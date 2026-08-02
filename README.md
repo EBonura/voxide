@@ -140,10 +140,6 @@ architecture, debugging and hardware verification. This is disclosed openly and
 is **not** a clean-room claim. The same holds for the SDK underneath it; see
 PSoXide's own provenance note.
 
-None of that changes what is in the repository: the game code is
-GPL-2.0-or-later, every shipped asset is CC0 and credited above, and no Mojang
-assets, code or data are used anywhere.
-
 ## Trademark
 
 VoXide is an original implementation inspired by Minecraft. It ships no Mojang
