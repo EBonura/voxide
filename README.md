@@ -99,13 +99,8 @@ The HUD carries hearts, hunger, air bubbles, armour pips, the XP bar and the
 hotbar. Mining draws crack stages on the block itself rather than a progress
 bar.
 
-## A note on names
+## Trademark
 
 VoXide is an original implementation inspired by Minecraft. It ships no Mojang
 assets, code or data, and it is not affiliated with, endorsed by or associated
 with Mojang Studios or Microsoft. Minecraft is a trademark of Mojang Studios.
-
-Blocks, mobs and dimensions that Minecraft calls by invented names are called
-something else here, so the vocabulary is this project's own: the two other
-dimensions are the Inferno and the Void, and you will meet sappers, wraiths,
-wailers and embers rather than their counterparts.
