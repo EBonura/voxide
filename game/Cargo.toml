@@ -1,0 +1,37 @@
+[package]
+name    = "voxide"
+version = "0.1.0"
+edition = "2021"
+
+# Standalone workspace, matching zelda3-psx / oot-psx / hl-psx: the PSX target
+# config lives under game/ so it does not leak onto host-side PSoXide tools.
+[workspace]
+
+[[bin]]
+name = "voxide"
+path = "src/main.rs"
+
+[profile.release]
+panic         = "abort"
+codegen-units = 1
+lto           = true
+
+[features]
+default = []
+# PSoXide-only MMIO telemetry so `frontend launch` can stop on guest frames and
+# write profile/counter CSVs. Off for shipping builds (calls compile to no-ops).
+emulator-telemetry = []
+
+[dependencies]
+psx-telemetry = { path = "../../PSoXide/sdk/crates/psx-telemetry" }
+psx-rt   = { path = "../../PSoXide/sdk/crates/psx-rt" }
+psx-gpu  = { path = "../../PSoXide/sdk/crates/psx-gpu" }
+psx-pad  = { path = "../../PSoXide/sdk/crates/psx-pad" }
+psx-font = { path = "../../PSoXide/sdk/crates/psx-font" }
+psx-vram = { path = "../../PSoXide/sdk/crates/psx-vram" }
+psx-math = { path = "../../PSoXide/sdk/crates/psx-math" }
+psx-gte  = { path = "../../PSoXide/sdk/crates/psx-gte" }
+psx-spu  = { path = "../../PSoXide/sdk/crates/psx-spu" }
+psx-pack = { path = "../../PSoXide/sdk/crates/psx-pack" }
+psx-mc   = { path = "../../PSoXide/sdk/crates/psx-mc" }
+psx-fx   = { path = "../../PSoXide/sdk/crates/psx-fx" }
