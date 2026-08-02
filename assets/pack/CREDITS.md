@@ -11,9 +11,9 @@ The "16x16 Block Texture Set" from OpenGameArt, CC0 1.0.
 * License: https://creativecommons.org/publicdomain/zero/1.0/
 
 `tools/convert_pack.py` quantises the pack into a 4bpp atlas with one CLUT per
-block and writes `game/src/texdata.rs`. Tiles the pack doesn't cover (the
-crafting table, chest, crack overlays, mob faces and a few others) are drawn
-procedurally in `game/src/tex.rs`.
+block and writes `game/src/texdata.rs`. Tiles the pack doesn't cover are drawn
+procedurally in `game/src/tex.rs`: the crafting table, chest, the four tool
+icons, the crack overlays and every mob face.
 
 ## Sound effects
 
