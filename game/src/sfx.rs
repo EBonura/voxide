@@ -99,7 +99,15 @@ fn play(id: usize, vol: i16, pct: u32) {
         v.set_volume(Volume(vol), Volume(vol));
         v.set_pitch(Pitch::for_frequency(s.rate as u32 * pct / 100, 44100));
         v.set_start_addr(SpuAddr::new(SPU_BASE + s.off));
-        v.set_adsr(Adsr::sample());
+        // default_tone rather than Adsr::sample(). The cooked bank's
+        // self-looping silent tail should already park a finished
+        // one-shot on silence, but PSoXide's SB1 console capture
+        // (2026-08-02) showed what sample() costs if any block's flags
+        // are off: END+mute lands the voice in a release that never
+        // ends, looping the sample at full volume. default_tone plays
+        // the sample out identically and adds a ~100 ms release that
+        // makes the END flag a real stop either way.
+        v.set_adsr(Adsr::default_tone());
         Voice::key_on(v.mask());
     }
 }
