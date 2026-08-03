@@ -18,7 +18,7 @@ use crate::sfxdata::{
 };
 use psx_pack::cd::{self, SectorReader, SECTOR_WORDS};
 use psx_pack::SECTOR_BYTES;
-use psx_spu::{Adsr, Pitch, SpuAddr, Voice, Volume};
+use psx_spu::{Adsr, Pitch, SpuAddr, Voice, Volume, SILENCE_BLOCK};
 
 /// SPU RAM byte offset of the sample bank: just above the 0x0000..0x1000
 /// SPU/BIOS reserved page, 8-byte aligned.
@@ -99,6 +99,15 @@ fn play(id: usize, vol: i16, pct: u32) {
         v.set_volume(Volume(vol), Volume(vol));
         v.set_pitch(Pitch::for_frequency(s.rate as u32 * pct / 100, 44100));
         v.set_start_addr(SpuAddr::new(SPU_BASE + s.off));
+        // The bank's silent tail sits after each sample, but a finished
+        // one-shot never falls through to it: the last real block raises END,
+        // and END makes silicon JUMP to the repeat address rather than carry
+        // on. Nothing was writing that register, so it kept whatever the
+        // previous sound left behind and the voice landed in some other
+        // sample's data. That was the blip after a footstep. PSoXide's
+        // 2026-08-03 SB2 capture read the register back as a fixed 0x034C no
+        // matter what had been keyed.
+        v.set_loop_addr(SILENCE_BLOCK);
         // default_tone rather than Adsr::sample(). The cooked bank's
         // self-looping silent tail should already park a finished
         // one-shot on silence, but PSoXide's SB1 console capture
