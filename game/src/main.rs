@@ -49,7 +49,7 @@ use psx_gpu::{
 use psx_gte::math::{Mat3I16, Vec3I16, Vec3I32};
 use psx_gte::scene;
 use psx_math::sincos;
-use psx_pad::{button, enable_analog_port1, poll_port1, ButtonState};
+use psx_pad::{button, enable_analog_port1, poll_port1, ButtonState, Deadzone};
 use psx_rt::{interrupts, tty};
 use psx_vram::{Clut, TexDepth, Tpage};
 
@@ -3775,8 +3775,15 @@ fn update_player(
     right: (i16, i16),
 ) {
     // --- look: RIGHT stick = camera (yaw + pitch), proportional analog ---
-    let rx = analog(right.0, unsafe { SET_LOOK_DZ });
-    let ry = analog(right.1, unsafe { SET_LOOK_DZ });
+    //
+    // Radial, through psx-pad. This used to gate each axis on its own, which
+    // makes the dead region a square: a stick pushed gently along a diagonal
+    // clears the threshold on one axis and not the other, so the look snapped
+    // to a cardinal instead of going where it was pushed. A stick's centre
+    // drift is radial, so the region that ignores it has to be a circle.
+    let (rx, ry) = Deadzone::new(unsafe { SET_LOOK_DZ })
+        .scaled(right.0, right.1)
+        .map_or((0, 0), |(x, y)| (x as i32, y as i32));
     // Response CURVE, not a flat divisor: a gentle linear base keeps aim precise
     // near centre (placing blocks with a stick), plus a quadratic term so a full
     // push turns quickly. Tops out ~90°/s yaw / ~75°/s pitch (was a flat ~60/50,
@@ -3811,8 +3818,9 @@ fn update_player(
     }
 
     // --- move: LEFT stick = character (forward/back + strafe), camera-relative analog ---
-    let lx = analog(left.0, unsafe { SET_MOVE_DZ });
-    let ly = analog(left.1, unsafe { SET_MOVE_DZ });
+    let (lx, ly) = Deadzone::new(unsafe { SET_MOVE_DZ })
+        .scaled(left.0, left.1)
+        .map_or((0, 0), |(x, y)| (x as i32, y as i32));
     let mut strafe = lx / 11;
     let mut forward = -ly / 11;
     if lx == 0 && ly == 0 {
@@ -9375,16 +9383,6 @@ fn mine_speed(p: &Player, block: u8) -> u32 {
 /// Analog axis with a SMOOTH deadzone: 0 inside the zone, otherwise ramps from 0
 /// (subtracts the zone) so the stick eases in instead of jumping to full speed at
 /// the edge -- the classic dual-stick feel.
-fn analog(v: i16, zone: i16) -> i32 {
-    if v > zone {
-        (v - zone) as i32
-    } else if v < -zone {
-        (v + zone) as i32
-    } else {
-        0
-    }
-}
-
 fn pressed(now: ButtonState, previous: ButtonState, mask: u16) -> bool {
     now.is_held(mask) && !previous.is_held(mask)
 }
