@@ -1684,7 +1684,19 @@ fn main() {
     // reads as a fresh press and drops you into the world with the options menu
     // already open.
     let mut previous = poll_port1().buttons;
+    // Frames since the world opened. Monotonic: it counts loop iterations and
+    // nothing else moves it.
     let mut frame: u32 = 0;
+    // The world clock, in frames: `frame` plus however much sleeping has
+    // skipped.
+    //
+    // Separate because sleeping jumps it to dawn, and this used to be `frame`
+    // itself. Everything reading a frame count for another reason was dragged
+    // forward with it -- the telemetry frame boundary, the demo's scripted
+    // timings, the `% 8` and `% 7` periodic work, and the particle and mob RNG
+    // seeds all skipped a few hundred frames on every night slept through. One
+    // counter cannot be both monotonic and skippable.
+    let mut day: u32 = 0;
     let mut prev_vbl = interrupts::vblank_count();
     let mut cast_t: u16 = 0; // fishing: frames until a bite while the rod is cast
     let mut swing: i32 = 0; // held-item swing animation countdown (mine/place/attack)
@@ -2001,7 +2013,7 @@ fn main() {
                 update_player(&mut player, pad, prev_i, lstick, rstick);
                 let hp_before = player.health;
                 update_survival(&mut player);
-                let night = (day_brightness(frame % DAY_LEN) as i32) <= NIGHT_LIGHT;
+                let night = (day_brightness(day % DAY_LEN) as i32) <= NIGHT_LIGHT;
                 mob::set_lure(player.selected == WHEAT_ITEM); // animals follow held wheat
                 mob::update(player.x, player.y, player.z, night);
                 let raw_hit =
@@ -2062,7 +2074,7 @@ fn main() {
             // the same window the bed interaction itself accepts.
             PROMPT_SLEEP = pick.hit
                 && get_block_i32(pick.bx, pick.by, pick.bz) == BED
-                && (day_brightness(frame % DAY_LEN) as i32) <= NIGHT_LIGHT + 20;
+                && (day_brightness(day % DAY_LEN) as i32) <= NIGHT_LIGHT + 20;
         }
 
         let mut mine_den: u32 = 0;
@@ -2112,9 +2124,11 @@ fn main() {
                         RESPAWN_BX = pick.bx;
                         RESPAWN_BZ = pick.bz;
                     }
-                    let dt = frame % DAY_LEN;
+                    let dt = day % DAY_LEN;
                     if (day_brightness(dt) as i32) <= NIGHT_LIGHT + 20 {
-                        frame += DAY_LEN - dt;
+                        // Only the world clock skips. `frame` keeps counting
+                        // the frames that actually happened.
+                        day += DAY_LEN - dt;
                     }
                     sfx::confirm();
                 } else if tb == ENCHANT {
@@ -2450,7 +2464,7 @@ fn main() {
         // Weather: rain in one of every three ~40s windows. Phase 2, not 0, so a
         // fresh world always opens dry -- `% 3 == 0` meant frame 0 was rain and
         // every session started in a downpour.
-        let (tod, rain, light, sky) = world_lighting(frame);
+        let (tod, rain, light, sky) = world_lighting(day);
         let raining = rain > 0;
         unsafe {
             LIGHT = light;
@@ -2519,7 +2533,7 @@ fn main() {
         // register state such as dithering belongs in this frame's list.
         ui_frame_begin();
         queue_dither();
-        draw_frame_sky(&cam, frame, tod, light, sky, rain > 128);
+        draw_frame_sky(&cam, day, tod, light, sky, rain > 128);
         ui_finish_sky(false);
         telemetry::stage_end(ST_R_SKY);
         telemetry::stage_begin(ST_RENDER);
@@ -2580,6 +2594,7 @@ fn main() {
         frame_present(&mut fb, &mut render_in_flight);
         previous = pad;
         frame = frame.wrapping_add(1);
+        day = day.wrapping_add(1);
     }
 }
 
@@ -3375,9 +3390,13 @@ fn rain_amount(frame: u32) -> i32 {
 
 /// can live behind a call has to.
 #[inline(never)]
-fn world_lighting(frame: u32) -> (u32, i32, u8, (u8, u8, u8)) {
-    let tod = if FORCE_TIME >= 0 { FORCE_TIME as u32 } else { frame % DAY_LEN };
-    let rain = rain_amount(frame);
+/// Time of day, rain, terrain light and sky colour from the world clock.
+///
+/// `day`, not a frame count: sleeping skips this forward, and the weather and
+/// the sun are meant to move with it.
+fn world_lighting(day: u32) -> (u32, i32, u8, (u8, u8, u8)) {
+    let tod = if FORCE_TIME >= 0 { FORCE_TIME as u32 } else { day % DAY_LEN };
+    let rain = rain_amount(day);
     let mut light = day_brightness(tod);
     if rain > 0 {
         // Scaled by the ramp, so the terrain darkens as the shower arrives
@@ -6655,7 +6674,9 @@ const SKY_COLS: usize = 4;
 /// the day, night stars, and a drifting cloud band. Must run before the world
 /// OT is submitted so terrain paints over it.
 #[inline(never)]
-fn draw_sky(cam: &Camera, frame: u32, tod: u32, light: u8, horizon: (u8, u8, u8), raining: bool) {
+/// `day` is the world clock, not a frame count: the moon phase below counts
+/// days off it, and sleeping has to advance the moon.
+fn draw_sky(cam: &Camera, day: u32, tod: u32, light: u8, horizon: (u8, u8, u8), raining: bool) {
     let h = SCREEN_H as i16;
     // Zenith is tracked in its own right, not derived from the horizon. The old
     // code scaled the horizon down by fixed ratios, so a warm sunset horizon
@@ -6862,8 +6883,8 @@ fn draw_sky(cam: &Camera, frame: u32, tod: u32, light: u8, horizon: (u8, u8, u8)
                 // Phase: a sky-coloured occluder slid across the disc. Eight
                 // phases over eight days, as in Java.
                 let phase = ((tod / DAY_LEN.max(1)) % 8) as i32;
-                let day = (frame / DAY_LEN.max(1)) as i32;
-                let ph = (day + phase) % 8;
+                let days = (day / DAY_LEN.max(1)) as i32;
+                let ph = (days + phase) % 8;
                 if ph != 0 {
                     let shift = ((ph - 4) * 6) as i16;
                     billboard(x + shift, y, 12, 12, zenith);
@@ -6918,7 +6939,7 @@ fn draw_sky(cam: &Camera, frame: u32, tod: u32, light: u8, horizon: (u8, u8, u8)
     // perspective on the offset vector.
     const CLOUD_H: i32 = 300; // altitude of the deck above the eye
     const CLOUD_SPAN: i32 = 4096; // how far the deck extends before it wraps
-    let drift = (frame as i32 * 3) % CLOUD_SPAN;
+    let drift = (day as i32 * 3) % CLOUD_SPAN;
     let mut i = 0i32;
     while i < 34 {
         // A scattered but stable grid: two coprime strides so the cells do not
@@ -8760,11 +8781,11 @@ fn queue_dither() {
 /// is a closed cavern and the Void is open blackness, so both get a flat fog wall
 /// instead of the gradient/sun/moon/stars/cloud stack.
 #[inline(never)]
-fn draw_frame_sky(cam: &Camera, frame: u32, tod: u32, light: u8, sky: (u8, u8, u8), raining: bool) {
+fn draw_frame_sky(cam: &Camera, day: u32, tod: u32, light: u8, sky: (u8, u8, u8), raining: bool) {
     if world::dimension() != world::DIM_OVERWORLD {
         rect(0, 0, SCREEN_W as i16, SCREEN_H as i16, sky.0, sky.1, sky.2);
     } else {
-        draw_sky(cam, frame, tod, light, sky, raining);
+        draw_sky(cam, day, tod, light, sky, raining);
     }
 }
 

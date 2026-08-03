@@ -35,9 +35,12 @@ static mut PLAYER: Player<SFX_VOICES> =
 
 /// The SFX clock, in frames.
 ///
-/// Its own counter rather than the main loop's `frame`, which doubles as the
-/// day-cycle clock and is jumped forward when sleeping. A deadline measured
-/// against that would expire early and clip the sound it was following.
+/// Its own counter because sounds play from more than one loop -- the world
+/// and the main menu each run their own -- and a cutoff has to be measured on
+/// a clock that spans both. (It was originally separate for a worse reason:
+/// the world loop's `frame` doubled as the day clock and jumped forward when
+/// sleeping, so a deadline against it expired early. That is fixed; this
+/// stands on its own.)
 static mut TICK: u32 = 0;
 
 /// Advance the SFX clock and silence any voice whose sample has ended. Call
