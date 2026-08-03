@@ -3,12 +3,12 @@
 
 ROOT     := $(CURDIR)
 GAME     := $(ROOT)/game
-# The SDK crates are Cargo PATH dependencies (game/Cargo.toml), and Cargo
-# resolves those relative to the manifest -- so the sibling layout is a hard
-# requirement, not a default. PSOXIDE only redirects the linker script and the
-# host tools; it cannot move the crate paths.
-SIBLING  := $(abspath $(ROOT)/../PSoXide)
-PSOXIDE  ?= $(SIBLING)
+# The SDK is hydrated into .psoxide by psoxide-link, from the pin in
+# psoxide-pin/. The crate paths in game/Cargo.toml point there, so this builds
+# from a clean clone with no sibling checkout -- which the old layout required
+# outright, since Cargo resolves path dependencies relative to the manifest and
+# no variable could move them.
+PSOXIDE  ?= $(ROOT)/.psoxide
 MKISOPSX := $(PSOXIDE)/tools/mkisopsx
 TARGET   := mipsel-sony-psx
 DIST     := $(ROOT)/dist
@@ -23,7 +23,7 @@ PSOXIDE_PROFILE_STEPS ?= 900000000
 PSOXIDE_START_PULSE ?= 0x0008@700+60
 
 .DEFAULT_GOAL := build
-.PHONY: help psoxide-check build compile disc install run smoke profile clean
+.PHONY: help psoxide build compile disc install run smoke profile clean
 
 help:
 	@echo "VoXide targets:"
@@ -36,26 +36,23 @@ help:
 	@echo "  make profile    - telemetry build + per-frame stage-cycle CSV report"
 	@echo "  make clean      - remove build output"
 
-psoxide-check:
-	@test -f "$(SIBLING)/sdk/psoxide.ld" || { \
-		echo ""; \
-		echo "PSoXide SDK not found at $(SIBLING)"; \
-		echo ""; \
-		echo "VoXide builds against the PSoXide SDK as Cargo path dependencies,"; \
-		echo "so the two checkouts must sit side by side:"; \
-		echo ""; \
-		echo "    git clone https://github.com/EBonura/PSoXide.git"; \
-		echo "    git clone https://github.com/EBonura/voxide.git"; \
-		echo "    cd voxide && make"; \
-		echo ""; \
-		exit 1; \
-	}
-	@echo "PSoXide -> $(PSOXIDE)"
+# Which PSoXide this is built against. Cargo owns the pin (psoxide-pin/), and
+# psoxide-link copies the resolved checkout into .psoxide so the crate paths
+# and the linker script resolve. This replaces a check that could only tell you
+# to go and clone a sibling checkout by hand.
+#
+# PSOXIDE_FROM=/path/to/tree overrides the pin with a working tree, which is
+# how the demo disc puts every program it presses on one SDK.
+PSOXIDE_FROM ?=
+psoxide:
+	@if [ -n "$(PSOXIDE_FROM)" ]; then \
+		cargo run -q --manifest-path $(PSOXIDE_FROM)/tools/psoxide-link/Cargo.toml -- \
+			--from "$(PSOXIDE_FROM)" --into $(PSOXIDE); \
+	else \
+		cargo run -q --manifest-path $(ROOT)/psoxide-pin/Cargo.toml -- $(PSOXIDE); \
+	fi
 
-build: install
-	@echo "build -> live in PSoXide ($(GAMES_DIR)/$(GAME_NAME))"
-
-compile: psoxide-check
+compile: psoxide
 	cd $(GAME) && PSOXIDE="$(PSOXIDE)" cargo build --release
 	@echo "EXE -> $(EXE)"
 

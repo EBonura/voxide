@@ -23,16 +23,16 @@ default = []
 emulator-telemetry = []
 
 [dependencies]
-psx-telemetry = { path = "../../PSoXide/sdk/crates/psx-telemetry" }
-psx-rt   = { path = "../../PSoXide/sdk/crates/psx-rt" }
-psx-sfx  = { path = "../../PSoXide/sdk/crates/psx-sfx" }
-psx-gpu  = { path = "../../PSoXide/sdk/crates/psx-gpu" }
-psx-pad  = { path = "../../PSoXide/sdk/crates/psx-pad" }
-psx-font = { path = "../../PSoXide/sdk/crates/psx-font" }
-psx-vram = { path = "../../PSoXide/sdk/crates/psx-vram" }
-psx-math = { path = "../../PSoXide/sdk/crates/psx-math" }
-psx-gte  = { path = "../../PSoXide/sdk/crates/psx-gte" }
-psx-spu  = { path = "../../PSoXide/sdk/crates/psx-spu" }
-psx-pack = { path = "../../PSoXide/sdk/crates/psx-pack" }
-psx-mc   = { path = "../../PSoXide/sdk/crates/psx-mc" }
-psx-fx   = { path = "../../PSoXide/sdk/crates/psx-fx" }
+psx-telemetry = { path = "../.psoxide/sdk/crates/psx-telemetry" }
+psx-rt   = { path = "../.psoxide/sdk/crates/psx-rt" }
+psx-sfx  = { path = "../.psoxide/sdk/crates/psx-sfx" }
+psx-gpu  = { path = "../.psoxide/sdk/crates/psx-gpu" }
+psx-pad  = { path = "../.psoxide/sdk/crates/psx-pad" }
+psx-font = { path = "../.psoxide/sdk/crates/psx-font" }
+psx-vram = { path = "../.psoxide/sdk/crates/psx-vram" }
+psx-math = { path = "../.psoxide/sdk/crates/psx-math" }
+psx-gte  = { path = "../.psoxide/sdk/crates/psx-gte" }
+psx-spu  = { path = "../.psoxide/sdk/crates/psx-spu" }
+psx-pack = { path = "../.psoxide/sdk/crates/psx-pack" }
+psx-mc   = { path = "../.psoxide/sdk/crates/psx-mc" }
+psx-fx   = { path = "../.psoxide/sdk/crates/psx-fx" }
