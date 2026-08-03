@@ -209,10 +209,10 @@ pub fn set_lure(on: bool) {
 
 #[inline]
 fn rng() -> u32 {
-    // Callers lean on the low bits (& 1, % 4, % 120), and an LCG's low bits
-    // alone cycle with tiny periods, so fold the strong high half back in.
-    let x = unsafe { RNG.next() };
-    x ^ (x >> 16)
+    // The fold this used to do by hand lives on the generator now: callers
+    // here lean on the low bits (& 1, % 4, % 120) and a raw LCG's cycle with
+    // tiny periods.
+    unsafe { RNG.next_mixed() }
 }
 
 /// (half-width, height) in world units per kind.
