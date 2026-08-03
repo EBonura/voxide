@@ -25,6 +25,7 @@ emulator-telemetry = []
 [dependencies]
 psx-telemetry = { path = "../../PSoXide/sdk/crates/psx-telemetry" }
 psx-rt   = { path = "../../PSoXide/sdk/crates/psx-rt" }
+psx-sfx  = { path = "../../PSoXide/sdk/crates/psx-sfx" }
 psx-gpu  = { path = "../../PSoXide/sdk/crates/psx-gpu" }
 psx-pad  = { path = "../../PSoXide/sdk/crates/psx-pad" }
 psx-font = { path = "../../PSoXide/sdk/crates/psx-font" }

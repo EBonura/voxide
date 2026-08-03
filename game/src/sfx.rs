@@ -18,7 +18,8 @@ use crate::sfxdata::{
 };
 use psx_pack::cd::{self, SectorReader, SECTOR_WORDS};
 use psx_pack::SECTOR_BYTES;
-use psx_spu::{Adsr, Pitch, SpuAddr, Voice, Volume, SILENCE_BLOCK};
+use psx_sfx::{OneShot, Player, Sample as SfxSample};
+use psx_spu::{Pitch, SpuAddr, Voice, Volume};
 
 /// SPU RAM byte offset of the sample bank: just above the 0x0000..0x1000
 /// SPU/BIOS reserved page, 8-byte aligned.
@@ -26,8 +27,12 @@ const SPU_BASE: u32 = 0x1010;
 
 // Voices reserved for SFX, cycled round-robin so a new sound rarely cuts off
 // a still-ringing one.
-const SFX_VOICES: u8 = 4;
-static mut NEXT_VOICE: u8 = 0;
+const SFX_VOICES: usize = 4;
+/// Round-robin across those voices, with the correct key-on behind it. The
+/// tick rate is irrelevant here: without sample lengths there is no cutoff to
+/// schedule, so nothing ever calls `PLAYER.tick`.
+static mut PLAYER: Player<SFX_VOICES> =
+    Player::new([Voice::V0, Voice::V1, Voice::V2, Voice::V3], 60);
 static mut READY: bool = false;
 
 // Master SFX volume in percent, set from the SETTINGS card.
@@ -93,31 +98,22 @@ fn play(id: usize, vol: i16, pct: u32) {
             return;
         }
         let s: &Sample = &SAMPLES[id];
-        let v = Voice::new(NEXT_VOICE);
-        NEXT_VOICE = (NEXT_VOICE + 1) % SFX_VOICES;
         let vol = ((vol as i32) * VOL_PCT / 100) as i16;
-        v.set_volume(Volume(vol), Volume(vol));
-        v.set_pitch(Pitch::for_frequency(s.rate as u32 * pct / 100, 44100));
-        v.set_start_addr(SpuAddr::new(SPU_BASE + s.off));
-        // The bank's silent tail sits after each sample, but a finished
-        // one-shot never falls through to it: the last real block raises END,
-        // and END makes silicon JUMP to the repeat address rather than carry
-        // on. Nothing was writing that register, so it kept whatever the
-        // previous sound left behind and the voice landed in some other
-        // sample's data. That was the blip after a footstep. PSoXide's
-        // 2026-08-03 SB2 capture read the register back as a fixed 0x034C no
+        // psx-sfx owns the key-on, so the repeat address is written and a
+        // finished voice parks on silence instead of wandering into the next
+        // sample. That was the blip after a footstep, and PSoXide's 2026-08-03
+        // SB2 capture read the register back as a fixed 0x034C on hardware no
         // matter what had been keyed.
-        v.set_loop_addr(SILENCE_BLOCK);
-        // default_tone rather than Adsr::sample(). The cooked bank's
-        // self-looping silent tail should already park a finished
-        // one-shot on silence, but PSoXide's SB1 console capture
-        // (2026-08-02) showed what sample() costs if any block's flags
-        // are off: END+mute lands the voice in a release that never
-        // ends, looping the sample at full volume. default_tone plays
-        // the sample out identically and adds a ~100 ms release that
-        // makes the END flag a real stop either way.
-        v.set_adsr(Adsr::default_tone());
-        Voice::key_on(v.mask());
+        //
+        // Block count 0: the cooked bank records an offset and a rate but not
+        // a length, so there is nothing to time a cutoff from and default_tone's
+        // ~100 ms release finishes the sound instead. Recording lengths in the
+        // bank would let Player stop these on a clock, which is strictly better
+        // than trusting an envelope.
+        let sample = SfxSample::resident(SpuAddr::new(SPU_BASE + s.off), s.rate as u32, 0);
+        let shot = OneShot::new(sample, Volume(vol))
+            .with_pitch(Pitch::for_frequency(s.rate as u32 * pct / 100, 44100));
+        PLAYER.play(&shot, 0);
     }
 }
 
