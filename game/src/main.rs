@@ -1703,6 +1703,10 @@ fn main() {
     let mut render_in_flight = false;
 
     loop {
+        // Stop any SFX voice whose sample has ended. Ahead of everything that
+        // might start one, so a sound keyed this frame is not cut by the
+        // deadline of the one it replaced.
+        sfx::tick();
         telemetry::frame_begin(frame); // profiler frame boundary (no-op without the feature)
         telemetry::stage_begin(50); // TEMP: whole loop body minus vsync
         // Honest frame cost: VBlank IRQs elapsed since the last loop top.
@@ -2633,6 +2637,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
     let mut set_sel = 0usize;
     let mut t: u32 = 0;
     loop {
+        sfx::tick();
         let mut pad = poll_port1().buttons;
         if DEMO_PLAY && t == 90 {
             // Headless playtest: confirm PLAY at menu-frame 90.

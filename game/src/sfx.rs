@@ -28,11 +28,30 @@ const SPU_BASE: u32 = 0x1010;
 // Voices reserved for SFX, cycled round-robin so a new sound rarely cuts off
 // a still-ringing one.
 const SFX_VOICES: usize = 4;
-/// Round-robin across those voices, with the correct key-on behind it. The
-/// tick rate is irrelevant here: without sample lengths there is no cutoff to
-/// schedule, so nothing ever calls `PLAYER.tick`.
+/// Round-robin across those voices, with the correct key-on and the cutoff
+/// behind it.
 static mut PLAYER: Player<SFX_VOICES> =
     Player::new([Voice::V0, Voice::V1, Voice::V2, Voice::V3], 60);
+
+/// The SFX clock, in frames.
+///
+/// Its own counter rather than the main loop's `frame`, which doubles as the
+/// day-cycle clock and is jumped forward when sleeping. A deadline measured
+/// against that would expire early and clip the sound it was following.
+static mut TICK: u32 = 0;
+
+/// Advance the SFX clock and silence any voice whose sample has ended. Call
+/// once a frame, before anything that might start a sound.
+///
+/// Every sample's blob ends in a self-looping silent block, so a finished
+/// voice parks rather than wandering. This is the other half: parked is not
+/// stopped, and a voice sitting on that block still holds a live envelope.
+pub fn tick() {
+    unsafe {
+        TICK = TICK.wrapping_add(1);
+        PLAYER.tick(TICK);
+    }
+}
 static mut READY: bool = false;
 
 // Master SFX volume in percent, set from the SETTINGS card.
@@ -99,21 +118,19 @@ fn play(id: usize, vol: i16, pct: u32) {
         }
         let s: &Sample = &SAMPLES[id];
         let vol = ((vol as i32) * VOL_PCT / 100) as i16;
-        // psx-sfx owns the key-on, so the repeat address is written and a
-        // finished voice parks on silence instead of wandering into the next
-        // sample. That was the blip after a footstep, and PSoXide's 2026-08-03
-        // SB2 capture read the register back as a fixed 0x034C on hardware no
-        // matter what had been keyed.
-        //
-        // Block count 0: the cooked bank records an offset and a rate but not
-        // a length, so there is nothing to time a cutoff from and default_tone's
-        // ~100 ms release finishes the sound instead. Recording lengths in the
-        // bank would let Player stop these on a clock, which is strictly better
-        // than trusting an envelope.
-        let sample = SfxSample::resident(SpuAddr::new(SPU_BASE + s.off), s.rate as u32, 0);
+        // psx-sfx owns the key-on and the cutoff. The cooked bank ends every
+        // sample with a self-looping silent block (flags 0x07: loop-start,
+        // repeat, end), so silicon latches the repeat address as it decodes
+        // that block and the voice parks there on its own. The cutoff then
+        // silences it outright, which parking does not.
+        let sample = SfxSample::resident(
+            SpuAddr::new(SPU_BASE + s.off),
+            s.rate as u32,
+            s.blocks as u32,
+        );
         let shot = OneShot::new(sample, Volume(vol))
             .with_pitch(Pitch::for_frequency(s.rate as u32 * pct / 100, 44100));
-        PLAYER.play(&shot, 0);
+        PLAYER.play(&shot, TICK);
     }
 }
 
