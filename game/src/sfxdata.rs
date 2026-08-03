@@ -2,11 +2,19 @@
 //! CC0 sampled SFX (Kenney.nl + freesound.org, see assets/pack/CREDITS.md)
 //! as SPU-ADPCM blobs with per-sample offsets and native rates.
 
-/// One cooked sample: byte offset into the uploaded SPU bank, and
-/// the rate it was recorded at.
+/// One cooked sample: byte offset into the uploaded SPU bank, the
+/// rate it was recorded at, and how many ADPCM blocks of real audio
+/// it holds.
+///
+/// `blocks` excludes the self-looping silent tail every sample ends
+/// with, so it is the length of the sound itself. psx-sfx times its
+/// cutoff from it: without a length there is nothing to schedule and
+/// a finished voice sits on the tail with a live envelope instead of
+/// being silenced.
 pub struct Sample {
     pub off: u32,
     pub rate: u16,
+    pub blocks: u16,
 }
 
 /// WORLD.PAK chunk id of the cooked bank (streamed to SPU at boot;
@@ -40,29 +48,29 @@ pub const S_EAT: usize = 23;
 pub const S_EXPLODE: usize = 24;
 
 pub static SAMPLES: [Sample; 25] = [
-    Sample { off: 0, rate: 22050 }, // step_grass
-    Sample { off: 3760, rate: 22050 }, // step_stone
-    Sample { off: 5088, rate: 22050 }, // step_sand
-    Sample { off: 8848, rate: 22050 }, // step_wood
-    Sample { off: 12288, rate: 22050 }, // dig_soft
-    Sample { off: 14336, rate: 11025 }, // dig_stone
-    Sample { off: 16560, rate: 11025 }, // dig_wood
-    Sample { off: 17952, rate: 11025 }, // break
-    Sample { off: 20496, rate: 22050 }, // place
-    Sample { off: 22544, rate: 11025 }, // hurt
-    Sample { off: 24768, rate: 11025 }, // door
-    Sample { off: 28256, rate: 11025 }, // chest
-    Sample { off: 29824, rate: 22050 }, // click
-    Sample { off: 31072, rate: 11025 }, // confirm
-    Sample { off: 32928, rate: 11025 }, // pig
-    Sample { off: 37520, rate: 11025 }, // cow
-    Sample { off: 43536, rate: 11025 }, // sheep
-    Sample { off: 48912, rate: 11025 }, // chicken
-    Sample { off: 54608, rate: 11025 }, // zombie
-    Sample { off: 59888, rate: 11025 }, // bones
-    Sample { off: 64944, rate: 22050 }, // bark
-    Sample { off: 68080, rate: 11025 }, // hiss
-    Sample { off: 73136, rate: 11025 }, // splash
-    Sample { off: 76624, rate: 11025 }, // eat
-    Sample { off: 79152, rate: 11025 }, // explode
+    Sample { off: 0, rate: 22050, blocks: 234 }, // step_grass
+    Sample { off: 3760, rate: 22050, blocks: 82 }, // step_stone
+    Sample { off: 5088, rate: 22050, blocks: 234 }, // step_sand
+    Sample { off: 8848, rate: 22050, blocks: 214 }, // step_wood
+    Sample { off: 12288, rate: 22050, blocks: 127 }, // dig_soft
+    Sample { off: 14336, rate: 11025, blocks: 138 }, // dig_stone
+    Sample { off: 16560, rate: 11025, blocks: 86 }, // dig_wood
+    Sample { off: 17952, rate: 11025, blocks: 158 }, // break
+    Sample { off: 20496, rate: 22050, blocks: 127 }, // place
+    Sample { off: 22544, rate: 11025, blocks: 138 }, // hurt
+    Sample { off: 24768, rate: 11025, blocks: 217 }, // door
+    Sample { off: 28256, rate: 11025, blocks: 97 }, // chest
+    Sample { off: 29824, rate: 22050, blocks: 77 }, // click
+    Sample { off: 31072, rate: 11025, blocks: 115 }, // confirm
+    Sample { off: 32928, rate: 11025, blocks: 286 }, // pig
+    Sample { off: 37520, rate: 11025, blocks: 375 }, // cow
+    Sample { off: 43536, rate: 11025, blocks: 335 }, // sheep
+    Sample { off: 48912, rate: 11025, blocks: 355 }, // chicken
+    Sample { off: 54608, rate: 11025, blocks: 329 }, // zombie
+    Sample { off: 59888, rate: 11025, blocks: 315 }, // bones
+    Sample { off: 64944, rate: 22050, blocks: 195 }, // bark
+    Sample { off: 68080, rate: 11025, blocks: 315 }, // hiss
+    Sample { off: 73136, rate: 11025, blocks: 217 }, // splash
+    Sample { off: 76624, rate: 11025, blocks: 157 }, // eat
+    Sample { off: 79152, rate: 11025, blocks: 453 }, // explode
 ];

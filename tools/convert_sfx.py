@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "assets" / "sfx"
 PAK = SRC / "pak"
+BLOCK_BYTES = 16  # one SPU ADPCM block: shift/filter, flags, 14 of data
 BIN = PAK / "chunk_3000.bin"  # WORLD.PAK payload; id must match sfxdata SFX_CHUNK_ID
 RS = ROOT / "game" / "src" / "sfxdata.rs"
 
@@ -108,11 +109,19 @@ def main():
         "//! CC0 sampled SFX (Kenney.nl + freesound.org, see assets/pack/CREDITS.md)",
         "//! as SPU-ADPCM blobs with per-sample offsets and native rates.",
         "",
-        "/// One cooked sample: byte offset into the uploaded SPU bank, and",
-        "/// the rate it was recorded at.",
+        "/// One cooked sample: byte offset into the uploaded SPU bank, the",
+        "/// rate it was recorded at, and how many ADPCM blocks of real audio",
+        "/// it holds.",
+        "///",
+        "/// `blocks` excludes the self-looping silent tail every sample ends",
+        "/// with, so it is the length of the sound itself. psx-sfx times its",
+        "/// cutoff from it: without a length there is nothing to schedule and",
+        "/// a finished voice sits on the tail with a live envelope instead of",
+        "/// being silenced.",
         "pub struct Sample {",
         "    pub off: u32,",
         "    pub rate: u16,",
+        "    pub blocks: u16,",
         "}",
         "",
         "/// WORLD.PAK chunk id of the cooked bank (streamed to SPU at boot;",
@@ -124,7 +133,12 @@ def main():
         lines.append(f"pub const S_{name.upper()}: usize = {i};")
     lines += ["", f"pub static SAMPLES: [Sample; {len(table)}] = ["]
     for name, off, ln, rate in table:
-        lines.append(f"    Sample {{ off: {off}, rate: {rate} }}, // {name}")
+        # The trailing silent block is termination, not sound: a cutoff timed
+        # to include it would hold the voice open past the end of the sample.
+        blocks = ln // BLOCK_BYTES - 1
+        lines.append(
+            f"    Sample {{ off: {off}, rate: {rate}, blocks: {blocks} }}, // {name}"
+        )
     lines += ["];", ""]
     RS.write_text("\n".join(lines))
     print(f"wrote {RS.relative_to(ROOT)}")
