@@ -9,6 +9,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4388bee8683e3d04af747c73422af53102d2bd24d9eadb6cbc100baef4b43f8"
 
 [[package]]
+name = "psx-asset"
+version = "0.1.0"
+dependencies = [
+ "psx-gte",
+ "psxed-format",
+]
+
+[[package]]
 name = "psx-font"
 version = "0.1.0"
 dependencies = [
@@ -98,6 +106,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "psx-sfx"
+version = "0.1.0"
+dependencies = [
+ "psx-asset",
+ "psx-spu",
+]
+
+[[package]]
 name = "psx-spu"
 version = "0.1.0"
 dependencies = [
@@ -118,6 +134,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "psxed-format"
+version = "0.1.0"
+
+[[package]]
 name = "voxide"
 version = "0.1.0"
 dependencies = [
@@ -130,6 +150,7 @@ dependencies = [
  "psx-pack",
  "psx-pad",
  "psx-rt",
+ "psx-sfx",
  "psx-spu",
  "psx-telemetry",
  "psx-vram",
