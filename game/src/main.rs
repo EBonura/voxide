@@ -85,7 +85,11 @@ const FAR_SIDE_Z: i32 = 896;
 const BLOCK: i32 = 64;
 
 /// Shown on the main menu; bump the patch digit with every released change.
-const VERSION: &str = "V0.1.9";
+/// Drawn bottom-left on the title screen, and read by the demo disc for its
+/// carousel. Taken from Cargo rather than written out again: the manifest said
+/// 0.1.0 while this said V0.1.9 and the tag said v0.1.9, so the disc believed
+/// the one source nobody had been maintaining.
+const VERSION: &str = concat!("V", env!("CARGO_PKG_VERSION"));
 
 const AIR: u8 = 0;
 const GRASS: u8 = 1;

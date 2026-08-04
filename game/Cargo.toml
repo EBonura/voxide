@@ -1,6 +1,6 @@
 [package]
 name    = "voxide"
-version = "0.1.0"
+version = "0.1.9"
 edition = "2021"
 
 # Standalone workspace, matching zelda3-psx / oot-psx / hl-psx: the PSX target
