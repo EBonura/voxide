@@ -23,7 +23,7 @@ PSOXIDE_PROFILE_STEPS ?= 900000000
 PSOXIDE_START_PULSE ?= 0x0008@700+60
 
 .DEFAULT_GOAL := build
-.PHONY: help psoxide build compile disc install run smoke profile clean
+.PHONY: help psoxide build compile disc install release run smoke profile clean
 
 help:
 	@echo "VoXide targets:"
@@ -112,3 +112,10 @@ smoke: disc
 # clean leaves $(CAPTURE_DIR) alone: captures/ is local run history, not build output.
 clean:
 	rm -rf $(DIST) $(GAME)/target
+
+# Stage the itch.io payload. CI (deploy.yml) pushes release/ via butler
+# whenever it changes on main, versioned from the VERSION file.
+release: disc
+	@mkdir -p $(ROOT)/release
+	cp $(DIST)/voxide.bin $(DIST)/voxide.cue $(ROOT)/release/
+	@echo "RELEASE -> $(ROOT)/release (commit + push to deploy)"
