@@ -27,7 +27,7 @@ PSOXIDE_START_PULSE ?= 0x0008@700+60
 
 help:
 	@echo "VoXide targets:"
-	@echo "  make psoxide-check - verify the sibling PSoXide checkout"
+	@echo "  make psoxide    - hydrate the pinned PSoXide SDK into .psoxide"
 	@echo "  make            - build + install into the PSoXide game library"
 	@echo "  make compile    - build PSX-EXE only -> $(EXE)"
 	@echo "  make disc       - compile + pack dist/voxide.cue/.bin"
@@ -82,7 +82,7 @@ run: install
 # so without pressing START the game sits on the title screen and the profiler
 # records ZERO frames (silently -- you get a CSV with only a header). 0x0008 is
 # START; the tick is after world gen finishes.
-profile: psoxide-check
+profile: psoxide
 	cd $(GAME) && PSOXIDE="$(PSOXIDE)" cargo build --release --features emulator-telemetry
 	cd $(MKISOPSX) && cargo run --release -- --exe $(EXE) --out $(DIST)/voxide.bin --volume VOXIDE --world-pack-extra-dir $(ROOT)/assets/sfx/pak
 	@mkdir -p $(CAPTURE_DIR)
