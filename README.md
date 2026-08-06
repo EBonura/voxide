@@ -45,6 +45,15 @@ pack doesn't cover are drawn in code. Sources are credited in
 `assets/pack/CREDITS.md` and on the in-game credits screen. No Mojang assets,
 code or data are used.
 
+## Play it
+
+The disc image is on [itch.io](https://bonnie-studios.itch.io/voxide). VoXide
+also ships on the
+[PSoXide Demo Disc](https://bonnie-studios.itch.io/psoxide-demo-disc) with
+nine other programs, and that disc runs
+[in your browser](https://bonnie-studios.itch.io/psoxide) on the PSoXide
+page, no console needed.
+
 ## Build
 
 VoXide uses the PSoXide SDK as Cargo **path** dependencies, so the two
