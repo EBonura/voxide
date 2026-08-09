@@ -4,7 +4,7 @@ cargo-features = ["trim-paths"]
 
 [package]
 name    = "voxide"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2021"
 
 # Standalone workspace, matching zelda3-psx / oot-psx / hl-psx: the PSX target
