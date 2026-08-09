@@ -6153,7 +6153,19 @@ fn emit_face(block: u8, lx: i32, by: i32, lz: i32, dir: usize, w: usize, h: usiz
     // foreground band to the per-block shell before a large greedy plate can
     // overlay and deform those individual faces. The fallback retains only the
     // plate's farther continuation, clipped and locally tessellated.
-    if min_sz < NEAR_BLOCK_Z as u16 {
+    // Opaque long plates get the same treatment through the mid band (see
+    // MID_SUBDIV_Z): blended terrain is excluded because water's near-uniform
+    // texture doesn't show affine bend, and its plates are the biggest.
+    // A leaves exclusion was tried on the same "noisy texture" argument and
+    // measured NO win at the standing spawn profile (1,500K vs 1,486K loop
+    // body, inside codegen noise) -- the close-plate cost there is not
+    // canopy-dominated, so the branch was dropped.
+    if min_sz < NEAR_BLOCK_Z as u16
+        || (bl == 0
+            && min_sz < MID_SUBDIV_Z as u16
+            && w.max(h) >= MID_SUBDIV_SPAN
+            && unsafe { NEAR_TRI_N } < MID_SUBDIV_TRI_CAP)
+    {
         emit_near_face(
             &verts,
             dir,
@@ -6480,6 +6492,32 @@ const GTE_NEAR: u16 = 96;
 /// Through this full two-block band, opaque terrain ownership belongs to the
 /// authoritative per-block shell: one independently clipped face per cube.
 const NEAR_BLOCK_Z: i32 = 2 * BLOCK;
+
+/// One-level mid-band subdivision for large greedy plates (the camera-space
+/// subdivided affine technique from the Quake work, expressed in this
+/// renderer's own tessellator). A merged plate drawn as ONE affine quad
+/// interpolates UVs linearly in screen space, so a long floor or wall whose
+/// depth varies a lot across the primitive bends and swims its texture. The
+/// near band already fixes the worst of it; this extends the fix outward:
+/// a plate at least MID_SUBDIV_SPAN blocks long whose nearest projected
+/// corner is inside MID_SUBDIV_Z routes through emit_near_face, whose 4x4
+/// coarse patches interpolate position/UV/tint in camera space BEFORE the
+/// perspective divide (per-block refinement still only happens inside
+/// NEAR_BLOCK_Z, so the mid band costs 4x4 patches, not cells).
+/// Small faces stay on the one-quad path: their depth variation is bounded
+/// by their size, so the affine error is already below notice.
+///
+/// Threshold measured at the fixed meadow vista (make profile, VISTA knobs),
+/// loop-body cycles/frame vs baseline 1,573,431: 4 blocks +36,770 (+2.3%),
+/// 6 blocks +102,464 (+6.5%). Frame-diff at the same vista: 4 blocks covers
+/// ~75% of the pixels 6 blocks changes; the remainder is a thin far strip
+/// where plates are already small on screen. 4 blocks is the keep.
+const MID_SUBDIV_Z: i32 = 4 * BLOCK;
+const MID_SUBDIV_SPAN: usize = 4;
+/// Graceful degrade: leave headroom in the shared NEAR_TRIS pool so mid-band
+/// subdivision can never starve the authoritative near band of packets. Past
+/// this watermark a mid-band plate draws as the plain single quad again.
+const MID_SUBDIV_TRI_CAP: usize = MAX_NEAR_TRIS - 256;
 
 /// TEMP A/B toggle: route project_quad_gte through the software projector
 /// instead of COP2, for profiler comparisons. Ship = true.
