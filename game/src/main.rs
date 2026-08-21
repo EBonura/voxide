@@ -49,8 +49,12 @@ use psx_gpu::{
 use psx_gte::math::{Mat3I16, Vec3I16, Vec3I32};
 use psx_gte::scene;
 use psx_math::sincos;
-use psx_pad::{button, enable_analog_port1, poll_port1, ButtonState, Deadzone};
+use psx_pad::{
+    button, enable_analog_port1, poll_port1, ActionBinding, ActionMap, ButtonState, Deadzone,
+    PadState,
+};
 use psx_rt::{interrupts, tty};
+use psx_settings::Profile;
 use psx_vram::{Clut, TexDepth, Tpage};
 
 use tex::BlockTex;
@@ -652,12 +656,28 @@ const PICK_RANGE: i32 = BLOCK * 9 / 2; // 4.5-block block reach (Java survival)
 const PICK_STEP: i32 = 16;
 const MOVE_DEADZONE: i16 = 18;
 const LOOK_DEADZONE: i16 = 12;
-// Live settings, tweakable from the main menu's SETTINGS card. Session-only
-// (not persisted to the card); defaults are the shipped feel.
+// Live settings, tweakable from either SETTINGS card and persisted in their
+// own normal memory-card file (separate from the world save).
 static mut SET_MOVE_DZ: i16 = MOVE_DEADZONE;
 static mut SET_LOOK_DZ: i16 = LOOK_DEADZONE;
 static mut SET_LOOK_PCT: i32 = 100; // look-speed scale, percent
 static mut SET_INVERT_Y: bool = false;
+const SETTINGS_FILE: &str = "BESLES-00000VOXSET1";
+const SETTINGS_TITLE: &str = "VoXide Settings";
+const ACT_FORWARD: usize = 0;
+const ACT_BACK: usize = 1;
+const ACT_LEFT: usize = 2;
+const ACT_RIGHT: usize = 3;
+const ACT_SNEAK: usize = 4;
+const VOXIDE_ACTIONS: ActionMap<5> = ActionMap::new([
+    ActionBinding::new(button::UP, 0),
+    ActionBinding::new(button::DOWN, 0),
+    ActionBinding::new(button::LEFT, 0),
+    ActionBinding::new(button::RIGHT, 0),
+    ActionBinding::new(button::CIRCLE, 0),
+]);
+static mut SETTINGS_PROFILE: Profile<5, 0> = Profile::new(VOXIDE_ACTIONS);
+static mut SETTINGS_DIRTY: bool = false;
 // Frames a first jump-tap stays "armed"; a second CROSS within it toggles fly.
 const DOUBLE_TAP_FRAMES: u8 = 12;
 
@@ -1647,6 +1667,7 @@ fn main() {
     // taking effect -- which is why analog "used to work".)
     let _ = enable_analog_port1();
     interrupts::install_vblank_counter();
+    load_shared_settings();
     sfx::init();
     show_intro(&mut fb, &font);
 
@@ -1875,6 +1896,9 @@ fn main() {
                     menu = 0;
                 }
             } else if pressed(pad, previous, button::CIRCLE) {
+                if menu == MENU_OPTIONS {
+                    persist_shared_settings();
+                }
                 menu = 0;
             } else if menu == MENU_INV {
                 if pressed(pad, previous, button::SQUARE) {
@@ -2677,6 +2701,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             }
         } else if settings {
             if pressed(pad, prev, button::CIRCLE) || pressed(pad, prev, button::START) {
+                persist_shared_settings();
                 settings = false;
                 sfx::blip();
             }
@@ -2742,6 +2767,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             credits = true;
             sfx::confirm();
         } else if go {
+            persist_shared_settings();
             sfx::confirm();
             return;
         }
@@ -2881,6 +2907,37 @@ const SETTING_ROWS: usize = 5;
 const SETTING_NAMES: [&str; SETTING_ROWS] =
     ["MOVE DEADZONE", "LOOK DEADZONE", "LOOK SPEED", "INVERT LOOK Y", "SFX VOLUME"];
 
+fn load_shared_settings() {
+    let Ok(profile) = psx_settings::load_slot_one(SETTINGS_FILE) else {
+        return;
+    };
+    unsafe {
+        SETTINGS_PROFILE = profile;
+        SET_MOVE_DZ = SETTINGS_PROFILE.move_deadzone as i16;
+        SET_LOOK_DZ = SETTINGS_PROFILE.look_deadzone as i16;
+        SET_LOOK_PCT = SETTINGS_PROFILE.look_speed_percent as i32;
+        SET_INVERT_Y = SETTINGS_PROFILE.invert_y();
+        sfx::set_volume_pct(SETTINGS_PROFILE.sfx_volume as i32);
+        SETTINGS_DIRTY = false;
+    }
+}
+
+fn persist_shared_settings() {
+    unsafe {
+        if !SETTINGS_DIRTY {
+            return;
+        }
+        SETTINGS_PROFILE.move_deadzone = SET_MOVE_DZ as u8;
+        SETTINGS_PROFILE.look_deadzone = SET_LOOK_DZ as u8;
+        SETTINGS_PROFILE.look_speed_percent = SET_LOOK_PCT as u8;
+        SETTINGS_PROFILE.set_invert_y(SET_INVERT_Y);
+        SETTINGS_PROFILE.sfx_volume = sfx::volume_pct() as u8;
+        if psx_settings::save_slot_one(SETTINGS_FILE, SETTINGS_TITLE, &SETTINGS_PROFILE).is_ok() {
+            SETTINGS_DIRTY = false;
+        }
+    }
+}
+
 /// Step one setting up or down, clamped to its range.
 fn setting_adjust(row: usize, dir: i32) {
     unsafe {
@@ -2891,6 +2948,7 @@ fn setting_adjust(row: usize, dir: i32) {
             3 => SET_INVERT_Y = !SET_INVERT_Y,
             _ => sfx::set_volume_pct(sfx::volume_pct() + dir * 25),
         }
+        SETTINGS_DIRTY = true;
     }
 }
 
@@ -3778,6 +3836,17 @@ fn update_player(
     left: (i16, i16),
     right: (i16, i16),
 ) {
+    let action_map = unsafe { SETTINGS_PROFILE.actions };
+    let current = PadState {
+        buttons: pad,
+        ..PadState::NONE
+    };
+    let prior = PadState {
+        buttons: previous,
+        ..PadState::NONE
+    };
+    let actions = action_map.input(current, prior);
+
     // --- look: RIGHT stick = camera (yaw + pitch), proportional analog ---
     //
     // Radial, through psx-pad. This used to gate each axis on its own, which
@@ -3830,16 +3899,16 @@ fn update_player(
     if lx == 0 && ly == 0 {
         // D-pad as a movement fallback when the stick is idle: UP/DOWN walk,
         // LEFT/RIGHT strafe (turning stays on the right stick only).
-        if pad.is_held(button::UP) {
+        if actions.held(ACT_FORWARD) {
             forward += WALK_SPEED;
         }
-        if pad.is_held(button::DOWN) {
+        if actions.held(ACT_BACK) {
             forward -= WALK_SPEED;
         }
-        if pad.is_held(button::LEFT) {
+        if actions.held(ACT_LEFT) {
             strafe -= WALK_SPEED;
         }
-        if pad.is_held(button::RIGHT) {
+        if actions.held(ACT_RIGHT) {
             strafe += WALK_SPEED;
         }
     }
@@ -3847,7 +3916,7 @@ fn update_player(
     // Sneak: hold CIRCLE (the Bedrock PS4/PS5 default; it doubles as fly-down
     // while flying, exactly as on console). Java walks you at ~30% speed and
     // refuses to step off a ledge; it beats sprint, so you cannot sprint-sneak.
-    let sneaking = pad.is_held(button::CIRCLE) && !player.fly;
+    let sneaking = actions.held(ACT_SNEAK) && !player.fly;
     player.sneaking = sneaking;
     // Sprint (Bedrock): press L3, or push the stick forward twice inside the
     // double-tap window. The latch drops the moment forward input stops, so a
