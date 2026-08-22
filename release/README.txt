@@ -1,4 +1,4 @@
-VoXide (PSX)  -  v0.1.9
+VoXide (PSX)  -  v0.1.10
 =======================
 
 A Minecraft-style survival sandbox for the PlayStation 1, written in Rust.
