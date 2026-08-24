@@ -44,4 +44,5 @@ psx-gte  = { path = "../.psoxide/sdk/crates/psx-gte" }
 psx-spu  = { path = "../.psoxide/sdk/crates/psx-spu" }
 psx-pack = { path = "../.psoxide/sdk/crates/psx-pack" }
 psx-mc   = { path = "../.psoxide/sdk/crates/psx-mc" }
+psx-settings = { path = "../.psoxide/sdk/crates/psx-settings" }
 psx-fx   = { path = "../.psoxide/sdk/crates/psx-fx" }
