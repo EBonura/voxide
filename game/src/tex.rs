@@ -1215,21 +1215,38 @@ fn mob_face(tile: u8, x: usize, y: usize) -> u8 {
             }
             return (hash(x as i32, y as i32, 72) % 4) as u8;
         }
-        // Wolf: dark snout down the middle, amber eyes, ears at the corners.
+        // Wolf: outlined ears, small amber-lit eyes, short pale muzzle.
+        //
+        // The first pass never read as a wolf and it was structural, not taste.
+        // The ears were index 4, one step off the coat's own 0..3 ramp, so they
+        // dissolved into the head; the snout was a solid index-5 slab running
+        // from mid-face to the BOTTOM EDGE of the tile, which reads as a hole
+        // punched in the face rather than a muzzle; and nothing on the tile was
+        // dark enough to give the head an outline.
         T_FACE_WOLF => {
-            if r(x, y, 6, 8, 9, 15) {
-                return 5; // snout
+            // Glint before the rim, or the rim it sits inside swallows it.
+            if r(x, y, 4, 6, 4, 6) || r(x, y, 11, 6, 11, 6) {
+                return 7; // amber glint
             }
-            if r(x, y, 7, 12, 8, 14) {
-                return 6; // nose
+            if r(x, y, 4, 6, 5, 7) || r(x, y, 10, 6, 11, 7) {
+                return 6; // dark eye around it
             }
-            if r(x, y, 3, 6, 4, 7) || r(x, y, 11, 6, 12, 7) {
-                return 7; // amber eyes
+            if r(x, y, 1, 1, 2, 3) || r(x, y, 13, 1, 14, 3) {
+                return 5; // inner ear
             }
-            if r(x, y, 0, 0, 2, 4) || r(x, y, 13, 0, 15, 4) {
-                return 4; // ears
+            if r(x, y, 0, 0, 3, 4) || r(x, y, 12, 0, 15, 4) {
+                return 6; // ear outline, dark enough to survive the coat
             }
-            return (hash(x as i32, y as i32, 73) % 4) as u8;
+            if r(x, y, 7, 11, 8, 12) {
+                return 6; // black nose
+            }
+            if r(x, y, 6, 13, 9, 13) {
+                return 5; // mouth line
+            }
+            if r(x, y, 6, 10, 9, 14) {
+                return 3; // pale muzzle, clear of the tile edge
+            }
+            return (hash(x as i32, y as i32, 73) % 3) as u8;
         }
         T_FACE_SAPPER => {
             if r(x, y, 6, 12, 9, 12) {
@@ -1272,8 +1289,14 @@ fn mob_face(tile: u8, x: usize, y: usize) -> u8 {
             return 0;
         }
         // Charred skeleton: a skull, darker and squarer than the plain skeleton.
+        //
+        // The layout was fine; the SURFACE was not. Every texel that was not a
+        // feature returned a flat index 0, so the tile had no edge and no
+        // grain, and at head size on screen it read as one dark square rather
+        // than a face. Sockets widened a texel, the skull dithered over its two
+        // near tones, and a border in the darkest tone to give it a silhouette.
         T_FACE_CHARRED => {
-            if r(x, y, 4, 5, 5, 7) || r(x, y, 10, 5, 11, 7) {
+            if r(x, y, 4, 5, 6, 7) || r(x, y, 9, 5, 11, 7) {
                 return 6; // sunken sockets
             }
             if r(x, y, 6, 10, 9, 10) || r(x, y, 6, 12, 9, 12) {
@@ -1282,7 +1305,10 @@ fn mob_face(tile: u8, x: usize, y: usize) -> u8 {
             if r(x, y, 7, 8, 8, 9) {
                 return 4; // nasal
             }
-            return 0;
+            if r(x, y, 2, 2, 13, 14) {
+                return (hash(x as i32, y as i32, 74) % 2) as u8; // charred bone
+            }
+            return 4; // shadowed edge, so the skull has an outline
         }
         T_FACE_SPIDER => {
             if r(x, y, 4, 10, 11, 11) {
