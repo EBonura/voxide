@@ -860,12 +860,18 @@ fn texel(tile: u8, x: usize, y: usize) -> u8 {
         T_PICK | T_AXE | T_SHOVEL | T_SWORD => {
             // Hand-authored heads: 1 edge, 2 fill, 3 handle, 4 guard. All four
             // share a down-left handle so they read as a matched set.
+            // The pickaxe was the odd one out and read as broken rather than
+            // stylised -- an itch player called it "cursed". Its two prongs
+            // were different lengths and different widths, the right one just
+            // stopped mid-air, and the handle started INSIDE the head instead
+            // of below it. Redrawn: a symmetric arc, two matched prongs, and
+            // the handle emerging from the hollow under the middle.
             const PICK: [&[u8; 16]; 16] = [
-                b"......111111....", b"....112222211...", b"...12222222221..",
-                b"...122.....221..", b"..12.....33.21..", b"..12....33...1..",
-                b"..1....33.......", b"......33........", b".....33.........",
-                b"....33..........", b"...33...........", b"..33............",
-                b".33.............", b"33..............", b"3...............",
+                b"................", b"......1111......", b"....12222221....",
+                b"..122222222221..", b"..122......221..", b"..12.....33.21..",
+                b"..1.....33...1..", b".......33.......", b"......33........",
+                b".....33.........", b"....33..........", b"...33...........",
+                b"..33............", b".33.............", b"33..............",
                 b"................",
             ];
             const AXE: [&[u8; 16]; 16] = [
@@ -1003,9 +1009,15 @@ fn texel(tile: u8, x: usize, y: usize) -> u8 {
                 (hash(xi >> 1, yi >> 1, 45) % 4) as u8
             }
         }
+        // The wraith/villager/wolf arms were added to `mob_face` and to the
+        // palette table but NOT here, so all three fell through to `_ => 6` and
+        // wore a flat index-6 sticker: near-black for the wolf and the
+        // villager, magenta for the wraith. That is the "mobs have black
+        // faces" report from itch.
         T_FACE_PIG | T_FACE_COW | T_FACE_SHEEP | T_FACE_CHICKEN | T_FACE_ZOMBIE
         | T_FACE_SKELETON | T_FACE_SAPPER | T_FACE_SPIDER | T_FACE_EMBER | T_FACE_WAILER
-        | T_FACE_CHARRED | T_CRACK0 | T_CRACK1 | T_CRACK2 | T_CRACK3 => mob_face(tile, x, y),
+        | T_FACE_CHARRED | T_FACE_WRAITH | T_FACE_VILLAGER | T_FACE_WOLF | T_CRACK0
+        | T_CRACK1 | T_CRACK2 | T_CRACK3 => mob_face(tile, x, y),
         T_HIDE => {
             // Soft hide mottle over skin indices 0..3 (denser than the face
             // base dither so bodies read as fur/hide, not flat paint).
