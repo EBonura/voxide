@@ -653,7 +653,6 @@ const DIRS: [(i32, i32, i32); 6] = [
     (0, 0, -1),
 ];
 const PICK_RANGE: i32 = BLOCK * 9 / 2; // 4.5-block block reach (Java survival)
-const PICK_STEP: i32 = 16;
 const MOVE_DEADZONE: i16 = 18;
 const LOOK_DEADZONE: i16 = 12;
 // Live settings, tweakable from either SETTINGS card and persisted in their
@@ -912,6 +911,35 @@ const SKY_LEVELS: usize = 4;
 const SKY_SCALE: [u32; SKY_LEVELS] = [56, 80, 104, 128];
 // Horizon colour the far bands fade into; set from the sky each frame.
 static mut FOG_RGB: (u8, u8, u8) = (82, 130, 190);
+/// How enclosed the camera is: 0 under open sky, 255 deep underground. The fog
+/// ramp and the backdrop both fade to cave black by this.
+///
+/// The fog was calibrated for daylight and applied at every depth, so a cave
+/// dissolved into the same warm sand-grey the horizon uses -- terrain a few
+/// blocks away sat against what looked like a lit void, with the far wall of
+/// the cave simply absent. That is the screenshot behind the itch report of
+/// caves "generating very strangely", and behind the ask for fog: there was
+/// fog, it was just the wrong colour to read as depth underground.
+static mut CAVE: u8 = 0;
+/// What fully-fogged terrain fades to underground. Not pure black: at 15-bit
+/// colour a true zero reads as a hole punched in the frame.
+const CAVE_FOG: (u8, u8, u8) = (10, 11, 16);
+/// Past this, the sky dome is replaced by a flat cave wall. The dome's zenith
+/// is computed from the time of day rather than from the horizon colour, so
+/// darkening the horizon alone would leave blue sky showing through a cave
+/// roof.
+const CAVE_SOLID: u8 = 128;
+
+/// Blocks of cover before the fog starts going dark, and how many more until
+/// it is fully cave. A house roof is one or two blocks of cover and has to
+/// stay daylight; a mine ten blocks down is a cave.
+fn cave_amount(py: i32, bx: i32, bz: i32) -> u8 {
+    if world::dimension() != world::DIM_OVERWORLD {
+        return 0; // both off-world dims already draw their own flat fog wall
+    }
+    let depth = world::surface_y(bx, bz) - world_to_block_y(py);
+    (((depth - 3).max(0) * 255) / 8).min(255) as u8
+}
 
 /// Build the boot-time material word tables (after tex::upload).
 fn init_mat_tables() {
@@ -953,8 +981,16 @@ fn ground_haze(light: u8) -> (u8, u8, u8) {
 }
 
 fn refresh_mat_ccmd() {
-    let fog = unsafe { FOG_RGB };
-    let haze = ground_haze(unsafe { LIGHT });
+    let fog = unsafe { FOG_RGB }; // already faded toward CAVE_FOG by the caller
+    let cave = unsafe { CAVE } as i32;
+    let h = ground_haze(unsafe { LIGHT });
+    // The far bands converge on ground haze, which is a daylight colour. Fade
+    // it with the near bands or the end of a cave sightline stays sand-grey.
+    let haze = (
+        lerp_u8(h.0 as i32, CAVE_FOG.0 as i32, cave, 255),
+        lerp_u8(h.1 as i32, CAVE_FOG.1 as i32, cave, 255),
+        lerp_u8(h.2 as i32, CAVE_FOG.2 as i32, cave, 255),
+    );
     let mut sky = 0usize;
     while sky < SKY_LEVELS {
     let mut dir = 0;
@@ -1054,21 +1090,36 @@ static mut INV: [u16; BLOCK_KINDS] = [0; BLOCK_KINDS]; // block counts by block 
 static mut HOTBAR: [u8; HOTBAR_VIS] = [AIR; HOTBAR_VIS];
 static mut HOTBAR_SEL: usize = 0;
 
-// Edited-block deltas vs the seeded terrain, for memory-card save (capped).
-pub const MAX_EDITS: usize = 240;
+// Edited-block deltas vs the seeded terrain. This is not just the memory-card
+// payload any more: world::publish_chunk replays it into every chunk it
+// generates, which is what makes a build survive leaving the loaded ring.
+//
+// 1024, up from 240. Chunks outside the 5x5 ring are thrown away rather than
+// stored, so this log is the ONLY record a build has, and 240 blocks is a hut.
+// The cost is 7 bytes each in RAM and 8 on the card, so 1024 is ~7 KiB and a
+// two-block save file.
+// ponytail: a flat log with a hard cap -- past 1024 edits new ones are simply
+// dropped and will not come back. Per-chunk delta stores are the real answer
+// and a much bigger change; do that when players hit this rather than before.
+pub const MAX_EDITS: usize = 1024;
 pub static mut EDIT_X: [i16; MAX_EDITS] = [0; MAX_EDITS];
 pub static mut EDIT_Y: [i16; MAX_EDITS] = [0; MAX_EDITS];
 pub static mut EDIT_Z: [i16; MAX_EDITS] = [0; MAX_EDITS];
 pub static mut EDIT_B: [u8; MAX_EDITS] = [0; MAX_EDITS];
+/// Which dimension the edit belongs to. All three share one coordinate space
+/// and one chunk ring, so without this the replay would stamp your overworld
+/// house into the Inferno.
+pub static mut EDIT_D: [u8; MAX_EDITS] = [0; MAX_EDITS];
 pub static mut EDIT_N: usize = 0;
 
 /// Record a player block edit (last-write-wins per position; capped region).
 fn record_edit(wx: i32, wy: i32, wz: i32, b: u8) {
     let (x, y, z) = (wx as i16, wy as i16, wz as i16);
+    let d = world::dimension();
     unsafe {
         let mut i = 0;
         while i < EDIT_N {
-            if EDIT_X[i] == x && EDIT_Y[i] == y && EDIT_Z[i] == z {
+            if EDIT_X[i] == x && EDIT_Y[i] == y && EDIT_Z[i] == z && EDIT_D[i] == d {
                 EDIT_B[i] = b;
                 return;
             }
@@ -1079,6 +1130,7 @@ fn record_edit(wx: i32, wy: i32, wz: i32, b: u8) {
             EDIT_Y[EDIT_N] = y;
             EDIT_Z[EDIT_N] = z;
             EDIT_B[EDIT_N] = b;
+            EDIT_D[EDIT_N] = d;
             EDIT_N += 1;
         }
     }
@@ -2494,9 +2546,23 @@ fn main() {
         // every session started in a downpour.
         let (tod, rain, light, sky) = world_lighting(day);
         let raining = rain > 0;
+        // Underground the horizon colour is nonsense: fade it (and, in
+        // refresh_mat_ccmd, the far-band haze it meets) to cave black by how
+        // deep the camera has gone.
+        let cave = cave_amount(
+            player.y,
+            world_to_block_x(player.x),
+            world_to_block_z(player.z),
+        );
+        let sky = (
+            lerp_u8(sky.0 as i32, CAVE_FOG.0 as i32, cave as i32, 255),
+            lerp_u8(sky.1 as i32, CAVE_FOG.1 as i32, cave as i32, 255),
+            lerp_u8(sky.2 as i32, CAVE_FOG.2 as i32, cave as i32, 255),
+        );
         unsafe {
             LIGHT = light;
             FOG_RGB = sky;
+            CAVE = cave;
         }
         refresh_mat_ccmd(); // tint words follow LIGHT and the horizon colour
         if MOB_LINEUP {
@@ -3378,6 +3444,10 @@ fn spawn_player() -> Player {
             RESPAWN_BZ = sz;
         }
     }
+    // The bed may be a long way from wherever you died, so the ring is still
+    // centred there and this column has no terrain yet. Generate it before
+    // asking it how tall it is.
+    world::ensure_loaded(sx, sz);
     let h = world::surface_y(sx, sz);
     Player {
         x: block_to_world_x(sx) + BLOCK / 2,
@@ -4049,6 +4119,16 @@ fn update_player(
             player.fall_peak = player.y; // water breaks the fall, as in Java
         } else {
             player.vy = (player.vy - GRAVITY).max(TERMINAL_VY);
+        }
+        // The horizontal guard above stops you WALKING off the generated ring,
+        // but nothing stopped you falling through it. A teleport puts you
+        // there without walking -- respawning at a bed the ring has not reached
+        // yet -- and world::get answers AIR for those columns, so there was no
+        // floor to land on and the terrain generated on top of you a second
+        // later. That is the "appeared underground when respawned" report.
+        if !world::column_loaded(world_to_block_x(player.x), world_to_block_z(player.z)) {
+            player.vy = 0;
+            player.fall_peak = player.y;
         }
         let ny = player.y + player.vy;
         if aabb_collides(player.x, ny, player.z) {
@@ -7101,37 +7181,88 @@ fn depth_slot(depth: i32) -> usize {
     1 + ((depth - NEAR_Z) as usize * (OT_LEN - 2)) / (FAR_Z - NEAR_Z) as usize
 }
 
+/// Voxel ray march for the crosshair target, Amanatides-Woo style: step to
+/// whichever cell WALL the ray reaches next, so every cell the ray actually
+/// passes through gets tested, in order.
+///
+/// This replaces a fixed 16-unit sample march. Sampling every quarter block
+/// cannot skip a whole block along an axis, but it can cut a CORNER: where two
+/// solid blocks meet diagonally, consecutive samples land in the two empty
+/// diagonal cells and the ray slips between them into whatever is behind. That
+/// needs a particular yaw and pitch to line up, which is exactly the itch
+/// report of digging "through textures in specific positions of right analog
+/// stick", and jagged mined-out cave walls are full of those diagonals.
+///
+/// It is also CHEAPER than the march it replaces -- at most 19 cell tests over
+/// the 4.5-block reach against 18 fixed samples, and usually far fewer -- and
+/// the reported place cell is now always face-adjacent to the hit, where the
+/// sampler could hand back a diagonal neighbour.
 #[inline(never)]
 fn trace_pick(cam: &Camera) -> Pick {
-    let fx = (cam.sy * cam.cp) >> 12;
-    let fy = cam.sp;
-    let fz = (cam.cy * cam.cp) >> 12;
-    let mut place = (
+    let dir = [(cam.sy * cam.cp) >> 12, cam.sp, (cam.cy * cam.cp) >> 12];
+    let pos = [cam.x, cam.y, cam.z];
+    let mut cell = [
         world_to_block_x(cam.x),
         world_to_block_y(cam.y),
         world_to_block_z(cam.z),
-    );
-    let mut d = PICK_STEP;
-    while d <= PICK_RANGE {
-        let wx = cam.x + ((fx * d) >> 12);
-        let wy = cam.y + ((fy * d) >> 12);
-        let wz = cam.z + ((fz * d) >> 12);
-        let bx = world_to_block_x(wx);
-        let by = world_to_block_y(wy);
-        let bz = world_to_block_z(wz);
-        if get_block_i32(bx, by, bz) != AIR {
+    ];
+    // An axis the ray does not travel along never crosses a wall: park its
+    // next-wall distance past the reach so the min-pick below ignores it.
+    const NEVER: i32 = i32::MAX / 4;
+    // Fractional bits on those distances. Whole world units are NOT enough
+    // resolution: two walls a hundredth of a unit apart truncate to the same
+    // integer, the tie-break then crosses them in the wrong order, and the ray
+    // steps diagonally past the corner they share -- the exact tunnel this
+    // rewrite exists to close, just 200x rarer. Ten bits costs nothing (the
+    // divisions happen once, at setup) and keeps the worst accumulated value
+    // near 2^28, well inside i32 and below NEVER.
+    const T_FRAC: u32 = 10;
+    let mut step = [0i32; 3];
+    let mut t_wall = [NEVER; 3]; // distance to this axis' next cell wall
+    let mut t_cell = [NEVER; 3]; // distance between walls on this axis
+    let mut a = 0;
+    while a < 3 {
+        if dir[a] != 0 {
+            let mag = dir[a].abs();
+            let local = pos[a] - cell[a] * BLOCK; // 0..BLOCK-1 inside the cell
+            let to_wall = if dir[a] > 0 { BLOCK - local } else { local };
+            step[a] = if dir[a] > 0 { 1 } else { -1 };
+            // dir is a Q12 unit vector, so <<12 puts these in world units.
+            t_wall[a] = (to_wall << (12 + T_FRAC)) / mag;
+            t_cell[a] = (BLOCK << (12 + T_FRAC)) / mag;
+        }
+        a += 1;
+    }
+    let reach = PICK_RANGE << T_FRAC;
+    let mut place = cell;
+    // A ray this long crosses at most ceil(reach)+1 walls per axis.
+    let mut guard = 0;
+    while guard <= 3 * (PICK_RANGE / BLOCK + 2) {
+        if get_block_i32(cell[0], cell[1], cell[2]) != AIR {
             return Pick {
                 hit: true,
-                bx,
-                by,
-                bz,
-                px: place.0,
-                py: place.1,
-                pz: place.2,
+                bx: cell[0],
+                by: cell[1],
+                bz: cell[2],
+                px: place[0],
+                py: place[1],
+                pz: place[2],
             };
         }
-        place = (bx, by, bz);
-        d += PICK_STEP;
+        let a = if t_wall[0] <= t_wall[1] && t_wall[0] <= t_wall[2] {
+            0
+        } else if t_wall[1] <= t_wall[2] {
+            1
+        } else {
+            2
+        };
+        if t_wall[a] > reach {
+            break;
+        }
+        place = cell;
+        cell[a] += step[a];
+        t_wall[a] += t_cell[a];
+        guard += 1;
     }
     NO_PICK
 }
@@ -7490,6 +7621,12 @@ fn draw_inventory(font: &FontAtlas, sel: usize) {
     let vis = 8;
     let start = list_window(n, vis, sel);
     menu_scroll_hint(font, n, vis, start, MENU_HINT_X, MENU_ROWS_Y);
+    // This panel lists PLACEABLES, and tools are not among them: they have no
+    // durability and the best tier equips itself into the slot left of the
+    // hotbar. Nothing said so, so a player on itch spent the session hunting
+    // for a way to "equip my pickaxe" and concluded a full hotbar had blocked
+    // it. One line in the footer, where the panel already has the room.
+    draw_centered(font, 170, "TOOLS EQUIP THEMSELVES: NO SLOT", MC_INK);
     if n == 0 {
         ui_text(font, MENU_TEXT_X, MENU_ROWS_Y, "NOTHING YET: GO MINE!", MC_INK);
         return;
@@ -8901,7 +9038,10 @@ fn queue_dither() {
 /// instead of the gradient/sun/moon/stars/cloud stack.
 #[inline(never)]
 fn draw_frame_sky(cam: &Camera, day: u32, tod: u32, light: u8, sky: (u8, u8, u8), raining: bool) {
-    if world::dimension() != world::DIM_OVERWORLD {
+    // Deep underground gets the same treatment for the same reason: the dome's
+    // zenith comes from the time of day, not from `sky`, so a darkened horizon
+    // alone still left daylight blue showing through the cave roof.
+    if world::dimension() != world::DIM_OVERWORLD || unsafe { CAVE } >= CAVE_SOLID {
         rect(0, 0, SCREEN_W as i16, SCREEN_H as i16, sky.0, sky.1, sky.2);
     } else {
         draw_sky(cam, day, tod, light, sky, raining);

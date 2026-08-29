@@ -1045,6 +1045,21 @@ fn step_mob(i: usize, px: i32, _py: i32, pz: i32, night: bool) {
     // with collision on it pins itself against the first one it meets and never
     // reaches the player.
     let phases = is_flyer(m.kind);
+    // Self-heal: a mob standing INSIDE terrain used to stay there forever.
+    // Every move it can make is collision-checked against the position it is
+    // trying to reach, and from inside a block they all fail, so it froze half
+    // sunk in the world and could not be walked into or escaped from -- the
+    // itch report of mobs clipped into blocks that cannot be killed. Getting
+    // there is easy: build a block on top of one, or generate terrain around
+    // it. Lift it out an eighth of a block a frame instead.
+    if !phases && aabb_collides_dims(m.x, m.y, m.z, hw, h) {
+        m.y += 8;
+        m.vy = 0;
+        unsafe {
+            MOBS[i] = m;
+        }
+        return;
+    }
     if sx != 0 {
         let nx = m.x + sx;
         if !phases && aabb_collides_dims(nx, m.y, m.z, hw, h) {
@@ -1157,9 +1172,22 @@ pub fn melee(px: i32, py: i32, pz: i32, fx: i32, fz: i32, reach: i32, damage: i1
         m.state = ST_CHASE; // neutral no longer: you started it
         blink(&mut m, px, pz);
     }
-    // Knockback away from the player.
-    m.x += if m.x >= px { SPEED * 3 } else { -SPEED * 3 };
-    m.z += if m.z >= pz { SPEED * 3 } else { -SPEED * 3 };
+    // Knockback away from the player, THROUGH the same move-and-slide the AI
+    // uses. It used to teleport the mob 15 units per hit with no collision
+    // test at all, so a couple of swings against a wall pushed it bodily into
+    // the blocks behind: it then read as clipping through the terrain, and
+    // since every AI step is collision-checked it could never walk back out,
+    // which is the itch report of mobs that "clip through blocks when you try
+    // to attack them so it's unable to kill them".
+    let (hw, h) = dims(m.kind);
+    let kx = if m.x >= px { SPEED * 3 } else { -SPEED * 3 };
+    let kz = if m.z >= pz { SPEED * 3 } else { -SPEED * 3 };
+    if !aabb_collides_dims(m.x + kx, m.y, m.z, hw, h) {
+        m.x += kx;
+    }
+    if !aabb_collides_dims(m.x, m.y, m.z + kz, hw, h) {
+        m.z += kz;
+    }
     if m.health <= 0 {
         record_death(&m);
         unsafe {

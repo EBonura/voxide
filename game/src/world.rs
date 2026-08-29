@@ -1570,10 +1570,47 @@ fn pack_blocks(s: usize, from: usize, count: usize) -> usize {
 /// internal and cannot be seen; rebuilding four complete neighbours merely to
 /// delete them doubled streaming demand. A later edit/LOD transition naturally
 /// refreshes those ranges.
-fn publish_chunk(s: usize, _cx: i32, _cz: i32) {
+fn publish_chunk(s: usize, cx: i32, cz: i32) {
+    replay_edits(s, cx, cz);
     unsafe {
         CHUNKS[s].loaded = true;
         CHUNKS[s].dirty = true;
+    }
+}
+
+/// Stamp the player's block edits back onto a chunk that has just been
+/// generated from the seed.
+///
+/// A chunk that leaves the 5x5 ring is thrown away, not stored, so coming back
+/// re-derives it from noise -- and everything built there was gone. Walk far
+/// enough that one side of a build leaves the ring, come back, and half of it
+/// has reverted to terrain, which is exactly what an itch player reported
+/// happening to their house. The edit log already existed for the memory card;
+/// this makes it authoritative for streaming too.
+///
+/// Runs on the frame a chunk completes, which already carries the last gen
+/// tick. A full scan of the log is a few thousand cycles against that tick's
+/// ~40K, and only chunk completions pay it.
+fn replay_edits(s: usize, cx: i32, cz: i32) {
+    let dim = unsafe { DIM };
+    let (x0, z0) = (cx * CW, cz * CW);
+    let n = unsafe { crate::EDIT_N };
+    let mut i = 0;
+    while i < n {
+        let (x, z) = unsafe { (crate::EDIT_X[i] as i32, crate::EDIT_Z[i] as i32) };
+        if unsafe { crate::EDIT_D[i] } == dim
+            && x >= x0
+            && x < x0 + CW
+            && z >= z0
+            && z < z0 + CW
+        {
+            let y = unsafe { crate::EDIT_Y[i] as i32 };
+            if y >= 0 && y < CH {
+                let idx = lidx((x - x0) as usize, y as usize, (z - z0) as usize);
+                unsafe { bset(&mut CHUNKS[s].blocks, idx, crate::EDIT_B[i]) };
+            }
+        }
+        i += 1;
     }
 }
 
@@ -3483,6 +3520,27 @@ pub fn recenter(wx: i32, wz: i32) {
             GEN_COL = 0;
             GEN_PHASE = 0;
         }
+    }
+}
+
+/// Recentre on (bx, bz) and finish the chunk under it before returning.
+///
+/// `recenter` only STARTS one amortized gen, so anything that TELEPORTS the
+/// player -- respawning at a bed on the far side of the ring -- returns with
+/// the destination column still ungenerated. Everything that then reads the
+/// terrain there gets AIR: `surface_y` falls back to the noise height, gravity
+/// finds no floor, and the chunk finally generates around a player who has
+/// been falling for a second. Blocking here costs the frame a normal chunk gen
+/// (~38 ticks) and only ever happens on a teleport.
+#[inline(never)]
+pub fn ensure_loaded(bx: i32, bz: i32) {
+    // Generous: a chunk is ~38 gen ticks, and the centre chunk is the nearest
+    // missing one so recenter always picks it first.
+    let mut guard = 0;
+    while !column_loaded(bx, bz) && guard < 4096 {
+        recenter(bx, bz);
+        gen_tick();
+        guard += 1;
     }
 }
 

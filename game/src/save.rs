@@ -8,7 +8,9 @@
 //! a fixed header (magic, player pose/stats, inventory, edit count,
 //! progression) followed by 8-byte edit-delta records.
 
-use crate::{Player, AIR, BLOCK_KINDS, EDIT_B, EDIT_N, EDIT_X, EDIT_Y, EDIT_Z, INV, MAX_EDITS};
+use crate::{
+    Player, AIR, BLOCK_KINDS, EDIT_B, EDIT_D, EDIT_N, EDIT_X, EDIT_Y, EDIT_Z, INV, MAX_EDITS,
+};
 use psx_mc::{Card, HardwareCard, Slot};
 
 const MAGIC: [u8; 4] = *b"MCPX";
@@ -106,6 +108,10 @@ pub fn save(p: &Player) -> bool {
         put_i16(buf, off + 2, unsafe { EDIT_Y[idx] });
         put_i16(buf, off + 4, unsafe { EDIT_Z[idx] });
         buf[off + 6] = unsafe { EDIT_B[idx] };
+        // Byte 7 was the record's pad. It now carries the dimension, and it
+        // reads back 0 (= overworld) on saves written before this, because the
+        // serialization buffer is zeroed .bss and nothing ever wrote there.
+        buf[off + 7] = unsafe { EDIT_D[idx] };
         idx += 1;
     }
 
@@ -165,6 +171,7 @@ pub fn load(p: &mut Player) -> bool {
             EDIT_Y[idx] = get_i16(buf, off + 2);
             EDIT_Z[idx] = get_i16(buf, off + 4);
             EDIT_B[idx] = buf[off + 6];
+            EDIT_D[idx] = buf[off + 7];
         }
         idx += 1;
     }
@@ -175,18 +182,22 @@ pub fn load(p: &mut Player) -> bool {
 /// Apply the loaded edit log to the world (raw sets + one remesh per chunk).
 pub fn apply_edits() {
     let n = unsafe { EDIT_N };
+    let dim = crate::world::dimension();
     let mut i = 0;
     while i < n {
-        let (x, y, z, b) = unsafe {
+        let (x, y, z, b, d) = unsafe {
             (
                 EDIT_X[i] as i32,
                 EDIT_Y[i] as i32,
                 EDIT_Z[i] as i32,
                 EDIT_B[i],
+                EDIT_D[i],
             )
         };
         let _ = AIR;
-        crate::world::set_raw_pub(x, y, z, b);
+        if d == dim {
+            crate::world::set_raw_pub(x, y, z, b);
+        }
         i += 1;
     }
     crate::world::remesh_loaded();
