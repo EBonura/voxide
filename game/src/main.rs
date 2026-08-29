@@ -9595,9 +9595,16 @@ const TOOL_SHOVEL: u8 = 3;
 const TOOL_SWORD: u8 = 4;
 
 /// The tool class a block is worked with, following Java's material families.
+///
+/// The four STAIRS were missing from the pickaxe family while `block_hardness`
+/// put them at 30, "as cobble". Same material, same hardness, but a pickaxe did
+/// not help, and they were the only block in either table where the two
+/// disagreed. Nobody noticed because the old bare-hands rule in `mine_speed`
+/// handed tool-less blocks a speed bonus that took stairs most of the way back.
 fn tool_for(block: u8) -> u8 {
     match block {
-        STONE | COBBLE | BRICK | OBSIDIAN | FURNACE | ENCHANT | SLAB | PISTON | CINDERSTONE
+        STONE | COBBLE | BRICK | OBSIDIAN | FURNACE | ENCHANT | SLAB | STAIRS_N | STAIRS_E
+        | STAIRS_S | STAIRS_W | PISTON | CINDERSTONE
         | VOID_STONE | LUMISTONE | COAL_ORE | IRON_ORE | GOLD_ORE | DIAMOND_ORE => TOOL_PICK,
         WOOD | PLANK | FENCE | CHEST | CRAFT_TABLE | DOOR_C | DOOR_O | LADDER | BED => TOOL_AXE,
         GRASS | DIRT | SAND | SINK_SAND | SNOW | CLAY => TOOL_SHOVEL,
@@ -9619,12 +9626,15 @@ fn tool_tier(p: &Player, class: u8) -> u8 {
 /// Mining speed (progress per frame). The RIGHT tool speeds a block up; the
 /// wrong one works at bare-hand pace, which is what makes carrying a set of
 /// tools worth the crafting.
+///
+/// A block with NO tool family works at bare hands too -- `tool_tier` answers 0
+/// for TOOL_NONE, so the one line below covers it. It used to get a separate
+/// `1 + max(shovel, pick) / 2`, which made a shovel matter to breaking glass,
+/// matched neither Java nor any decision recorded here, and quietly concealed
+/// the stairs gap above. Removing it costs a third of a second on wool at
+/// worst (12 frames rather than 4); leaves go from 1 frame to 3.
 fn mine_speed(p: &Player, block: u8) -> u32 {
-    let class = tool_for(block);
-    if class == TOOL_NONE {
-        return 1 + tool_tier(p, TOOL_SHOVEL).max(tool_tier(p, TOOL_PICK)) as u32 / 2;
-    }
-    1 + tool_tier(p, class) as u32
+    1 + tool_tier(p, tool_for(block)) as u32
 }
 
 /// Cycle to the next placeable item that the player actually owns. Previously
