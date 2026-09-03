@@ -980,8 +980,18 @@ fn ground_haze(light: u8) -> (u8, u8, u8) {
     )
 }
 
+/// The inputs the tint table depends on. `refresh_mat_ccmd` ran every frame
+/// (4% of a spawn-meadow frame) while LIGHT, FOG_RGB and CAVE only move a
+/// few times a minute; rebuild only when one of them has.
+static mut MAT_CCMD_KEY: (u8, (u8, u8, u8), u8) = (0xFF, (0, 0, 0), 0xFF);
+
 fn refresh_mat_ccmd() {
     let fog = unsafe { FOG_RGB }; // already faded toward CAVE_FOG by the caller
+    let key = unsafe { (LIGHT, fog, CAVE) };
+    if unsafe { MAT_CCMD_KEY } == key {
+        return;
+    }
+    unsafe { MAT_CCMD_KEY = key };
     let cave = unsafe { CAVE } as i32;
     let h = ground_haze(unsafe { LIGHT });
     // The far bands converge on ground haze, which is a daylight colour. Fade
@@ -5562,6 +5572,8 @@ struct ClipVert {
 const EMPTY_CLIP_VERT: ClipVert =
     ClipVert { x: 0, y: 0, z: 0, u: 0, v: 0, r: 0, g: 0, b: 0 };
 const CLIP_VERT_CAP: usize = 12;
+static mut CLIP_SCRATCH_A: [ClipVert; CLIP_VERT_CAP] = [EMPTY_CLIP_VERT; CLIP_VERT_CAP];
+static mut CLIP_SCRATCH_B: [ClipVert; CLIP_VERT_CAP] = [EMPTY_CLIP_VERT; CLIP_VERT_CAP];
 #[inline]
 fn clip_distance(p: ClipVert, plane: usize) -> i32 {
     match plane {
@@ -5695,12 +5707,24 @@ fn emit_clipped_cell(
     depth_bias: i32,
 ) {
     // Perimeter order for the PS1 quad convention (TL, TR, BL, BR).
-    let mut a = [EMPTY_CLIP_VERT; CLIP_VERT_CAP];
+    // The two polygon buffers are static scratch, not locals: as locals the
+    // compiler zeroed 768 bytes per call (memset was 3% of a spawn-meadow
+    // frame, all from here) and `swap` copied both arrays every clipped
+    // plane. The renderer is single-threaded and this never recurses, so the
+    // buffers are only ever alive for one call; swapping the references
+    // replaces the copies.
+    // SAFETY: single-threaded guest; the buffers are used only inside this
+    // call and every element read is one written earlier in the same call.
+    let (mut a, mut b): (&mut [ClipVert; CLIP_VERT_CAP], &mut [ClipVert; CLIP_VERT_CAP]) = unsafe {
+        (
+            &mut *core::ptr::addr_of_mut!(CLIP_SCRATCH_A),
+            &mut *core::ptr::addr_of_mut!(CLIP_SCRATCH_B),
+        )
+    };
     a[0] = corners[0];
     a[1] = corners[1];
     a[2] = corners[3];
     a[3] = corners[2];
-    let mut b = [EMPTY_CLIP_VERT; CLIP_VERT_CAP];
     let mut n = 4usize;
     let mut plane = 0usize;
     while plane < 6 {
@@ -5725,7 +5749,7 @@ fn emit_clipped_cell(
             plane += 1;
             continue;
         }
-        n = clip_polygon_plane(&a, n, &mut b, plane);
+        n = clip_polygon_plane(a, n, b, plane);
         if n < 3 {
             return;
         }
