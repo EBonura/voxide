@@ -4417,6 +4417,31 @@ fn emit_box(cam: &Camera, x0: i32, y0: i32, z0: i32, x1: i32, y1: i32, z1: i32, 
 /// the +Z front (bit 4) because it wears a textured FACE quad instead.
 #[allow(clippy::too_many_arguments)]
 fn emit_box_masked(cam: &Camera, x0: i32, y0: i32, z0: i32, x1: i32, y1: i32, z1: i32, base: (u8, u8, u8), count: &mut usize, mask: u8) {
+    // Sphere-vs-frustum on the box centre before any face is projected: a
+    // herd behind the player cost six projections a box, and a box straddling
+    // the eye fell to the software clipper per face. Conservative radius: the
+    // half-diagonal bound the face cull uses (long + 27/64 short) on the
+    // three half-extents.
+    {
+        let hx = (x1 - x0) / 2;
+        let hy = (y1 - y0) / 2;
+        let hz = (z1 - z0) / 2;
+        let long = hx.max(hy).max(hz);
+        let short = (hx + hy + hz - long) / 2;
+        let r = long + (short * 27 + 63) / 64 + (short * 27 + 63) / 64;
+        let c = scene::transform_vertex_scheduled(Vec3I16::new(
+            ((x0 + x1) / 2 - cam.x).clamp(-32000, 32000) as i16,
+            ((y0 + y1) / 2 - cam.y).clamp(-32000, 32000) as i16,
+            ((z0 + z1) / 2 - cam.z).clamp(-32000, 32000) as i16,
+        ));
+        if c.z + r < 0 {
+            return;
+        }
+        let zs = c.z + r;
+        if (c.y.abs() - r) * PROJ_H > zs * 200 || (c.x.abs() - r) * PROJ_H > zs * 160 {
+            return;
+        }
+    }
     let mut dir = 0;
     while dir < 6 {
         if mask & (1 << dir) == 0 {
@@ -5102,6 +5127,26 @@ fn render_plants(cam: &Camera) {
         let ncross = if near_enough { 2 } else { 1 };
         if unsafe { PLANT_N } + 2 > MAX_PLANT_QUADS {
             return;
+        }
+        // Sphere-vs-frustum on the cell centre, one GTE MVMVA (the rotation is
+        // loaded, TR is zero). A plant behind the camera or off to the side
+        // used to be projected corner by corner and, if a corner sat inside
+        // the GTE near band, handed to the software clipper; in a meadow that
+        // is most of the plants around you. Same bounds as the face cull.
+        {
+            let c = scene::transform_vertex_scheduled(Vec3I16::new(
+                cdx as i16,
+                (wy + BLOCK / 2 - cam.y) as i16,
+                cdz as i16,
+            ));
+            let r = BLOCK;
+            if c.z + r < 0 {
+                return;
+            }
+            let zs = c.z + r;
+            if (c.y.abs() - r) * PROJ_H > zs * 200 || (c.x.abs() - r) * PROJ_H > zs * 160 {
+                return;
+            }
         }
         let tile = plant_tile(blk);
         let (tux, tuy) = tex::tile_uv(tile);
