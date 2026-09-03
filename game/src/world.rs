@@ -267,7 +267,8 @@ static mut PLAYER_CX: i32 = 0;
 static mut PLAYER_CZ: i32 = 0;
 // Chunk-radius that gets meshed (covers the draw distance in any facing). POOL
 // must be >= (2*RENDER_R+1)^2.
-const RENDER_R: i32 = 1; // mesh ring: 3x3 around the player. At FAR_Z 768
+const RENDER_R: i32 = 2; // mesh ring: 5x5 around the player; the outer ring meshes
+// at the tops-only LOD below (LOD_R). At FAR_Z 768
 // (12 blocks) a chunk entering this ring is 16+ blocks out -- past the far
 // plane, so it meshes before it can be seen. The old 5x5 ring meshed 25
 // chunks per boundary cross; that streaming load, not face count, was what
@@ -2465,7 +2466,12 @@ static mut MESH_CAP: usize = MAX_MERGE;
 ///
 /// Getting a green overworld to 30fps needs a REAL LOD -- coarse resampled
 /// meshes for distant chunks -- which does not exist here.
-const LOD_R: i32 = 99;
+/// ONE: the outer ring of the 5x5 (chunk distance 2, 16 to 48 blocks out)
+/// meshes through `mesh_lod_tops`, a real resolution LOD: top faces only,
+/// from the column heightfield at two-block cells. Beyond FAR_SIDE_Z the
+/// renderer draws tops only anyway, so nothing those chunks could have shown
+/// is lost, and a 90K-cell six-direction scan becomes a 64-cell pass.
+const LOD_R: i32 = 1;
 
 #[inline]
 fn pack(
@@ -2950,6 +2956,205 @@ fn rebuild_plane_bounds() {
     }
 }
 
+/// Far LOD mesh: top faces only, at two-block cells, from the decoded chunk's
+/// column heightfield (SKY_TOP, the highest meshable block per column).
+///
+/// Each 2x2 group of columns becomes one cell at the height of its tallest
+/// column, carrying that column's top block; runs of equal (height, block)
+/// along x merge into one face up to the ordinary merge cap. Faces are written
+/// plane by plane (y ascending) so the renderer's per-plane ranges hold, the
+/// five other directions get empty ranges, and every face is skylit with no
+/// ambient occlusion. The result is a plain face list: the renderer draws it
+/// exactly as it draws a near chunk's top faces.
+fn mesh_lod_tops() -> usize {
+    const CELLS: usize = CWU / 2;
+    let mut cell_h = [0u8; CELLS * CELLS];
+    let mut cell_b = [AIR; CELLS * CELLS];
+    let mut j = 0;
+    while j < CELLS {
+        let mut i = 0;
+        while i < CELLS {
+            let mut best_h = 0u8;
+            let mut best_col = 0usize;
+            let mut dz = 0;
+            while dz < 2 {
+                let mut dx = 0;
+                while dx < 2 {
+                    let col = (j * 2 + dz) * CWU + (i * 2 + dx);
+                    // Ground, not canopy: a tree's top at two-block cells is
+                    // an unsupported plate that reads as a shard floating in
+                    // the sky (the near ring draws trees whole; beyond it
+                    // they end, as they did at FAR_SIDE_Z before).
+                    let mut h = unsafe { SKY_TOP[col] };
+                    while h > 0 {
+                        let b = unsafe { MESH_SCRATCH[lidx(col % CWU, h as usize, col / CWU)] };
+                        if b == LEAVES || b == WOOD {
+                            h -= 1;
+                        } else if unsafe { BCLASS[b as usize] } & CLS_MESH != 0 {
+                            break;
+                        } else {
+                            h -= 1;
+                        }
+                    }
+                    if h >= best_h {
+                        best_h = h;
+                        best_col = col;
+                    }
+                    dx += 1;
+                }
+                dz += 1;
+            }
+            cell_h[j * CELLS + i] = best_h;
+            cell_b[j * CELLS + i] =
+                unsafe { MESH_SCRATCH[lidx(best_col % CWU, best_h as usize, best_col / CWU)] };
+            i += 1;
+        }
+        j += 1;
+    }
+    let mut n = 0usize;
+    let top_light = LIGHT_BUCKETS - 1;
+    // Skirts: where a cell's neighbour is lower, the wall between them is
+    // visible from the low side, and without it a terraced hill reads as
+    // plates floating over haze. One face per height step per neighbour,
+    // stored in the plane order the renderer expects (x-faces by lx, z-faces
+    // by lz). Chunk borders have no neighbour data and stay open.
+    let cell_at = |i: usize, j: usize| -> (usize, u8) {
+        (cell_h[j * CELLS + i] as usize, cell_b[j * CELLS + i])
+    };
+    // dir 0: +x wall of cell (i, j) faces the lower cell (i+1, j); lives on
+    // plane lx = 2i+1. dir 1: -x wall faces (i-1, j); plane lx = 2i.
+    let mut dir = 0usize;
+    while dir < 2 {
+        unsafe { MESH_DIR_START[dir] = n as u16 };
+        let mut plane = 0usize;
+        while plane < CWU {
+            unsafe { MESH_PLANE_START[PL_OFF[dir] + plane] = n as u16 };
+            let (i, ni) = if dir == 0 { (plane / 2, plane / 2 + 1) } else { (plane / 2, plane / 2) };
+            let on_plane = if dir == 0 { plane & 1 == 1 && ni < CELLS } else { plane & 1 == 0 && i > 0 };
+            if on_plane {
+                let mut j = 0;
+                while j < CELLS {
+                    let (h, b) = cell_at(i, j);
+                    let (nh, _) = if dir == 0 { cell_at(ni, j) } else { cell_at(i - 1, j) };
+                    if h > nh && n < MAX_FACES {
+                        let step = (h - nh).min(MAX_MERGE);
+                        unsafe {
+                            MESH_FACES[n] = pack(plane, nh + 1, j * 2, dir, b, step, 2, 1);
+                            MESH_AO[n] = AO_LIT as u16 | (top_light << 8);
+                        }
+                        n += 1;
+                    }
+                    j += 1;
+                }
+            }
+            plane += 1;
+        }
+        unsafe { MESH_PLANE_START[PL_OFF[dir] + CWU] = n as u16 };
+        dir += 1;
+    }
+    unsafe { MESH_DIR_START[2] = n as u16 };
+    // Tops: 2D greedy over the cell grid, one plane (height) at a time. A run
+    // along x extends down z while the next row repeats it exactly.
+    let mut used = [false; CELLS * CELLS];
+    let mut plane = 0usize;
+    while plane < CHU {
+        unsafe { MESH_PLANE_START[PL_OFF[2] + plane] = n as u16 };
+        let mut j = 0;
+        while j < CELLS {
+            let mut i = 0;
+            while i < CELLS {
+                let b = cell_b[j * CELLS + i];
+                if used[j * CELLS + i]
+                    || cell_h[j * CELLS + i] as usize != plane
+                    || unsafe { BCLASS[b as usize] } & CLS_MESH == 0
+                {
+                    i += 1;
+                    continue;
+                }
+                let mut run = 1;
+                while i + run < CELLS
+                    && !used[j * CELLS + i + run]
+                    && cell_h[j * CELLS + i + run] as usize == plane
+                    && cell_b[j * CELLS + i + run] == b
+                    && run * 2 + 2 <= MAX_MERGE
+                {
+                    run += 1;
+                }
+                let mut rows = 1;
+                'grow: while j + rows < CELLS && rows * 2 + 2 <= MAX_MERGE_H {
+                    let mut k = 0;
+                    while k < run {
+                        let c = (j + rows) * CELLS + i + k;
+                        if used[c] || cell_h[c] as usize != plane || cell_b[c] != b {
+                            break 'grow;
+                        }
+                        k += 1;
+                    }
+                    rows += 1;
+                }
+                let mut r = 0;
+                while r < rows {
+                    let mut k = 0;
+                    while k < run {
+                        used[(j + r) * CELLS + i + k] = true;
+                        k += 1;
+                    }
+                    r += 1;
+                }
+                if n < MAX_FACES {
+                    unsafe {
+                        // Light rides in the side band (bit 31 of the word is
+                        // the legacy single bit; see the pack comment).
+                        MESH_FACES[n] = pack(i * 2, plane, j * 2, 2, b, run * 2, rows * 2, 1);
+                        MESH_AO[n] = AO_LIT as u16 | (top_light << 8);
+                    }
+                    n += 1;
+                }
+                i += run;
+            }
+            j += 1;
+        }
+        plane += 1;
+    }
+    unsafe { MESH_PLANE_START[PL_OFF[2] + CHU] = n as u16 };
+    unsafe { MESH_DIR_START[3] = n as u16 };
+    pad_plane_starts(3, 0, n);
+    // dir 4: +z wall of cell (i, j) faces the lower (i, j+1); plane lz = 2j+1.
+    // dir 5: -z wall faces (i, j-1); plane lz = 2j.
+    let mut dir = 4usize;
+    while dir < 6 {
+        unsafe { MESH_DIR_START[dir] = n as u16 };
+        let mut plane = 0usize;
+        while plane < CWU {
+            unsafe { MESH_PLANE_START[PL_OFF[dir] + plane] = n as u16 };
+            let j = plane / 2;
+            let on_plane = if dir == 4 { plane & 1 == 1 && j + 1 < CELLS } else { plane & 1 == 0 && j > 0 };
+            if on_plane {
+                let mut i = 0;
+                while i < CELLS {
+                    let (h, b) = cell_at(i, j);
+                    let (nh, _) = if dir == 4 { cell_at(i, j + 1) } else { cell_at(i, j - 1) };
+                    if h > nh && n < MAX_FACES {
+                        let step = (h - nh).min(MAX_MERGE_H);
+                        unsafe {
+                            MESH_FACES[n] = pack(i * 2, nh + 1, plane, dir, b, 2, step, 1);
+                            MESH_AO[n] = AO_LIT as u16 | (top_light << 8);
+                        }
+                        n += 1;
+                    }
+                    i += 1;
+                }
+            }
+            plane += 1;
+        }
+        unsafe { MESH_PLANE_START[PL_OFF[dir] + CWU] = n as u16 };
+        dir += 1;
+    }
+    unsafe { MESH_DIR_START[6] = n as u16 };
+    rebuild_plane_bounds();
+    n
+}
+
 /// 2D greedy-mesh ONE face direction of chunk `s` into the scratch, from index n.
 fn mesh_dir(s: usize, dir: usize, mut n: usize) -> usize {
     let (a_dim, b_dim, num_planes) = dir_dims(dir);
@@ -3012,7 +3217,11 @@ fn commit_mesh_inner(s: usize, n: usize, scan_plants: bool) {
             q += 1;
         }
         POOL_NFACE[p] = n as u16;
-        if scan_plants {
+        if CHUNKS[s].face_lod == 1 {
+            // Sprites past the near ring are a few pixels each and the plant
+            // pass was paying for every one of them; the far LOD carries none.
+            POOL_NPLANT[p] = 0;
+        } else if scan_plants {
             // Record cross-sprite plant cells from the decoded scratch. Ordinary
             // cube edits leave this list untouched; only plant/small-block edits
             // need the full scan.
@@ -3101,7 +3310,7 @@ fn stream_commit_tick(s: usize, n: usize) {
             POOL_PLANTS[p][np] = MESH_PLANTS[np];
             np += 1;
         }
-        POOL_NPLANT[p] = MESH_NPLANT as u16;
+        POOL_NPLANT[p] = if CHUNKS[s].face_lod == 1 { 0 } else { MESH_NPLANT as u16 };
 
         let old = CHUNKS[s].face_slot;
         CHUNKS[s].face_slot = MESH_COMMIT_SLOT;
@@ -3124,6 +3333,12 @@ fn mesh_chunk(s: usize) {
     set_mesh_lod(s);
     decode_to_mesh_scratch(s);
     build_sky_top(); // skylight depends on the whole column, so it precedes meshing
+    if unsafe { CHUNKS[s].face_lod } == 1 {
+        let n = mesh_lod_tops();
+        commit_mesh(s, n);
+        unsafe { CHUNKS[s].dirty = false };
+        return;
+    }
     let mut n = 0usize;
     let mut dir = 0;
     while dir < 6 {
@@ -3785,6 +4000,11 @@ pub fn stream_tick() {
         let mut mesh_plane = MESH_PLANE;
         let mut mesh_n = MESH_N;
         let mut budget = MESH_CELL_BUDGET as i32;
+        if CHUNKS[s].face_lod == 1 && mesh_dir == 0 {
+            // The far LOD is one 64-cell pass: finish it in this slice.
+            mesh_n = mesh_lod_tops();
+            mesh_dir = 6;
+        }
         while mesh_dir < 6 && budget > 0 {
             let (a_dim, b_dim, num_planes) = dir_dims(mesh_dir);
             mesh_n = greedy_plane(s, mesh_dir, mesh_plane, a_dim, b_dim, mesh_n);
@@ -3825,7 +4045,8 @@ pub fn stream_tick() {
 /// far more than the chunks it manages to reject. It would need a much cheaper
 /// occluder (a horizon/height-span test rather than ray casts) to pay for
 /// itself.
-const OCCLUSION_CULL: bool = true;
+// Off: it becomes live with LOD_R at 1 and was measured harmful (see above).
+const OCCLUSION_CULL: bool = false;
 
 /// Solid enough to hide what's behind it. Air/water/lava/leaves see through.
 #[inline]
@@ -4002,7 +4223,12 @@ pub fn for_visible_faces<
             // A chunk wholly past the side horizon contributes only its
             // silhouette, which is its TOP faces; skip the other dirs before
             // iterating a single face of them.
-            let tops_only = zc - chunk_r > FAR_SIDE_Z;
+            // A far-LOD chunk holds only its top plates and the skirts between
+            // height steps: few faces, and the skirts ARE its silhouette, so
+            // they draw to the far plane while a near chunk's sides still stop
+            // at FAR_SIDE_Z.
+            let far_lod = unsafe { CHUNKS[s].face_lod } == 1;
+            let tops_only = zc - chunk_r > FAR_SIDE_Z && !far_lod;
             // Far-ring chunks: skip entirely if a ray to their surface is blocked
             // by nearer terrain (don't iterate/project a hill that's hidden behind
             // another hill). Near chunks always draw -- the ray would be too short.
@@ -4026,7 +4252,7 @@ pub fn for_visible_faces<
                     }
                     // Sides and bottoms stop at FAR_SIDE_Z; tops carry the
                     // silhouette out to FAR_Z (see FAR_SIDE_Z in main).
-                    let far_lim = if dir == 2 { FAR_Z } else { FAR_SIDE_Z };
+                    let far_lim = if dir == 2 || far_lod { FAR_Z } else { FAR_SIDE_Z };
                     // Visible plane sub-range for this dir: the old per-face
                     // backface test compared the camera to the face's PLANE
                     // coordinate only, so cutting the (plane-sorted) range is

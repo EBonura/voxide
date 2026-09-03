@@ -79,12 +79,12 @@ const NEAR_Z: i32 = 18;
 // distance step. The 4-level lighting measured FREE at this range (the
 // merge-break inflation scales with far-face area). Distance fog reaches
 // full ground-haze by the last band, so the short horizon reads as weather.
-const FAR_Z: i32 = 1024;
+const FAR_Z: i32 = 1536;
 // Side/bottom faces stop two bands earlier: beyond that every face is fully
 // hazed, so only the SILHOUETTE carries information, and a heightfield's
 // silhouette is its top faces (the 25..28-block-era ring measured far sides
 // at over 2x the tops' cost for no visible difference).
-const FAR_SIDE_Z: i32 = 896;
+const FAR_SIDE_Z: i32 = 1024;
 
 const BLOCK: i32 = 64;
 
@@ -507,7 +507,10 @@ const PROFILE_SKIP_TITLE: bool = false; // TEMP: bypass the title screen for hea
 const FORCE_TIME: i32 = -1;
 const SHOW_FPS: bool = false;
 const VISTA_VIEW: bool = false;
-const VISTA_YAW: u16 = 0x0500;
+/// With VISTA_VIEW: hover high above the spawn, pitched down, so the capture
+/// shows the horizon and the far ring instead of the tree in front of it.
+const VISTA_AERIAL: bool = false;
+const VISTA_YAW: u16 = 0x0C00;
 // TEMP capture knob: when >= 0 the spawn search also requires this biome id
 // (world::B_*) so headless captures can inspect grass/leaves/water/snow. -1 = off.
 const CAPTURE_BIOME: i32 = -1;
@@ -1017,14 +1020,16 @@ fn refresh_mat_ccmd() {
             // Clear until ~12 blocks out, then ramp to the far plane, so close
             // terrain keeps full contrast and only the band where the hard edge
             // against the sky used to be gets blended.
+            // Clear to ~5 blocks, ramp through mid distance, full ground-haze
+            // in the last band so the horizon dissolves into the below-horizon
+            // sky fill. The ramp is laid out against FAR_Z: `full` is the band
+            // the far plane lands in.
+            let full = (FAR_Z >> FOG_SHIFT) as usize;
             let t = if b <= 2 {
                 0
-            } else if b <= 5 {
-                // Bands 0..7 at FAR_Z 1024: clear to ~5 blocks, ramp through
-                // mid distance, full ground-haze in the last band so the
-                // horizon dissolves into the below-horizon sky fill.
-                ((b - 2) as i32) * 255 / 6
-            } else if b == 6 {
+            } else if b + 2 < full {
+                ((b - 2) as i32) * 255 / ((full - 3) as i32)
+            } else if b + 2 == full {
                 200
             } else {
                 255
@@ -1035,9 +1040,9 @@ fn refresh_mat_ccmd() {
             // colour as the below-horizon sky behind them (ground_haze on
             // both sides). Sky-blue full fog would repaint the old void
             // sliver ON the terrain.
-            let target = if b <= 4 {
+            let target = if b <= full / 2 {
                 fog
-            } else if b <= 6 {
+            } else if b + 2 <= full {
                 (
                     ((fog.0 as u16 + haze.0 as u16) / 2) as u8,
                     ((fog.1 as u16 + haze.1 as u16) / 2) as u8,
@@ -2149,6 +2154,12 @@ fn main() {
         if VISTA_VIEW {
             player.yaw = VISTA_YAW; // FIXED yaw: A/B captures must not drift with fps
             player.pitch = (-140i32 & 0x0FFF) as i16; // eye-level, slight down: the real gameplay view
+            if VISTA_AERIAL {
+                player.fly = true;
+                player.vy = 0;
+                player.y = 52 * BLOCK;
+                player.pitch = (-420i32 & 0x0FFF) as i16;
+            }
         }
         let cam = camera_from_player(player);
         let pick = if menu != 0 { NO_PICK } else { trace_pick(&cam) };
