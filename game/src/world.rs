@@ -120,9 +120,11 @@ fn decode_to_mesh_scratch(s: usize) {
         let src = &CHUNKS[s].blocks;
         let mut i = 0;
         let mut top = 0usize;
+        col_masks_reset();
         while i < CHUNK_VOL {
             let b = bget(src, i);
             MESH_SCRATCH[i] = b;
+            col_masks_note(i, b);
             if b != AIR {
                 top = i;
             }
@@ -377,6 +379,64 @@ fn set_mesh_lod(s: usize) {
 // refuses to merge across a light step. That is the whole cost of block light
 // in the mesher -- no second array, no second compare.
 static mut FMASK: [u16; CHU as usize * CWU] = [0; CHU as usize * CWU];
+/// Rows of FMASK (the plane's b axis) that hold at least one face cell after
+/// `build_mask`; the greedy seed scan skips the others. All ones on the
+/// dense border path.
+static mut FMASK_ROWS: u64 = 0;
+/// Per-column occupancy of the chunk in MESH_SCRATCH, one bit per ly: which
+/// cells are meshable (CLS_MESH) and which can be seen through (CLS_SEE).
+/// Built alongside every scratch decode and kept in step by the edit
+/// writers, so `build_mask` can find a plane's face cells with a few 64-bit
+/// ANDs per column instead of visiting every cell. Index is lx + lz * CWU.
+static mut COL_MESH: [u64; CWU * CWU] = [0; CWU * CWU];
+static mut COL_SEE: [u64; CWU * CWU] = [0; CWU * CWU];
+
+#[inline(always)]
+fn col_masks_reset() {
+    unsafe {
+        COL_MESH = [0; CWU * CWU];
+        COL_SEE = [0; CWU * CWU];
+    }
+}
+
+/// Note block `b` at scratch index `i` during a decode (bits only ever set).
+#[inline(always)]
+fn col_masks_note(i: usize, b: u8) {
+    let cls = unsafe { BCLASS[b as usize] };
+    if cls & (CLS_MESH | CLS_SEE) == 0 {
+        return;
+    }
+    let col = i & (CWU * CWU - 1);
+    let bit = 1u64 << (i >> 8);
+    unsafe {
+        if cls & CLS_MESH != 0 {
+            COL_MESH[col] |= bit;
+        }
+        if cls & CLS_SEE != 0 {
+            COL_SEE[col] |= bit;
+        }
+    }
+}
+
+/// Rewrite the bits of scratch index `i` after an edit stored block `b`.
+#[inline(always)]
+fn col_masks_set(i: usize, b: u8) {
+    let cls = unsafe { BCLASS[b as usize] };
+    let col = i & (CWU * CWU - 1);
+    let bit = 1u64 << (i >> 8);
+    unsafe {
+        if cls & CLS_MESH != 0 {
+            COL_MESH[col] |= bit;
+        } else {
+            COL_MESH[col] &= !bit;
+        }
+        if cls & CLS_SEE != 0 {
+            COL_SEE[col] |= bit;
+        } else {
+            COL_SEE[col] &= !bit;
+        }
+    }
+}
 /// Height of the first sky-blocking block in each column of the chunk being
 /// meshed, rebuilt per mesh. Skylight is derived from depth below it.
 static mut SKY_TOP: [u8; CWU * CWU] = [0; CWU * CWU];
@@ -1729,6 +1789,7 @@ pub fn set(wx: i32, wy: i32, wz: i32, b: u8) {
         bset(&mut CHUNKS[s].blocks, i, b);
         if MESH_SCRATCH_OWNER == s {
             MESH_SCRATCH[i] = b;
+            col_masks_set(i, b);
             if b != AIR {
                 MESH_YHI = MESH_YHI.max(wy as usize);
     }
@@ -2429,6 +2490,7 @@ fn raw_set(wx: i32, wy: i32, wz: i32, b: u8) {
             bset(&mut CHUNKS[s].blocks, i, b);
             if MESH_SCRATCH_OWNER == s {
                 MESH_SCRATCH[i] = b;
+                col_masks_set(i, b);
                 if b != AIR {
                     MESH_YHI = MESH_YHI.max(wy as usize);
                 }
@@ -2547,6 +2609,7 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
     };
     let mut any = false;
     if border {
+        unsafe { FMASK_ROWS = !0 };
         // Cold: the neighbour lives in the next chunk, so go through `get`.
         let (cx, cz) = unsafe { (CHUNKS[s].cx, CHUNKS[s].cz) };
         let d = DIRS[dir];
@@ -2580,46 +2643,93 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
         }
         return any;
     }
-    let noff = NOFF[dir];
-    let mut b = 0;
-    let mut row = base;
-    let mut m = 0usize;
-    while b < b_dim {
-        let mut a = 0;
-        let mut idx = row;
-        while a < a_dim {
-            let blk = unsafe { MESH_SCRATCH[idx] };
-            let nb = unsafe { MESH_SCRATCH[(idx as i32 + noff) as usize] };
-            let mut f = AIR;
-            // `blk != nb` FIRST. A face always needs the two to differ, and the
-            // overwhelming majority of cells are interior (stone against stone)
-            // or open (air against air), so this one compare retires them on two
-            // loads instead of four. It used to be the LAST test, after both
-            // BCLASS lookups -- and the PS1 has no data cache, so every table
-            // read is a main-memory hit. `blk != AIR` then retires air-against-
-            // solid before the tables are touched at all.
-            if blk != nb && blk != AIR {
-                if unsafe { BCLASS[blk as usize] } & CLS_MESH != 0
-                    && unsafe { BCLASS[nb as usize] } & CLS_SEE != 0
-                {
-                    f = blk;
+    let _ = (base, sa, sb);
+    // Interior planes: a face cell is a meshable block whose neighbour along
+    // the face normal can be seen through and is a different block. The
+    // first two are one 64-bit AND of the column masks (COL_MESH of this
+    // column against COL_SEE of the neighbour column), so only the surviving
+    // bits are visited; the old code read two blocks and up to two class
+    // bytes for every one of the plane's cells (about 90K cells a chunk).
+    // The cell values written are identical to that scan's. Only face cells
+    // are written: the greedy merge zeroes every cell it consumes and it
+    // consumes every non-zero cell, so FMASK is all zero between planes (the
+    // border path still writes every cell of its plane).
+    let mut rows = 0u64;
+    match dir {
+        2 | 3 => {
+            // a = lx, b = lz, both 16: FMASK index is the column index.
+            let nplane = if dir == 2 { plane + 1 } else { plane - 1 };
+            let shift_n = nplane as u32;
+            let shift_p = plane as u32;
+            let mut col = 0usize;
+            while col < CWU * CWU {
+                let cand = unsafe { (COL_MESH[col] >> shift_p) & (COL_SEE[col] >> shift_n) & 1 };
+                if cand != 0 {
+                    let blk = unsafe { MESH_SCRATCH[col + plane * CWU * CWU] };
+                    let nb = unsafe { MESH_SCRATCH[col + nplane * CWU * CWU] };
+                    if blk != nb {
+                        let lx = col & (CWU - 1);
+                        let lz = col / CWU;
+                        unsafe { FMASK[col] = blk as u16 | (sky_bucket(lx, plane, lz) << 7) };
+                        rows |= 1u64 << lz;
+                        any = true;
+                    }
                 }
+                col += 1;
             }
-            let cell = if f == AIR {
-                0
-            } else {
-                let (clx, cly, clz) = cell_to_local(dir, plane, a, b);
-                f as u16 | (sky_bucket(clx, cly, clz) << 7)
-            };
-            unsafe { FMASK[m] = cell };
-            any |= f != AIR;
-            m += 1;
-            idx += sa;
-            a += 1;
         }
-        row += sb;
-        b += 1;
+        0 | 1 => {
+            // plane = lx; a = ly (a_dim = hy), b = lz.
+            let nlx = if dir == 0 { plane + 1 } else { plane - 1 };
+            let mut lz = 0usize;
+            while lz < CWU {
+                let mut cand = unsafe { COL_MESH[lz * CWU + plane] & COL_SEE[lz * CWU + nlx] };
+                while cand != 0 {
+                    let ly = cand.trailing_zeros() as usize;
+                    cand &= cand - 1;
+                    if ly >= a_dim {
+                        break;
+                    }
+                    let blk = unsafe { MESH_SCRATCH[lidx(plane, ly, lz)] };
+                    let nb = unsafe { MESH_SCRATCH[lidx(nlx, ly, lz)] };
+                    if blk != nb {
+                        unsafe {
+                            FMASK[lz * a_dim + ly] = blk as u16 | (sky_bucket(plane, ly, lz) << 7)
+                        };
+                        rows |= 1u64 << lz;
+                        any = true;
+                    }
+                }
+                lz += 1;
+            }
+        }
+        _ => {
+            // plane = lz; a = lx (16), b = ly (b_dim = hy).
+            let nlz = if dir == 4 { plane + 1 } else { plane - 1 };
+            let mut lx = 0usize;
+            while lx < CWU {
+                let mut cand = unsafe { COL_MESH[plane * CWU + lx] & COL_SEE[nlz * CWU + lx] };
+                while cand != 0 {
+                    let ly = cand.trailing_zeros() as usize;
+                    cand &= cand - 1;
+                    if ly >= b_dim {
+                        break;
+                    }
+                    let blk = unsafe { MESH_SCRATCH[lidx(lx, ly, plane)] };
+                    let nb = unsafe { MESH_SCRATCH[lidx(lx, ly, nlz)] };
+                    if blk != nb {
+                        unsafe {
+                            FMASK[ly * a_dim + lx] = blk as u16 | (sky_bucket(lx, ly, plane) << 7)
+                        };
+                        rows |= 1u64 << ly;
+                        any = true;
+                    }
+                }
+                lx += 1;
+            }
+        }
     }
+    unsafe { FMASK_ROWS = rows };
     any
 }
 
@@ -2801,8 +2911,15 @@ fn greedy_plane(
     let mut amax = 0usize;
     let mut bmin = 127usize;
     let mut bmax = 0usize;
+    let rows = unsafe { FMASK_ROWS };
     let mut b0 = 0;
     while b0 < b_dim {
+        // Rows without a face cell (build_mask's bitmap) are not scanned; a
+        // cleared bit is exact, a stale set bit only costs the scan.
+        if (rows >> (b0 as u32)) & 1 == 0 {
+            b0 += 1;
+            continue;
+        }
         let mut a0 = 0;
         while a0 < a_dim {
             let cell = unsafe { FMASK[b0 * a_dim + a0] };
@@ -3229,9 +3346,13 @@ fn mesh_edit_tick() {
                 let src = &CHUNKS[s].blocks;
                 let end = (EDIT_MESH_DECODE + EDIT_DECODE_BATCH).min(CHUNK_VOL);
                 let mut i = EDIT_MESH_DECODE;
+                if i == 0 {
+                    col_masks_reset();
+                }
                 while i < end {
                     let b = bget(src, i);
                     MESH_SCRATCH[i] = b;
+                    col_masks_note(i, b);
                     if b != AIR {
                         EDIT_MESH_TOP = i;
                     }
@@ -3727,9 +3848,13 @@ pub fn stream_tick() {
             let src = &CHUNKS[s].blocks;
             let end = (MESH_DECODE + STREAM_DECODE_BATCH).min(CHUNK_VOL);
             let mut i = MESH_DECODE;
+            if i == 0 {
+                col_masks_reset();
+            }
             while i < end {
                 let b = bget(src, i);
                 MESH_SCRATCH[i] = b;
+                col_masks_note(i, b);
                 let lx = i & 15;
                 let lz = (i >> 4) & 15;
                 let ly = i >> 8;
