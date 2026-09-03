@@ -78,6 +78,28 @@ fn bget(data: &[u8; PACKED_SIZE], i: usize) -> u8 {
     ((win >> off) & BLOCK_MASK) as u8
 }
 
+/// Decode the eight blocks of group `g` (blocks 8g..8g+8). Eight 7-bit fields
+/// are exactly seven bytes, so a group never straddles a byte and the eight
+/// values come out of two little-endian windows with constant shifts: seven
+/// byte loads instead of sixteen, and no per-block multiply by 7.
+#[inline(always)]
+fn bget8(data: &[u8; PACKED_SIZE], g: usize) -> [u8; 8] {
+    let p = g * 7;
+    let d = &data[p..p + 7];
+    let lo = d[0] as u32 | (d[1] as u32) << 8 | (d[2] as u32) << 16 | (d[3] as u32) << 24;
+    let hi = d[3] as u32 | (d[4] as u32) << 8 | (d[5] as u32) << 16 | (d[6] as u32) << 24;
+    [
+        (lo & 0x7F) as u8,
+        ((lo >> 7) & 0x7F) as u8,
+        ((lo >> 14) & 0x7F) as u8,
+        ((lo >> 21) & 0x7F) as u8,
+        ((hi >> 4) & 0x7F) as u8,
+        ((hi >> 11) & 0x7F) as u8,
+        ((hi >> 18) & 0x7F) as u8,
+        ((hi >> 25) & 0x7F) as u8,
+    ]
+}
+
 /// Write the 5-bit block `v` at flat index `i` into a packed chunk store.
 #[inline]
 fn bset(data: &mut [u8; PACKED_SIZE], i: usize, v: u8) {
@@ -118,18 +140,9 @@ fn decode_to_mesh_scratch(s: usize) {
             return;
         }
         let src = &CHUNKS[s].blocks;
-        let mut i = 0;
         let mut top = 0usize;
         col_masks_reset();
-        while i < CHUNK_VOL {
-            let b = bget(src, i);
-            MESH_SCRATCH[i] = b;
-            col_masks_note(i, b);
-            if b != AIR {
-                top = i;
-            }
-            i += 1;
-        }
+        decode_blocks::<false>(src, 0, CHUNK_VOL, &mut top);
         // Highest ly holding anything but air. Nothing above it can emit a face
         // (a face needs a MESHABLE cell, and every cell up there is air), so the
         // mesher clips its y range to this -- see dir_dims.
@@ -412,6 +425,67 @@ fn col_masks_reset() {
 }
 
 /// Note block `b` at scratch index `i` during a decode (bits only ever set).
+/// Decode blocks `i0..i1` (multiples of 256, i.e. whole layers) of a packed
+/// store into MESH_SCRATCH, noting the column masks. `top` tracks the highest
+/// non-air index. With FULL the stream mesher's extras are recorded as well:
+/// per-column sky top, light sources and plants.
+#[inline(never)]
+fn decode_blocks<const FULL: bool>(src: &[u8; PACKED_SIZE], i0: usize, i1: usize, top: &mut usize) {
+    let mut i = i0;
+    while i < i1 {
+        // One layer: the y bit of the column masks is fixed for 256 blocks.
+        let ly = i >> 8;
+        let bit = 1u64 << ly;
+        let layer_end = i + CWU * CWU;
+        while i < layer_end {
+            let blk = bget8(src, i >> 3);
+            let mut k = 0;
+            while k < 8 {
+                let b = blk[k];
+                let idx = i + k;
+                let cls = unsafe { BCLASS[b as usize] };
+                unsafe { MESH_SCRATCH[idx] = b };
+                if b != AIR {
+                    *top = idx;
+                    // Air is see-through only; everything else touches a mask.
+                    let col = idx & (CWU * CWU - 1);
+                    unsafe {
+                        if cls & CLS_MESH != 0 {
+                            COL_MESH[col] |= bit;
+                            if FULL {
+                                SKY_TOP[col] = ly as u8;
+                            }
+                        }
+                        if cls & CLS_SEE != 0 {
+                            COL_SEE[col] |= bit;
+                        }
+                        if FULL && cls & CLS_SPECIAL != 0 {
+                            let lx = col & (CWU - 1);
+                            let lz = col >> 4;
+                            if MESH_NLIGHT < MAX_SOURCES && is_light_source(b) {
+                                MESH_LIGHT_SOURCES[MESH_NLIGHT] = (lx, ly, lz);
+                                MESH_NLIGHT += 1;
+                            }
+                            if MESH_NPLANT < MAX_PLANTS && (is_cross_plant(b) || is_small_block(b)) {
+                                MESH_PLANTS[MESH_NPLANT] = lx as u32
+                                    | ((ly as u32) << 4)
+                                    | ((lz as u32) << 10)
+                                    | ((b as u32) << 14);
+                                MESH_NPLANT += 1;
+                            }
+                        }
+                    }
+                } else {
+                    let col = idx & (CWU * CWU - 1);
+                    unsafe { COL_SEE[col] |= bit };
+                }
+                k += 1;
+            }
+            i += 8;
+        }
+    }
+}
+
 #[inline(always)]
 fn col_masks_note(i: usize, b: u8) {
     let cls = unsafe { BCLASS[b as usize] };
@@ -1154,7 +1228,8 @@ fn gen_column(blk: &mut [u8; CHUNK_VOL], t: &ShapeTiles, lx: usize, lz: usize, w
         let mut y = lo;
         let mut i = base + lo as usize * STRIDE;
         while y < hi {
-            blk[i] = b;
+            // i < base + CH*STRIDE = CHUNK_VOL for every clamped y.
+            unsafe { *blk.get_unchecked_mut(i) = b };
             i += STRIDE;
             y += 1;
         }
@@ -1164,7 +1239,8 @@ fn gen_column(blk: &mut [u8; CHUNK_VOL], t: &ShapeTiles, lx: usize, lz: usize, w
     put_run(if h - 4 < 1 { 1 } else { h - 4 }, h, sub);
     put_run(h, h + 1, top);
     put_run(h + 1, SEA + 1, WATER); // oceans and lakes
-    put_run(if h + 1 > SEA + 1 { h + 1 } else { SEA + 1 }, CH, AIR);
+    // The air above is already there: gen_columns clears the scratch to AIR
+    // once per chunk (one memset beats 256 strided store loops).
 
     // Carve caves through the stone band. Deep cave air becomes lava. Caves are
     // 42% of the generator, so the band is sampled every 4 blocks and stops at
@@ -1186,7 +1262,7 @@ fn gen_column(blk: &mut [u8; CHUNK_VOL], t: &ShapeTiles, lx: usize, lz: usize, w
                 cave_air = d > 196 && d < 208;
             }
             if cave_air {
-                blk[i] = if y < LAVA_Y { LAVA } else { AIR };
+                unsafe { *blk.get_unchecked_mut(i) = if y < LAVA_Y { LAVA } else { AIR } };
             }
             i += STRIDE;
             y += 1;
@@ -1526,6 +1602,9 @@ fn gen_columns(ox: i32, oz: i32, from: usize, count: usize) -> usize {
     // per column (5120). Streaming calls this several times per chunk with the
     // same origin, so the rebuild is amortised anyway.
     let t = shape_tiles(ox, oz);
+    if from == 0 {
+        blk.fill(AIR);
+    }
     let mut col = from;
     while col < end {
         let lx = col % CWU;
@@ -2575,6 +2654,9 @@ fn pack(
 static mut BCLASS: [u8; 128] = [0; 128];
 const CLS_MESH: u8 = 1;
 const CLS_SEE: u8 = 2;
+/// Light source, cross plant or small block: the decode records these per
+/// cell, so the compare chains only run on blocks that carry this bit.
+const CLS_SPECIAL: u8 = 4;
 
 fn init_block_class() {
     unsafe {
@@ -2590,7 +2672,8 @@ fn init_block_class() {
             // still draws.
             let see =
                 b == AIR || is_water(b) || b == DOOR_O || is_cross_plant(b) || is_small_block(b);
-            BCLASS[i] = (meshable as u8) | ((see as u8) << 1);
+            let special = is_light_source(b) || is_cross_plant(b) || is_small_block(b);
+            BCLASS[i] = (meshable as u8) | ((see as u8) << 1) | ((special as u8) << 2);
             i += 1;
         }
     }
@@ -3409,19 +3492,12 @@ fn mesh_edit_tick() {
             if MESH_SCRATCH_OWNER != s {
                 let src = &CHUNKS[s].blocks;
                 let end = (EDIT_MESH_DECODE + EDIT_DECODE_BATCH).min(CHUNK_VOL);
-                let mut i = EDIT_MESH_DECODE;
-                if i == 0 {
+                if EDIT_MESH_DECODE == 0 {
                     col_masks_reset();
                 }
-                while i < end {
-                    let b = bget(src, i);
-                    MESH_SCRATCH[i] = b;
-                    col_masks_note(i, b);
-                    if b != AIR {
-                        EDIT_MESH_TOP = i;
-                    }
-                    i += 1;
-                }
+                let mut top = EDIT_MESH_TOP;
+                decode_blocks::<false>(src, EDIT_MESH_DECODE, end, &mut top);
+                EDIT_MESH_TOP = top;
                 EDIT_MESH_DECODE = end;
                 if end < CHUNK_VOL {
                     return;
@@ -3911,34 +3987,12 @@ pub fn stream_tick() {
             }
             let src = &CHUNKS[s].blocks;
             let end = (MESH_DECODE + STREAM_DECODE_BATCH).min(CHUNK_VOL);
-            let mut i = MESH_DECODE;
-            if i == 0 {
+            if MESH_DECODE == 0 {
                 col_masks_reset();
             }
-            while i < end {
-                let b = bget(src, i);
-                MESH_SCRATCH[i] = b;
-                col_masks_note(i, b);
-                let lx = i & 15;
-                let lz = (i >> 4) & 15;
-                let ly = i >> 8;
-                if b != AIR {
-                    MESH_DECODE_TOP = i;
-                }
-                if BCLASS[b as usize] & CLS_MESH != 0 {
-                    SKY_TOP[lz * CWU + lx] = ly as u8;
-                }
-                if MESH_NLIGHT < MAX_SOURCES && is_light_source(b) {
-                    MESH_LIGHT_SOURCES[MESH_NLIGHT] = (lx, ly, lz);
-                    MESH_NLIGHT += 1;
-                }
-                if MESH_NPLANT < MAX_PLANTS && (is_cross_plant(b) || is_small_block(b)) {
-                    MESH_PLANTS[MESH_NPLANT] =
-                        lx as u32 | ((ly as u32) << 4) | ((lz as u32) << 10) | ((b as u32) << 14);
-                    MESH_NPLANT += 1;
-                }
-                i += 1;
-            }
+            let mut top = MESH_DECODE_TOP;
+            decode_blocks::<true>(src, MESH_DECODE, end, &mut top);
+            MESH_DECODE_TOP = top;
             MESH_DECODE = end;
             if end < CHUNK_VOL {
                 return;
