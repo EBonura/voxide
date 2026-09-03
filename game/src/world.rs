@@ -383,6 +383,17 @@ static mut FMASK: [u16; CHU as usize * CWU] = [0; CHU as usize * CWU];
 /// `build_mask`; the greedy seed scan skips the others. All ones on the
 /// dense border path.
 static mut FMASK_ROWS: u64 = 0;
+/// Per row of FMASK, one bit per cell that holds a face (bit a of row b).
+/// The greedy seed scan jumps between set bits instead of reading every
+/// cell of a non-empty row; the merge clears the bits of the cells it
+/// consumes as it zeroes them.
+static mut FMASK_BITS: [u64; CHU as usize] = [0; CHU as usize];
+/// OR over all columns of the +Y / -Y candidate masks: bit ly set when some
+/// column has a face cell in y-plane ly for that direction. Rebuilt whenever
+/// the column masks change (decode or edit), tracked by the epoch below.
+static mut Y_ANY: [u64; 2] = [0; 2];
+static mut Y_ANY_EPOCH: u32 = u32::MAX;
+static mut COL_MASKS_EPOCH: u32 = 0;
 /// Per-column occupancy of the chunk in MESH_SCRATCH, one bit per ly: which
 /// cells are meshable (CLS_MESH) and which can be seen through (CLS_SEE).
 /// Built alongside every scratch decode and kept in step by the edit
@@ -396,6 +407,7 @@ fn col_masks_reset() {
     unsafe {
         COL_MESH = [0; CWU * CWU];
         COL_SEE = [0; CWU * CWU];
+        COL_MASKS_EPOCH = COL_MASKS_EPOCH.wrapping_add(1);
     }
 }
 
@@ -425,6 +437,7 @@ fn col_masks_set(i: usize, b: u8) {
     let col = i & (CWU * CWU - 1);
     let bit = 1u64 << (i >> 8);
     unsafe {
+        COL_MASKS_EPOCH = COL_MASKS_EPOCH.wrapping_add(1);
         if cls & CLS_MESH != 0 {
             COL_MESH[col] |= bit;
         } else {
@@ -2609,8 +2622,9 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
     };
     let mut any = false;
     if border {
-        unsafe { FMASK_ROWS = !0 };
         // Cold: the neighbour lives in the next chunk, so go through `get`.
+        // The dense fill below writes every cell; the row bitmaps are
+        // rebuilt from it afterwards.
         let (cx, cz) = unsafe { (CHUNKS[s].cx, CHUNKS[s].cz) };
         let d = DIRS[dir];
         let mut b = 0;
@@ -2641,6 +2655,20 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
             }
             b += 1;
         }
+        let mut b = 0;
+        while b < b_dim {
+            let mut bits = 0u64;
+            let mut a = 0;
+            while a < a_dim {
+                if unsafe { FMASK[b * a_dim + a] } != 0 {
+                    bits |= 1u64 << a;
+                }
+                a += 1;
+            }
+            unsafe { FMASK_BITS[b] = bits };
+            b += 1;
+        }
+        unsafe { FMASK_ROWS = !0 };
         return any;
     }
     let _ = (base, sa, sb);
@@ -2655,22 +2683,55 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
     // consumes every non-zero cell, so FMASK is all zero between planes (the
     // border path still writes every cell of its plane).
     let mut rows = 0u64;
+    // Row cell bitmaps start empty for an interior plane (the previous plane's
+    // merge consumed every set bit).
     match dir {
         2 | 3 => {
             // a = lx, b = lz, both 16: FMASK index is the column index.
             let nplane = if dir == 2 { plane + 1 } else { plane - 1 };
-            let shift_n = nplane as u32;
-            let shift_p = plane as u32;
+            // Which y-planes hold any candidate at all, for this direction:
+            // OR of every column's (mesh & shifted see). Rebuilt when the
+            // column masks changed since the last time.
+            unsafe {
+                if Y_ANY_EPOCH != COL_MASKS_EPOCH {
+                    let mut up = 0u64;
+                    let mut down = 0u64;
+                    let mut c = 0usize;
+                    while c < CWU * CWU {
+                        let m = COL_MESH[c];
+                        let v = COL_SEE[c];
+                        up |= m & (v >> 1);
+                        down |= m & (v << 1);
+                        c += 1;
+                    }
+                    Y_ANY = [up, down];
+                    Y_ANY_EPOCH = COL_MASKS_EPOCH;
+                }
+                if (Y_ANY[dir - 2] >> plane) & 1 == 0 {
+                    FMASK_ROWS = 0;
+                    return false;
+                }
+            }
+            // Test the plane's bit through 32-bit halves: a 64-bit shift by a
+            // runtime count is a branchy multi-word sequence on the R3000, and
+            // this ran once per column per plane.
+            let (hp, sp) = (plane >> 5, (plane & 31) as u32);
+            let (hn, sn) = (nplane >> 5, (nplane & 31) as u32);
+            let mesh_words = unsafe { &*(core::ptr::addr_of!(COL_MESH) as *const [[u32; 2]; CWU * CWU]) };
+            let see_words = unsafe { &*(core::ptr::addr_of!(COL_SEE) as *const [[u32; 2]; CWU * CWU]) };
             let mut col = 0usize;
             while col < CWU * CWU {
-                let cand = unsafe { (COL_MESH[col] >> shift_p) & (COL_SEE[col] >> shift_n) & 1 };
+                let cand = (mesh_words[col][hp] >> sp) & (see_words[col][hn] >> sn) & 1;
                 if cand != 0 {
                     let blk = unsafe { MESH_SCRATCH[col + plane * CWU * CWU] };
                     let nb = unsafe { MESH_SCRATCH[col + nplane * CWU * CWU] };
                     if blk != nb {
                         let lx = col & (CWU - 1);
                         let lz = col / CWU;
-                        unsafe { FMASK[col] = blk as u16 | (sky_bucket(lx, plane, lz) << 7) };
+                        unsafe {
+                            FMASK[col] = blk as u16 | (sky_bucket(lx, plane, lz) << 7);
+                            FMASK_BITS[lz] |= 1u64 << lx;
+                        }
                         rows |= 1u64 << lz;
                         any = true;
                     }
@@ -2694,8 +2755,9 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                     let nb = unsafe { MESH_SCRATCH[lidx(nlx, ly, lz)] };
                     if blk != nb {
                         unsafe {
-                            FMASK[lz * a_dim + ly] = blk as u16 | (sky_bucket(plane, ly, lz) << 7)
-                        };
+                            FMASK[lz * a_dim + ly] = blk as u16 | (sky_bucket(plane, ly, lz) << 7);
+                            FMASK_BITS[lz] |= 1u64 << ly;
+                        }
                         rows |= 1u64 << lz;
                         any = true;
                     }
@@ -2719,8 +2781,9 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                     let nb = unsafe { MESH_SCRATCH[lidx(lx, ly, nlz)] };
                     if blk != nb {
                         unsafe {
-                            FMASK[ly * a_dim + lx] = blk as u16 | (sky_bucket(lx, ly, plane) << 7)
-                        };
+                            FMASK[ly * a_dim + lx] = blk as u16 | (sky_bucket(lx, ly, plane) << 7);
+                            FMASK_BITS[ly] |= 1u64 << lx;
+                        }
                         rows |= 1u64 << ly;
                         any = true;
                     }
@@ -2911,20 +2974,19 @@ fn greedy_plane(
     let mut amax = 0usize;
     let mut bmin = 127usize;
     let mut bmax = 0usize;
-    let rows = unsafe { FMASK_ROWS };
+    let _ = unsafe { FMASK_ROWS };
     let mut b0 = 0;
     while b0 < b_dim {
-        // Rows without a face cell (build_mask's bitmap) are not scanned; a
-        // cleared bit is exact, a stale set bit only costs the scan.
-        if (rows >> (b0 as u32)) & 1 == 0 {
-            b0 += 1;
-            continue;
-        }
-        let mut a0 = 0;
-        while a0 < a_dim {
+        // Seeds come from the row's cell bitmap: the next set bit is the next
+        // unconsumed face cell, so empty cells are never read.
+        let mut row_bits = unsafe { FMASK_BITS[b0] };
+        while row_bits != 0 {
+            let a0 = row_bits.trailing_zeros() as usize;
             let cell = unsafe { FMASK[b0 * a_dim + a0] };
             if cell == 0 {
-                a0 += 1;
+                // Cannot happen (bits and cells are cleared together); stay
+                // safe rather than spin.
+                row_bits &= row_bits - 1;
                 continue;
             }
             let cap = unsafe { MESH_CAP };
@@ -2944,6 +3006,7 @@ fn greedy_plane(
                 }
                 h += 1;
             }
+            let span = (((1u64 << (w as u32)) - 1) << (a0 as u32)) as u64;
             let mut bb = 0;
             while bb < h {
                 let mut aa = 0;
@@ -2951,8 +3014,10 @@ fn greedy_plane(
                     unsafe { FMASK[(b0 + bb) * a_dim + a0 + aa] = 0 };
                     aa += 1;
                 }
+                unsafe { FMASK_BITS[b0 + bb] &= !span };
                 bb += 1;
             }
+            row_bits &= !span;
             let ao = if ob == usize::MAX {
                 AO_LIT
             } else {
@@ -2964,7 +3029,6 @@ fn greedy_plane(
             amax = amax.max(a0 + w);
             bmin = bmin.min(b0);
             bmax = bmax.max(b0 + h);
-            a0 += w;
         }
         b0 += 1;
     }
