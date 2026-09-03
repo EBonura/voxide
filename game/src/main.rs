@@ -5627,6 +5627,88 @@ const CLIP_SCRATCH_A: usize = SCRATCHPAD;
 const CLIP_SCRATCH_B: usize = SCRATCHPAD + CLIP_VERT_CAP * core::mem::size_of::<ClipVert>();
 const CLIP_SCRATCH_P: usize = CLIP_SCRATCH_B + CLIP_VERT_CAP * core::mem::size_of::<ClipVert>();
 const _: () = assert!(CLIP_SCRATCH_P + CLIP_VERT_CAP * core::mem::size_of::<Proj>() <= SCRATCHPAD + 1024);
+/// `clip_distance` with the plane known at compile time. The runtime-`plane`
+/// form below compiled to a jump table inside the clipper's per-vertex loop
+/// (an indirect branch plus the plane arithmetic per vertex per plane, about
+/// 750 instructions of scanning per near cell); the six-way unroll in
+/// `emit_clipped_cell` folds all of it.
+#[inline(always)]
+fn clip_distance_c<const P: usize>(p: &ClipVert) -> i32 {
+    match P {
+        0 => p.z - NEAR_Z,
+        1 => FAR_Z - p.z,
+        2 => PROJ_H * p.x + CX as i32 * p.z,
+        3 => (SCREEN_W as i32 - CX as i32) * p.z - PROJ_H * p.x,
+        4 => PROJ_H * p.y + CY as i32 * p.z,
+        _ => (SCREEN_H as i32 - CY as i32) * p.z - PROJ_H * p.y,
+    }
+}
+
+/// Sutherland-Hodgman against one compile-time plane; same arithmetic as
+/// `clip_polygon_plane`.
+#[inline(always)]
+fn clip_polygon_plane_c<const P: usize>(
+    src: &[ClipVert; CLIP_VERT_CAP],
+    src_n: usize,
+    dst: &mut [ClipVert; CLIP_VERT_CAP],
+) -> usize {
+    let mut out = 0usize;
+    let mut previous = src[src_n - 1];
+    let mut previous_d = clip_distance_c::<P>(&previous);
+    let mut i = 0usize;
+    while i < src_n {
+        let current = src[i];
+        let current_d = clip_distance_c::<P>(&current);
+        let previous_in = previous_d >= 0;
+        let current_in = current_d >= 0;
+        if previous_in != current_in && out < CLIP_VERT_CAP {
+            dst[out] = clip_intersection(previous, current, previous_d, current_d);
+            out += 1;
+        }
+        if current_in && out < CLIP_VERT_CAP {
+            dst[out] = current;
+            out += 1;
+        }
+        previous = current;
+        previous_d = current_d;
+        i += 1;
+    }
+    out
+}
+
+/// One plane of `emit_clipped_cell`: scan, and clip only when the polygon
+/// straddles the plane. Returns the new vertex count, 0 when nothing is left.
+#[inline(always)]
+fn clip_cell_plane_c<'s, const P: usize>(
+    a: &mut &'s mut [ClipVert; CLIP_VERT_CAP],
+    b: &mut &'s mut [ClipVert; CLIP_VERT_CAP],
+    n: usize,
+) -> usize {
+    let mut any_inside = false;
+    let mut any_outside = false;
+    let mut scan = 0usize;
+    while scan < n {
+        if clip_distance_c::<P>(&a[scan]) >= 0 {
+            any_inside = true;
+        } else {
+            any_outside = true;
+        }
+        scan += 1;
+    }
+    if !any_inside {
+        return 0;
+    }
+    if !any_outside {
+        return n;
+    }
+    let out = clip_polygon_plane_c::<P>(a, n, b);
+    if out < 3 {
+        return 0;
+    }
+    core::mem::swap(a, b);
+    out
+}
+
 #[inline]
 fn clip_distance(p: ClipVert, plane: usize) -> i32 {
     match plane {
@@ -5779,36 +5861,24 @@ fn emit_clipped_cell(
     a[2] = corners[3];
     a[3] = corners[2];
     let mut n = 4usize;
-    let mut plane = 0usize;
-    while plane < 6 {
-        // Most close block cells are wholly inside five of the six planes.
-        // Avoid copying the polygon through a second array for an identity
-        // clip; on the R3000 this is substantially dearer than the tests.
-        let mut any_inside = false;
-        let mut any_outside = false;
-        let mut scan = 0usize;
-        while scan < n {
-            if clip_distance(a[scan], plane) >= 0 {
-                any_inside = true;
-            } else {
-                any_outside = true;
+    // Most close block cells are wholly inside five of the six planes: scan
+    // first and clip only a straddled plane, so an identity clip never copies
+    // the polygon. The planes are unrolled at compile time (see
+    // `clip_distance_c`); the same six in the same order as before.
+    macro_rules! plane {
+        ($p:literal) => {
+            n = clip_cell_plane_c::<$p>(&mut a, &mut b, n);
+            if n == 0 {
+                return;
             }
-            scan += 1;
-        }
-        if !any_inside {
-            return;
-        }
-        if !any_outside {
-            plane += 1;
-            continue;
-        }
-        n = clip_polygon_plane(a, n, b, plane);
-        if n < 3 {
-            return;
-        }
-        core::mem::swap(&mut a, &mut b);
-        plane += 1;
+        };
     }
+    plane!(0);
+    plane!(1);
+    plane!(2);
+    plane!(3);
+    plane!(4);
+    plane!(5);
 
     let mut pivot = 0usize;
     let mut best = i32::MAX;
