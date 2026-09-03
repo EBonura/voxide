@@ -5617,8 +5617,16 @@ struct ClipVert {
 const EMPTY_CLIP_VERT: ClipVert =
     ClipVert { x: 0, y: 0, z: 0, u: 0, v: 0, r: 0, g: 0, b: 0 };
 const CLIP_VERT_CAP: usize = 12;
-static mut CLIP_SCRATCH_A: [ClipVert; CLIP_VERT_CAP] = [EMPTY_CLIP_VERT; CLIP_VERT_CAP];
-static mut CLIP_SCRATCH_B: [ClipVert; CLIP_VERT_CAP] = [EMPTY_CLIP_VERT; CLIP_VERT_CAP];
+/// The R3000's 1 KiB data scratchpad. Nothing else in VoXide uses it; the
+/// near-cell clipper's two polygon buffers (384 bytes each) and its projected
+/// polygon (144 bytes) live here, so the clipper's loads and stores are one
+/// cycle instead of main-RAM wait states (every access to those buffers was a
+/// RAM round trip: they measured about 3,000 cycles per emitted triangle).
+const SCRATCHPAD: usize = 0x1F80_0000;
+const CLIP_SCRATCH_A: usize = SCRATCHPAD;
+const CLIP_SCRATCH_B: usize = SCRATCHPAD + CLIP_VERT_CAP * core::mem::size_of::<ClipVert>();
+const CLIP_SCRATCH_P: usize = CLIP_SCRATCH_B + CLIP_VERT_CAP * core::mem::size_of::<ClipVert>();
+const _: () = assert!(CLIP_SCRATCH_P + CLIP_VERT_CAP * core::mem::size_of::<Proj>() <= SCRATCHPAD + 1024);
 #[inline]
 fn clip_distance(p: ClipVert, plane: usize) -> i32 {
     match plane {
@@ -5762,8 +5770,8 @@ fn emit_clipped_cell(
     // call and every element read is one written earlier in the same call.
     let (mut a, mut b): (&mut [ClipVert; CLIP_VERT_CAP], &mut [ClipVert; CLIP_VERT_CAP]) = unsafe {
         (
-            &mut *core::ptr::addr_of_mut!(CLIP_SCRATCH_A),
-            &mut *core::ptr::addr_of_mut!(CLIP_SCRATCH_B),
+            &mut *(CLIP_SCRATCH_A as *mut [ClipVert; CLIP_VERT_CAP]),
+            &mut *(CLIP_SCRATCH_B as *mut [ClipVert; CLIP_VERT_CAP]),
         )
     };
     a[0] = corners[0];
@@ -5827,7 +5835,8 @@ fn emit_clipped_cell(
     // and each showed as dashed sky-coloured hairlines right in front of the
     // camera. Same-texture overlap is invisible; transparent cells keep exact
     // edges because overlapping two Average-blended quads double-blends.
-    let mut pp = [Proj { x: 0, y: 0, z: 0 }; CLIP_VERT_CAP];
+    // Scratchpad too; only the first `n` entries are ever read.
+    let pp: &mut [Proj; CLIP_VERT_CAP] = unsafe { &mut *(CLIP_SCRATCH_P as *mut [Proj; CLIP_VERT_CAP]) };
     let mut sx = 0i32;
     let mut sy = 0i32;
     let mut i = 0usize;
