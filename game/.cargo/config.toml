@@ -8,9 +8,10 @@ target = "mipsel-sony-psx"
 build-std = ["core"]
 build-std-features = ["compiler-builtins-mem"]
 
-[target.mipsel-sony-psx]
 # LLVM's MIPS delay-slot filler hoists loads into branch delay slots without
-# re-checking the R3000 load-delay hazard, so the next instruction on either
-# path can read the stale register. The backward search is the one that does
-# it; PSoXide's own guest build carries the same flag.
-rustflags = ["-C", "llvm-args=-disable-mips-df-backward-search"]
+# re-checking the R3000 load-delay hazard. This used to be held off with
+# `-C llvm-args=-disable-mips-df-backward-search`, which left a nop in nearly
+# every delay slot of the image. The filler now runs and the Makefile reroutes
+# the hazards it creates through PSoXide's post-link trampoline patcher
+# (`$(PSOXIDE)/tools/hazard_patch.py`, HAZARD_TRAMPOLINES in psx-rt), as
+# Cortex, hl-psx and quake-psx build.
