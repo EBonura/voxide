@@ -54,6 +54,7 @@ psoxide:
 
 compile: psoxide
 	cd $(GAME) && PSOXIDE="$(PSOXIDE)" cargo build --release
+	python3 $(PSOXIDE)/tools/hazard_patch.py $(EXE)
 	@echo "EXE -> $(EXE)"
 
 # disc always installs into the game library too, so EVERY build (disc, smoke,
@@ -84,6 +85,7 @@ run: install
 # START; the tick is after world gen finishes.
 profile: psoxide
 	cd $(GAME) && PSOXIDE="$(PSOXIDE)" cargo build --release --features emulator-telemetry
+	python3 $(PSOXIDE)/tools/hazard_patch.py $(EXE)
 	cd $(MKISOPSX) && cargo run --release -- --exe $(EXE) --out $(DIST)/voxide.bin --volume VOXIDE --world-pack-extra-dir $(ROOT)/assets/sfx/pak
 	@mkdir -p $(CAPTURE_DIR)
 	$(PSOXIDE_LAUNCH) \
