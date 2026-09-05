@@ -1,5 +1,9 @@
 # VoXide
 
+Start with the [PSoXide Demo Disc](https://bonnie-studios.itch.io/psoxide-demo-disc): it includes VoXide
+and the other Bonnie Studios PlayStation demos. Standalone downloads are available
+for testing just this project.
+
 A Minecraft-style survival sandbox for the PlayStation 1, written in Rust on
 top of the PSoXide SDK.
 
@@ -22,13 +26,12 @@ game equips the best of each and uses whichever suits the block you're aiming
 at. There's no music. Structures, falling sand, boats and rails, hoppers and
 signs aren't in yet.
 
-Performance is the part worth talking about on this hardware. Detailed terrain
+Detailed terrain
 draws 16 blocks ahead and 14 to the sides, projected on the GTE, using 2D
 greedy meshing over cached per-chunk face pools that only rebuild the planes an
 edit actually touches.
 
-What that costs depends entirely on what is in front of you, and the honest
-number is **20fps** in the grassy, tree-and-flower terrain the game spawns you
+The measured rate is **20fps** in the grassy, tree-and-flower terrain the game spawns you
 into. The same renderer holds a locked **30fps** in sparse terrain: the sandier
 spawn it used to ship measures exactly that on the same route. So roughly a
 third of the frame budget goes on trees and ground plants, and vegetation won
@@ -163,3 +166,8 @@ PSoXide's own provenance note.
 VoXide is an original implementation inspired by Minecraft. It ships no Mojang
 assets, code or data, and it is not affiliated with, endorsed by or associated
 with Mojang Studios or Microsoft. Minecraft is a trademark of Mojang Studios.
+
+## Recent changes
+
+Source snapshot **2026.09.05**: Switched standalone builds to the extracted SDK and separate emulator.
+See the [changelog](CHANGELOG.md) for the remaining changes and published download versions.

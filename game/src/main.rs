@@ -6755,7 +6755,7 @@ fn near_shell_see_through(b: u8) -> bool {
     b == AIR || is_water(b) || b == DOOR_O || world::is_cross_plant(b) || is_small_block(b)
 }
 
-/// Authoritative close-range block shell, independent of the greedy mesh.
+/// Close-range block shell, independent of the greedy mesh.
 ///
 /// The fast mesh can merge a top face across the eye and later reject the
 /// rectangle as a unit, leaving sky under the player. This bounded 3x3x4 pass
@@ -7559,7 +7559,7 @@ fn gte_begin_chunk(cam: &Camera, oxw: i32, ozw: i32) {
 /// camera lands here (a handful of faces per frame).
 const GTE_NEAR: u16 = 96;
 /// Through this full two-block band, opaque terrain ownership belongs to the
-/// authoritative per-block shell: one independently clipped face per cube.
+/// per-block shell: one independently clipped face per cube.
 const NEAR_BLOCK_Z: i32 = 2 * BLOCK;
 
 /// One-level mid-band subdivision for large greedy plates (the camera-space
@@ -7584,7 +7584,7 @@ const NEAR_BLOCK_Z: i32 = 2 * BLOCK;
 const MID_SUBDIV_Z: i32 = 4 * BLOCK;
 const MID_SUBDIV_SPAN: usize = 4;
 /// Graceful degrade: leave headroom in the shared NEAR_TRIS pool so mid-band
-/// subdivision can never starve the authoritative near band of packets. Past
+/// subdivision cannot exhaust the near band packet budget. Past
 /// this watermark a mid-band plate draws as the plain single quad again.
 const MID_SUBDIV_TRI_CAP: usize = MAX_NEAR_TRIS - 256;
 
