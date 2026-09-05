@@ -6194,16 +6194,17 @@ fn emit_near_face(
     // The greedy rectangle is an exact block grid, so compute its two grid
     // steps once. The former point() divided all three coordinates for every
     // emitted corner -- hundreds of integer divisions for a close 16x8 plate.
-    let du = (
-        (verts[1].0 - verts[0].0) / uc as i32,
-        (verts[1].1 - verts[0].1) / uc as i32,
-        (verts[1].2 - verts[0].2) / uc as i32,
-    );
-    let dv = (
-        (verts[2].0 - verts[0].0) / vc as i32,
-        (verts[2].1 - verts[0].1) / vc as i32,
-        (verts[2].2 - verts[0].2) / vc as i32,
-    );
+    // Each tessellation step is one block along a signed world axis.
+    // Select that axis directly instead of dividing the merged spans by
+    // uc/vc for all six coordinates on every near face.
+    let (du, dv) = match dir {
+        0 => ((0, 0, BLOCK), (0, -BLOCK, 0)),
+        1 => ((0, 0, -BLOCK), (0, -BLOCK, 0)),
+        2 => ((BLOCK, 0, 0), (0, 0, BLOCK)),
+        3 => ((BLOCK, 0, 0), (0, 0, -BLOCK)),
+        4 => ((-BLOCK, 0, 0), (0, -BLOCK, 0)),
+        _ => ((BLOCK, 0, 0), (0, -BLOCK, 0)),
+    };
     // Exact q12 camera-space planes for the whole block grid. Camera position
     // is affine across this face, so transforming every emitted corner with
     // nine fresh multiplies is redundant; base + du*u + dv*v is byte-identical
@@ -6215,10 +6216,19 @@ fn emit_near_face(
         row[0] * local_base.0 + row[1] * local_base.1 + row[2] * local_base.2
     };
     let plane_du = |row: [i32; 3]| -> i32 {
-        row[0] * du.0 + row[1] * du.1 + row[2] * du.2
+        match dir {
+            0 => row[2] * BLOCK,
+            1 => -row[2] * BLOCK,
+            4 => -row[0] * BLOCK,
+            _ => row[0] * BLOCK,
+        }
     };
     let plane_dv = |row: [i32; 3]| -> i32 {
-        row[0] * dv.0 + row[1] * dv.1 + row[2] * dv.2
+        match dir {
+            2 => row[2] * BLOCK,
+            3 => -row[2] * BLOCK,
+            _ => -row[1] * BLOCK,
+        }
     };
     let camera_base = [plane_base(rows[0]), plane_base(rows[1]), plane_base(rows[2])];
     let camera_du = [plane_du(rows[0]), plane_du(rows[1]), plane_du(rows[2])];

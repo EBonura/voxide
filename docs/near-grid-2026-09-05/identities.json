@@ -1,0 +1,52 @@
+{
+  "baseline": "5637e2c",
+  "sdk": "8df242b353b8a3664c1d2ed20622d692d1349306",
+  "scratch": "/tmp/astra-vox-near-projection-20260905",
+  "source_diff_sha256": "084b4652232f7709c09ea6d1ed3271d6fd33e0a5104c8335edc7a8d9ca9d9746",
+  "diagnostic_features": [
+    "emulator-telemetry"
+  ],
+  "normal_features": "default only",
+  "files": {
+    "/tmp/astra-vox-near-projection-20260905/axis/voxide.exe": {
+      "bytes": 491520,
+      "sha256": "fe321ee84f26e7bf69caffee4fca202c9f4f2b388fdc59ba17e4ae35792229a6"
+    },
+    "/tmp/astra-vox-near-projection-20260905/shipping/voxide.exe": {
+      "bytes": 491520,
+      "sha256": "a90361548d13fc7e295e9c269756107aeb894a776267f342552f9a4c33fe75b5"
+    },
+    "/tmp/astra-vox-near-projection-20260905/shipping/voxide.bin": {
+      "bytes": 2511936,
+      "sha256": "8e2201bdcad636bfd24ff357807f551a8026881f57356ed9db11a4ed14f205c1"
+    },
+    "/tmp/astra-vox-near-projection-20260905/shipping/voxide.cue": {
+      "bytes": 69,
+      "sha256": "416945f50741918a1a19fd88f2900e7ba6641591875db3a87f51653a3525d9a8"
+    },
+    "/tmp/astra-vox-near-projection-20260905/axis-proof.rs": {
+      "bytes": 4080,
+      "sha256": "35e5ee1136e824ff763ec1e05f4dc52c14e7b37183fb6d8d223605e78a4a670e"
+    },
+    "/tmp/astra-vox-distance-20260905/shipping-pivot/voxide.exe": {
+      "bytes": 491520,
+      "sha256": "2e7d892cb81ec0ae3387382d252d6c59afbf658ab5a84ef190844c0a67ee4fe1"
+    },
+    "/tmp/astra-vox-distance-20260905/shipping-pivot/voxide.bin": {
+      "bytes": 2511936,
+      "sha256": "8965794ac6bec00e62603a9c350553a7ec69ba52a6b01a30849a30c15ef1929a"
+    },
+    "/tmp/astra-perf-20260904/frontend": {
+      "bytes": 24189104,
+      "sha256": "8dd6ca938059b29a831fa754b78642865587bb7cf04e7a1a625c1017a47a1041"
+    },
+    "/tmp/astra-vox-distance-20260905/standing.pxtape": {
+      "bytes": 21012,
+      "sha256": "790b2c30b996c98e0420ebcfdfbaef55f5f6676207831b5c6840c2b779e40858"
+    },
+    "/tmp/astra-vox-distance-20260905/actions.pxtape": {
+      "bytes": 21012,
+      "sha256": "9957c52cb2dbd4aac4afc108ddc00e54e5706a6f7423d70370d4b984139d6879"
+    }
+  }
+}

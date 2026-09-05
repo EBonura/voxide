@@ -1,0 +1,128 @@
+[
+  {
+    "route": "standing",
+    "tick": "tick-000400",
+    "changed_pixels": 0,
+    "bbox": null
+  },
+  {
+    "route": "standing",
+    "tick": "tick-000800",
+    "changed_pixels": 0,
+    "bbox": null
+  },
+  {
+    "route": "standing",
+    "tick": "tick-001200",
+    "changed_pixels": 0,
+    "bbox": null
+  },
+  {
+    "route": "standing",
+    "tick": "tick-001600",
+    "changed_pixels": 0,
+    "bbox": null
+  },
+  {
+    "route": "standing",
+    "tick": "tick-002000",
+    "changed_pixels": 0,
+    "bbox": null
+  },
+  {
+    "route": "standing",
+    "tick": "tick-002400",
+    "changed_pixels": 0,
+    "bbox": null
+  },
+  {
+    "route": "standing",
+    "tick": "tick-002800",
+    "changed_pixels": 0,
+    "bbox": null
+  },
+  {
+    "route": "standing",
+    "tick": "tick-003200",
+    "changed_pixels": 0,
+    "bbox": null
+  },
+  {
+    "route": "actions",
+    "tick": "tick-000400",
+    "changed_pixels": 0,
+    "bbox": null
+  },
+  {
+    "route": "actions",
+    "tick": "tick-000800",
+    "changed_pixels": 0,
+    "bbox": null
+  },
+  {
+    "route": "actions",
+    "tick": "tick-001200",
+    "changed_pixels": 99,
+    "bbox": [
+      36,
+      0,
+      241,
+      79
+    ]
+  },
+  {
+    "route": "actions",
+    "tick": "tick-001600",
+    "changed_pixels": 6906,
+    "bbox": [
+      117,
+      54,
+      320,
+      240
+    ]
+  },
+  {
+    "route": "actions",
+    "tick": "tick-002000",
+    "changed_pixels": 1184,
+    "bbox": [
+      159,
+      90,
+      320,
+      239
+    ]
+  },
+  {
+    "route": "actions",
+    "tick": "tick-002400",
+    "changed_pixels": 132,
+    "bbox": [
+      92,
+      96,
+      107,
+      113
+    ]
+  },
+  {
+    "route": "actions",
+    "tick": "tick-002800",
+    "changed_pixels": 1102,
+    "bbox": [
+      250,
+      123,
+      320,
+      240
+    ]
+  },
+  {
+    "route": "actions",
+    "tick": "tick-003200",
+    "changed_pixels": 1159,
+    "bbox": [
+      250,
+      125,
+      320,
+      240
+    ]
+  }
+]
