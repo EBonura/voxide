@@ -55,13 +55,14 @@ page, no console needed.
 
 ## Build
 
-VoXide uses the PSoXide SDK as Cargo **path** dependencies, so the two
-checkouts have to sit side by side:
+VoXide uses the [PSoXide SDK](https://github.com/EBonura/PSoXide) as Cargo
+path dependencies. `make` hydrates the exact revision in `psoxide-pin/` into
+ignored `.psoxide/`; a sibling checkout is not required.
 
 ```bash
-git clone https://github.com/EBonura/PSoXide.git
 git clone https://github.com/EBonura/voxide.git
-cd voxide && make
+cd voxide
+make disc
 ```
 
 ```bash
@@ -72,8 +73,16 @@ make smoke        # boot through PSoXide headless and write captures/
 ```
 
 The build needs a nightly Rust toolchain (pinned by `rust-toolchain.toml`,
-which also pulls `rust-src` for the `mipsel-sony-psx` target) and Python 3 for
-the asset cooks in `tools/`.
+which also pulls `rust-src` for the `mipsel-sony-psx` target), Make, Python 3
+and `mipsel-none-elf-objdump` on `PATH` for the load-delay patch/check. Host
+Rust tools require a C/C++ linker. Recooking source assets also needs Pillow.
+
+`make disc` writes `dist/voxide.{bin,cue}` and installs a copy under
+`~/Downloads/ps1 games/VoXide/`; override that library with `GAMES_DIR`.
+Keep each BIN/CUE pair together. For smoke tests, build the separate
+[PSoXide emulator](https://github.com/EBonura/PSoXide-emulator) and pass
+`make smoke FRONTEND=/absolute/path/to/frontend`. `PSOXIDE_FROM` is an
+explicit source override for SDK development and demo-disc integration.
 
 ## Controls
 
@@ -126,7 +135,8 @@ bar.
 
 ## Credits
 
-Everything shipped here is CC0 (public domain). `assets/pack/CREDITS.md` has
+The credited texture and sound assets are CC0 (public domain); game code is
+[GPL-2.0-or-later](LICENSE). `assets/pack/CREDITS.md` has
 the per-sound breakdown and the links; the short version:
 
 - **Block textures** are the "16x16 Block Texture Set" from OpenGameArt.
