@@ -1,0 +1,10 @@
+{
+  "command": "make disc GAMES_DIR=/tmp/astra-vox-distance-20260905/ordinary-install",
+  "sdk_receipt": "git:3d274b7406ac74c3d382c8a36ec523a92fc4da27",
+  "files": {
+    "exe": "2e7d892cb81ec0ae3387382d252d6c59afbf658ab5a84ef190844c0a67ee4fe1",
+    "bin": "8965794ac6bec00e62603a9c350553a7ec69ba52a6b01a30849a30c15ef1929a",
+    "cue": "416945f50741918a1a19fd88f2900e7ba6641591875db3a87f51653a3525d9a8"
+  },
+  "identical_to_tested_shipping": true
+}

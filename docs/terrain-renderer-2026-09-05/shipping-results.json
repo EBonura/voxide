@@ -1,0 +1,668 @@
+{
+  "baseline-standing": {
+    "flips": 867,
+    "route_ticks": 2600,
+    "bus_cycles": 1485218762,
+    "nominal_fps": 20.00769230769231,
+    "emulated_seconds": 43.85212236630763,
+    "emulated_fps": 19.770992901044433,
+    "windows": [
+      [
+        900,
+        20.0
+      ],
+      [
+        1200,
+        20.0
+      ],
+      [
+        1500,
+        20.0
+      ],
+      [
+        1800,
+        20.0
+      ],
+      [
+        2100,
+        20.0
+      ],
+      [
+        2400,
+        20.0
+      ],
+      [
+        2700,
+        20.0
+      ],
+      [
+        3000,
+        20.0
+      ]
+    ],
+    "cold_boot_flips": 1252,
+    "cold_boot_bus_cycles": 1999531614,
+    "cold_boot_fps": 21.20683529237763,
+    "full_tape_last_row": {
+      "route_tick": "3500",
+      "tape_frame": "3499",
+      "cpu_tick": "867304524",
+      "bus_cycles": "1999531614",
+      "cpu_tick_delta": "238578",
+      "bus_cycle_delta": "571239",
+      "display_x": "0",
+      "display_y": "0",
+      "display_width": "320",
+      "display_height": "240",
+      "display_start_changed": "1",
+      "port1_polls": "1205",
+      "icache_refill_events_delta": "9519",
+      "icache_refill_words_delta": "35942",
+      "icache_refill_stall_cycles_delta": "46510"
+    },
+    "minimum_observed_sp": 2149558448
+  },
+  "baseline-actions": {
+    "flips": 860,
+    "route_ticks": 2600,
+    "bus_cycles": 1485219172,
+    "nominal_fps": 19.846153846153847,
+    "emulated_seconds": 43.852134471844295,
+    "emulated_fps": 19.611360093592975,
+    "windows": [
+      [
+        900,
+        20.4
+      ],
+      [
+        1200,
+        20.0
+      ],
+      [
+        1500,
+        18.4
+      ],
+      [
+        1800,
+        20.0
+      ],
+      [
+        2100,
+        20.0
+      ],
+      [
+        2400,
+        20.0
+      ],
+      [
+        2700,
+        20.0
+      ],
+      [
+        3000,
+        20.0
+      ]
+    ],
+    "cold_boot_flips": 1245,
+    "cold_boot_bus_cycles": 1999532024,
+    "cold_boot_fps": 21.088262400342533,
+    "full_tape_last_row": {
+      "route_tick": "3500",
+      "tape_frame": "3499",
+      "cpu_tick": "855057491",
+      "bus_cycles": "1999532024",
+      "cpu_tick_delta": "254841",
+      "bus_cycle_delta": "571243",
+      "display_x": "0",
+      "display_y": "240",
+      "display_width": "320",
+      "display_height": "240",
+      "display_start_changed": "0",
+      "port1_polls": "1198",
+      "icache_refill_events_delta": "22173",
+      "icache_refill_words_delta": "84207",
+      "icache_refill_stall_cycles_delta": "108953"
+    },
+    "minimum_observed_sp": 2149558448
+  },
+  "outlined-standing": {
+    "flips": 1300,
+    "route_ticks": 2600,
+    "bus_cycles": 1485218399,
+    "nominal_fps": 30.0,
+    "emulated_seconds": 43.85211164847884,
+    "emulated_fps": 29.645094640387633,
+    "windows": [
+      [
+        900,
+        30.0
+      ],
+      [
+        1200,
+        30.0
+      ],
+      [
+        1500,
+        30.0
+      ],
+      [
+        1800,
+        30.0
+      ],
+      [
+        2100,
+        30.0
+      ],
+      [
+        2400,
+        30.0
+      ],
+      [
+        2700,
+        30.0
+      ],
+      [
+        3000,
+        30.0
+      ]
+    ],
+    "cold_boot_flips": 1722,
+    "cold_boot_bus_cycles": 1999521018,
+    "cold_boot_fps": 29.168022278823578,
+    "full_tape_last_row": {
+      "route_tick": "3500",
+      "tape_frame": "3499",
+      "cpu_tick": "925494802",
+      "bus_cycles": "1999521018",
+      "cpu_tick_delta": "259063",
+      "bus_cycle_delta": "571236",
+      "display_x": "0",
+      "display_y": "0",
+      "display_width": "320",
+      "display_height": "240",
+      "display_start_changed": "0",
+      "port1_polls": "1675",
+      "icache_refill_events_delta": "25553",
+      "icache_refill_words_delta": "97133",
+      "icache_refill_stall_cycles_delta": "125762"
+    },
+    "minimum_observed_sp": 2149558448
+  },
+  "outlined-actions": {
+    "flips": 865,
+    "route_ticks": 2600,
+    "bus_cycles": 1485219363,
+    "nominal_fps": 19.96153846153846,
+    "emulated_seconds": 43.85214011125284,
+    "emulated_fps": 19.72537709232653,
+    "windows": [
+      [
+        900,
+        21.2
+      ],
+      [
+        1200,
+        20.0
+      ],
+      [
+        1500,
+        18.4
+      ],
+      [
+        1800,
+        20.0
+      ],
+      [
+        2100,
+        20.0
+      ],
+      [
+        2400,
+        20.0
+      ],
+      [
+        2700,
+        20.0
+      ],
+      [
+        3000,
+        20.0
+      ]
+    ],
+    "cold_boot_flips": 1287,
+    "cold_boot_bus_cycles": 1999521982,
+    "cold_boot_fps": 21.799783144369552,
+    "full_tape_last_row": {
+      "route_tick": "3500",
+      "tape_frame": "3499",
+      "cpu_tick": "876202176",
+      "bus_cycles": "1999521982",
+      "cpu_tick_delta": "235387",
+      "bus_cycle_delta": "571240",
+      "display_x": "0",
+      "display_y": "240",
+      "display_width": "320",
+      "display_height": "240",
+      "display_start_changed": "0",
+      "port1_polls": "1240",
+      "icache_refill_events_delta": "29753",
+      "icache_refill_words_delta": "114065",
+      "icache_refill_stall_cycles_delta": "147312"
+    },
+    "minimum_observed_sp": 2149558448
+  },
+  "far17-standing": {
+    "flips": 1233,
+    "route_ticks": 2600,
+    "bus_cycles": 1485218634,
+    "nominal_fps": 28.453846153846154,
+    "emulated_seconds": 43.85211858701814,
+    "emulated_fps": 28.117227621586654,
+    "windows": [
+      [
+        900,
+        30.0
+      ],
+      [
+        1200,
+        30.0
+      ],
+      [
+        1500,
+        30.0
+      ],
+      [
+        1800,
+        30.0
+      ],
+      [
+        2100,
+        30.0
+      ],
+      [
+        2400,
+        30.0
+      ],
+      [
+        2700,
+        30.0
+      ],
+      [
+        3000,
+        23.4
+      ]
+    ],
+    "cold_boot_flips": 1651,
+    "cold_boot_bus_cycles": 1999523887,
+    "cold_boot_fps": 27.965351733755007,
+    "full_tape_last_row": {
+      "route_tick": "3500",
+      "tape_frame": "3499",
+      "cpu_tick": "920375005",
+      "bus_cycles": "1999523887",
+      "cpu_tick_delta": "264920",
+      "bus_cycle_delta": "571242",
+      "display_x": "0",
+      "display_y": "240",
+      "display_width": "320",
+      "display_height": "240",
+      "display_start_changed": "0",
+      "port1_polls": "1604",
+      "icache_refill_events_delta": "10278",
+      "icache_refill_words_delta": "39083",
+      "icache_refill_stall_cycles_delta": "50532"
+    },
+    "minimum_observed_sp": 2149558448
+  },
+  "far17-actions": {
+    "flips": 865,
+    "route_ticks": 2600,
+    "bus_cycles": 1485218931,
+    "nominal_fps": 19.96153846153846,
+    "emulated_seconds": 43.852127356150795,
+    "emulated_fps": 19.725382829772187,
+    "windows": [
+      [
+        900,
+        21.2
+      ],
+      [
+        1200,
+        20.0
+      ],
+      [
+        1500,
+        18.4
+      ],
+      [
+        1800,
+        20.0
+      ],
+      [
+        2100,
+        20.0
+      ],
+      [
+        2400,
+        20.0
+      ],
+      [
+        2700,
+        20.0
+      ],
+      [
+        3000,
+        20.0
+      ]
+    ],
+    "cold_boot_flips": 1283,
+    "cold_boot_bus_cycles": 1999524184,
+    "cold_boot_fps": 21.732005417944972,
+    "full_tape_last_row": {
+      "route_tick": "3500",
+      "tape_frame": "3499",
+      "cpu_tick": "876656857",
+      "bus_cycles": "1999524184",
+      "cpu_tick_delta": "237989",
+      "bus_cycle_delta": "571236",
+      "display_x": "0",
+      "display_y": "240",
+      "display_width": "320",
+      "display_height": "240",
+      "display_start_changed": "1",
+      "port1_polls": "1236",
+      "icache_refill_events_delta": "9613",
+      "icache_refill_words_delta": "36349",
+      "icache_refill_stall_cycles_delta": "47018"
+    },
+    "minimum_observed_sp": 2149558448
+  },
+  "pivot-standing": {
+    "flips": 1300,
+    "route_ticks": 2600,
+    "bus_cycles": 1485218179,
+    "nominal_fps": 30.0,
+    "emulated_seconds": 43.85210515282502,
+    "emulated_fps": 29.64509903160834,
+    "windows": [
+      [
+        900,
+        30.0
+      ],
+      [
+        1200,
+        30.0
+      ],
+      [
+        1500,
+        30.0
+      ],
+      [
+        1800,
+        30.0
+      ],
+      [
+        2100,
+        30.0
+      ],
+      [
+        2400,
+        30.0
+      ],
+      [
+        2700,
+        30.0
+      ],
+      [
+        3000,
+        30.0
+      ]
+    ],
+    "cold_boot_flips": 1730,
+    "cold_boot_bus_cycles": 1999523151,
+    "cold_boot_fps": 29.303498672019128,
+    "full_tape_last_row": {
+      "route_tick": "3500",
+      "tape_frame": "3499",
+      "cpu_tick": "936687154",
+      "bus_cycles": "1999523151",
+      "cpu_tick_delta": "264735",
+      "bus_cycle_delta": "571236",
+      "display_x": "0",
+      "display_y": "0",
+      "display_width": "320",
+      "display_height": "240",
+      "display_start_changed": "0",
+      "port1_polls": "1683",
+      "icache_refill_events_delta": "23884",
+      "icache_refill_words_delta": "90875",
+      "icache_refill_stall_cycles_delta": "117447"
+    },
+    "stack_summary": {
+      "call": "0",
+      "root_pc": "0x00000000",
+      "return_pc": "0x00000000",
+      "entry_sp": "0x801ffff0",
+      "min_sp": "0x801fa8b0",
+      "depth_bytes": "22336",
+      "observations": "936687154",
+      "completed": "1"
+    }
+  },
+  "pivot-actions": {
+    "flips": 867,
+    "route_ticks": 2600,
+    "bus_cycles": 1485219344,
+    "nominal_fps": 20.00769230769231,
+    "emulated_seconds": 43.85213955026455,
+    "emulated_fps": 19.770985153557223,
+    "windows": [
+      [
+        900,
+        21.2
+      ],
+      [
+        1200,
+        20.0
+      ],
+      [
+        1500,
+        19.0
+      ],
+      [
+        1800,
+        20.0
+      ],
+      [
+        2100,
+        20.0
+      ],
+      [
+        2400,
+        20.0
+      ],
+      [
+        2700,
+        20.0
+      ],
+      [
+        3000,
+        20.0
+      ]
+    ],
+    "cold_boot_flips": 1297,
+    "cold_boot_bus_cycles": 1999524316,
+    "cold_boot_fps": 21.969141984667917,
+    "full_tape_last_row": {
+      "route_tick": "3500",
+      "tape_frame": "3499",
+      "cpu_tick": "884631039",
+      "bus_cycles": "1999524316",
+      "cpu_tick_delta": "261766",
+      "bus_cycle_delta": "571236",
+      "display_x": "0",
+      "display_y": "240",
+      "display_width": "320",
+      "display_height": "240",
+      "display_start_changed": "0",
+      "port1_polls": "1250",
+      "icache_refill_events_delta": "18810",
+      "icache_refill_words_delta": "71788",
+      "icache_refill_stall_cycles_delta": "92770"
+    },
+    "stack_summary": {
+      "call": "0",
+      "root_pc": "0x00000000",
+      "return_pc": "0x00000000",
+      "entry_sp": "0x801ffff0",
+      "min_sp": "0x801fa8b0",
+      "depth_bytes": "22336",
+      "observations": "884631039",
+      "completed": "1"
+    }
+  },
+  "pivot17-standing": {
+    "flips": 1300,
+    "route_ticks": 2600,
+    "bus_cycles": 1485218213,
+    "nominal_fps": 30.0,
+    "emulated_seconds": 43.85210615669879,
+    "emulated_fps": 29.645098352965054,
+    "windows": [
+      [
+        900,
+        30.0
+      ],
+      [
+        1200,
+        30.0
+      ],
+      [
+        1500,
+        30.0
+      ],
+      [
+        1800,
+        30.0
+      ],
+      [
+        2100,
+        30.0
+      ],
+      [
+        2400,
+        30.0
+      ],
+      [
+        2700,
+        30.0
+      ],
+      [
+        3000,
+        30.0
+      ]
+    ],
+    "cold_boot_flips": 1718,
+    "cold_boot_bus_cycles": 1999526676,
+    "cold_boot_fps": 29.10018610824475,
+    "full_tape_last_row": {
+      "route_tick": "3500",
+      "tape_frame": "3499",
+      "cpu_tick": "935614306",
+      "bus_cycles": "1999526676",
+      "cpu_tick_delta": "278928",
+      "bus_cycle_delta": "571236",
+      "display_x": "0",
+      "display_y": "0",
+      "display_width": "320",
+      "display_height": "240",
+      "display_start_changed": "1",
+      "port1_polls": "1671",
+      "icache_refill_events_delta": "16542",
+      "icache_refill_words_delta": "62899",
+      "icache_refill_stall_cycles_delta": "81313"
+    },
+    "stack_summary": {
+      "call": "0",
+      "root_pc": "0x00000000",
+      "return_pc": "0x00000000",
+      "entry_sp": "0x801ffff0",
+      "min_sp": "0x801fa8b0",
+      "depth_bytes": "22336",
+      "observations": "935614306",
+      "completed": "1"
+    }
+  },
+  "pivot17-actions": {
+    "flips": 866,
+    "route_ticks": 2600,
+    "bus_cycles": 1485219330,
+    "nominal_fps": 19.984615384615385,
+    "emulated_seconds": 43.85213913690476,
+    "emulated_fps": 19.748181435263167,
+    "windows": [
+      [
+        900,
+        21.2
+      ],
+      [
+        1200,
+        20.0
+      ],
+      [
+        1500,
+        18.6
+      ],
+      [
+        1800,
+        20.0
+      ],
+      [
+        2100,
+        20.0
+      ],
+      [
+        2400,
+        20.0
+      ],
+      [
+        2700,
+        20.0
+      ],
+      [
+        3000,
+        20.0
+      ]
+    ],
+    "cold_boot_flips": 1284,
+    "cold_boot_bus_cycles": 1999527793,
+    "cold_boot_fps": 21.748904592495453,
+    "full_tape_last_row": {
+      "route_tick": "3500",
+      "tape_frame": "3499",
+      "cpu_tick": "883736261",
+      "bus_cycles": "1999527793",
+      "cpu_tick_delta": "239195",
+      "bus_cycle_delta": "571240",
+      "display_x": "0",
+      "display_y": "0",
+      "display_width": "320",
+      "display_height": "240",
+      "display_start_changed": "0",
+      "port1_polls": "1237",
+      "icache_refill_events_delta": "28578",
+      "icache_refill_words_delta": "109429",
+      "icache_refill_stall_cycles_delta": "141185"
+    },
+    "stack_summary": {
+      "call": "0",
+      "root_pc": "0x00000000",
+      "return_pc": "0x00000000",
+      "entry_sp": "0x801ffff0",
+      "min_sp": "0x801fa8b0",
+      "depth_bytes": "22336",
+      "observations": "883736261",
+      "completed": "1"
+    }
+  }
+}

@@ -8,7 +8,7 @@
 # .psoxide -- a pin that did could not be read before that tree existed, which
 # is the whole reason a clean clone works.
 #
-# To move the SDK: change rev here and PSOXIDE_REV in the Makefile.
+# To move the SDK: change rev here and update psoxide-pin/Cargo.lock.
 [package]
 name    = "psoxide-pin"
 version = "0.0.0"
@@ -18,4 +18,4 @@ publish = false
 [workspace]
 
 [dependencies]
-psoxide-link = { git = "https://github.com/EBonura/PSoXide.git", rev = "e4f27c2fad3de1b827ec460b2c3db89117b1ad94" }
+psoxide-link = { git = "https://github.com/EBonura/PSoXide.git", rev = "8df242b353b8a3664c1d2ed20622d692d1349306" }

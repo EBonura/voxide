@@ -1,0 +1,136 @@
+{
+  "baseline": {
+    "frame_cycles": 1713708.1672240803,
+    "cell_collect": 1202410.1220735786,
+    "update_actor": 864622.695652174,
+    "room_surface_cache": 3564.8428093645484,
+    "generation_cycles": null,
+    "completed_steady_frames": 598,
+    "missed_two_vblank_deadlines": 598,
+    "nominal_fps": 19.999998048394897
+  },
+  "outlined": {
+    "frame_cycles": 1142472.1638795987,
+    "cell_collect": 1105669.7240802676,
+    "update_actor": 804477.3913043478,
+    "room_surface_cache": 3561.958193979933,
+    "generation_cycles": null,
+    "completed_steady_frames": 598,
+    "missed_two_vblank_deadlines": 0,
+    "nominal_fps": 29.999995696710943
+  },
+  "demo-baseline": {
+    "frame_cycles": 1275263.4318637275,
+    "cell_collect": 1008966.3226452906,
+    "update_actor": 738078.7274549098,
+    "room_surface_cache": 9953.804609218438,
+    "generation_cycles": null,
+    "completed_steady_frames": 998,
+    "missed_two_vblank_deadlines": 229,
+    "nominal_fps": 26.87614115140916
+  },
+  "demo-outlined": {
+    "frame_cycles": 1254085.3496993987,
+    "cell_collect": 998351.9248496994,
+    "update_actor": 727017.7585170341,
+    "room_surface_cache": 9952.086172344689,
+    "generation_cycles": null,
+    "completed_steady_frames": 998,
+    "missed_two_vblank_deadlines": 192,
+    "nominal_fps": 27.330005894906144
+  },
+  "march-baseline": {
+    "frame_cycles": 1252031.9469646432,
+    "cell_collect": 963133.8362241494,
+    "update_actor": 465301.3305537025,
+    "room_surface_cache": 343392.4566377585,
+    "generation_cycles": null,
+    "completed_steady_frames": 2998,
+    "missed_two_vblank_deadlines": 906,
+    "nominal_fps": 27.37482864002981
+  },
+  "march-outlined": {
+    "frame_cycles": 1162669.143095397,
+    "cell_collect": 860798.9062708472,
+    "update_actor": 362514.1087391594,
+    "room_surface_cache": 343398.6881254169,
+    "generation_cycles": null,
+    "completed_steady_frames": 2998,
+    "missed_two_vblank_deadlines": 705,
+    "nominal_fps": 29.478859229678385
+  },
+  "far17": {
+    "frame_cycles": 1142472.1822742475,
+    "cell_collect": 1120389.204013378,
+    "update_actor": 819189.0100334449,
+    "room_surface_cache": 3562.138795986622,
+    "generation_cycles": null,
+    "completed_steady_frames": 598,
+    "missed_two_vblank_deadlines": 0,
+    "nominal_fps": 29.99999521368878
+  },
+  "far18": {
+    "frame_cycles": 1545585.2224080267,
+    "cell_collect": 1161690.7675585283,
+    "update_actor": 832633.2775919732,
+    "room_surface_cache": 3580.0652173913045,
+    "generation_cycles": null,
+    "completed_steady_frames": 598,
+    "missed_two_vblank_deadlines": 422,
+    "nominal_fps": 22.17552258076119
+  },
+  "terrain-baseline": {
+    "frame_cycles": 1511165.015677118,
+    "cell_collect": 1213037.8742494998,
+    "update_actor": 848527.3405603736,
+    "room_surface_cache": 160465.1751167445,
+    "generation_cycles": null,
+    "completed_steady_frames": 2998,
+    "missed_two_vblank_deadlines": 1539
+  },
+  "terrain-outlined": {
+    "frame_cycles": 1333392.1087391595,
+    "cell_collect": 1050592.5547031355,
+    "update_actor": 685598.1114076051,
+    "room_surface_cache": 160462.71614409608,
+    "generation_cycles": null,
+    "completed_steady_frames": 2998,
+    "missed_two_vblank_deadlines": 810
+  },
+  "pivot": {
+    "frame_cycles": 1142472.152173913,
+    "cell_collect": 1080401.7257525083,
+    "update_actor": 780219.1488294314,
+    "room_surface_cache": 3555.1003344481605,
+    "generation_cycles": null,
+    "completed_steady_frames": 598,
+    "missed_two_vblank_deadlines": 0
+  },
+  "demo-pivot": {
+    "frame_cycles": 1177386.3336673346,
+    "cell_collect": 979756.8206412826,
+    "update_actor": 709517.5751503006,
+    "room_surface_cache": 9951.663326653306,
+    "generation_cycles": null,
+    "completed_steady_frames": 998,
+    "missed_two_vblank_deadlines": 58
+  },
+  "march-pivot": {
+    "frame_cycles": 1176959.5747164777,
+    "cell_collect": 873637.1981320881,
+    "update_actor": 375205.2131420947,
+    "room_surface_cache": 343400.9412941961,
+    "generation_cycles": null,
+    "completed_steady_frames": 2998,
+    "missed_two_vblank_deadlines": 720
+  },
+  "terrain-pivot": {
+    "frame_cycles": 1345967.68478986,
+    "cell_collect": 1066725.1300867244,
+    "update_actor": 701593.5583722482,
+    "room_surface_cache": 160464.2798532355,
+    "generation_cycles": null,
+    "completed_steady_frames": 2998,
+    "missed_two_vblank_deadlines": 844
+  }
+}

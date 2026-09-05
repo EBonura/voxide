@@ -1,0 +1,12 @@
+{
+  "outlined": {
+    "frame_cycles": 1142472.1638795987,
+    "cell_collect": 1105669.7240802676,
+    "update_actor": 804477.3913043478
+  },
+  "pivot": {
+    "frame_cycles": 1142472.152173913,
+    "cell_collect": 1080401.7257525083,
+    "update_actor": 780219.1488294314
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "baseline_commit": "1d4816c",
+  "baseline_sdk": "8df242b353b8a3664c1d2ed20622d692d1349306",
+  "candidate_sdk": "8df242b353b8a3664c1d2ed20622d692d1349306",
+  "scratch": "/tmp/astra-vox-distance-20260905",
+  "sources": {
+    "game/src/main.rs": "5a88c79d9862b5aa167f1264e8920788cd23f6650ba41b8a10c8ecf1415fe03c",
+    "psoxide-pin/Cargo.toml": "baa51d969ce36a5528d20473d52a2d41aa66676e50a58398f62111637bc8388b",
+    "psoxide-pin/Cargo.lock": "6120495a372e920ef1ab3e137ba4fd887f982ab16902b1007eedcc325d942e4b",
+    "tools/profile_report.py": "ac9e5394a4fcb0ef14c6ecc4b2aa3228162b6c25b59324af4d232b66c463e8af",
+    "tools/test_profile_report.py": "af17f95d37ff5197c0d8c635d96f951722cc64ee236c856f1c266b6fae0269c1",
+    "tools/make_renderer_tapes.py": "d48cbaf216ea5219d70681d5243baff28a441b1c68bbda6fda6953fee02c405f"
+  },
+  "files": {
+    "/tmp/astra-vox-distance-20260905/shipping-baseline/voxide.exe": {
+      "bytes": 493568,
+      "sha256": "cf9f199545cf25256759bbd9af648e03eb3cda8484a6568aa26d61d09e3fa906"
+    },
+    "/tmp/astra-vox-distance-20260905/shipping-outlined/voxide.exe": {
+      "bytes": 493568,
+      "sha256": "f6e0c82fa65be05f2383a5bd222dfc557709d963be7e89c49e5d793282f3780e"
+    },
+    "/tmp/astra-vox-distance-20260905/shipping-pivot/voxide.exe": {
+      "bytes": 491520,
+      "sha256": "2e7d892cb81ec0ae3387382d252d6c59afbf658ab5a84ef190844c0a67ee4fe1"
+    },
+    "/tmp/astra-vox-distance-20260905/shipping-pivot/voxide.bin": {
+      "bytes": 2511936,
+      "sha256": "8965794ac6bec00e62603a9c350553a7ec69ba52a6b01a30849a30c15ef1929a"
+    },
+    "/tmp/astra-vox-distance-20260905/shipping-pivot/voxide.cue": {
+      "bytes": 69,
+      "sha256": "416945f50741918a1a19fd88f2900e7ba6641591875db3a87f51653a3525d9a8"
+    },
+    "/tmp/astra-vox-distance-20260905/standing.pxtape": {
+      "bytes": 21012,
+      "sha256": "790b2c30b996c98e0420ebcfdfbaef55f5f6676207831b5c6840c2b779e40858"
+    },
+    "/tmp/astra-vox-distance-20260905/actions.pxtape": {
+      "bytes": 21012,
+      "sha256": "9957c52cb2dbd4aac4afc108ddc00e54e5706a6f7423d70370d4b984139d6879"
+    },
+    "/tmp/astra-vox-distance-20260905/pivot-proof.rs": {
+      "bytes": 1617,
+      "sha256": "5ad48955e259ff99982319380fe436b33de88960254e317945ce987fbfc3ec52"
+    },
+    "/tmp/astra-vox-distance-20260905/pivot-proof.log": {
+      "bytes": 206,
+      "sha256": "cc2721d3d68eb1d05469b86ad620e9613af62b313e2eb312bff27c6ab629ff6b"
+    },
+    "/tmp/astra-perf-20260904/frontend": {
+      "bytes": 24189104,
+      "sha256": "8dd6ca938059b29a831fa754b78642865587bb7cf04e7a1a625c1017a47a1041"
+    },
+    "/tmp/astra-vox-distance-20260905/demo-pivot.rs": {
+      "bytes": 409227,
+      "sha256": "1766557d2f5850c008a62739aa14e2d1afeef422602ccc0c8881098a36cb148f"
+    },
+    "/tmp/astra-vox-distance-20260905/march-pivot.rs": {
+      "bytes": 409226,
+      "sha256": "e6f86c8fc25fc84e04c4adaaba26abaab99eedeaecb57c3233f957add7a7f5b7"
+    },
+    "/tmp/astra-vox-distance-20260905/terrain-pivot.rs": {
+      "bytes": 409966,
+      "sha256": "5708815bf557fc60fc5420fc6ae3b8d73c16e757f7e475642983fab240fa5314"
+    }
+  },
+  "shipping_features": "default only; no telemetry, DEMO_PLAY or fixed dt",
+  "shipping_far_blocks": 16,
+  "shipping_side_far_blocks": 14,
+  "packet_occupancy": null,
+  "generation_cycles": null,
+  "rustc": "rustc 1.96.0-nightly (362211dc2 2026-03-24)"
+}

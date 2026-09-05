@@ -5880,16 +5880,21 @@ fn emit_clipped_cell(
     plane!(4);
     plane!(5);
 
+    // The farthest depth from any candidate is one of the two extrema.
+    // Keep the first minimum exactly as the former all-pairs search did.
+    let mut min_z = a[0].z;
+    let mut max_z = min_z;
+    let mut j = 1usize;
+    while j < n {
+        min_z = min_z.min(a[j].z);
+        max_z = max_z.max(a[j].z);
+        j += 1;
+    }
     let mut pivot = 0usize;
     let mut best = i32::MAX;
     let mut candidate = 0usize;
     while candidate < n {
-        let mut worst = 0i32;
-        let mut j = 0usize;
-        while j < n {
-            worst = worst.max((a[candidate].z - a[j].z).abs());
-            j += 1;
-        }
+        let worst = (a[candidate].z - min_z).max(max_z - a[candidate].z);
         if worst < best {
             best = worst;
             pivot = candidate;
@@ -6165,6 +6170,7 @@ fn render_near_block_shell(cam: &Camera) {
 /// before projection; it is never represented by moving arbitrary quad
 /// corners to the near plane.
 #[allow(clippy::too_many_arguments)]
+#[inline(never)] // Keep tessellation temporaries out of the common face loop.
 fn emit_near_face(
     verts: &[(i32, i32, i32); 4],
     dir: usize,
