@@ -1,44 +1,17 @@
 --- a/game/src/main.rs
 +++ b/game/src/main.rs
-@@ -541,7 +541,7 @@
- // crafting menu, swings, and turns around like a player would. Checkpoint
- // state goes to the emulator console and the frame number is stamped on the
- // HUD so headless captures self-document. Ship = false.
+@@ -544 +544 @@
 -const DEMO_PLAY: bool = false;
 +const DEMO_PLAY: bool = true;
- 
- /// The demo input for a frame: (buttons, left stick, right stick), sticks as
- /// centred i16 (+-~110 usable). Phases are generous so captures at imprecise
-@@ -641,7 +641,7 @@
- 
- /// Demo variant: an obstacle-free four-direction flight (streaming stress).
- /// Use with DEMO_PLAY; reproduces movement across chunk borders for a long time.
+@@ -644 +644 @@
 -const DEMO_MARCH: bool = false;
 +const DEMO_MARCH: bool = true;
- 
- // Block-face direction vectors, shared by mesh build and render.
- const DIRS: [(i32, i32, i32); 6] = [
-@@ -1763,6 +1763,7 @@
-     // reseeds happened in the menu.
-     reset_game_state();
-     let mut player = spawn_player();
+@@ -1765,0 +1766 @@
 +    let tour_origin = (player.x, player.z);
-     mob::populate(player.x, player.z);
-     // Prime the edge detector with whatever is ACTUALLY held right now, not
-     // NONE. The title screen exits on START, world generation then runs for
-@@ -1811,7 +1812,7 @@
-         // Honest frame cost: VBlank IRQs elapsed since the last loop top.
-         // 1 vbl = 60 fps, 2 = 30, 3 = 20 (NTSC). Read before doing work.
-         let now_vbl = interrupts::vblank_count();
+@@ -1814 +1815 @@
 -        let dt = now_vbl.wrapping_sub(prev_vbl).max(1);
 +        let dt = 2u32; // Diagnostic: identical simulation states for renderer A/B.
-         prev_vbl = now_vbl;
-         let fps = (60 / dt).min(99);
-         // Fixed-timestep count: run the sim this many times per rendered frame so the
-@@ -2150,6 +2151,22 @@
-             player.yaw = VISTA_YAW; // FIXED yaw: A/B captures must not drift with fps
-             player.pitch = (-140i32 & 0x0FFF) as i16; // eye-level, slight down: the real gameplay view
-         }
+@@ -2152,0 +2154,16 @@
 +        // Diagnostic camera tour: fixed XZ square, terrain-relative height,
 +        // and survival disabled. This validates rendering, not player movement.
 +        let leg = (frame / 750).min(3);
@@ -55,6 +28,3 @@
 +        player.vy = 0;
 +        player.health = 20;
 +        player.pitch = -512;
-         let cam = camera_from_player(player);
-         let pick = if menu != 0 { NO_PICK } else { trace_pick(&cam) };
-         // The block under the crosshair decides which tool the HUD and the hand
