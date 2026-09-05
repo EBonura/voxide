@@ -105,7 +105,9 @@ not a collision or survival test. The earlier high-flight route often looks
 into empty sky; a discarded low flight died in canopy; the initial shallow
 camera tour gave poor ground coverage. Those were not used as proof of a
 complete visible-terrain tour. Diagnostic patches are provided alongside this
-report and must never be installed as normal builds.
+report and must never be installed as normal builds. Apply one in an isolated
+checkout with `git apply --unidiff-zero <fixture.patch>`; the zero-context
+patches target the exact source identity in this report.
 
 The actual new Rust pivot block was also tested against an independent
 quadratic reference: 488,280 exhaustive ordered inputs, 100,000 randomized
