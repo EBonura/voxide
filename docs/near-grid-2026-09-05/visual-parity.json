@@ -1,0 +1,29 @@
+[
+  {
+    "route": "demo",
+    "checkpoints": 33,
+    "all_exact": true,
+    "final_hashes": {
+      "vram_fnv1a_64": "0x11bc1c8e205ef85c",
+      "display_fnv1a_64": "0xfc40f7705bc3a074"
+    }
+  },
+  {
+    "route": "terrain",
+    "checkpoints": 100,
+    "all_exact": true,
+    "final_hashes": {
+      "vram_fnv1a_64": "0x166fa1a15e23b584",
+      "display_fnv1a_64": "0xedf87b6954a1d854"
+    }
+  },
+  {
+    "route": "march",
+    "checkpoints": 100,
+    "all_exact": true,
+    "final_hashes": {
+      "vram_fnv1a_64": "0x7a9aba64df5a3f19",
+      "display_fnv1a_64": "0x92f9b498489408d2"
+    }
+  }
+]

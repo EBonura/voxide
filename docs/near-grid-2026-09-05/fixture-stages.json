@@ -1,0 +1,50 @@
+[
+  {
+    "route": "terrain",
+    "variant": "baseline",
+    "frames": 2998,
+    "body": 1066725.1300867244,
+    "face": 701593.5583722482,
+    "misses": 844
+  },
+  {
+    "route": "terrain",
+    "variant": "candidate",
+    "frames": 2998,
+    "body": 1046266.8799199467,
+    "face": 681080.9663108739,
+    "misses": 796
+  },
+  {
+    "route": "demo",
+    "variant": "baseline",
+    "frames": 998,
+    "body": 979756.8206412826,
+    "face": 709517.5751503006,
+    "misses": 58
+  },
+  {
+    "route": "demo",
+    "variant": "candidate",
+    "frames": 998,
+    "body": 958595.8507014028,
+    "face": 689301.9488977956,
+    "misses": 48
+  },
+  {
+    "route": "march",
+    "variant": "baseline",
+    "frames": 2998,
+    "body": 873637.1981320881,
+    "face": 375205.2131420947,
+    "misses": 720
+  },
+  {
+    "route": "march",
+    "variant": "candidate",
+    "frames": 2998,
+    "body": 856964.0823882589,
+    "face": 358589.80920613743,
+    "misses": 691
+  }
+]
