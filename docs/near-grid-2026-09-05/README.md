@@ -94,3 +94,6 @@ The existing tape generator and terrain-renderer report describe the fixtures.
 Exact commands, source snapshots, logs, map/disassembly files and images are
 retained under /tmp/astra-vox-near-projection-20260905. Normal and diagnostic
 artifact identities and compact results are committed here.
+
+The ordinary `make disc` rebuild at committed 0fa14af reproduces the tested
+EXE and BIN byte for byte, using the SDK pin and no diagnostic features.
