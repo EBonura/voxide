@@ -6,14 +6,14 @@ hl-psx's vocabulary, so a raw CSV column reads "box_prop_debris" where VoXide
 means "world face render". This maps them back and prints mean cycles per frame.
 
 Usage: profile_report.py <profile.csv>
-VoXide's measured two-VBlank period is 1,142,476 profiler bus cycles. Use that
+VoXide's measured two-VBlank period is 1,142,472 profiler bus cycles. Use that
 observed cadence rather than deriving it from the nominal CPU clock: the latter
 made a perfectly locked run print as 2.02 VBlanks / 29.7fps.
 """
 import csv
 import sys
 
-FRAME_30_CYCLES = 1_142_476
+FRAME_30_CYCLES = 1_142_472
 
 # VoXide stage id -> (emulator CSV column, our label). Ids come from the ST_*
 # constants in game/src/main.rs; column names from the emulator's id table.
@@ -25,7 +25,7 @@ STAGES = [
     ("update_actor", "      face loop", 4),
     ("box_prop_shards", "    mobs", 3),
     ("room_surface_cache", "    streaming total", 3),
-    ("cd_room_chunk_load", "      generation", 4),
+    ("cd_world_pack_stream", "      generation", 4),
     ("sim_solve", "  sky", 2),
     ("image_cards", "  tail (HUD, particles)", 2),
     ("cell_depth", "  pad poll", 2),
@@ -38,7 +38,11 @@ def main() -> int:
     if len(sys.argv) < 2:
         print(__doc__)
         return 2
-    rows = list(csv.DictReader(open(sys.argv[1])))
+    with open(sys.argv[1]) as stream:
+        # Stopping at frame_begin leaves a terminal zero-cycle row. It has
+        # rendered nothing and must not count as a free successful frame.
+        rows = [row for row in csv.DictReader(stream)
+                if float(row.get("frame_cycles") or 0) > 0]
     if not rows:
         print("no frames recorded -- did the run press START? "
               "frame_begin only runs in the gameplay loop.")
@@ -55,7 +59,7 @@ def main() -> int:
     # cluster (~1.14247M); it has slipped to at least the three-VBlank cadence.
     # The margin keeps one-off profiler-event jitter from becoming a false miss.
     misses = sum(float(r["frame_cycles"] or 0) > FRAME_30_CYCLES * 1.25 for r in rows)
-    print(f"frames: {n}   mean frame: {total:,.0f} cycles "
+    print(f"completed frames: {n}   mean frame: {total:,.0f} cycles "
           f"({total / FRAME_30_CYCLES:.2f} 30fps periods, "
           f"{30 * FRAME_30_CYCLES / total:.1f} fps)")
     print(f"  30fps deadline misses: {misses} ({100 * misses / n:.2f}%)\n")

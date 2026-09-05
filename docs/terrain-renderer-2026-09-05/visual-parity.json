@@ -1,0 +1,51 @@
+{
+  "demo": {
+    "checkpoints": 33,
+    "mismatches": [],
+    "final": {
+      "baseline": {
+        "vram_fnv1a_64": "11bc1c8e205ef85c",
+        "display_fnv1a_64": "fc40f7705bc3a074"
+      },
+      "outlined": {
+        "vram_fnv1a_64": "11bc1c8e205ef85c",
+        "display_fnv1a_64": "fc40f7705bc3a074"
+      }
+    },
+    "fixed_dt": 2,
+    "shipping_performance_benchmark": false
+  },
+  "march": {
+    "checkpoints": 100,
+    "mismatches": [],
+    "final": {
+      "baseline": {
+        "vram_fnv1a_64": "7a9aba64df5a3f19",
+        "display_fnv1a_64": "92f9b498489408d2"
+      },
+      "outlined": {
+        "vram_fnv1a_64": "7a9aba64df5a3f19",
+        "display_fnv1a_64": "92f9b498489408d2"
+      }
+    },
+    "fixed_dt": 2,
+    "shipping_performance_benchmark": false
+  },
+  "terrain": {
+    "checkpoints": 100,
+    "mismatches": [],
+    "final": {
+      "baseline": {
+        "display_fnv1a_64": "edf87b6954a1d854",
+        "vram_fnv1a_64": "166fa1a15e23b584"
+      },
+      "outlined": {
+        "display_fnv1a_64": "edf87b6954a1d854",
+        "vram_fnv1a_64": "166fa1a15e23b584"
+      }
+    },
+    "fixed_dt": 2,
+    "camera_rig": "6000-unit square, 8 units/frame, 9 blocks above ground, pitch -512, health 20",
+    "shipping_performance_benchmark": false
+  }
+}

@@ -1,0 +1,20 @@
+--- a/game/src/main.rs
++++ b/game/src/main.rs
+@@ -541,7 +541,7 @@
+ // crafting menu, swings, and turns around like a player would. Checkpoint
+ // state goes to the emulator console and the frame number is stamped on the
+ // HUD so headless captures self-document. Ship = false.
+-const DEMO_PLAY: bool = false;
++const DEMO_PLAY: bool = true;
+ 
+ /// The demo input for a frame: (buttons, left stick, right stick), sticks as
+ /// centred i16 (+-~110 usable). Phases are generous so captures at imprecise
+@@ -1811,7 +1811,7 @@
+         // Honest frame cost: VBlank IRQs elapsed since the last loop top.
+         // 1 vbl = 60 fps, 2 = 30, 3 = 20 (NTSC). Read before doing work.
+         let now_vbl = interrupts::vblank_count();
+-        let dt = now_vbl.wrapping_sub(prev_vbl).max(1);
++        let dt = 2u32; // Diagnostic: identical simulation states for renderer A/B.
+         prev_vbl = now_vbl;
+         let fps = (60 / dt).min(99);
+         // Fixed-timestep count: run the sim this many times per rendered frame so the

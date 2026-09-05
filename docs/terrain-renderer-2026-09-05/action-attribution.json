@@ -1,0 +1,287 @@
+{
+  "gameplay": {
+    "total": 157285,
+    "top": [
+      {
+        "symbol": "voxide::world::for_visible_faces::<voxide::render_world::{closure#0}, voxide::render_world::{closure#1}>",
+        "samples": 51689,
+        "percent": 32.863273675175634
+      },
+      {
+        "symbol": "voxide::frame_present",
+        "samples": 32318,
+        "percent": 20.54741393012684
+      },
+      {
+        "symbol": "voxide::emit_near_face",
+        "samples": 15418,
+        "percent": 9.802587659344502
+      },
+      {
+        "symbol": "voxide::emit_clipped_cell",
+        "samples": 12137,
+        "percent": 7.71656547032457
+      },
+      {
+        "symbol": "voxide::render_plants",
+        "samples": 10832,
+        "percent": 6.886861429888419
+      },
+      {
+        "symbol": "voxide::aabb_collides_dims",
+        "samples": 5263,
+        "percent": 3.346155068824109
+      },
+      {
+        "symbol": "voxide::world::plane_in_frustum",
+        "samples": 4957,
+        "percent": 3.151603776583908
+      },
+      {
+        "symbol": "main",
+        "samples": 3172,
+        "percent": 2.0167212385160695
+      },
+      {
+        "symbol": "voxide::render_world",
+        "samples": 3079,
+        "percent": 1.95759290459993
+      },
+      {
+        "symbol": "voxide::project_quad_sw",
+        "samples": 2397,
+        "percent": 1.5239851225482404
+      },
+      {
+        "symbol": "voxide::emit_box_masked",
+        "samples": 1706,
+        "percent": 1.0846552436659567
+      },
+      {
+        "symbol": "voxide::draw_all_hud",
+        "samples": 1205,
+        "percent": 0.7661251867628827
+      },
+      {
+        "symbol": "voxide::emit_body_box",
+        "samples": 1168,
+        "percent": 0.7426010109037734
+      },
+      {
+        "symbol": "voxide::world::get",
+        "samples": 1164,
+        "percent": 0.7400578567568427
+      },
+      {
+        "symbol": "voxide::render_mobs",
+        "samples": 1050,
+        "percent": 0.6675779635693169
+      },
+      {
+        "symbol": "voxide::world::greedy_plane",
+        "samples": 943,
+        "percent": 0.5995485901389198
+      },
+      {
+        "symbol": "voxide::face_tile",
+        "samples": 921,
+        "percent": 0.5855612423308008
+      },
+      {
+        "symbol": "psx_pad::poll_once_diag",
+        "samples": 919,
+        "percent": 0.5842896652573354
+      }
+    ]
+  },
+  "mining": {
+    "total": 36655,
+    "top": [
+      {
+        "symbol": "voxide::world::for_visible_faces::<voxide::render_world::{closure#0}, voxide::render_world::{closure#1}>",
+        "samples": 11820,
+        "percent": 32.24662392579457
+      },
+      {
+        "symbol": "voxide::frame_present",
+        "samples": 6962,
+        "percent": 18.993316055108444
+      },
+      {
+        "symbol": "voxide::emit_near_face",
+        "samples": 3479,
+        "percent": 9.491201746010095
+      },
+      {
+        "symbol": "voxide::emit_clipped_cell",
+        "samples": 2603,
+        "percent": 7.101350429682172
+      },
+      {
+        "symbol": "voxide::render_plants",
+        "samples": 2281,
+        "percent": 6.222889101077616
+      },
+      {
+        "symbol": "voxide::aabb_collides_dims",
+        "samples": 1233,
+        "percent": 3.363797571954713
+      },
+      {
+        "symbol": "voxide::world::plane_in_frustum",
+        "samples": 1109,
+        "percent": 3.0255081162187967
+      },
+      {
+        "symbol": "voxide::world::greedy_plane",
+        "samples": 943,
+        "percent": 2.5726367480562
+      },
+      {
+        "symbol": "voxide::world::decode_blocks::<true>",
+        "samples": 849,
+        "percent": 2.316191515482199
+      },
+      {
+        "symbol": "main",
+        "samples": 681,
+        "percent": 1.857863865775474
+      },
+      {
+        "symbol": "voxide::render_world",
+        "samples": 675,
+        "percent": 1.841495021143091
+      },
+      {
+        "symbol": "voxide::project_quad_sw",
+        "samples": 493,
+        "percent": 1.3449734006274723
+      },
+      {
+        "symbol": "voxide::emit_box_masked",
+        "samples": 324,
+        "percent": 0.8839176101486836
+      },
+      {
+        "symbol": "voxide::world::get",
+        "samples": 290,
+        "percent": 0.7911608238985132
+      },
+      {
+        "symbol": "voxide::draw_all_hud",
+        "samples": 270,
+        "percent": 0.7365980084572364
+      },
+      {
+        "symbol": "voxide::emit_body_box",
+        "samples": 246,
+        "percent": 0.6711226299277042
+      },
+      {
+        "symbol": "voxide::render_mobs",
+        "samples": 235,
+        "percent": 0.641113081435002
+      },
+      {
+        "symbol": "psx_pad::poll_once_diag",
+        "samples": 209,
+        "percent": 0.5701814213613422
+      }
+    ]
+  },
+  "late": {
+    "total": 47779,
+    "top": [
+      {
+        "symbol": "voxide::world::for_visible_faces::<voxide::render_world::{closure#0}, voxide::render_world::{closure#1}>",
+        "samples": 15367,
+        "percent": 32.16266560622868
+      },
+      {
+        "symbol": "voxide::frame_present",
+        "samples": 9019,
+        "percent": 18.876493857133887
+      },
+      {
+        "symbol": "voxide::emit_near_face",
+        "samples": 5279,
+        "percent": 11.048787124050316
+      },
+      {
+        "symbol": "voxide::emit_clipped_cell",
+        "samples": 4119,
+        "percent": 8.62094225496557
+      },
+      {
+        "symbol": "voxide::render_plants",
+        "samples": 3382,
+        "percent": 7.078423575210866
+      },
+      {
+        "symbol": "voxide::aabb_collides_dims",
+        "samples": 1732,
+        "percent": 3.6250235459092908
+      },
+      {
+        "symbol": "voxide::world::plane_in_frustum",
+        "samples": 1533,
+        "percent": 3.2085225726783735
+      },
+      {
+        "symbol": "main",
+        "samples": 1100,
+        "percent": 2.3022666862010506
+      },
+      {
+        "symbol": "voxide::render_world",
+        "samples": 965,
+        "percent": 2.01971577471274
+      },
+      {
+        "symbol": "voxide::project_quad_sw",
+        "samples": 955,
+        "percent": 1.9987860775654576
+      },
+      {
+        "symbol": "voxide::emit_box_masked",
+        "samples": 626,
+        "percent": 1.3101990414198708
+      },
+      {
+        "symbol": "voxide::emit_body_box",
+        "samples": 403,
+        "percent": 0.8434667950354758
+      },
+      {
+        "symbol": "voxide::draw_all_hud",
+        "samples": 386,
+        "percent": 0.8078863098850959
+      },
+      {
+        "symbol": "voxide::world::get",
+        "samples": 373,
+        "percent": 0.780677703593629
+      },
+      {
+        "symbol": "voxide::render_mobs",
+        "samples": 347,
+        "percent": 0.7262604910106951
+      },
+      {
+        "symbol": "psx_pad::poll_once_diag",
+        "samples": 282,
+        "percent": 0.5902174595533602
+      },
+      {
+        "symbol": "voxide::face_tile",
+        "samples": 278,
+        "percent": 0.5818455806944474
+      },
+      {
+        "symbol": "voxide::world::recenter",
+        "samples": 237,
+        "percent": 0.49603382239059
+      }
+    ]
+  }
+}
