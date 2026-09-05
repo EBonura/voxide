@@ -70,7 +70,7 @@ struct Mob {
     timer: u16, // wander/flee countdown, or skeleton shoot cooldown
     fuse: u16,  // sapper detonation charge
     hurt_cd: u8,
-    love: u16,  // breeding "in love" countdown (passive mobs, set by feeding wheat)
+    love: u16, // breeding "in love" countdown (passive mobs, set by feeding wheat)
     /// Gait phase, advanced only while actually moving, so legs stop when the
     /// mob stops. Java drives limb swing off distance travelled for the same
     /// reason -- a timer-driven swing marches on the spot.
@@ -196,16 +196,12 @@ pub fn take_xp() -> u16 {
     }
 }
 
-
-
 /// Set each frame: passive animals follow the player while this is true.
 pub fn set_lure(on: bool) {
     unsafe {
         LURE = on;
     }
 }
-
-
 
 #[inline]
 fn rng() -> u32 {
@@ -570,7 +566,15 @@ fn breed_tick() {
                             MOBS[i].love = 0;
                             MOBS[j].love = 0;
                         }
-                        crate::spawn_particles(cx, mi.y + BLOCK, cz, (240, 120, 170), 8, (i * 31 + j) as u32, 14);
+                        crate::spawn_particles(
+                            cx,
+                            mi.y + BLOCK,
+                            cz,
+                            (240, 120, 170),
+                            8,
+                            (i * 31 + j) as u32,
+                            14,
+                        );
                         break;
                     }
                 }
@@ -637,7 +641,15 @@ pub fn feed(px: i32, py: i32, pz: i32, fx: i32, fz: i32, reach: i32) -> bool {
     }
     unsafe {
         MOBS[best].love = 600; // ~20s window to find a mate
-        crate::spawn_particles(MOBS[best].x, MOBS[best].y + BLOCK, MOBS[best].z, (240, 120, 170), 5, best as u32, 12);
+        crate::spawn_particles(
+            MOBS[best].x,
+            MOBS[best].y + BLOCK,
+            MOBS[best].z,
+            (240, 120, 170),
+            5,
+            best as u32,
+            12,
+        );
     }
     true
 }
@@ -685,7 +697,15 @@ fn sun_burn(i: usize) {
     if world_to_block_y(m.y) < world::surface_y(bx, bz) {
         return; // sheltered below the surface
     }
-    crate::spawn_particles(m.x, m.y + BLOCK, m.z, (240, 140, 40), 4, (tick as u32) ^ (i as u32), 16);
+    crate::spawn_particles(
+        m.x,
+        m.y + BLOCK,
+        m.z,
+        (240, 140, 40),
+        4,
+        (tick as u32) ^ (i as u32),
+        16,
+    );
     m.health -= 1;
     if m.health <= 0 {
         unsafe {
@@ -700,7 +720,11 @@ fn sun_burn(i: usize) {
 
 #[inline]
 fn solid(wx: i32, wy: i32, wz: i32) -> bool {
-    let b = world::get(world_to_block_x(wx), world_to_block_y(wy), world_to_block_z(wz));
+    let b = world::get(
+        world_to_block_x(wx),
+        world_to_block_y(wy),
+        world_to_block_z(wz),
+    );
     b != crate::AIR && b != crate::WATER && b != crate::LAVA
 }
 
@@ -770,7 +794,8 @@ fn arrow_hit_mob(ax: i32, ay: i32, az: i32) -> bool {
         let mut m = unsafe { MOBS[i] };
         if m.alive {
             let (w, h) = dims(m.kind);
-            if (ax - m.x).abs() < w + 6 && (az - m.z).abs() < w + 6 && ay > m.y - 8 && ay < m.y + h {
+            if (ax - m.x).abs() < w + 6 && (az - m.z).abs() < w + 6 && ay > m.y - 8 && ay < m.y + h
+            {
                 m.health -= 4; // arrow damage (Java: 6 at full draw; 4 here)
                 m.hurt_cd = 8;
                 if m.health <= 0 {
@@ -902,12 +927,20 @@ fn step_mob(i: usize, px: i32, _py: i32, pz: i32, night: bool) {
         }
     } else if m.kind == DRAGON {
         // Never loses interest, and daylight means nothing to it.
-        m.state = if dist2 < DRAGON_CHASE_R * DRAGON_CHASE_R { ST_CHASE } else { ST_WANDER };
+        m.state = if dist2 < DRAGON_CHASE_R * DRAGON_CHASE_R {
+            ST_CHASE
+        } else {
+            ST_WANDER
+        };
         m.timer = m.timer.wrapping_add(1); // flight phase, drives the height weave
     } else if m.kind == EMBER || m.kind == WAILER {
         // Hostile on sight and unaffected by daylight; they only live in the
         // Inferno, where there is none.
-        m.state = if dist2 < CHASE_R * CHASE_R { ST_CHASE } else { ST_WANDER };
+        m.state = if dist2 < CHASE_R * CHASE_R {
+            ST_CHASE
+        } else {
+            ST_WANDER
+        };
         m.timer = m.timer.wrapping_add(1);
     } else if m.kind == WRAITH {
         // Neutral: it only hunts once you have hit it, and hitting it sets
@@ -923,7 +956,11 @@ fn step_mob(i: usize, px: i32, _py: i32, pz: i32, night: bool) {
 
     // A tamed wolf follows its owner without needing wheat.
     if m.kind == WOLF && m.love == u16::MAX {
-        m.state = if dist2 > (3 * BLOCK) * (3 * BLOCK) { ST_CHASE } else { ST_WANDER };
+        m.state = if dist2 > (3 * BLOCK) * (3 * BLOCK) {
+            ST_CHASE
+        } else {
+            ST_WANDER
+        };
     }
     // Passive animals follow a player holding wheat (reuses the chase walk).
     if !is_hostile(m.kind) && m.kind != WOLF && m.state != ST_FLEE {
@@ -981,39 +1018,39 @@ fn step_mob(i: usize, px: i32, _py: i32, pz: i32, night: bool) {
             sz = if dx > 0 { -v } else { v };
         }
     } else {
-    match m.state {
-        ST_CHASE => {
-            if dx > 4 {
-                sx = SPEED;
-            } else if dx < -4 {
-                sx = -SPEED;
+        match m.state {
+            ST_CHASE => {
+                if dx > 4 {
+                    sx = SPEED;
+                } else if dx < -4 {
+                    sx = -SPEED;
+                }
+                if dz > 4 {
+                    sz = SPEED;
+                } else if dz < -4 {
+                    sz = -SPEED;
+                }
             }
-            if dz > 4 {
-                sz = SPEED;
-            } else if dz < -4 {
-                sz = -SPEED;
+            ST_FLEE => {
+                sx = if dx > 0 { -SPEED } else { SPEED };
+                sz = if dz > 0 { -SPEED } else { SPEED };
+            }
+            _ => {
+                // Wander: occasionally pick a new heading; idle otherwise.
+                if m.timer > 0 {
+                    m.timer -= 1;
+                } else {
+                    m.timer = 60 + (rng() % 120) as u16;
+                }
+                let r = rng();
+                if r & 3 != 0 {
+                    sx = ((r >> 2) % 3) as i32 - 1;
+                    sz = ((r >> 4) % 3) as i32 - 1;
+                    sx *= SPEED - 2;
+                    sz *= SPEED - 2;
+                }
             }
         }
-        ST_FLEE => {
-            sx = if dx > 0 { -SPEED } else { SPEED };
-            sz = if dz > 0 { -SPEED } else { SPEED };
-        }
-        _ => {
-            // Wander: occasionally pick a new heading; idle otherwise.
-            if m.timer > 0 {
-                m.timer -= 1;
-            } else {
-                m.timer = 60 + (rng() % 120) as u16;
-            }
-            let r = rng();
-            if r & 3 != 0 {
-                sx = ((r >> 2) % 3) as i32 - 1;
-                sz = ((r >> 4) % 3) as i32 - 1;
-                sx *= SPEED - 2;
-                sz *= SPEED - 2;
-            }
-        }
-    }
     }
 
     // Gait + facing, from the movement intent the AI just produced. Advancing
@@ -1081,7 +1118,11 @@ fn step_mob(i: usize, px: i32, _py: i32, pz: i32, night: bool) {
         // like Java's dragon. `timer` doubles as the flight phase.
         // Embers and wailers hover just off the ground rather than at the
         // dragon's cruise, which is above the Inferno roof.
-        let cruise = if m.kind == DRAGON { DRAGON_CRUISE } else { m.y / BLOCK * BLOCK + 2 * BLOCK };
+        let cruise = if m.kind == DRAGON {
+            DRAGON_CRUISE
+        } else {
+            m.y / BLOCK * BLOCK + 2 * BLOCK
+        };
         let want = cruise + ((m.timer as i32 % 64) - 32) * 2;
         if m.y < want {
             m.y += 4;
@@ -1275,7 +1316,11 @@ pub fn clear() {
 pub fn populate(px: i32, pz: i32) {
     let mut k = 0i32;
     while k < 4 {
-        spawn_at((k as u8) % 4, px + (k - 2) * 2 * BLOCK, pz + (4 + k) * BLOCK);
+        spawn_at(
+            (k as u8) % 4,
+            px + (k - 2) * 2 * BLOCK,
+            pz + (4 + k) * BLOCK,
+        );
         k += 1;
     }
 }

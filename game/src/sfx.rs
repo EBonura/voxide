@@ -11,10 +11,10 @@
 #![allow(dead_code)]
 
 use crate::sfxdata::{
-    Sample, S_BARK, S_BONES, S_BREAK, S_CHEST, S_CHICKEN, S_CLICK, S_CONFIRM, S_COW, S_DIG_SOFT,
-    S_DIG_STONE, S_DIG_WOOD, S_DOOR, S_EAT, S_EXPLODE, S_HISS, S_HURT, S_PIG, S_PLACE, S_SHEEP,
-    S_SPLASH, S_STEP_GRASS, S_STEP_SAND, S_STEP_STONE, S_STEP_WOOD, S_ZOMBIE, SAMPLES,
-    SFX_CHUNK_ID,
+    Sample, SAMPLES, SFX_CHUNK_ID, S_BARK, S_BONES, S_BREAK, S_CHEST, S_CHICKEN, S_CLICK,
+    S_CONFIRM, S_COW, S_DIG_SOFT, S_DIG_STONE, S_DIG_WOOD, S_DOOR, S_EAT, S_EXPLODE, S_HISS,
+    S_HURT, S_PIG, S_PLACE, S_SHEEP, S_SPLASH, S_STEP_GRASS, S_STEP_SAND, S_STEP_STONE,
+    S_STEP_WOOD, S_ZOMBIE,
 };
 use psx_pack::cd::{self, SectorReader, SECTOR_WORDS};
 use psx_pack::SECTOR_BYTES;
@@ -85,8 +85,12 @@ pub fn init() {
 unsafe fn stream_bank() -> bool {
     let mut rd = SectorReader::new();
     let mut scratch = [0u32; SECTOR_WORDS];
-    let Some(entry) = cd::find_entry(&mut rd, cd::WORLD_PACK_DEFAULT_LBA, SFX_CHUNK_ID, &mut scratch)
-    else {
+    let Some(entry) = cd::find_entry(
+        &mut rd,
+        cd::WORLD_PACK_DEFAULT_LBA,
+        SFX_CHUNK_ID,
+        &mut scratch,
+    ) else {
         return false;
     };
     if !rd.prepare() || !rd.start_read(cd::WORLD_PACK_DEFAULT_LBA + entry.sector_offset) {

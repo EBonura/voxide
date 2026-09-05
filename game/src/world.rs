@@ -8,13 +8,13 @@
 //! only chunks that pass a cheap distance + horizontal-frustum cull.
 
 use crate::{
-    floor_div, Camera, AIR, BLOCK, CACTUS, CLAY, COAL_ORE, DIAMOND_ORE, DIRS, DIRT, DOOR_O, FAR_SIDE_Z,
-    FAR_Z, FLOWER_R, FLOWER_Y, GOLD_ORE, GRASS, IRON_ORE, LAVA, LEAVES, PROJ_H, SAND, SAPLING, SNOW,
-    STONE, TALL_GRASS, WATER, WHEAT, WHEAT_RIPE, WOOD,
+    floor_div, Camera, AIR, BLOCK, CACTUS, CLAY, COAL_ORE, DIAMOND_ORE, DIRS, DIRT, DOOR_O,
+    FAR_SIDE_Z, FAR_Z, FLOWER_R, FLOWER_Y, GOLD_ORE, GRASS, IRON_ORE, LAVA, LEAVES, PROJ_H, SAND,
+    SAPLING, SNOW, STONE, TALL_GRASS, WATER, WHEAT, WHEAT_RIPE, WOOD,
 };
 use crate::{
-    is_flammable, VOID_STONE, FIRE, LUMISTONE, CINDERSTONE, EMBER_CAP, OBSIDIAN, PORTAL, SINK_SAND,
-    SUGAR_CANE, TORCH,
+    is_flammable, CINDERSTONE, EMBER_CAP, FIRE, LUMISTONE, OBSIDIAN, PORTAL, SINK_SAND, SUGAR_CANE,
+    TORCH, VOID_STONE,
 };
 use crate::{
     is_lava, is_small_block, is_water, lava_level, lava_of_level, water_level, water_of_level,
@@ -198,9 +198,9 @@ struct Chunk {
     cx: i32,
     cz: i32,
     loaded: bool,
-    dirty: bool,       // mesh out of date (block edit or a neighbour appeared)
-    face_slot: u16,    // index into FACE_POOL, or NO_SLOT if this chunk has no mesh
-    face_lod: u8,      // LOD level the current mesh was built at (0 near, 1 far)
+    dirty: bool,               // mesh out of date (block edit or a neighbour appeared)
+    face_slot: u16,            // index into FACE_POOL, or NO_SLOT if this chunk has no mesh
+    face_lod: u8,              // LOD level the current mesh was built at (0 near, 1 far)
     blocks: [u8; PACKED_SIZE], // 5-bit-packed block ids; access via bget/bset
 }
 
@@ -283,10 +283,10 @@ static mut PLAYER_CZ: i32 = 0;
 // Chunk-radius that gets meshed (covers the draw distance in any facing). POOL
 // must be >= (2*RENDER_R+1)^2.
 const RENDER_R: i32 = 1; // mesh ring: 3x3 around the player. At FAR_Z 768
-// (12 blocks) a chunk entering this ring is 16+ blocks out -- past the far
-// plane, so it meshes before it can be seen. The old 5x5 ring meshed 25
-// chunks per boundary cross; that streaming load, not face count, was what
-// kept walking frames off the 30fps quantum below ~17-block draws.
+                         // (12 blocks) a chunk entering this ring is 16+ blocks out -- past the far
+                         // plane, so it meshes before it can be seen. The old 5x5 ring meshed 25
+                         // chunks per boundary cross; that streaming load, not face count, was what
+                         // kept walking frames off the 30fps quantum below ~17-block draws.
 
 /// Find a free pool slot for chunk `s`, or reuse its current one. Evicts a slot
 /// owned by an out-of-render-range chunk if the pool is full. Returns NO_SLOT if
@@ -466,7 +466,8 @@ fn decode_blocks<const FULL: bool>(src: &[u8; PACKED_SIZE], i0: usize, i1: usize
                                 MESH_LIGHT_SOURCES[MESH_NLIGHT] = (lx, ly, lz);
                                 MESH_NLIGHT += 1;
                             }
-                            if MESH_NPLANT < MAX_PLANTS && (is_cross_plant(b) || is_small_block(b)) {
+                            if MESH_NPLANT < MAX_PLANTS && (is_cross_plant(b) || is_small_block(b))
+                            {
                                 MESH_PLANTS[MESH_NPLANT] = lx as u32
                                     | ((ly as u32) << 4)
                                     | ((lz as u32) << 10)
@@ -482,24 +483,6 @@ fn decode_blocks<const FULL: bool>(src: &[u8; PACKED_SIZE], i0: usize, i1: usize
                 k += 1;
             }
             i += 8;
-        }
-    }
-}
-
-#[inline(always)]
-fn col_masks_note(i: usize, b: u8) {
-    let cls = unsafe { BCLASS[b as usize] };
-    if cls & (CLS_MESH | CLS_SEE) == 0 {
-        return;
-    }
-    let col = i & (CWU * CWU - 1);
-    let bit = 1u64 << (i >> 8);
-    unsafe {
-        if cls & CLS_MESH != 0 {
-            COL_MESH[col] |= bit;
-        }
-        if cls & CLS_SEE != 0 {
-            COL_SEE[col] |= bit;
         }
     }
 }
@@ -763,11 +746,11 @@ const MESH_CELL_BUDGET: usize = 2048;
 // streaming tick (kept loaded=false -> reads as air, unrendered -- until
 // complete) so a boundary cross never does a whole chunk's gen in one frame.
 const CHUNK_AREA: usize = CWU * CWU; // 256 columns
-// Columns per streaming TICK. A chunk is 256 columns and main runs at most
-// STREAM_TICKS_MAX ticks a frame, so this sets how many FRAMES a chunk takes.
-// Crossing a chunk boundary needs five new chunks inside the ~57 frames it takes
-// to walk 16 blocks; much slower and generation cannot keep up in a straight
-// line, which is exactly what the too-fine publish split below caused.
+                                     // Columns per streaming TICK. A chunk is 256 columns and main runs at most
+                                     // STREAM_TICKS_MAX ticks a frame, so this sets how many FRAMES a chunk takes.
+                                     // Crossing a chunk boundary needs five new chunks inside the ~57 frames it takes
+                                     // to walk 16 blocks; much slower and generation cannot keep up in a straight
+                                     // line, which is exactly what the too-fine publish split below caused.
 const GEN_BATCH: usize = 8;
 // The decorate + pack phases only ever totalled ~2 vblanks. Split them just
 // finely enough that no single frame swallows the lump (2 and 4 ticks), NOT as
@@ -1239,8 +1222,8 @@ fn gen_column(blk: &mut [u8; CHUNK_VOL], t: &ShapeTiles, lx: usize, lz: usize, w
     put_run(if h - 4 < 1 { 1 } else { h - 4 }, h, sub);
     put_run(h, h + 1, top);
     put_run(h + 1, SEA + 1, WATER); // oceans and lakes
-    // The air above is already there: gen_columns clears the scratch to AIR
-    // once per chunk (one memset beats 256 strided store loops).
+                                    // The air above is already there: gen_columns clears the scratch to AIR
+                                    // once per chunk (one memset beats 256 strided store loops).
 
     // Carve caves through the stone band. Deep cave air becomes lava. Caves are
     // 42% of the generator, so the band is sampled every 4 blocks and stops at
@@ -1516,7 +1499,7 @@ fn gen_nether_column(blk: &mut [u8; CHUNK_VOL], lx: usize, lz: usize, wx: i32, w
     }
     put_run(roof, CH - 1, CINDERSTONE);
     put_run(CH - 1, CH, STONE); // bedrock roof
-    // Sink sand patches on dry floor, lumistone blotches under the roof.
+                                // Sink sand patches on dry floor, lumistone blotches under the roof.
     if floor > LAVA_SEA && (hash2(wx, wz, 0x503) & 15) < 3 {
         blk[base + (floor as usize - 1) * STRIDE] = SINK_SAND;
         // ember cap grows on sink sand. It is the base of every potion, so
@@ -1750,12 +1733,7 @@ fn replay_edits(s: usize, cx: i32, cz: i32) {
     let mut i = 0;
     while i < n {
         let (x, z) = unsafe { (crate::EDIT_X[i] as i32, crate::EDIT_Z[i] as i32) };
-        if unsafe { crate::EDIT_D[i] } == dim
-            && x >= x0
-            && x < x0 + CW
-            && z >= z0
-            && z < z0 + CW
-        {
+        if unsafe { crate::EDIT_D[i] } == dim && x >= x0 && x < x0 + CW && z >= z0 && z < z0 + CW {
             let y = unsafe { crate::EDIT_Y[i] as i32 };
             if y >= 0 && y < CH {
                 let idx = lidx((x - x0) as usize, y as usize, (z - z0) as usize);
@@ -1876,15 +1854,15 @@ pub fn set(wx: i32, wy: i32, wz: i32, b: u8) {
         }
         let old_blocks = BCLASS[old as usize] & CLS_MESH != 0;
         let new_blocks = BCLASS[b as usize] & CLS_MESH != 0;
-        let sky_changed = (new_blocks && wy > col_top)
-            || (old_blocks && !new_blocks && wy == col_top);
+        let sky_changed =
+            (new_blocks && wy > col_top) || (old_blocks && !new_blocks && wy == col_top);
         bset(&mut CHUNKS[s].blocks, i, b);
         if MESH_SCRATCH_OWNER == s {
             MESH_SCRATCH[i] = b;
             col_masks_set(i, b);
             if b != AIR {
                 MESH_YHI = MESH_YHI.max(wy as usize);
-    }
+            }
         }
         (old, sky_changed)
     };
@@ -1896,7 +1874,15 @@ pub fn set(wx: i32, wy: i32, wz: i32, b: u8) {
     // topology or AO. Rebuild those and copy every unaffected plane from the
     // committed mesh; collision updates immediately and the mesh swaps in
     // atomically after its bounded rebuild.
-    queue_mesh_edit(s, lx as usize, wy as usize, lz as usize, old, b, sky_changed);
+    queue_mesh_edit(
+        s,
+        lx as usize,
+        wy as usize,
+        lz as usize,
+        old,
+        b,
+        sky_changed,
+    );
     if lx == 0 {
         set_dirty(cx - 1, cz);
     }
@@ -2599,7 +2585,7 @@ const MAX_MERGE_H: usize = 8;
 const MAX_MERGE_FAR: usize = 15; // LOD: distant chunks merge harder -> far fewer faces to
                                  // iterate/project. Coarser/blockier, but small on screen.
                                  // 15*16=240 keeps UV in a u8 and (w-1) in 4 bits.
-// Current merge cap for the chunk being meshed; mesh_chunk/stream_tick set it per LOD.
+                                 // Current merge cap for the chunk being meshed; mesh_chunk/stream_tick set it per LOD.
 static mut MESH_CAP: usize = MAX_MERGE;
 // Chunks at a chunk-distance > LOD_R from the player mesh at the coarse (far) LOD.
 /// LOD off. Note what the "LOD" here actually IS before reviving it: it only
@@ -2681,7 +2667,6 @@ fn init_block_class() {
 
 // MESH_SCRATCH index deltas for the six face directions: lidx is
 // ly*256 + lz*16 + lx, so each axis step is a constant stride.
-const NOFF: [i32; 6] = [1, -1, 256, -256, 16, -16];
 
 /// Fill FMASK for one `dir`-plane: FMASK[cell] = the block whose face shows
 /// there, or AIR.
@@ -2800,8 +2785,10 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
             // this ran once per column per plane.
             let (hp, sp) = (plane >> 5, (plane & 31) as u32);
             let (hn, sn) = (nplane >> 5, (nplane & 31) as u32);
-            let mesh_words = unsafe { &*(core::ptr::addr_of!(COL_MESH) as *const [[u32; 2]; CWU * CWU]) };
-            let see_words = unsafe { &*(core::ptr::addr_of!(COL_SEE) as *const [[u32; 2]; CWU * CWU]) };
+            let mesh_words =
+                unsafe { &*(core::ptr::addr_of!(COL_MESH) as *const [[u32; 2]; CWU * CWU]) };
+            let see_words =
+                unsafe { &*(core::ptr::addr_of!(COL_SEE) as *const [[u32; 2]; CWU * CWU]) };
             let mut col = 0usize;
             while col < CWU * CWU {
                 let cand = (mesh_words[col][hp] >> sp) & (see_words[col][hn] >> sn) & 1;
@@ -3132,9 +3119,9 @@ fn dir_dims(dir: usize) -> (usize, usize, usize) {
     // for this direction is the one that shrinks.
     let hy = unsafe { MESH_YHI } + 1;
     match dir {
-        0 | 1 => (hy, CWU, CWU),  // x-planes: a=ly b=lz(16), 16 of them (lx)
-        2 | 3 => (CWU, CWU, hy),  // y-planes: a=lx(16) b=lz(16), hy of them (ly)
-        _ => (CWU, hy, CWU),      // z-planes: a=lx(16) b=ly, 16 of them (lz)
+        0 | 1 => (hy, CWU, CWU), // x-planes: a=ly b=lz(16), 16 of them (lx)
+        2 | 3 => (CWU, CWU, hy), // y-planes: a=lx(16) b=lz(16), hy of them (ly)
+        _ => (CWU, hy, CWU),     // z-planes: a=lx(16) b=ly, 16 of them (lz)
     }
 }
 
@@ -3645,7 +3632,6 @@ pub fn boot_prepare(wx: i32, wz: i32) {
     }
 }
 
-
 /// Clear the 5x5x6 spawn pocket so the player never starts inside a tree.
 /// Called by the menu the moment the spawn chunk publishes; raw writes, then
 /// re-dirty the touched chunks (aborting any in-flight mesh of them) so the
@@ -3722,9 +3708,9 @@ pub fn recenter(wx: i32, wz: i32) {
         PLAYER_CZ = pcz;
     }
     free_far_slots(); // give back slots of chunks now out of view
-    // Start the amortized gen of at most ONE missing chunk (gen_tick fills it over
-    // ~8 frames, then it meshes; all beyond the far plane, so it loads before it's
-    // seen). Only one gen runs at a time. Cheap when nothing is missing.
+                      // Start the amortized gen of at most ONE missing chunk (gen_tick fills it over
+                      // ~8 frames, then it meshes; all beyond the far plane, so it loads before it's
+                      // seen). Only one gen runs at a time. Cheap when nothing is missing.
     unsafe {
         if GEN_S != usize::MAX {
             return; // a gen is already in flight; finish it first
@@ -3898,8 +3884,7 @@ pub fn stream_backlog() -> (u32, u32) {
                 // idle tier mid-build.
                 let pending = !resident
                     || mesh_s == s
-                    || (in_render_range(s)
-                        && (CHUNKS[s].dirty || CHUNKS[s].face_slot == NO_SLOT));
+                    || (in_render_range(s) && (CHUNKS[s].dirty || CHUNKS[s].face_slot == NO_SLOT));
                 if pending {
                     // URGENT means a hole the player could see: no mesh at all
                     // within one chunk. A re-dirty that still displays its old
@@ -4218,12 +4203,12 @@ pub fn for_visible_faces<
 ) -> usize {
     let mut face_work = 0usize;
     let chunk_r = 12 * BLOCK; // horizontal half-extent of a chunk, world units
-    // The per-face frustum cull runs ON THE GTE: one MVMVA (rt*v0+tr, ~8 GTE
-    // cycles) of the face's anchor-cell centre -- chunk-local i16, using the
-    // per-chunk TR begin_chunk just loaded -- returns camera-space (x, -y, z)
-    // in MAC1..3. That replaces the old 640 bytes of per-frame cull tables
-    // (whose base pointers spilled) plus 2 multiplies per face, and the
-    // tilted-frame values are exact instead of table-split approximations.
+                              // The per-face frustum cull runs ON THE GTE: one MVMVA (rt*v0+tr, ~8 GTE
+                              // cycles) of the face's anchor-cell centre -- chunk-local i16, using the
+                              // per-chunk TR begin_chunk just loaded -- returns camera-space (x, -y, z)
+                              // in MAC1..3. That replaces the old 640 bytes of per-frame cull tables
+                              // (whose base pointers spilled) plus 2 multiplies per face, and the
+                              // tilted-frame values are exact instead of table-split approximations.
     let mut s = 0;
     while s < NCHUNKS {
         let fslot = unsafe { CHUNKS[s].face_slot };
@@ -4256,8 +4241,8 @@ pub fn for_visible_faces<
                 let oxw = ox * BLOCK;
                 let ozw = oz * BLOCK;
                 begin_chunk(oxw, ozw); // caller notes this chunk's camera-relative origin
-                // Camera-relative anchor-centre base for the MVMVA cull (the
-                // GTE translation is zero; see gte_begin_chunk's crack note).
+                                       // Camera-relative anchor-centre base for the MVMVA cull (the
+                                       // GTE translation is zero; see gte_begin_chunk's crack note).
                 let ccx0 = oxw + BLOCK / 2 - cam.x;
                 let ccy0 = BLOCK / 2 - cam.y;
                 let ccz0 = ozw + BLOCK / 2 - cam.z;
@@ -4321,100 +4306,100 @@ pub fn for_visible_faces<
                             continue;
                         }
                         face_work += end - start;
-                    let mut k = start;
-                    while k < end {
-                        let f = unsafe { POOL_FACES[p][k] };
-                        k += 1;
-                        let lx = (f & 15) as usize;
-                        let wy = ((f >> 4) & 63) as i32;
-                        let lz = ((f >> 10) & 15) as usize;
-                        let w = ((f >> 24) & 15) as usize + 1;
-                        let h = ((f >> 28) & 7) as usize + 1;
-                        // Light comes from the side-band word beside the face,
-                        // read below with AO. Bit 31 of the packed word used to
-                        // hold it, which capped it at ONE bit -- values above 1
-                        // shifted off the end.
-                        // View-frustum cull in camera space, BEFORE the costly
-                        // 4-corner perspective projection in emit(): drop faces
-                        // behind the camera, beyond far, above/below, or outside
-                        // the FOV cone.
+                        let mut k = start;
+                        while k < end {
+                            let f = unsafe { POOL_FACES[p][k] };
+                            k += 1;
+                            let lx = (f & 15) as usize;
+                            let wy = ((f >> 4) & 63) as i32;
+                            let lz = ((f >> 10) & 15) as usize;
+                            let w = ((f >> 24) & 15) as usize + 1;
+                            let h = ((f >> 28) & 7) as usize + 1;
+                            // Light comes from the side-band word beside the face,
+                            // read below with AO. Bit 31 of the packed word used to
+                            // hold it, which capped it at ONE bit -- values above 1
+                            // shifted off the end.
+                            // View-frustum cull in camera space, BEFORE the costly
+                            // 4-corner perspective projection in emit(): drop faces
+                            // behind the camera, beyond far, above/below, or outside
+                            // the FOV cone.
                             if FRUSTUM_CULL && plane_vis != 2 {
-                            // Bounding sphere of the whole merged plate, NOT its
-                            // min corner: a greedy face spans up to 12x12 blocks,
-                            // so sampling the anchor and comparing it against an
-                            // anchor-depth cone dropped plates whose corner sat
-                            // behind/beside the eye while most of the plate was
-                            // dead ahead -- the ground vanished from under the
-                            // player in terraced terrain.
-                            //   centre = anchor + half the face extent
+                                // Bounding sphere of the whole merged plate, NOT its
+                                // min corner: a greedy face spans up to 12x12 blocks,
+                                // so sampling the anchor and comparing it against an
+                                // anchor-depth cone dropped plates whose corner sat
+                                // behind/beside the eye while most of the plate was
+                                // dead ahead -- the ground vanished from under the
+                                // player in terraced terrain.
+                                //   centre = anchor + half the face extent
                                 //   r      = conservative half-diagonal. For
                                 //            0<=short<=long, long+27/64*short bounds
                                 //            sqrt(long²+short²), closely following the
                                 //            chord to sqrt(2) without a runtime sqrt.
-                            let hw = (w as i32 - 1) * (BLOCK / 2);
-                            let hh = (h as i32 - 1) * (BLOCK / 2);
-                            let (cox, coy, coz) = match dir {
+                                let hw = (w as i32 - 1) * (BLOCK / 2);
+                                let hh = (h as i32 - 1) * (BLOCK / 2);
+                                let (cox, coy, coz) = match dir {
                                     0 => (BLOCK / 2, hw, hh),
                                     1 => (-BLOCK / 2, hw, hh),
                                     2 => (hw, BLOCK / 2, hh),
                                     3 => (hw, -BLOCK / 2, hh),
                                     4 => (hw, hh, BLOCK / 2),
                                     _ => (hw, hh, -BLOCK / 2),
-                            };
-                            let rw = w as i32 * (BLOCK / 2);
-                            let rh = h as i32 * (BLOCK / 2);
-                            let long = rw.max(rh);
-                            let short = rw.min(rh);
+                                };
+                                let rw = w as i32 * (BLOCK / 2);
+                                let rh = h as i32 * (BLOCK / 2);
+                                let long = rw.max(rh);
+                                let short = rw.min(rh);
                                 let r = long + (short * 27 + 63) / 64;
-                            // ONE GTE MVMVA gives the sphere centre in camera
-                            // space exactly: c.x = screen-right, c.y = negated
-                            // height (the loaded Y row is negated), c.z = true
-                            // pitch-tilted depth.
-                            let c = scene::transform_vertex_scheduled(Vec3I16::new(
-                                (ccx0 + lx as i32 * BLOCK + cox) as i16,
-                                (ccy0 + wy * BLOCK + coy) as i16,
-                                (ccz0 + lz as i32 * BLOCK + coz) as i16,
-                            ));
-                            let z2 = c.z;
-                            // Far cull on the sphere CENTRE, not its near point.
-                            // emit_face throws a face away after full GTE
-                            // projection when the average of its four projected
-                            // corner depths reaches FAR_Z -- and that average is
-                            // this same centre depth. Culling on `z2 - r` was
-                            // looser than the test the face would face anyway, so
-                            // every face in that band paid a full projection to be
-                            // discarded. A profiling pass counted 77 of 393 faces
-                            // a frame dying exactly there.
-                            if z2 + r < 0 || z2 > far_lim {
-                                continue;
-                            }
-                            // Cone tests against the sphere: compare the nearest
-                            // possible screen offset (|c| - r) with the FARTHEST
-                            // possible depth (z2 + r). Half-height 120 + the emit
-                            // bbox's +-80 margin = 200; half-width 160.
-                            // No near-exemption needed: the sphere bound is exact
-                            // enough that close off-axis plates survive on their
-                            // own (the old +-3-block escape hatch existed only to
-                            // paper over the min-corner sampling above).
-                            let zs = z2 + r;
-                            if zs > 0 {
-                                if (c.y.abs() - r) * PROJ_H > zs * 200 {
+                                // ONE GTE MVMVA gives the sphere centre in camera
+                                // space exactly: c.x = screen-right, c.y = negated
+                                // height (the loaded Y row is negated), c.z = true
+                                // pitch-tilted depth.
+                                let c = scene::transform_vertex_scheduled(Vec3I16::new(
+                                    (ccx0 + lx as i32 * BLOCK + cox) as i16,
+                                    (ccy0 + wy * BLOCK + coy) as i16,
+                                    (ccz0 + lz as i32 * BLOCK + coz) as i16,
+                                ));
+                                let z2 = c.z;
+                                // Far cull on the sphere CENTRE, not its near point.
+                                // emit_face throws a face away after full GTE
+                                // projection when the average of its four projected
+                                // corner depths reaches FAR_Z -- and that average is
+                                // this same centre depth. Culling on `z2 - r` was
+                                // looser than the test the face would face anyway, so
+                                // every face in that band paid a full projection to be
+                                // discarded. A profiling pass counted 77 of 393 faces
+                                // a frame dying exactly there.
+                                if z2 + r < 0 || z2 > far_lim {
                                     continue;
                                 }
-                                if (c.x.abs() - r) * PROJ_H > zs * 160 {
-                                    continue;
+                                // Cone tests against the sphere: compare the nearest
+                                // possible screen offset (|c| - r) with the FARTHEST
+                                // possible depth (z2 + r). Half-height 120 + the emit
+                                // bbox's +-80 margin = 200; half-width 160.
+                                // No near-exemption needed: the sphere bound is exact
+                                // enough that close off-axis plates survive on their
+                                // own (the old +-3-block escape hatch existed only to
+                                // paper over the min-corner sampling above).
+                                let zs = z2 + r;
+                                if zs > 0 {
+                                    if (c.y.abs() - r) * PROJ_H > zs * 200 {
+                                        continue;
+                                    }
+                                    if (c.x.abs() - r) * PROJ_H > zs * 160 {
+                                        continue;
+                                    }
                                 }
                             }
+                            let block = ((f >> 17) & 127) as u8;
+                            // AO byte read only for faces that SURVIVED the cull:
+                            // it is a second uncached array, so paying it per
+                            // iterated face would cost on the ones we throw away.
+                            let side = unsafe { POOL_AO[p][k - 1] };
+                            let ao = (side & 0xFF) as u8;
+                            let light = ((side >> 8) & 7) as usize;
+                            emit(block, lx as i32, wy, lz as i32, dir, w, h, light, ao);
                         }
-                        let block = ((f >> 17) & 127) as u8;
-                        // AO byte read only for faces that SURVIVED the cull:
-                        // it is a second uncached array, so paying it per
-                        // iterated face would cost on the ones we throw away.
-                        let side = unsafe { POOL_AO[p][k - 1] };
-                        let ao = (side & 0xFF) as u8;
-                        let light = ((side >> 8) & 7) as usize;
-                        emit(block, lx as i32, wy, lz as i32, dir, w, h, light, ao);
-                    }
                         plane += 1;
                     }
                     dir += 1;
@@ -4451,7 +4436,7 @@ pub fn for_plants<F: FnMut(u8, i32, i32, i32)>(cam: &Camera, mut emit: F) {
                 let dzb = ccz - cam.z;
                 let zc = ((dxb * cam.sy) + (dzb * cam.cy)) >> 12; // forward depth
                 let xc = ((dxb * cam.cy) - (dzb * cam.sy)) >> 12; // right
-                // Near, ahead, and within the horizontal FOV cone (+ chunk half-extent).
+                                                                  // Near, ahead, and within the horizontal FOV cone (+ chunk half-extent).
                 if zc >= -chunk_r
                     && zc - chunk_r <= PLANT_FAR
                     && (zc <= 0 || (xc.abs() - chunk_r) <= zc * 160 / PROJ_H)

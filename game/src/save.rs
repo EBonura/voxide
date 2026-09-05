@@ -44,7 +44,8 @@ fn put_i32(b: &mut [u8], o: usize, v: i32) {
 }
 #[inline]
 fn get_i32(b: &[u8], o: usize) -> i32 {
-    (b[o] as u32 | (b[o + 1] as u32) << 8 | (b[o + 2] as u32) << 16 | (b[o + 3] as u32) << 24) as i32
+    (b[o] as u32 | (b[o + 1] as u32) << 8 | (b[o + 2] as u32) << 16 | (b[o + 3] as u32) << 24)
+        as i32
 }
 #[inline]
 fn put_u16(b: &mut [u8], o: usize, v: u16) {
