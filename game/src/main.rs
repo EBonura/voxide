@@ -28,7 +28,7 @@ const ST_SIM: u16 = telemetry::stage::UPDATE; // 1
 const ST_GEN: u16 = telemetry::stage::CD_WORLD_PACK_STREAM; // 25
 const ST_MESH: u16 = telemetry::stage::ROOM_SURFACE_CACHE; // 21
 const ST_RENDER: u16 = telemetry::stage::RENDER; // 3
-// TEMP render sub-stages for the GTE-vs-software profile (arbitrary distinct ids).
+                                                 // TEMP render sub-stages for the GTE-vs-software profile (arbitrary distinct ids).
 const ST_R_SKY: u16 = 40;
 const ST_R_WORLD: u16 = 42;
 const ST_R_MOBS: u16 = 43;
@@ -112,7 +112,7 @@ const SNOW: u8 = 13;
 const GLASS: u8 = 14; // transparent, smelted from sand
 const CHEST: u8 = 15; // placed interactable storage block
 const CRAFT_TABLE: u8 = 93; // placed crafting station: use (L2) opens the full recipe menu
-// Crafted items live above the block ids in the same INV array.
+                            // Crafted items live above the block ids in the same INV array.
 const PLANK: u8 = 16;
 const STICK: u8 = 17;
 const FURNACE: u8 = 18; // placed interactable smelter block
@@ -148,21 +148,21 @@ const DOOR_O: u8 = 47; // open door: invisible + walk-through; R3 closes
 const CACTUS: u8 = 48; // desert plant; hurts on contact
 const CLAY: u8 = 49; // found under shallow water; smelts into brick
 const BRICK: u8 = 50; // placeable brick block (smelted clay)
-// Decorative cross-sprite plants scattered on grass at gen time. Walk-through,
-// never in the inventory -- purely to make the world feel alive.
+                      // Decorative cross-sprite plants scattered on grass at gen time. Walk-through,
+                      // never in the inventory -- purely to make the world feel alive.
 const FLOWER_R: u8 = 51; // red flower
 const FLOWER_Y: u8 = 52; // yellow flower
 const TALL_GRASS: u8 = 53; // tuft of grass blades
-// Non-full-block shapes. The greedy mesher only speaks in whole cubes, so these
-// are excluded from it and drawn by the same per-block pass the cross-sprite
-// plants use. ponytail: no stairs -- those need four ids for the four facings
-// and the 6-bit block field has no room left; widening BLOCK_BITS to 7 is the
-// documented way out if it ever matters.
+                           // Non-full-block shapes. The greedy mesher only speaks in whole cubes, so these
+                           // are excluded from it and drawn by the same per-block pass the cross-sprite
+                           // plants use. ponytail: no stairs -- those need four ids for the four facings
+                           // and the 6-bit block field has no room left; widening BLOCK_BITS to 7 is the
+                           // documented way out if it ever matters.
 const SLAB: u8 = 61; // half-height cobble; you stand on it at half a block
 const FENCE: u8 = 62; // thin wood post; blocks movement, does not block sight
-// Stairs, one id per facing -- the direction the HIGH step faces away from,
-// i.e. the side you walk up from. The inventory carries STAIRS_N; placement
-// picks the facing from where you are standing and `drop_of` maps them all back.
+                      // Stairs, one id per facing -- the direction the HIGH step faces away from,
+                      // i.e. the side you walk up from. The inventory carries STAIRS_N; placement
+                      // picks the facing from where you are standing and `drop_of` maps them all back.
 const STAIRS_N: u8 = 63; // high half on +Z
 const STAIRS_E: u8 = 64; // high half on +X
 const STAIRS_S: u8 = 65; // high half on -Z
@@ -200,9 +200,9 @@ const SINK_SAND: u8 = 73; // walks slow, as in Java
 const LUMISTONE: u8 = 74;
 const PORTAL: u8 = 75; // the sheet inside an obsidian frame; walk in to travel
 const FLINT_STEEL: u8 = 76; // item: lights a portal frame, or sets a fire
-// Brewing. Java's chain is bottle -> awkward (ember cap) -> effect
-// (ingredient); ours is the same shape, brewed through the recipe book the way
-// this port already adapts the crafting grid.
+                            // Brewing. Java's chain is bottle -> awkward (ember cap) -> effect
+                            // (ingredient); ours is the same shape, brewed through the recipe book the way
+                            // this port already adapts the crafting grid.
 const EMBER_CAP: u8 = 77; // grows on sink sand down there; the base ingredient
 const BOTTLE: u8 = 78;
 const POTION_AWKWARD: u8 = 79; // no effect on its own, as in Java
@@ -217,7 +217,7 @@ const VOID_EYE: u8 = 86; // item: lights an obsidian frame for the End instead
 const STRING: u8 = 87; // item: spiders drop it; the bow's actual cord
 const SUGAR_CANE: u8 = 88; // plant: grows on sand beside water, brews into speed
 const VOID_PEARL: u8 = 89; // item: wraiths drop it; 4 + coal = a void eye
-// Brewing ingredients, now with the Java sources rather than stand-ins.
+                           // Brewing ingredients, now with the Java sources rather than stand-ins.
 const EMBER_ROD: u8 = 90;
 const WAILER_TEAR: u8 = 91;
 const MAGMA_PASTE: u8 = 92;
@@ -439,12 +439,54 @@ const ARMOR_PCT: [i32; 3] = [100, 60, 35]; // % of damage taken at each tier
 // Blocks the hotbar lets you select and place (building set; ores/fluids excluded).
 // SEEDS is selectable but plants a crop instead of placing a block (see place path).
 const PLACEABLE: [u8; 48] = [
-    GRASS, DIRT, STONE, COBBLE, SLAB, STAIRS_N, BRICK, OBSIDIAN, CINDERSTONE, SINK_SAND, LUMISTONE,
-    VOID_STONE, WOOD, PLANK, FENCE, LEAVES, SAND, SNOW, GLASS, WOOL, FLINT_STEEL, VOID_EYE,
-    BOTTLE, POTION_SPEED,
-    POTION_STRENGTH, POTION_REGEN, POTION_FIRE,
-    LADDER, DOOR_C, CRAFT_TABLE, CHEST, FURNACE, ENCHANT, BED, WIRE, TORCH, PISTON, TNT, CACTUS, SEEDS, SAPLING,
-    WHEAT_ITEM, BONEMEAL, BOW, FISHING_ROD, BUCKET, WATER_BUCKET, LAVA_BUCKET,
+    GRASS,
+    DIRT,
+    STONE,
+    COBBLE,
+    SLAB,
+    STAIRS_N,
+    BRICK,
+    OBSIDIAN,
+    CINDERSTONE,
+    SINK_SAND,
+    LUMISTONE,
+    VOID_STONE,
+    WOOD,
+    PLANK,
+    FENCE,
+    LEAVES,
+    SAND,
+    SNOW,
+    GLASS,
+    WOOL,
+    FLINT_STEEL,
+    VOID_EYE,
+    BOTTLE,
+    POTION_SPEED,
+    POTION_STRENGTH,
+    POTION_REGEN,
+    POTION_FIRE,
+    LADDER,
+    DOOR_C,
+    CRAFT_TABLE,
+    CHEST,
+    FURNACE,
+    ENCHANT,
+    BED,
+    WIRE,
+    TORCH,
+    PISTON,
+    TNT,
+    CACTUS,
+    SEEDS,
+    SAPLING,
+    WHEAT_ITEM,
+    BONEMEAL,
+    BOW,
+    FISHING_ROD,
+    BUCKET,
+    WATER_BUCKET,
+    LAVA_BUCKET,
 ];
 
 // Spawn column, in world block coords.
@@ -496,10 +538,10 @@ static mut RESPAWN_BZ: i32 = SPAWN_BZ;
 const OT_LEN: usize = 1024;
 const MAX_QUADS: usize = 1536;
 const RECIP_LEN: usize = (FAR_Z + 1) as usize; // 1/z table for the perspective divide
-// Profiling toggles (ship = all false; const-folded, zero runtime cost). Flip one
-// to true and read `cmd_log fills=N` from `make smoke` as a CPU dynamometer:
-// the fill count is a continuous metric, where the vsync-quantised fps readout
-// only moves in 60/N steps and hides real gains.
+                                               // Profiling toggles (ship = all false; const-folded, zero runtime cost). Flip one
+                                               // to true and read `cmd_log fills=N` from `make smoke` as a CPU dynamometer:
+                                               // the fill count is a continuous metric, where the vsync-quantised fps readout
+                                               // only moves in 60/N steps and hides real gains.
 const PROFILE_SKIP_WORLD: bool = false; // skip world face render (isolate world cost)
 const PERF_FREERUN: bool = false; // skip vsync so frames-per-cycle reads true CPU cost
 const PROFILE_SKIP_SUBMIT: bool = false; // build OT but skip GPU draw (isolate fill cost)
@@ -584,7 +626,7 @@ fn demo_input(frame: u32) -> (ButtonState, (i16, i16), (i16, i16)) {
         200 => b = button::L2,
         210 => b = button::L1,
         220 => b = button::L2,
-        221..=239 => {},
+        221..=239 => {}
         // D: stand and hold R2 -- hold-to-mine the picked block.
         240..=419 => b = button::R2,
         // E: repeat the placing sequence after mining.
@@ -626,13 +668,37 @@ fn demo_checkpoint(frame: u32, player: &Player) {
 #[inline(never)]
 fn draw_demo_hud(font: &FontAtlas, frame: u32, player: &Player) {
     ui_text(font, 4, 228, "DF", (0x80, 0xE0, 0xF0));
-    ui_text(font, 24, 228, &decimal3((frame / 10).min(999) as u16), (0x80, 0xE0, 0xF0));
+    ui_text(
+        font,
+        24,
+        228,
+        &decimal3((frame / 10).min(999) as u16),
+        (0x80, 0xE0, 0xF0),
+    );
     let bx = world_to_block_x(player.x) + 500;
     let by = world_to_block_y(player.y) + 500;
     let bz = world_to_block_z(player.z) + 500;
-    ui_text(font, 64, 228, &decimal3(bx.clamp(0, 999) as u16), (0xE0, 0xC0, 0x70));
-    ui_text(font, 96, 228, &decimal3(by.clamp(0, 999) as u16), (0xE0, 0xC0, 0x70));
-    ui_text(font, 128, 228, &decimal3(bz.clamp(0, 999) as u16), (0xE0, 0xC0, 0x70));
+    ui_text(
+        font,
+        64,
+        228,
+        &decimal3(bx.clamp(0, 999) as u16),
+        (0xE0, 0xC0, 0x70),
+    );
+    ui_text(
+        font,
+        96,
+        228,
+        &decimal3(by.clamp(0, 999) as u16),
+        (0xE0, 0xC0, 0x70),
+    );
+    ui_text(
+        font,
+        128,
+        228,
+        &decimal3(bz.clamp(0, 999) as u16),
+        (0xE0, 0xC0, 0x70),
+    );
     let (wl, wm, wd) = world::world_stats(world_to_block_x(player.x), world_to_block_z(player.z));
     ui_text(font, 168, 228, &decimal3(wl), (0x90, 0xE0, 0x90));
     ui_text(font, 200, 228, &decimal3(wm), (0x90, 0xE0, 0x90));
@@ -747,8 +813,7 @@ static mut OT: [OrderingTable<OT_LEN>; RENDER_ARENAS] =
 /// The sky keeps a chain of its own so it is queued ahead of the world chain.
 /// Both are submitted only after the previous frame has finished: while the GPU
 /// rasterises them, the CPU builds the next frame in the other arena.
-static mut SKY_OT: [OrderingTable<2>; RENDER_ARENAS] =
-    [OrderingTable::new(), OrderingTable::new()];
+static mut SKY_OT: [OrderingTable<2>; RENDER_ARENAS] = [OrderingTable::new(), OrderingTable::new()];
 static mut QUADS: [[QuadTexturedMaterial; MAX_QUADS]; RENDER_ARENAS] =
     [[EMPTY_QUAD; MAX_QUADS], [EMPTY_QUAD; MAX_QUADS]];
 static mut MOB_QUADS: [[QuadFlat; MAX_MOB_QUADS]; RENDER_ARENAS] =
@@ -771,10 +836,11 @@ const EMPTY_GOURAUD_TRI: TriTexturedGouraud = TriTexturedGouraud {
 /// Four maximum-size visible faces can all take the slow path without dropping
 /// geometry; in normal play the high-water mark is far below this.
 const MAX_NEAR_TRIS: usize = 1536;
-static mut NEAR_TRIS: [[TriTexturedGouraud; MAX_NEAR_TRIS]; RENDER_ARENAS] =
-    [[EMPTY_GOURAUD_TRI; MAX_NEAR_TRIS], [EMPTY_GOURAUD_TRI; MAX_NEAR_TRIS]];
+static mut NEAR_TRIS: [[TriTexturedGouraud; MAX_NEAR_TRIS]; RENDER_ARENAS] = [
+    [EMPTY_GOURAUD_TRI; MAX_NEAR_TRIS],
+    [EMPTY_GOURAUD_TRI; MAX_NEAR_TRIS],
+];
 static mut NEAR_TRI_N: usize = 0;
-
 
 /// Master switch for ambient occlusion. ON.
 ///
@@ -812,11 +878,10 @@ const AO_BAND: usize = 4;
 /// words against the flat one's 9, so the two cannot share an array. Faces past
 /// this cap draw flat rather than not at all.
 const MAX_AO_QUADS: usize = 1024;
-static mut AO_QUADS: [[QuadTexturedGouraud; MAX_AO_QUADS]; RENDER_ARENAS] =
-    [
-        [QuadTexturedGouraud::EMPTY; MAX_AO_QUADS],
-        [QuadTexturedGouraud::EMPTY; MAX_AO_QUADS],
-    ];
+static mut AO_QUADS: [[QuadTexturedGouraud; MAX_AO_QUADS]; RENDER_ARENAS] = [
+    [QuadTexturedGouraud::EMPTY; MAX_AO_QUADS],
+    [QuadTexturedGouraud::EMPTY; MAX_AO_QUADS],
+];
 static mut AO_N: usize = 0;
 /// Scale a packed 24-bit GP0 colour by one corner's 2-bit AO level.
 ///
@@ -951,9 +1016,14 @@ fn init_mat_tables() {
         let o = TextureMaterial::opaque(bt.clut[t], bt.tpage, (128, 128, 128))
             .with_texture_window(win)
             .textured_packet_material();
-        let a = TextureMaterial::blended(bt.clut_alpha[t], bt.tpage, (128, 128, 128), BlendMode::Average)
-            .with_texture_window(win)
-            .textured_packet_material();
+        let a = TextureMaterial::blended(
+            bt.clut_alpha[t],
+            bt.tpage,
+            (128, 128, 128),
+            BlendMode::Average,
+        )
+        .with_texture_window(win)
+        .textured_packet_material();
         unsafe {
             MAT_WIN[0][t] = o.tex_window_word;
             MAT_CLUT_HI[0][t] = o.clut_high_word;
@@ -1003,74 +1073,74 @@ fn refresh_mat_ccmd() {
     );
     let mut sky = 0usize;
     while sky < SKY_LEVELS {
-    let mut dir = 0;
-    while dir < 6 {
-        let lit = face_tint(dir);
-        let sc = SKY_SCALE[sky];
-        let tint = (
-            (lit.0 as u32 * sc / 128) as u8,
-            (lit.1 as u32 * sc / 128) as u8,
-            (lit.2 as u32 * sc / 128) as u8,
-        );
-        let mut b = 0;
-        while b < FOG_BANDS {
-            // Clear until ~12 blocks out, then ramp to the far plane, so close
-            // terrain keeps full contrast and only the band where the hard edge
-            // against the sky used to be gets blended.
-            let t = if b <= 2 {
-                0
-            } else if b <= 5 {
-                // Bands 0..7 at FAR_Z 1024: clear to ~5 blocks, ramp through
-                // mid distance, full ground-haze in the last band so the
-                // horizon dissolves into the below-horizon sky fill.
-                ((b - 2) as i32) * 255 / 6
-            } else if b == 6 {
-                200
-            } else {
-                255
-            };
-            // ...and the far bands converge on GROUND HAZE rather than sky
-            // blue: those bands exist to give crest sightlines something to
-            // hit, and they only work if the ring's silhouettes are the same
-            // colour as the below-horizon sky behind them (ground_haze on
-            // both sides). Sky-blue full fog would repaint the old void
-            // sliver ON the terrain.
-            let target = if b <= 4 {
-                fog
-            } else if b <= 6 {
-                (
-                    ((fog.0 as u16 + haze.0 as u16) / 2) as u8,
-                    ((fog.1 as u16 + haze.1 as u16) / 2) as u8,
-                    ((fog.2 as u16 + haze.2 as u16) / 2) as u8,
-                )
-            } else {
-                haze
-            };
-            // The tint is a MODULATION word: the GPU computes texel * cmd / 128.
-            // Lerping it toward the raw fog colour therefore does not converge
-            // distant terrain ON the fog colour, it multiplies the fog by the
-            // texel -- so a bright sand texel (~230) against a fog tint of
-            // (82,130,190) landed near (147,234,255), lighter and cooler than
-            // both the near ground AND the sky. The first sky audit measured
-            // exactly that and called the far dunes "a wall of ice". Pre-divide
-            // by the mean terrain texel so the product lands on the fog colour.
-            const MEAN_TEXEL: u32 = 176;
-            let fm = |f: u8| ((f as u32 * 128 / MEAN_TEXEL).min(255)) as u8;
-            let (fr, fg, fb) = (fm(target.0), fm(target.1), fm(target.2));
-            let mix = |c: u8, f: u8| lerp_u8(c as i32, f as i32, t, 255);
-            let ft = (mix(tint.0, fr), mix(tint.1, fg), mix(tint.2, fb));
-            let o = TextureMaterial::opaque(0, 0, ft).flat_textured_polygon_header(true);
-            let a = TextureMaterial::blended(0, 0, ft, BlendMode::Average)
-                .flat_textured_polygon_header(true);
-            unsafe {
-                MAT_CCMD[sky][0][dir][b] = o;
-                MAT_CCMD[sky][1][dir][b] = a;
+        let mut dir = 0;
+        while dir < 6 {
+            let lit = face_tint(dir);
+            let sc = SKY_SCALE[sky];
+            let tint = (
+                (lit.0 as u32 * sc / 128) as u8,
+                (lit.1 as u32 * sc / 128) as u8,
+                (lit.2 as u32 * sc / 128) as u8,
+            );
+            let mut b = 0;
+            while b < FOG_BANDS {
+                // Clear until ~12 blocks out, then ramp to the far plane, so close
+                // terrain keeps full contrast and only the band where the hard edge
+                // against the sky used to be gets blended.
+                let t = if b <= 2 {
+                    0
+                } else if b <= 5 {
+                    // Bands 0..7 at FAR_Z 1024: clear to ~5 blocks, ramp through
+                    // mid distance, full ground-haze in the last band so the
+                    // horizon dissolves into the below-horizon sky fill.
+                    ((b - 2) as i32) * 255 / 6
+                } else if b == 6 {
+                    200
+                } else {
+                    255
+                };
+                // ...and the far bands converge on GROUND HAZE rather than sky
+                // blue: those bands exist to give crest sightlines something to
+                // hit, and they only work if the ring's silhouettes are the same
+                // colour as the below-horizon sky behind them (ground_haze on
+                // both sides). Sky-blue full fog would repaint the old void
+                // sliver ON the terrain.
+                let target = if b <= 4 {
+                    fog
+                } else if b <= 6 {
+                    (
+                        ((fog.0 as u16 + haze.0 as u16) / 2) as u8,
+                        ((fog.1 as u16 + haze.1 as u16) / 2) as u8,
+                        ((fog.2 as u16 + haze.2 as u16) / 2) as u8,
+                    )
+                } else {
+                    haze
+                };
+                // The tint is a MODULATION word: the GPU computes texel * cmd / 128.
+                // Lerping it toward the raw fog colour therefore does not converge
+                // distant terrain ON the fog colour, it multiplies the fog by the
+                // texel -- so a bright sand texel (~230) against a fog tint of
+                // (82,130,190) landed near (147,234,255), lighter and cooler than
+                // both the near ground AND the sky. The first sky audit measured
+                // exactly that and called the far dunes "a wall of ice". Pre-divide
+                // by the mean terrain texel so the product lands on the fog colour.
+                const MEAN_TEXEL: u32 = 176;
+                let fm = |f: u8| ((f as u32 * 128 / MEAN_TEXEL).min(255)) as u8;
+                let (fr, fg, fb) = (fm(target.0), fm(target.1), fm(target.2));
+                let mix = |c: u8, f: u8| lerp_u8(c as i32, f as i32, t, 255);
+                let ft = (mix(tint.0, fr), mix(tint.1, fg), mix(tint.2, fb));
+                let o = TextureMaterial::opaque(0, 0, ft).flat_textured_polygon_header(true);
+                let a = TextureMaterial::blended(0, 0, ft, BlendMode::Average)
+                    .flat_textured_polygon_header(true);
+                unsafe {
+                    MAT_CCMD[sky][0][dir][b] = o;
+                    MAT_CCMD[sky][1][dir][b] = a;
+                }
+                b += 1;
             }
-            b += 1;
+            dir += 1;
         }
-        dir += 1;
-    }
-    sky += 1;
+        sky += 1;
     }
 }
 
@@ -1093,10 +1163,10 @@ static mut NIGHT_BIAS: u8 = 0;
 /// drifting cold while the horizon burns orange.
 static mut SUN_WARMTH: u8 = 0; // global sky light, set each frame from time-of-day
 static mut INV: [u16; BLOCK_KINDS] = [0; BLOCK_KINDS]; // block counts by block id
-// Vanilla hotbar: 9 REAL slots holding item ids (AIR = empty), not a scrolling
-// window over the catalogue. A kind you did not own claims the first free slot
-// when acquired (Bedrock's rule); an emptied stack vacates its slot and the
-// gap stays, exactly like the original.
+                                                       // Vanilla hotbar: 9 REAL slots holding item ids (AIR = empty), not a scrolling
+                                                       // window over the catalogue. A kind you did not own claims the first free slot
+                                                       // when acquired (Bedrock's rule); an emptied stack vacates its slot and the
+                                                       // gap stays, exactly like the original.
 static mut HOTBAR: [u8; HOTBAR_VIS] = [AIR; HOTBAR_VIS];
 static mut HOTBAR_SEL: usize = 0;
 
@@ -1161,7 +1231,7 @@ static mut CHEST_USED: [bool; MAX_CHESTS] = [false; MAX_CHESTS];
 const MAX_FURNACES: usize = 8;
 const SMELT_TIME: u16 = 150; // ~5s to smelt one item (ponytail: half Java's 10s, a nod
                              // to our compressed clock; FURN_FUEL counts item-smelts)
-const COAL_SMELTS: u16 = 8;  // one coal smelts 8 items (Java)
+const COAL_SMELTS: u16 = 8; // one coal smelts 8 items (Java)
 static mut FURN_X: [i32; MAX_FURNACES] = [0; MAX_FURNACES];
 static mut FURN_Y: [i32; MAX_FURNACES] = [0; MAX_FURNACES];
 static mut FURN_Z: [i32; MAX_FURNACES] = [0; MAX_FURNACES];
@@ -1175,7 +1245,9 @@ static mut FURN_PROG: [u16; MAX_FURNACES] = [0; MAX_FURNACES];
 
 // Items the furnace can deposit into (UI list); coal/wood/planks are fuel,
 // the rest are inputs.
-const FURN_ITEMS: [u8; 8] = [IRON_ORE, SAND, COBBLE, RAW_MEAT, CLAY, COAL_ORE, WOOD, PLANK];
+const FURN_ITEMS: [u8; 8] = [
+    IRON_ORE, SAND, COBBLE, RAW_MEAT, CLAY, COAL_ORE, WOOD, PLANK,
+];
 
 /// Fuel value in item-smelts (0 = not a fuel). Coal 8 (Java), wood/planks 2.
 fn fuel_smelts(item: u8) -> u16 {
@@ -1208,16 +1280,16 @@ struct Player {
     pitch: i16,
     on_ground: bool,
     fly: bool,
-    health: i32,       // 0..MAX_HEALTH (2 hp per heart)
-    fall_peak: i32,    // highest y since last on ground, for fall damage
-    air: i32,          // breath remaining underwater
-    burn: i32,         // burning timer (set by lava/fire), damages over time
-    hurt_cd: i32,      // i-frames between environmental damage ticks
-    regen_delay: i32,  // frames to wait after damage before regen resumes
-    regen_tick: i32,   // frames accumulated toward the next regen/starve point
-    food: i32,         // hunger, 0..MAX_FOOD
-    food_items: i32,   // raw food carried (mob drops); auto-eaten when hungry
-    exhaustion: i32,   // counts toward the next hunger point lost
+    health: i32,      // 0..MAX_HEALTH (2 hp per heart)
+    fall_peak: i32,   // highest y since last on ground, for fall damage
+    air: i32,         // breath remaining underwater
+    burn: i32,        // burning timer (set by lava/fire), damages over time
+    hurt_cd: i32,     // i-frames between environmental damage ticks
+    regen_delay: i32, // frames to wait after damage before regen resumes
+    regen_tick: i32,  // frames accumulated toward the next regen/starve point
+    food: i32,        // hunger, 0..MAX_FOOD
+    food_items: i32,  // raw food carried (mob drops); auto-eaten when hungry
+    exhaustion: i32,  // counts toward the next hunger point lost
     // A tier per tool TYPE (0 none, 1 wood .. 4 diamond). They are player
     // stats rather than inventory items: there is no durability, the best of
     // each auto-equips, and the right one is chosen for whatever you swing at.
@@ -1225,15 +1297,15 @@ struct Player {
     axe: u8,
     shovel: u8,
     sword: u8,
-    armor: u8,         // 0 none, 1 iron, 2 diamond (scales combat damage taken)
+    armor: u8, // 0 none, 1 iron, 2 diamond (scales combat damage taken)
     selected: u8,
-    xp: i32,           // experience from kills + ore; XP_PER_LEVEL each level
-    efficiency: u8,    // mining-speed enchant level (0..3), bought with XP at a table
-    sharpness: u8,     // melee-damage enchant level (0..3)
-    protection: u8,    // damage-reduction enchant level (0..3)
-    sprinting: bool,   // latched by L3 or double-tap-forward: 1.3x speed, 3x exhaustion
-    sneaking: bool,    // CIRCLE held: slow, and will not walk off a ledge
-    eff_speed: u16,    // potion effect timers, in frames
+    xp: i32,         // experience from kills + ore; XP_PER_LEVEL each level
+    efficiency: u8,  // mining-speed enchant level (0..3), bought with XP at a table
+    sharpness: u8,   // melee-damage enchant level (0..3)
+    protection: u8,  // damage-reduction enchant level (0..3)
+    sprinting: bool, // latched by L3 or double-tap-forward: 1.3x speed, 3x exhaustion
+    sneaking: bool,  // CIRCLE held: slow, and will not walk off a ledge
+    eff_speed: u16,  // potion effect timers, in frames
     eff_strength: u16,
     eff_regen: u16,
     eff_fire: u16,
@@ -1244,9 +1316,9 @@ struct Player {
     /// Frames of hurt-tilt left, and which way to lean. Java rotates the view
     /// toward the damage source and decays it over ~10 ticks.
     hurt_tilt: u8,
-    sprint_tap: u8,    // frames left in the double-tap-forward window (sprint start)
+    sprint_tap: u8,     // frames left in the double-tap-forward window (sprint start)
     sprint_latch: bool, // sprint engaged (L3 or double-tap); drops when forward stops
-    was_fwd: bool,     // forward-input edge detector for the sprint double-tap
+    was_fwd: bool,      // forward-input edge detector for the sprint double-tap
 }
 
 const XP_PER_LEVEL: i32 = 20;
@@ -1268,18 +1340,18 @@ fn armored(raw: i32, armor: u8, protection: u8) -> i32 {
 
 const MAX_HEALTH: i32 = 20;
 const SAFE_FALL_BLOCKS: i32 = 3; // first 3 blocks of a fall do no damage (Java)
-const MAX_AIR: i32 = 450;        // 15s underwater before drowning (Java: 300 ticks)
-const REGEN_DELAY: i32 = 90;     // ponytail: ~3s post-hit regen pause; Java has none,
-                                 // but our slow regen makes it near-moot. Kept for feel.
-const REGEN_PERIOD: i32 = 120;   // slow regen: +1 hp / 4s (Java food>=18 tier)
-const REGEN_FAST: i32 = 15;      // fast regen: +1 hp / 0.5s when well fed (food==20)
-const FIRE_DURATION: i32 = 240;  // 8s of burning after lava contact (Cuberite BURN_TICKS)
+const MAX_AIR: i32 = 450; // 15s underwater before drowning (Java: 300 ticks)
+const REGEN_DELAY: i32 = 90; // ponytail: ~3s post-hit regen pause; Java has none,
+                             // but our slow regen makes it near-moot. Kept for feel.
+const REGEN_PERIOD: i32 = 120; // slow regen: +1 hp / 4s (Java food>=18 tier)
+const REGEN_FAST: i32 = 15; // fast regen: +1 hp / 0.5s when well fed (food==20)
+const FIRE_DURATION: i32 = 240; // 8s of burning after lava contact (Cuberite BURN_TICKS)
 const MAX_FOOD: i32 = 20;
-const FOOD_DRAIN: i32 = 600;     // ~20s per hunger point lost (time-based; ponytail:
-                                 // Java uses per-action exhaustion, but heal-burns-food
-                                 // below carries the core "activity drains food" loop)
-const STARVE_PERIOD: i32 = 120;  // lose 1 hp per 4s while starving (Java rate)
-const REGEN_FOOD_MIN: i32 = 18;  // need food >= 18 to regen (Java threshold)
+const FOOD_DRAIN: i32 = 600; // ~20s per hunger point lost (time-based; ponytail:
+                             // Java uses per-action exhaustion, but heal-burns-food
+                             // below carries the core "activity drains food" loop)
+const STARVE_PERIOD: i32 = 120; // lose 1 hp per 4s while starving (Java rate)
+const REGEN_FOOD_MIN: i32 = 18; // need food >= 18 to regen (Java threshold)
 
 #[derive(Copy, Clone)]
 struct Camera {
@@ -1335,59 +1407,409 @@ struct Recipe {
 }
 
 const RECIPES: [Recipe; 50] = [
-    Recipe { in_item: [PLANK, 0], in_qty: [4, 0], n_in: 1, out: CRAFT_TABLE, out_qty: 1, label: "CRAFT TABLE" },
-    Recipe { in_item: [PLANK, 0], in_qty: [6, 0], n_in: 1, out: DOOR_C, out_qty: 3, label: "DOOR" },
-    Recipe { in_item: [WOOD, 0], in_qty: [1, 0], n_in: 1, out: PLANK, out_qty: 4, label: "PLANKS" },
-    Recipe { in_item: [PLANK, 0], in_qty: [2, 0], n_in: 1, out: STICK, out_qty: 4, label: "STICKS" },
-    Recipe { in_item: [PLANK, 0], in_qty: [8, 0], n_in: 1, out: CHEST, out_qty: 1, label: "CHEST" },
+    Recipe {
+        in_item: [PLANK, 0],
+        in_qty: [4, 0],
+        n_in: 1,
+        out: CRAFT_TABLE,
+        out_qty: 1,
+        label: "CRAFT TABLE",
+    },
+    Recipe {
+        in_item: [PLANK, 0],
+        in_qty: [6, 0],
+        n_in: 1,
+        out: DOOR_C,
+        out_qty: 3,
+        label: "DOOR",
+    },
+    Recipe {
+        in_item: [WOOD, 0],
+        in_qty: [1, 0],
+        n_in: 1,
+        out: PLANK,
+        out_qty: 4,
+        label: "PLANKS",
+    },
+    Recipe {
+        in_item: [PLANK, 0],
+        in_qty: [2, 0],
+        n_in: 1,
+        out: STICK,
+        out_qty: 4,
+        label: "STICKS",
+    },
+    Recipe {
+        in_item: [PLANK, 0],
+        in_qty: [8, 0],
+        n_in: 1,
+        out: CHEST,
+        out_qty: 1,
+        label: "CHEST",
+    },
     // Java: 3 cobble -> 6 slabs, 4 planks + 2 sticks -> 3 fences.
-    Recipe { in_item: [COBBLE, 0], in_qty: [3, 0], n_in: 1, out: SLAB, out_qty: 6, label: "SLABS" },
-    Recipe { in_item: [COBBLE, 0], in_qty: [6, 0], n_in: 1, out: STAIRS_N, out_qty: 4, label: "STAIRS" },
-    Recipe { in_item: [IRON_ORE, COAL_ORE], in_qty: [1, 1], n_in: 2, out: FLINT_STEEL, out_qty: 1, label: "FLINT+STEEL" },
+    Recipe {
+        in_item: [COBBLE, 0],
+        in_qty: [3, 0],
+        n_in: 1,
+        out: SLAB,
+        out_qty: 6,
+        label: "SLABS",
+    },
+    Recipe {
+        in_item: [COBBLE, 0],
+        in_qty: [6, 0],
+        n_in: 1,
+        out: STAIRS_N,
+        out_qty: 4,
+        label: "STAIRS",
+    },
+    Recipe {
+        in_item: [IRON_ORE, COAL_ORE],
+        in_qty: [1, 1],
+        n_in: 2,
+        out: FLINT_STEEL,
+        out_qty: 1,
+        label: "FLINT+STEEL",
+    },
     // Brewing: bottle -> awkward -> effect, one ingredient per step (Java).
-    Recipe { in_item: [GLASS, 0], in_qty: [3, 0], n_in: 1, out: BOTTLE, out_qty: 3, label: "BOTTLES" },
-    Recipe { in_item: [BOTTLE, EMBER_CAP], in_qty: [1, 1], n_in: 2, out: POTION_AWKWARD, out_qty: 1, label: "AWKWARD POT" },
-    Recipe { in_item: [POTION_AWKWARD, SUGAR_CANE], in_qty: [1, 1], n_in: 2, out: POTION_SPEED, out_qty: 1, label: "POT SPEED" },
-    Recipe { in_item: [VOID_PEARL, EMBER_ROD], in_qty: [1, 1], n_in: 2, out: VOID_EYE, out_qty: 1, label: "VOID EYE" },
-    Recipe { in_item: [POTION_AWKWARD, EMBER_ROD], in_qty: [1, 1], n_in: 2, out: POTION_STRENGTH, out_qty: 1, label: "POT STRENGTH" },
-    Recipe { in_item: [POTION_AWKWARD, WAILER_TEAR], in_qty: [1, 1], n_in: 2, out: POTION_REGEN, out_qty: 1, label: "POT REGEN" },
-    Recipe { in_item: [POTION_AWKWARD, MAGMA_PASTE], in_qty: [1, 1], n_in: 2, out: POTION_FIRE, out_qty: 1, label: "POT FIRERES" },
+    Recipe {
+        in_item: [GLASS, 0],
+        in_qty: [3, 0],
+        n_in: 1,
+        out: BOTTLE,
+        out_qty: 3,
+        label: "BOTTLES",
+    },
+    Recipe {
+        in_item: [BOTTLE, EMBER_CAP],
+        in_qty: [1, 1],
+        n_in: 2,
+        out: POTION_AWKWARD,
+        out_qty: 1,
+        label: "AWKWARD POT",
+    },
+    Recipe {
+        in_item: [POTION_AWKWARD, SUGAR_CANE],
+        in_qty: [1, 1],
+        n_in: 2,
+        out: POTION_SPEED,
+        out_qty: 1,
+        label: "POT SPEED",
+    },
+    Recipe {
+        in_item: [VOID_PEARL, EMBER_ROD],
+        in_qty: [1, 1],
+        n_in: 2,
+        out: VOID_EYE,
+        out_qty: 1,
+        label: "VOID EYE",
+    },
+    Recipe {
+        in_item: [POTION_AWKWARD, EMBER_ROD],
+        in_qty: [1, 1],
+        n_in: 2,
+        out: POTION_STRENGTH,
+        out_qty: 1,
+        label: "POT STRENGTH",
+    },
+    Recipe {
+        in_item: [POTION_AWKWARD, WAILER_TEAR],
+        in_qty: [1, 1],
+        n_in: 2,
+        out: POTION_REGEN,
+        out_qty: 1,
+        label: "POT REGEN",
+    },
+    Recipe {
+        in_item: [POTION_AWKWARD, MAGMA_PASTE],
+        in_qty: [1, 1],
+        n_in: 2,
+        out: POTION_FIRE,
+        out_qty: 1,
+        label: "POT FIRERES",
+    },
     // Java: ember powder + slime ball. No slimes here, so a rod and gunpowder.
-    Recipe { in_item: [EMBER_ROD, GUNPOWDER], in_qty: [1, 1], n_in: 2, out: MAGMA_PASTE, out_qty: 1, label: "MAGMA PASTE" },
-    Recipe { in_item: [PLANK, STICK], in_qty: [4, 2], n_in: 2, out: FENCE, out_qty: 3, label: "FENCES" },
-    Recipe { in_item: [COBBLE, 0], in_qty: [8, 0], n_in: 1, out: FURNACE, out_qty: 1, label: "FURNACE" },
-    Recipe { in_item: [PLANK, STICK], in_qty: [3, 2], n_in: 2, out: CRAFT_PICK, out_qty: 1, label: "WOOD PICKAXE" },
-    Recipe { in_item: [PLANK, STICK], in_qty: [3, 2], n_in: 2, out: CRAFT_AXE, out_qty: 1, label: "WOOD AXE" },
-    Recipe { in_item: [PLANK, STICK], in_qty: [1, 2], n_in: 2, out: CRAFT_SHOVEL, out_qty: 1, label: "WOOD SHOVEL" },
-    Recipe { in_item: [PLANK, STICK], in_qty: [2, 1], n_in: 2, out: CRAFT_SWORD, out_qty: 1, label: "WOOD SWORD" },
-    Recipe { in_item: [COBBLE, STICK], in_qty: [3, 2], n_in: 2, out: CRAFT_PICK, out_qty: 2, label: "STONE PICKAXE" },
-    Recipe { in_item: [COBBLE, STICK], in_qty: [3, 2], n_in: 2, out: CRAFT_AXE, out_qty: 2, label: "STONE AXE" },
-    Recipe { in_item: [COBBLE, STICK], in_qty: [1, 2], n_in: 2, out: CRAFT_SHOVEL, out_qty: 2, label: "STONE SHOVEL" },
-    Recipe { in_item: [COBBLE, STICK], in_qty: [2, 1], n_in: 2, out: CRAFT_SWORD, out_qty: 2, label: "STONE SWORD" },
-    Recipe { in_item: [IRON_INGOT, STICK], in_qty: [3, 2], n_in: 2, out: CRAFT_PICK, out_qty: 3, label: "IRON PICKAXE" },
-    Recipe { in_item: [IRON_INGOT, STICK], in_qty: [3, 2], n_in: 2, out: CRAFT_AXE, out_qty: 3, label: "IRON AXE" },
-    Recipe { in_item: [IRON_INGOT, STICK], in_qty: [1, 2], n_in: 2, out: CRAFT_SHOVEL, out_qty: 3, label: "IRON SHOVEL" },
-    Recipe { in_item: [IRON_INGOT, STICK], in_qty: [2, 1], n_in: 2, out: CRAFT_SWORD, out_qty: 3, label: "IRON SWORD" },
-    Recipe { in_item: [DIAMOND_ORE, STICK], in_qty: [3, 2], n_in: 2, out: CRAFT_PICK, out_qty: 4, label: "DIAMOND PICKAXE" },
-    Recipe { in_item: [DIAMOND_ORE, STICK], in_qty: [3, 2], n_in: 2, out: CRAFT_AXE, out_qty: 4, label: "DIAMOND AXE" },
-    Recipe { in_item: [DIAMOND_ORE, STICK], in_qty: [1, 2], n_in: 2, out: CRAFT_SHOVEL, out_qty: 4, label: "DIAMOND SHOVEL" },
-    Recipe { in_item: [DIAMOND_ORE, STICK], in_qty: [2, 1], n_in: 2, out: CRAFT_SWORD, out_qty: 4, label: "DIAMOND SWORD" },
-    Recipe { in_item: [SAND, COAL_ORE], in_qty: [1, 1], n_in: 2, out: GLASS, out_qty: 1, label: "GLASS" },
-    Recipe { in_item: [WOOL, PLANK], in_qty: [3, 3], n_in: 2, out: BED, out_qty: 1, label: "BED" },
-    Recipe { in_item: [COAL_ORE, 0], in_qty: [1, 0], n_in: 1, out: WIRE, out_qty: 4, label: "WIRE" },
-    Recipe { in_item: [COAL_ORE, STICK], in_qty: [1, 1], n_in: 2, out: TORCH, out_qty: 4, label: "TORCH" },
-    Recipe { in_item: [STICK, 0], in_qty: [7, 0], n_in: 1, out: LADDER, out_qty: 3, label: "LADDER" },
-    Recipe { in_item: [PLANK, IRON_INGOT], in_qty: [3, 1], n_in: 2, out: PISTON, out_qty: 1, label: "PISTON" },
-    Recipe { in_item: [GUNPOWDER, SAND], in_qty: [5, 4], n_in: 2, out: TNT, out_qty: 1, label: "TNT" },
-    Recipe { in_item: [WHEAT_ITEM, 0], in_qty: [3, 0], n_in: 1, out: BREAD, out_qty: 1, label: "BREAD" },
-    Recipe { in_item: [IRON_INGOT, 0], in_qty: [5, 0], n_in: 1, out: CRAFT_ARMOR, out_qty: 1, label: "IRON ARMOR" },
-    Recipe { in_item: [DIAMOND_ORE, 0], in_qty: [5, 0], n_in: 1, out: CRAFT_ARMOR, out_qty: 2, label: "DIAMOND ARMOR" },
-    Recipe { in_item: [STICK, STRING], in_qty: [3, 3], n_in: 2, out: BOW, out_qty: 1, label: "BOW" },
-    Recipe { in_item: [STICK, COAL_ORE], in_qty: [1, 1], n_in: 2, out: ARROW, out_qty: 4, label: "ARROWS" },
-    Recipe { in_item: [IRON_INGOT, 0], in_qty: [3, 0], n_in: 1, out: BUCKET, out_qty: 1, label: "BUCKET" },
-    Recipe { in_item: [BONE, 0], in_qty: [1, 0], n_in: 1, out: BONEMEAL, out_qty: 3, label: "BONEMEAL" },
-    Recipe { in_item: [STICK, STRING], in_qty: [3, 2], n_in: 2, out: FISHING_ROD, out_qty: 1, label: "FISH ROD" },
-    Recipe { in_item: [OBSIDIAN, DIAMOND_ORE], in_qty: [4, 2], n_in: 2, out: ENCHANT, out_qty: 1, label: "ENCHANT TBL" },
+    Recipe {
+        in_item: [EMBER_ROD, GUNPOWDER],
+        in_qty: [1, 1],
+        n_in: 2,
+        out: MAGMA_PASTE,
+        out_qty: 1,
+        label: "MAGMA PASTE",
+    },
+    Recipe {
+        in_item: [PLANK, STICK],
+        in_qty: [4, 2],
+        n_in: 2,
+        out: FENCE,
+        out_qty: 3,
+        label: "FENCES",
+    },
+    Recipe {
+        in_item: [COBBLE, 0],
+        in_qty: [8, 0],
+        n_in: 1,
+        out: FURNACE,
+        out_qty: 1,
+        label: "FURNACE",
+    },
+    Recipe {
+        in_item: [PLANK, STICK],
+        in_qty: [3, 2],
+        n_in: 2,
+        out: CRAFT_PICK,
+        out_qty: 1,
+        label: "WOOD PICKAXE",
+    },
+    Recipe {
+        in_item: [PLANK, STICK],
+        in_qty: [3, 2],
+        n_in: 2,
+        out: CRAFT_AXE,
+        out_qty: 1,
+        label: "WOOD AXE",
+    },
+    Recipe {
+        in_item: [PLANK, STICK],
+        in_qty: [1, 2],
+        n_in: 2,
+        out: CRAFT_SHOVEL,
+        out_qty: 1,
+        label: "WOOD SHOVEL",
+    },
+    Recipe {
+        in_item: [PLANK, STICK],
+        in_qty: [2, 1],
+        n_in: 2,
+        out: CRAFT_SWORD,
+        out_qty: 1,
+        label: "WOOD SWORD",
+    },
+    Recipe {
+        in_item: [COBBLE, STICK],
+        in_qty: [3, 2],
+        n_in: 2,
+        out: CRAFT_PICK,
+        out_qty: 2,
+        label: "STONE PICKAXE",
+    },
+    Recipe {
+        in_item: [COBBLE, STICK],
+        in_qty: [3, 2],
+        n_in: 2,
+        out: CRAFT_AXE,
+        out_qty: 2,
+        label: "STONE AXE",
+    },
+    Recipe {
+        in_item: [COBBLE, STICK],
+        in_qty: [1, 2],
+        n_in: 2,
+        out: CRAFT_SHOVEL,
+        out_qty: 2,
+        label: "STONE SHOVEL",
+    },
+    Recipe {
+        in_item: [COBBLE, STICK],
+        in_qty: [2, 1],
+        n_in: 2,
+        out: CRAFT_SWORD,
+        out_qty: 2,
+        label: "STONE SWORD",
+    },
+    Recipe {
+        in_item: [IRON_INGOT, STICK],
+        in_qty: [3, 2],
+        n_in: 2,
+        out: CRAFT_PICK,
+        out_qty: 3,
+        label: "IRON PICKAXE",
+    },
+    Recipe {
+        in_item: [IRON_INGOT, STICK],
+        in_qty: [3, 2],
+        n_in: 2,
+        out: CRAFT_AXE,
+        out_qty: 3,
+        label: "IRON AXE",
+    },
+    Recipe {
+        in_item: [IRON_INGOT, STICK],
+        in_qty: [1, 2],
+        n_in: 2,
+        out: CRAFT_SHOVEL,
+        out_qty: 3,
+        label: "IRON SHOVEL",
+    },
+    Recipe {
+        in_item: [IRON_INGOT, STICK],
+        in_qty: [2, 1],
+        n_in: 2,
+        out: CRAFT_SWORD,
+        out_qty: 3,
+        label: "IRON SWORD",
+    },
+    Recipe {
+        in_item: [DIAMOND_ORE, STICK],
+        in_qty: [3, 2],
+        n_in: 2,
+        out: CRAFT_PICK,
+        out_qty: 4,
+        label: "DIAMOND PICKAXE",
+    },
+    Recipe {
+        in_item: [DIAMOND_ORE, STICK],
+        in_qty: [3, 2],
+        n_in: 2,
+        out: CRAFT_AXE,
+        out_qty: 4,
+        label: "DIAMOND AXE",
+    },
+    Recipe {
+        in_item: [DIAMOND_ORE, STICK],
+        in_qty: [1, 2],
+        n_in: 2,
+        out: CRAFT_SHOVEL,
+        out_qty: 4,
+        label: "DIAMOND SHOVEL",
+    },
+    Recipe {
+        in_item: [DIAMOND_ORE, STICK],
+        in_qty: [2, 1],
+        n_in: 2,
+        out: CRAFT_SWORD,
+        out_qty: 4,
+        label: "DIAMOND SWORD",
+    },
+    Recipe {
+        in_item: [SAND, COAL_ORE],
+        in_qty: [1, 1],
+        n_in: 2,
+        out: GLASS,
+        out_qty: 1,
+        label: "GLASS",
+    },
+    Recipe {
+        in_item: [WOOL, PLANK],
+        in_qty: [3, 3],
+        n_in: 2,
+        out: BED,
+        out_qty: 1,
+        label: "BED",
+    },
+    Recipe {
+        in_item: [COAL_ORE, 0],
+        in_qty: [1, 0],
+        n_in: 1,
+        out: WIRE,
+        out_qty: 4,
+        label: "WIRE",
+    },
+    Recipe {
+        in_item: [COAL_ORE, STICK],
+        in_qty: [1, 1],
+        n_in: 2,
+        out: TORCH,
+        out_qty: 4,
+        label: "TORCH",
+    },
+    Recipe {
+        in_item: [STICK, 0],
+        in_qty: [7, 0],
+        n_in: 1,
+        out: LADDER,
+        out_qty: 3,
+        label: "LADDER",
+    },
+    Recipe {
+        in_item: [PLANK, IRON_INGOT],
+        in_qty: [3, 1],
+        n_in: 2,
+        out: PISTON,
+        out_qty: 1,
+        label: "PISTON",
+    },
+    Recipe {
+        in_item: [GUNPOWDER, SAND],
+        in_qty: [5, 4],
+        n_in: 2,
+        out: TNT,
+        out_qty: 1,
+        label: "TNT",
+    },
+    Recipe {
+        in_item: [WHEAT_ITEM, 0],
+        in_qty: [3, 0],
+        n_in: 1,
+        out: BREAD,
+        out_qty: 1,
+        label: "BREAD",
+    },
+    Recipe {
+        in_item: [IRON_INGOT, 0],
+        in_qty: [5, 0],
+        n_in: 1,
+        out: CRAFT_ARMOR,
+        out_qty: 1,
+        label: "IRON ARMOR",
+    },
+    Recipe {
+        in_item: [DIAMOND_ORE, 0],
+        in_qty: [5, 0],
+        n_in: 1,
+        out: CRAFT_ARMOR,
+        out_qty: 2,
+        label: "DIAMOND ARMOR",
+    },
+    Recipe {
+        in_item: [STICK, STRING],
+        in_qty: [3, 3],
+        n_in: 2,
+        out: BOW,
+        out_qty: 1,
+        label: "BOW",
+    },
+    Recipe {
+        in_item: [STICK, COAL_ORE],
+        in_qty: [1, 1],
+        n_in: 2,
+        out: ARROW,
+        out_qty: 4,
+        label: "ARROWS",
+    },
+    Recipe {
+        in_item: [IRON_INGOT, 0],
+        in_qty: [3, 0],
+        n_in: 1,
+        out: BUCKET,
+        out_qty: 1,
+        label: "BUCKET",
+    },
+    Recipe {
+        in_item: [BONE, 0],
+        in_qty: [1, 0],
+        n_in: 1,
+        out: BONEMEAL,
+        out_qty: 3,
+        label: "BONEMEAL",
+    },
+    Recipe {
+        in_item: [STICK, STRING],
+        in_qty: [3, 2],
+        n_in: 2,
+        out: FISHING_ROD,
+        out_qty: 1,
+        label: "FISH ROD",
+    },
+    Recipe {
+        in_item: [OBSIDIAN, DIAMOND_ORE],
+        in_qty: [4, 2],
+        n_in: 2,
+        out: ENCHANT,
+        out_qty: 1,
+        label: "ENCHANT TBL",
+    },
 ];
 
 // Category tabs, the console-edition answer to a long flat recipe list: the
@@ -1395,8 +1817,12 @@ const RECIPES: [Recipe; 50] = [
 // PS4 UI keeps the same category tabs, so L1/R1 pages these. TRIANGLE hides
 // recipes the inventory cannot pay for.
 const CRAFT_TABS: usize = 4;
-const CRAFT_TAB_TITLE: [&str; CRAFT_TABS] =
-    ["CRAFTING < BLOCKS >", "CRAFTING < GEAR >", "CRAFTING < ITEMS >", "CRAFTING < FOOD >"];
+const CRAFT_TAB_TITLE: [&str; CRAFT_TABS] = [
+    "CRAFTING < BLOCKS >",
+    "CRAFTING < GEAR >",
+    "CRAFTING < ITEMS >",
+    "CRAFTING < FOOD >",
+];
 static mut CRAFT_TAB: usize = 0;
 static mut CRAFT_HIDE: bool = false;
 /// True while the crafting menu was opened at a placed crafting table; the
@@ -1559,7 +1985,11 @@ fn draw_tutorial(font: &FontAtlas) {
         return;
     }
     let (key, text) = TUT_STEPS[step];
-    let bw = if key.is_empty() { 0 } else { key.len() as i16 * 8 + 10 };
+    let bw = if key.is_empty() {
+        0
+    } else {
+        key.len() as i16 * 8 + 10
+    };
     let w = bw + text.len() as i16 * 8 + 12;
     let x = SCREEN_W as i16 - 6 - w;
     let y = 6i16;
@@ -1808,8 +2238,8 @@ fn main() {
         sfx::tick();
         telemetry::frame_begin(frame); // profiler frame boundary (no-op without the feature)
         telemetry::stage_begin(50); // TEMP: whole loop body minus vsync
-        // Honest frame cost: VBlank IRQs elapsed since the last loop top.
-        // 1 vbl = 60 fps, 2 = 30, 3 = 20 (NTSC). Read before doing work.
+                                    // Honest frame cost: VBlank IRQs elapsed since the last loop top.
+                                    // 1 vbl = 60 fps, 2 = 30, 3 = 20 (NTSC). Read before doing work.
         let now_vbl = interrupts::vblank_count();
         let dt = now_vbl.wrapping_sub(prev_vbl).max(1);
         prev_vbl = now_vbl;
@@ -2267,7 +2697,11 @@ fn main() {
                 let fx = (cam.sy * cam.cp) >> 12;
                 let fz = (cam.cy * cam.cp) >> 12;
                 // Java sword damage: fist 1, then wood 4 / stone 5 / iron 6 / diamond 7.
-                let mut dmg = if player.sword == 0 { 1 } else { 3 + player.sword as i16 };
+                let mut dmg = if player.sword == 0 {
+                    1
+                } else {
+                    3 + player.sword as i16
+                };
                 if player.eff_strength > 0 {
                     dmg += dmg / 2; // Java strength I: +3 hearts-ish, here +50%
                 }
@@ -2329,7 +2763,12 @@ fn main() {
                             give_drop(dx, dy, dz, SEEDS, frame); // immature: just the seed
                         } else if tb == LEAVES {
                             // ~30% sapling drop keeps wood renewable (Java-ish rate).
-                            if (pick.bx.wrapping_mul(73) ^ pick.by.wrapping_mul(151) ^ pick.bz.wrapping_mul(37)) as u32 % 10 < 3 {
+                            if (pick.bx.wrapping_mul(73)
+                                ^ pick.by.wrapping_mul(151)
+                                ^ pick.bz.wrapping_mul(37)) as u32
+                                % 10
+                                < 3
+                            {
                                 give_drop(dx, dy, dz, SAPLING, frame);
                             }
                         } else if player.pick >= mine_min_tier(tb) {
@@ -2469,8 +2908,13 @@ fn main() {
                     }
                 } else if player.selected == WATER_BUCKET || player.selected == LAVA_BUCKET {
                     // Empty the bucket into the adjacent cell.
-                    let fluid = if player.selected == WATER_BUCKET { WATER } else { LAVA };
-                    if get_block_i32(pick.px, pick.py, pick.pz) == AIR && inv_take(player.selected) {
+                    let fluid = if player.selected == WATER_BUCKET {
+                        WATER
+                    } else {
+                        LAVA
+                    };
+                    if get_block_i32(pick.px, pick.py, pick.pz) == AIR && inv_take(player.selected)
+                    {
                         set_block_i32(pick.px, pick.py, pick.pz, fluid);
                         record_edit(pick.px, pick.py, pick.pz, fluid);
                         world::wake_fluid(pick.px, pick.py, pick.pz);
@@ -2535,7 +2979,7 @@ fn main() {
                     mob::SHEEP => WOOL,
                     mob::SKELETON => BONE,
                     mob::SAPPER => GUNPOWDER, // slain (not exploded) sappers
-                    mob::SPIDER => STRING,     // the bow's cord, as in Java
+                    mob::SPIDER => STRING,    // the bow's cord, as in Java
                     mob::WRAITH => VOID_PEARL,
                     mob::EMBER => EMBER_ROD,
                     mob::WAILER => WAILER_TEAR,
@@ -2668,7 +3112,12 @@ fn main() {
             swing -= 1;
         }
         if menu == 0 {
-            draw_held_item(player.selected, hud_tool(&player, aimed_block), frame, swing);
+            draw_held_item(
+                player.selected,
+                hud_tool(&player, aimed_block),
+                frame,
+                swing,
+            );
         }
         if raining && under_open_sky(&player) {
             // Over the world, UNDER the HUD (it used to fall in front of the
@@ -2878,7 +3327,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         let sky = apply_sunset(sky, t % DAY_LEN, false);
         unsafe { FOG_RGB = sky };
         refresh_mat_ccmd(); // tint words follow LIGHT and the horizon colour
-        // No fb.clear: draw_sky covers every pixel (same as the game loop).
+                            // No fb.clear: draw_sky covers every pixel (same as the game loop).
         ui_frame_begin();
         draw_sky(&cam, t, t % DAY_LEN, light, sky, false); // menu is always fair weather
         ui_finish_sky(true);
@@ -2965,7 +3414,11 @@ fn draw_splash_now(font: &FontAtlas, t: u32) {
     let sp = SPLASHES[(t / 300) as usize % SPLASHES.len()];
     let n = sp.len() as i16;
     let bob = ((t / 20) % 2) as i16;
-    let col = if (t / 10) % 2 == 0 { (0xFF, 0xFF, 0x40) } else { (0xD8, 0xD8, 0x20) };
+    let col = if (t / 10) % 2 == 0 {
+        (0xFF, 0xFF, 0x40)
+    } else {
+        (0xD8, 0xD8, 0x20)
+    };
     let x0 = SCREEN_W as i16 - 14 - n * 8;
     let y0 = 92 + bob;
     let mut i = 0i16;
@@ -2980,8 +3433,13 @@ fn draw_splash_now(font: &FontAtlas, t: u32) {
 }
 
 const SETTING_ROWS: usize = 5;
-const SETTING_NAMES: [&str; SETTING_ROWS] =
-    ["MOVE DEADZONE", "LOOK DEADZONE", "LOOK SPEED", "INVERT LOOK Y", "SFX VOLUME"];
+const SETTING_NAMES: [&str; SETTING_ROWS] = [
+    "MOVE DEADZONE",
+    "LOOK DEADZONE",
+    "LOOK SPEED",
+    "INVERT LOOK Y",
+    "SFX VOLUME",
+];
 
 fn load_shared_settings() {
     let Ok(profile) = psx_settings::load_slot_one(SETTINGS_FILE) else {
@@ -3035,7 +3493,15 @@ fn setting_value(row: usize, buf: &mut [u8; 4]) -> usize {
             0 => (SET_MOVE_DZ as i32, false),
             1 => (SET_LOOK_DZ as i32, false),
             2 => (SET_LOOK_PCT, true),
-            3 => return if SET_INVERT_Y { buf[..2].copy_from_slice(b"ON"); 2 } else { buf[..3].copy_from_slice(b"OFF"); 3 },
+            3 => {
+                return if SET_INVERT_Y {
+                    buf[..2].copy_from_slice(b"ON");
+                    2
+                } else {
+                    buf[..3].copy_from_slice(b"OFF");
+                    3
+                }
+            }
             _ => (sfx::volume_pct(), true),
         }
     };
@@ -3091,8 +3557,24 @@ fn row_button_now(y: i16, sel: bool) {
     gpu::draw_rect_flat(x, y, w as u16, h as u16, 0, 0, 0);
     let (top, bot) = if sel { (0xA6, 0x8B) } else { (0x8B, 0x6E) };
     let half = h / 2;
-    gpu::draw_rect_flat(x + 1, y + 1, (w - 2) as u16, (half - 1) as u16, top, top, top);
-    gpu::draw_rect_flat(x + 1, y + half, (w - 2) as u16, (h - half - 1) as u16, bot, bot, bot);
+    gpu::draw_rect_flat(
+        x + 1,
+        y + 1,
+        (w - 2) as u16,
+        (half - 1) as u16,
+        top,
+        top,
+        top,
+    );
+    gpu::draw_rect_flat(
+        x + 1,
+        y + half,
+        (w - 2) as u16,
+        (h - half - 1) as u16,
+        bot,
+        bot,
+        bot,
+    );
     let hi = if sel { 0xFF } else { 0xC6 };
     gpu::draw_rect_flat(x + 1, y + 1, (w - 2) as u16, 1, hi, hi, hi);
     gpu::draw_rect_flat(x + 1, y + 1, 1, (h - 2) as u16, hi, hi, hi);
@@ -3119,8 +3601,12 @@ fn draw_settings_now(font: &FontAtlas, sel: usize) {
         font.draw_text(278 - n as i16 * 8, y, txt, (0x70, 0xE0, 0x70));
         i += 1;
     }
-    font.draw_text(MENU_TEXT_X, MENU_ROWS_Y + 5 * MENU_ROW_H as i16 + 8,
-        "TAKES EFFECT IMMEDIATELY", (0x6A, 0x6A, 0x74));
+    font.draw_text(
+        MENU_TEXT_X,
+        MENU_ROWS_Y + 5 * MENU_ROW_H as i16 + 8,
+        "TAKES EFFECT IMMEDIATELY",
+        (0x6A, 0x6A, 0x74),
+    );
 }
 
 /// The credits card: asset provenance in the same panel dress as every
@@ -3154,7 +3640,10 @@ fn draw_credits_now(font: &FontAtlas) {
     for (indent, text, style) in LINES {
         if !text.is_empty() {
             let (x, c) = match style {
-                0 => ((SCREEN_W as i16 - text.len() as i16 * 8) / 2, (0x14, 0x14, 0x1A)),
+                0 => (
+                    (SCREEN_W as i16 - text.len() as i16 * 8) / 2,
+                    (0x14, 0x14, 0x1A),
+                ),
                 1 => (24 + indent, (0x10, 0x10, 0x16)),
                 _ => (24 + indent, (0x2C, 0x2C, 0x34)),
             };
@@ -3169,15 +3658,35 @@ fn menu_button_now(font: &FontAtlas, y: i16, label: &str, sel: bool) {
     gpu::draw_rect_flat(x, y, w as u16, h as u16, 0, 0, 0);
     let (top, bot) = if sel { (0xA6, 0x8B) } else { (0x8B, 0x6E) };
     let half = h / 2;
-    gpu::draw_rect_flat(x + 1, y + 1, (w - 2) as u16, (half - 1) as u16, top, top, top);
-    gpu::draw_rect_flat(x + 1, y + half, (w - 2) as u16, (h - half - 1) as u16, bot, bot, bot);
+    gpu::draw_rect_flat(
+        x + 1,
+        y + 1,
+        (w - 2) as u16,
+        (half - 1) as u16,
+        top,
+        top,
+        top,
+    );
+    gpu::draw_rect_flat(
+        x + 1,
+        y + half,
+        (w - 2) as u16,
+        (h - half - 1) as u16,
+        bot,
+        bot,
+        bot,
+    );
     let hi = if sel { 0xFF } else { 0xC6 };
     gpu::draw_rect_flat(x + 1, y + 1, (w - 2) as u16, 1, hi, hi, hi);
     gpu::draw_rect_flat(x + 1, y + 1, 1, (h - 2) as u16, hi, hi, hi);
     gpu::draw_rect_flat(x + 1, y + h - 2, (w - 2) as u16, 1, 0x37, 0x37, 0x37);
     gpu::draw_rect_flat(x + w - 2, y + 1, 1, (h - 2) as u16, 0x37, 0x37, 0x37);
     let tx = x + (w - (label.len() as i16) * 8) / 2;
-    let color = if sel { (0xFF, 0xFF, 0xA0) } else { (0xE0, 0xE0, 0xE0) };
+    let color = if sel {
+        (0xFF, 0xFF, 0xA0)
+    } else {
+        (0xE0, 0xE0, 0xE0)
+    };
     font.draw_text(tx, y + (h - 8) / 2, label, color);
 }
 
@@ -3322,7 +3831,13 @@ fn show_intro(fb: &mut FrameBuffer, font: &FontAtlas) {
                 font.draw_text(x + dx, 150 + dy, glyph, (0, 0, 0));
             }
             let k = (18 - ((i as i32) - head).abs() * 6).max(0);
-            font.draw_text_gradient(x, 150, glyph, mix((0x68, 0x80, 0x80), k), mix((0x38, 0x58, 0x80), k));
+            font.draw_text_gradient(
+                x,
+                150,
+                glyph,
+                mix((0x68, 0x80, 0x80), k),
+                mix((0x38, 0x58, 0x80), k),
+            );
             x += font.text_width(glyph) as i16;
         }
         gpu::draw_sync();
@@ -3408,8 +3923,8 @@ fn draw_mark_text(x: i16, y: i16, text: &str, scale: i16, color: (u8, u8, u8)) {
 
 fn spawn_player() -> Player {
     let (mut sx, mut sz) = unsafe { (RESPAWN_BX, RESPAWN_BZ) }; // bed if slept, else world spawn
-    // At the default spawn, search outward for open lowland (not a peak/ocean) so
-    // the first thing you see is a proper landscape, not a mountainside.
+                                                                // At the default spawn, search outward for open lowland (not a peak/ocean) so
+                                                                // the first thing you see is a proper landscape, not a mountainside.
     let (wbx, wbz) = unsafe { (WORLD_BX, WORLD_BZ) };
     if sx == wbx && sz == wbz {
         // Biome-hunting captures may search wider, but stay inside the
@@ -3431,8 +3946,11 @@ fn spawn_player() -> Player {
                         // wedges the player -- the freeze-on-moving bug on
                         // regenerated worlds.
                         let top = world::get(wbx + dx, h - 1, wbz + dz);
-                        let ground_ok =
-                            top == GRASS || top == DIRT || top == SAND || top == SNOW || top == STONE;
+                        let ground_ok = top == GRASS
+                            || top == DIRT
+                            || top == SAND
+                            || top == SNOW
+                            || top == STONE;
                         // ...and the two blocks of body room above must be
                         // clear (an overhanging canopy would embed the head).
                         let room_ok = world::get(wbx + dx, h, wbz + dz) == AIR
@@ -3537,7 +4055,11 @@ fn rain_amount(frame: u32) -> i32 {
 /// `day`, not a frame count: sleeping skips this forward, and the weather and
 /// the sun are meant to move with it.
 fn world_lighting(day: u32) -> (u32, i32, u8, (u8, u8, u8)) {
-    let tod = if FORCE_TIME >= 0 { FORCE_TIME as u32 } else { day % DAY_LEN };
+    let tod = if FORCE_TIME >= 0 {
+        FORCE_TIME as u32
+    } else {
+        day % DAY_LEN
+    };
     let rain = rain_amount(day);
     let mut light = day_brightness(tod);
     if rain > 0 {
@@ -3621,7 +4143,11 @@ fn portal_tick(player: &Player, dwell: &mut u16) -> bool {
     let bx = world_to_block_x(player.x);
     let bz = world_to_block_z(player.z);
     let inside = is_portal(get_block_i32(bx, world_to_block_y(player.y + 8), bz))
-        || is_portal(get_block_i32(bx, world_to_block_y(player.y + PLAYER_HEIGHT / 2), bz));
+        || is_portal(get_block_i32(
+            bx,
+            world_to_block_y(player.y + PLAYER_HEIGHT / 2),
+            bz,
+        ));
     if !inside {
         *dwell = 0;
         return false;
@@ -3676,7 +4202,9 @@ fn portal_travel(player: &mut Player, fb: &mut FrameBuffer, font: &FontAtlas) {
     } else {
         (bx * 8, bz * 8)
     };
-    world::set_dimension(to, nx, nz, |done, total| draw_loading(fb, font, done, total));
+    world::set_dimension(to, nx, nz, |done, total| {
+        draw_loading(fb, font, done, total)
+    });
     // Land on solid ground, and carve out a return portal so you are never
     // stranded: Java builds one for you too.
     let sy = world::surface_y(nx, nz);
@@ -3863,7 +4391,11 @@ fn update_survival(player: &mut Player) {
     } else if player.health < MAX_HEALTH && player.food >= REGEN_FOOD_MIN {
         player.regen_tick += 1;
         // Fast regen when well fed (Java: food==20 & saturation>0), else slow.
-        let period = if player.food == MAX_FOOD { REGEN_FAST } else { REGEN_PERIOD };
+        let period = if player.food == MAX_FOOD {
+            REGEN_FAST
+        } else {
+            REGEN_PERIOD
+        };
         if player.regen_tick >= period {
             player.health += 1;
             player.food -= 1; // healing burns food (Java: ~1.5 food/hp via exhaustion)
@@ -3889,7 +4421,13 @@ fn camera_from_player(p: Player) -> Camera {
         x: p.x,
         // Sneaking drops the eye, the way Java does. Without it there is no
         // on-screen sign that sneak is engaged at all.
-        y: p.y + if p.sneaking { EYE_HEIGHT - 8 } else { EYE_HEIGHT } + bob_y,
+        y: p.y
+            + if p.sneaking {
+                EYE_HEIGHT - 8
+            } else {
+                EYE_HEIGHT
+            }
+            + bob_y,
         z: p.z,
         sy: sincos::sin_q12(p.yaw),
         cy: sincos::cos_q12(p.yaw),
@@ -4263,11 +4801,8 @@ fn aabb_collides(cx: i32, feet: i32, cz: i32) -> bool {
 /// see-through of caves and sky that a long investigation chased as terrain
 /// corruption. Walk-through blocks stay placeable at your feet, as in Java.
 fn place_intersects_player(player: &Player, bx: i32, by: i32, bz: i32, b: u8) -> bool {
-    let passable = b == LADDER
-        || b == DOOR_O
-        || world::is_cross_plant(b)
-        || is_water(b)
-        || is_lava(b);
+    let passable =
+        b == LADDER || b == DOOR_O || world::is_cross_plant(b) || is_water(b) || is_lava(b);
     if passable {
         return false;
     }
@@ -4301,7 +4836,11 @@ fn in_water_body(cx: i32, feet: i32, cz: i32) -> bool {
     // so you could never climb out. Floating by the feet puts them level with
     // the water top, which is also the top of the adjacent land block.
     is_water(get_block_i32(bx, world_to_block_y(feet + 8), bz))
-        || is_water(get_block_i32(bx, world_to_block_y(feet + PLAYER_HEIGHT / 2), bz))
+        || is_water(get_block_i32(
+            bx,
+            world_to_block_y(feet + PLAYER_HEIGHT / 2),
+            bz,
+        ))
 }
 
 /// True if the player is standing in a ladder block (enables climbing).
@@ -4335,10 +4874,15 @@ pub fn aabb_collides_dims(cx: i32, feet: i32, cz: i32, halfw: i32, height: i32) 
                         return true;
                     }
                     // A stair adds an upper step over half its footprint.
-                    if is_stairs(b) && feet < (by + 1) * BLOCK && feet + height > by * BLOCK + BLOCK / 2
+                    if is_stairs(b)
+                        && feet < (by + 1) * BLOCK
+                        && feet + height > by * BLOCK + BLOCK / 2
                     {
                         let (sx0, _, sz0, sx1, _, sz1) = stair_step_box(b, bx, by, bz);
-                        if cx + halfw > sx0 && cx - halfw < sx1 && cz + halfw > sz0 && cz - halfw < sz1
+                        if cx + halfw > sx0
+                            && cx - halfw < sx1
+                            && cz + halfw > sz0
+                            && cz - halfw < sz1
                         {
                             return true;
                         }
@@ -4409,14 +4953,35 @@ fn mob_color(kind: u8) -> (u8, u8, u8) {
 }
 
 /// Emit the visible faces of an axis-aligned box as flat-shaded quads into the OT.
-fn emit_box(cam: &Camera, x0: i32, y0: i32, z0: i32, x1: i32, y1: i32, z1: i32, base: (u8, u8, u8), count: &mut usize) {
+fn emit_box(
+    cam: &Camera,
+    x0: i32,
+    y0: i32,
+    z0: i32,
+    x1: i32,
+    y1: i32,
+    z1: i32,
+    base: (u8, u8, u8),
+    count: &mut usize,
+) {
     emit_box_masked(cam, x0, y0, z0, x1, y1, z1, base, count, 0x3F);
 }
 
 /// emit_box with a direction bitmask (bit d = draw dir d); mob heads mask out
 /// the +Z front (bit 4) because it wears a textured FACE quad instead.
 #[allow(clippy::too_many_arguments)]
-fn emit_box_masked(cam: &Camera, x0: i32, y0: i32, z0: i32, x1: i32, y1: i32, z1: i32, base: (u8, u8, u8), count: &mut usize, mask: u8) {
+fn emit_box_masked(
+    cam: &Camera,
+    x0: i32,
+    y0: i32,
+    z0: i32,
+    x1: i32,
+    y1: i32,
+    z1: i32,
+    base: (u8, u8, u8),
+    count: &mut usize,
+    mask: u8,
+) {
     // Sphere-vs-frustum on the box centre before any face is projected: a
     // herd behind the player cost six projections a box, and a box straddling
     // the eye fell to the software clipper per face. Conservative radius: the
@@ -4516,8 +5081,8 @@ fn scale_rgb(c: (u8, u8, u8), pct: u32) -> (u8, u8, u8) {
 fn held_face(verts: [(i16, i16); 4], tile: u8, bt: BlockTex, shade: u8) {
     let (u, v) = tex::tile_uv(tile);
     let win = TextureWindow::power_of_two_tile(u, v, 16, 16);
-    let mat =
-        TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, (shade, shade, shade)).with_texture_window(win);
+    let mat = TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, (shade, shade, shade))
+        .with_texture_window(win);
     ui_quad_textured(verts, [(0, 0), (16, 0), (0, 16), (16, 16)], mat);
 }
 
@@ -4544,37 +5109,67 @@ fn draw_held_item(selected: u8, tool: (u8, u8), frame: u32, swing: i32) {
     // with a knuckle break -- still flat-shaded, but it reads as an arm.
     // Sleeve first, so the forearm overlaps it at the cuff.
     ui_quad_flat(
-        [(wx + 16, wy + 30), (wx + 50, wy + 20), (wx + 54, wy + 78), (wx + 88, wy + 58)],
+        [
+            (wx + 16, wy + 30),
+            (wx + 50, wy + 20),
+            (wx + 54, wy + 78),
+            (wx + 88, wy + 58),
+        ],
         arm(96),
         arm(126),
         arm(178),
     ); // sleeve (a blue-grey shirt, so the limb has a silhouette break)
     ui_quad_flat(
-        [(wx + 14, wy + 31), (wx + 34, wy + 25), (wx + 36, wy + 55), (wx + 56, wy + 49)],
+        [
+            (wx + 14, wy + 31),
+            (wx + 34, wy + 25),
+            (wx + 36, wy + 55),
+            (wx + 56, wy + 49),
+        ],
         arm(70),
         arm(94),
         arm(136),
     ); // cuff shadow, sells the sleeve edge
     ui_quad_flat(
-        [(wx - 8, wy + 8), (wx + 26, wy - 2), (wx + 26, wy + 66), (wx + 60, wy + 44)],
+        [
+            (wx - 8, wy + 8),
+            (wx + 26, wy - 2),
+            (wx + 26, wy + 66),
+            (wx + 60, wy + 44),
+        ],
         arm(186),
         arm(138),
         arm(106),
     ); // forearm (shaded skin)
     ui_quad_flat(
-        [(wx - 8, wy + 8), (wx + 26, wy - 2), (wx + 22, wy + 22), (wx + 56, wy + 12)],
+        [
+            (wx - 8, wy + 8),
+            (wx + 26, wy - 2),
+            (wx + 22, wy + 22),
+            (wx + 56, wy + 12),
+        ],
         arm(214),
         arm(164),
         arm(128),
     ); // lit upper edge of the forearm, so it is not one flat plane
     ui_quad_flat(
-        [(wx - 12, wy - 10), (wx + 22, wy - 18), (wx - 4, wy + 12), (wx + 30, wy + 2)],
+        [
+            (wx - 12, wy - 10),
+            (wx + 22, wy - 18),
+            (wx - 4, wy + 12),
+            (wx + 30, wy + 2),
+        ],
         arm(212),
         arm(160),
         arm(124),
     ); // fist (lit skin)
     ui_quad_flat(
-        [(wx - 10, wy - 2), (wx + 20, wy - 9), (wx - 8, wy + 3), (wx + 22, wy - 4)],
+        [
+            (wx - 10, wy - 2),
+            (wx + 20, wy - 9),
+            (wx - 8, wy + 3),
+            (wx + 22, wy - 4),
+        ],
         arm(150),
         arm(108),
         arm(84),
@@ -4600,7 +5195,12 @@ fn draw_held_item(selected: u8, tool: (u8, u8), frame: u32, swing: i32) {
             let mat = TextureMaterial::opaque(btx.clut[tile as usize], btx.tpage, tint)
                 .with_texture_window(win);
             ui_quad_textured(
-                [(wx - 58, wy - 66), (wx + 8, wy - 52), (wx - 44, wy - 4), (wx + 22, wy + 10)],
+                [
+                    (wx - 58, wy - 66),
+                    (wx + 8, wy - 52),
+                    (wx - 44, wy - 4),
+                    (wx + 22, wy + 10),
+                ],
                 [(16, 0), (0, 0), (16, 16), (0, 16)],
                 mat,
             );
@@ -4787,7 +5387,12 @@ fn emit_head_box_dir(
                 let mat = TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, tint)
                     .with_texture_window(win);
                 let packet = QuadTexturedMaterial::with_material(
-                    [(p[0].x, p[0].y), (p[1].x, p[1].y), (p[2].x, p[2].y), (p[3].x, p[3].y)],
+                    [
+                        (p[0].x, p[0].y),
+                        (p[1].x, p[1].y),
+                        (p[2].x, p[2].y),
+                        (p[3].x, p[3].y),
+                    ],
                     [(0, 0), (16, 0), (0, 16), (16, 16)],
                     mat,
                 );
@@ -4862,7 +5467,12 @@ fn render_mob_shadow(cam: &Camera, m: mob::MobView, hw: i32) {
     // the ground, while genuinely nearer terrain still occludes it.
     let slot = depth_slot(depth).saturating_sub(1).max(1);
     ui_quad_blend_depth(
-        [(p[0].x, p[0].y), (p[1].x, p[1].y), (p[2].x, p[2].y), (p[3].x, p[3].y)],
+        [
+            (p[0].x, p[0].y),
+            (p[1].x, p[1].y),
+            (p[2].x, p[2].y),
+            (p[3].x, p[3].y),
+        ],
         0,
         0,
         0,
@@ -4913,15 +5523,55 @@ fn render_mob(cam: &Camera, m: mob::MobView, count: &mut usize) {
             // Swing along the facing axis, the two legs in antiphase.
             let (ax, az) = (fx * sw, fz * sw);
             let (bx, bz) = (-ax, -az);
-            emit_box(cam, x - hw + ax, y, z - lw + az, x + ax, y + leg_h, z + lw + az, legc, count);
-            emit_box(cam, x + bx, y, z - lw + bz, x + hw + bx, y + leg_h, z + lw + bz, legc, count);
+            emit_box(
+                cam,
+                x - hw + ax,
+                y,
+                z - lw + az,
+                x + ax,
+                y + leg_h,
+                z + lw + az,
+                legc,
+                count,
+            );
+            emit_box(
+                cam,
+                x + bx,
+                y,
+                z - lw + bz,
+                x + hw + bx,
+                y + leg_h,
+                z + lw + bz,
+                legc,
+                count,
+            );
         }
         let body_y0 = if legs { y + leg_h } else { y };
         let body_y1 = y + h * 13 / 16;
         if m.priming || m.hurt || !mob_body_textured(m.kind) {
-            emit_box(cam, x - hw, body_y0, z - lw, x + hw, body_y1, z + lw, base, count);
+            emit_box(
+                cam,
+                x - hw,
+                body_y0,
+                z - lw,
+                x + hw,
+                body_y1,
+                z + lw,
+                base,
+                count,
+            );
         } else {
-            emit_body_box(cam, x - hw, body_y0, z - lw, x + hw, body_y1, z + lw, face, count);
+            emit_body_box(
+                cam,
+                x - hw,
+                body_y0,
+                z - lw,
+                x + hw,
+                body_y1,
+                z + lw,
+                face,
+                count,
+            );
         }
         // Arms. A zombie holds them straight out forward, which IS the zombie
         // read; everyone else hangs them at the sides and swings them against
@@ -4933,13 +5583,44 @@ fn render_mob(cam: &Camera, m: mob::MobView, count: &mut usize) {
             let zom = m.kind == mob::ZOMBIE;
             let (ox, oz) = if zom { (fx * hw, fz * hw) } else { (0, 0) };
             let asw = if zom { 0 } else { -sw };
-            emit_box(cam, x - hw - aw * 2 + ox, arm_y0, z - aw + oz + fz * asw,
-                     x - hw + ox, arm_y1, z + aw + oz + fz * asw, legc, count);
-            emit_box(cam, x + hw + ox, arm_y0, z - aw + oz - fz * asw,
-                     x + hw + aw * 2 + ox, arm_y1, z + aw + oz - fz * asw, legc, count);
+            emit_box(
+                cam,
+                x - hw - aw * 2 + ox,
+                arm_y0,
+                z - aw + oz + fz * asw,
+                x - hw + ox,
+                arm_y1,
+                z + aw + oz + fz * asw,
+                legc,
+                count,
+            );
+            emit_box(
+                cam,
+                x + hw + ox,
+                arm_y0,
+                z - aw + oz - fz * asw,
+                x + hw + aw * 2 + ox,
+                arm_y1,
+                z + aw + oz - fz * asw,
+                legc,
+                count,
+            );
         }
         let hh = hw * 3 / 4;
-        emit_face_box(cam, x - hh, body_y1, z - hh, x + hh, y + h, z + hh, base, face, fdir, m, count);
+        emit_face_box(
+            cam,
+            x - hh,
+            body_y1,
+            z - hh,
+            x + hh,
+            y + h,
+            z + hh,
+            base,
+            face,
+            fdir,
+            m,
+            count,
+        );
     } else {
         let leg_h = h * 2 / 5;
         let lw = hw / 3;
@@ -4954,7 +5635,17 @@ fn render_mob(cam: &Camera, m: mob::MobView, count: &mut usize) {
             let s2 = gait(m.walk, hw / 2, true);
             let leg = |cx: i32, cz: i32, sw: i32, c: &mut usize| {
                 let (ax, az) = (fx * sw, fz * sw);
-                emit_box(cam, cx - lw + ax, y, cz - lw + az, cx + lw + ax, y + leg_h, cz + lw + az, legc, c);
+                emit_box(
+                    cam,
+                    cx - lw + ax,
+                    y,
+                    cz - lw + az,
+                    cx + lw + ax,
+                    y + leg_h,
+                    cz + lw + az,
+                    legc,
+                    c,
+                );
             };
             leg(x - sx, z - long_z + lw, s1, count);
             leg(x + sx, z - long_z + lw, s2, count);
@@ -4966,15 +5657,47 @@ fn render_mob(cam: &Camera, m: mob::MobView, count: &mut usize) {
         // side rather than hard-coded to +Z.
         let body_y1 = y + h;
         if m.hurt || !mob_body_textured(m.kind) {
-            emit_box(cam, x - long_x, body_y0, z - long_z, x + long_x, body_y1, z + long_z, base, count);
+            emit_box(
+                cam,
+                x - long_x,
+                body_y0,
+                z - long_z,
+                x + long_x,
+                body_y1,
+                z + long_z,
+                base,
+                count,
+            );
         } else {
-            emit_body_box(cam, x - long_x, body_y0, z - long_z, x + long_x, body_y1, z + long_z, face, count);
+            emit_body_box(
+                cam,
+                x - long_x,
+                body_y0,
+                z - long_z,
+                x + long_x,
+                body_y1,
+                z + long_z,
+                face,
+                count,
+            );
         }
         let hh = hw * 3 / 4;
         let hy0 = body_y1 - h * 2 / 5;
         let (hx, hz) = (fx * (long_x + hh), fz * (long_z + hh));
-        emit_face_box(cam, x + hx - hh, hy0, z + hz - hh, x + hx + hh, hy0 + h * 2 / 5, z + hz + hh,
-                      base, face, fdir, m, count);
+        emit_face_box(
+            cam,
+            x + hx - hh,
+            hy0,
+            z + hz - hh,
+            x + hx + hh,
+            hy0 + h * 2 / 5,
+            z + hz + hh,
+            base,
+            face,
+            fdir,
+            m,
+            count,
+        );
     }
 }
 
@@ -5033,7 +5756,17 @@ fn render_mobs(cam: &Camera, frame: u32) {
             let dx = (ax - cam.x).abs();
             let dz = (az - cam.z).abs();
             if dx + dz <= FAR_Z + 4 * BLOCK {
-                emit_box(cam, ax - 5, ay - 5, az - 5, ax + 5, ay + 5, az + 5, (50, 38, 24), &mut count);
+                emit_box(
+                    cam,
+                    ax - 5,
+                    ay - 5,
+                    az - 5,
+                    ax + 5,
+                    ay + 5,
+                    az + 5,
+                    (50, 38, 24),
+                    &mut count,
+                );
             }
         }
         j += 1;
@@ -5048,10 +5781,7 @@ const CROSS_PLANTS: bool = true; // false = old cube rendering (A/B knob)
 const PLANT_SINGLE_D2: i32 = (8 * BLOCK) * (8 * BLOCK);
 const MAX_PLANT_QUADS: usize = 128; // 2 quads/plant; ponytail cap on visible plants/frame
 static mut PLANT_QUADS: [[QuadTexturedMaterial; MAX_PLANT_QUADS]; RENDER_ARENAS] =
-    [
-        [EMPTY_QUAD; MAX_PLANT_QUADS],
-        [EMPTY_QUAD; MAX_PLANT_QUADS],
-    ];
+    [[EMPTY_QUAD; MAX_PLANT_QUADS], [EMPTY_QUAD; MAX_PLANT_QUADS]];
 static mut PLANT_N: usize = 0;
 
 fn plant_tile(blk: u8) -> u8 {
@@ -5151,8 +5881,8 @@ fn render_plants(cam: &Camera) {
         let tile = plant_tile(blk);
         let (tux, tuy) = tex::tile_uv(tile);
         let win = TextureWindow::power_of_two_tile(tux, tuy, 16, 16);
-        let mat =
-            TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, tint).with_texture_window(win);
+        let mat = TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, tint)
+            .with_texture_window(win);
         let (x0, x1) = (wx, wx + BLOCK);
         let (y0, y1) = (wy, wy + BLOCK);
         let (z0, z1) = (wz, wz + BLOCK);
@@ -5174,7 +5904,12 @@ fn render_plants(cam: &Camera) {
             if depth < FAR_Z && !quad_exploded(&p) {
                 let slot = depth_slot(depth);
                 let packet = QuadTexturedMaterial::with_material(
-                    [(p[0].x, p[0].y), (p[1].x, p[1].y), (p[2].x, p[2].y), (p[3].x, p[3].y)],
+                    [
+                        (p[0].x, p[0].y),
+                        (p[1].x, p[1].y),
+                        (p[2].x, p[2].y),
+                        (p[3].x, p[3].y),
+                    ],
                     [(0, 0), (16, 0), (0, 16), (16, 16)],
                     mat,
                 );
@@ -5242,10 +5977,16 @@ fn emit_small_box(
                     // Top and bottom faces read the whole tile; the sides take
                     // only as much of it as the box is tall.
                     let v1 = if dir == 2 || dir == 3 { 16 } else { vhi };
-                    let mat = TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, face_tint(dir))
-                        .with_texture_window(win);
+                    let mat =
+                        TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, face_tint(dir))
+                            .with_texture_window(win);
                     let packet = QuadTexturedMaterial::with_material(
-                        [(p[0].x, p[0].y), (p[1].x, p[1].y), (p[2].x, p[2].y), (p[3].x, p[3].y)],
+                        [
+                            (p[0].x, p[0].y),
+                            (p[1].x, p[1].y),
+                            (p[2].x, p[2].y),
+                            (p[3].x, p[3].y),
+                        ],
                         [(0, 0), (16, 0), (0, v1), (16, v1)],
                         mat,
                     );
@@ -5273,9 +6014,16 @@ fn small_box_shape(blk: u8, wx: i32, wy: i32, wz: i32) -> (i32, i32, i32, i32, i
     match blk {
         // Half-height, full footprint. Sits on the block grid, so a slab floor
         // is walkable at half a block up.
-        SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W => {
-            (wx, wy, wz, wx + BLOCK, wy + BLOCK / 2, wz + BLOCK, tex::T_COBBLE, 8)
-        }
+        SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W => (
+            wx,
+            wy,
+            wz,
+            wx + BLOCK,
+            wy + BLOCK / 2,
+            wz + BLOCK,
+            tex::T_COBBLE,
+            8,
+        ),
         // A post through the middle of the cell. Vanilla adds arms to the
         // neighbours; ponytail: post only, which still reads as a fence line and
         // costs one box instead of up to five.
@@ -5561,9 +6309,17 @@ fn render_drops(cam: &Camera, frame: u32, count: &mut usize) {
 /// Project one camera-relative world point on the GTE (one RTPS; TR must be 0).
 #[inline(always)]
 fn project_point_gte(cam: &Camera, p: (i32, i32, i32)) -> Proj {
-    let v = Vec3I16::new((p.0 - cam.x) as i16, (p.1 - cam.y) as i16, (p.2 - cam.z) as i16);
+    let v = Vec3I16::new(
+        (p.0 - cam.x) as i16,
+        (p.1 - cam.y) as i16,
+        (p.2 - cam.z) as i16,
+    );
     let pr = scene::project_vertex_scheduled(v);
-    Proj { x: pr.sx, y: pr.sy.clamp(-511, 511), z: pr.sz as i32 }
+    Proj {
+        x: pr.sx,
+        y: pr.sy.clamp(-511, 511),
+        z: pr.sz as i32,
+    }
 }
 
 #[inline(never)]
@@ -5614,8 +6370,16 @@ struct ClipVert {
     b: i32,
 }
 
-const EMPTY_CLIP_VERT: ClipVert =
-    ClipVert { x: 0, y: 0, z: 0, u: 0, v: 0, r: 0, g: 0, b: 0 };
+const EMPTY_CLIP_VERT: ClipVert = ClipVert {
+    x: 0,
+    y: 0,
+    z: 0,
+    u: 0,
+    v: 0,
+    r: 0,
+    g: 0,
+    b: 0,
+};
 const CLIP_VERT_CAP: usize = 12;
 /// The R3000's 1 KiB data scratchpad. Nothing else in VoXide uses it; the
 /// near-cell clipper's two polygon buffers (384 bytes each) and its projected
@@ -5626,7 +6390,8 @@ const SCRATCHPAD: usize = 0x1F80_0000;
 const CLIP_SCRATCH_A: usize = SCRATCHPAD;
 const CLIP_SCRATCH_B: usize = SCRATCHPAD + CLIP_VERT_CAP * core::mem::size_of::<ClipVert>();
 const CLIP_SCRATCH_P: usize = CLIP_SCRATCH_B + CLIP_VERT_CAP * core::mem::size_of::<ClipVert>();
-const _: () = assert!(CLIP_SCRATCH_P + CLIP_VERT_CAP * core::mem::size_of::<Proj>() <= SCRATCHPAD + 1024);
+const _: () =
+    assert!(CLIP_SCRATCH_P + CLIP_VERT_CAP * core::mem::size_of::<Proj>() <= SCRATCHPAD + 1024);
 /// `clip_distance` with the plane known at compile time. The runtime-`plane`
 /// form below compiled to a jump table inside the clipper's per-vertex loop
 /// (an indirect branch plus the plane arithmetic per vertex per plane, about
@@ -5730,9 +6495,7 @@ fn clip_distance(p: ClipVert, plane: usize) -> i32 {
 fn clip_intersection(a: ClipVert, b: ClipVert, da: i32, db: i32) -> ClipVert {
     let den = da - db;
     let t_q8 = (da << 8) / den;
-    let lerp = |av: i32, bv: i32| -> i32 {
-        av + (((bv - av) * t_q8) >> 8)
-    };
+    let lerp = |av: i32, bv: i32| -> i32 { av + (((bv - av) * t_q8) >> 8) };
     ClipVert {
         x: lerp(a.x, b.x),
         y: lerp(a.y, b.y),
@@ -5743,39 +6506,6 @@ fn clip_intersection(a: ClipVert, b: ClipVert, da: i32, db: i32) -> ClipVert {
         g: lerp(a.g, b.g),
         b: lerp(a.b, b.b),
     }
-}
-
-fn clip_polygon_plane(
-    src: &[ClipVert; CLIP_VERT_CAP],
-    src_n: usize,
-    dst: &mut [ClipVert; CLIP_VERT_CAP],
-    plane: usize,
-) -> usize {
-    if src_n == 0 {
-        return 0;
-    }
-    let mut out = 0usize;
-    let mut previous = src[src_n - 1];
-    let mut previous_d = clip_distance(previous, plane);
-    let mut i = 0usize;
-    while i < src_n {
-        let current = src[i];
-        let current_d = clip_distance(current, plane);
-        let previous_in = previous_d >= 0;
-        let current_in = current_d >= 0;
-        if previous_in != current_in && out < CLIP_VERT_CAP {
-            dst[out] = clip_intersection(previous, current, previous_d, current_d);
-            out += 1;
-        }
-        if current_in && out < CLIP_VERT_CAP {
-            dst[out] = current;
-            out += 1;
-        }
-        previous = current;
-        previous_d = current_d;
-        i += 1;
-    }
-    out
 }
 
 /// Clip a camera-space line segment against the same six planes as terrain.
@@ -5824,8 +6554,7 @@ fn pack_clip_color(p: ClipVert) -> u32 {
 
 #[inline]
 fn pack_clip_uv(p: ClipVert) -> u32 {
-    ((p.u + 128) >> 8).clamp(0, 255) as u32
-        | ((((p.v + 128) >> 8).clamp(0, 255) as u32) << 8)
+    ((p.u + 128) >> 8).clamp(0, 255) as u32 | ((((p.v + 128) >> 8).clamp(0, 255) as u32) << 8)
 }
 
 /// Clip one block-sized terrain cell against the near/far and display planes,
@@ -5850,7 +6579,10 @@ fn emit_clipped_cell(
     // replaces the copies.
     // SAFETY: single-threaded guest; the buffers are used only inside this
     // call and every element read is one written earlier in the same call.
-    let (mut a, mut b): (&mut [ClipVert; CLIP_VERT_CAP], &mut [ClipVert; CLIP_VERT_CAP]) = unsafe {
+    let (mut a, mut b): (
+        &mut [ClipVert; CLIP_VERT_CAP],
+        &mut [ClipVert; CLIP_VERT_CAP],
+    ) = unsafe {
         (
             &mut *(CLIP_SCRATCH_A as *mut [ClipVert; CLIP_VERT_CAP]),
             &mut *(CLIP_SCRATCH_B as *mut [ClipVert; CLIP_VERT_CAP]),
@@ -5911,7 +6643,8 @@ fn emit_clipped_cell(
     // camera. Same-texture overlap is invisible; transparent cells keep exact
     // edges because overlapping two Average-blended quads double-blends.
     // Scratchpad too; only the first `n` entries are ever read.
-    let pp: &mut [Proj; CLIP_VERT_CAP] = unsafe { &mut *(CLIP_SCRATCH_P as *mut [Proj; CLIP_VERT_CAP]) };
+    let pp: &mut [Proj; CLIP_VERT_CAP] =
+        unsafe { &mut *(CLIP_SCRATCH_P as *mut [Proj; CLIP_VERT_CAP]) };
     let mut sx = 0i32;
     let mut sy = 0i32;
     let mut i = 0usize;
@@ -6008,9 +6741,7 @@ fn tint_factor(rgb: u32, factor: i32) -> (i32, i32, i32) {
 fn camera_space_world(cam: &Camera, p: (i32, i32, i32)) -> (i32, i32, i32) {
     let rows = unsafe { CAM_ROWS };
     let d = (p.0 - cam.x, p.1 - cam.y, p.2 - cam.z);
-    let dot = |row: [i32; 3]| -> i32 {
-        (row[0] * d.0 + row[1] * d.1 + row[2] * d.2) >> 12
-    };
+    let dot = |row: [i32; 3]| -> i32 { (row[0] * d.0 + row[1] * d.1 + row[2] * d.2) >> 12 };
     (dot(rows[0]), dot(rows[1]), dot(rows[2]))
 }
 
@@ -6047,12 +6778,11 @@ fn render_near_block_shell(cam: &Camera) {
         while iz < 5 {
             let mut ix = 0usize;
             while ix < 5 {
-                cells[iy][iz][ix] =
-                    get_block_i32(
-                        shell_x0 + ix as i32 - 1,
-                        cby + iy as i32 - 3,
-                        shell_z0 + iz as i32 - 1,
-                    );
+                cells[iy][iz][ix] = get_block_i32(
+                    shell_x0 + ix as i32 - 1,
+                    cby + iy as i32 - 3,
+                    shell_z0 + iz as i32 - 1,
+                );
                 ix += 1;
             }
             iz += 1;
@@ -6110,7 +6840,11 @@ fn render_near_block_shell(cam: &Camera) {
                                 camera_space_world(cam, world[2]),
                                 camera_space_world(cam, world[3]),
                             ];
-                            let min_z = camera[0].2.min(camera[1].2).min(camera[2].2).min(camera[3].2);
+                            let min_z = camera[0]
+                                .2
+                                .min(camera[1].2)
+                                .min(camera[2].2)
+                                .min(camera[3].2);
                             // Keep the replacement shell through two block
                             // depths. A large greedy plate can be rejected as a
                             // unit before its nearest constituent cell reaches
@@ -6209,8 +6943,7 @@ fn emit_near_face(
     // is affine across this face, so transforming every emitted corner with
     // nine fresh multiplies is redundant; base + du*u + dv*v is byte-identical
     // to camera_space_local(point(u,v)).
-    let (rows, chdx, chdy, chdz) =
-        unsafe { (CAM_ROWS, CH_DX, CH_DY, CH_DZ) };
+    let (rows, chdx, chdy, chdz) = unsafe { (CAM_ROWS, CH_DX, CH_DY, CH_DZ) };
     let local_base = (verts[0].0 + chdx, verts[0].1 + chdy, verts[0].2 + chdz);
     let plane_base = |row: [i32; 3]| -> i32 {
         row[0] * local_base.0 + row[1] * local_base.1 + row[2] * local_base.2
@@ -6230,7 +6963,11 @@ fn emit_near_face(
             _ => -row[1] * BLOCK,
         }
     };
-    let camera_base = [plane_base(rows[0]), plane_base(rows[1]), plane_base(rows[2])];
+    let camera_base = [
+        plane_base(rows[0]),
+        plane_base(rows[1]),
+        plane_base(rows[2]),
+    ];
     let camera_du = [plane_du(rows[0]), plane_du(rows[1]), plane_du(rows[2])];
     let camera_dv = [plane_dv(rows[0]), plane_dv(rows[1]), plane_dv(rows[2])];
     let grid_z = |u: usize, v: usize| -> i32 {
@@ -6274,8 +7011,7 @@ fn emit_near_face(
             4 => center.2 -= BLOCK / 2,
             _ => center.2 += BLOCK / 2,
         }
-        let (cbx, cby, cbz, chbx, chbz) =
-            unsafe { (CAM_BX, CAM_BY, CAM_BZ, CH_BX, CH_BZ) };
+        let (cbx, cby, cbz, chbx, chbz) = unsafe { (CAM_BX, CAM_BY, CAM_BZ, CH_BX, CH_BZ) };
         let bx = chbx + center.0 / BLOCK;
         let by = center.1 / BLOCK;
         let bz = chbz + center.2 / BLOCK;
@@ -6299,7 +7035,16 @@ fn emit_near_face(
         let (x, y, z) = grid_camera(u, v);
         let rgb = ccmd_row[fog_band(z)] & 0x00FF_FFFF;
         let (r, g, b) = tint_factor(rgb, factor(u, v));
-        ClipVert { x, y, z, u: tu << 8, v: tv << 8, r, g, b }
+        ClipVert {
+            x,
+            y,
+            z,
+            u: tu << 8,
+            v: tv << 8,
+            r,
+            g,
+            b,
+        }
     };
 
     // Start from the old, inexpensive 4x4-cell fallback, then refine only the
@@ -6317,15 +7062,13 @@ fn emit_near_face(
                 vertex(u, v, 0, 0),
                 vertex(u1, v, ((u1 - u) * 16) as i32, 0),
                 vertex(u, v1, 0, ((v1 - v) * 16) as i32),
-                vertex(
-                    u1,
-                    v1,
-                    ((u1 - u) * 16) as i32,
-                    ((v1 - v) * 16) as i32,
-                ),
+                vertex(u1, v1, ((u1 - u) * 16) as i32, ((v1 - v) * 16) as i32),
             ];
-            let coarse_min_z =
-                coarse[0].z.min(coarse[1].z).min(coarse[2].z).min(coarse[3].z);
+            let coarse_min_z = coarse[0]
+                .z
+                .min(coarse[1].z)
+                .min(coarse[2].z)
+                .min(coarse[3].z);
             // Reject the coarse patch before refining it. Close walls and
             // floors often have most of their merged plate behind the eye or
             // beyond one display edge; expanding those invisible regions into
@@ -6361,10 +7104,7 @@ fn emit_near_face(
                         // greedy pass. Reject them before constructing four
                         // fully shaded vertices. Transparent terrain is not
                         // part of that shell and must still be emitted here.
-                        if !blended
-                            && cell_min_z < NEAR_BLOCK_Z
-                            && near_shell_owns(cu, cv)
-                        {
+                        if !blended && cell_min_z < NEAR_BLOCK_Z && near_shell_owns(cu, cv) {
                             cu += 1;
                             continue;
                         }
@@ -6394,7 +7134,18 @@ fn emit_near_face(
 /// (Re-tested 2026-07-30 after the body grew: outlining measured ~2% WORSE on
 /// the route -- the note stands.)
 #[inline(always)]
-fn emit_face(block: u8, lx: i32, by: i32, lz: i32, dir: usize, w: usize, h: usize, light: usize, ao: u8, count: &mut usize) {
+fn emit_face(
+    block: u8,
+    lx: i32,
+    by: i32,
+    lz: i32,
+    dir: usize,
+    w: usize,
+    h: usize,
+    light: usize,
+    ao: u8,
+    count: &mut usize,
+) {
     if *count >= MAX_QUADS {
         return;
     }
@@ -6432,7 +7183,11 @@ fn emit_face(block: u8, lx: i32, by: i32, lz: i32, dir: usize, w: usize, h: usiz
     // cracks (the per-chunk-TR variant rounded differently per chunk).
     let (chdx, chdy, chdz) = unsafe { (CH_DX, CH_DY, CH_DZ) };
     let lv = |p: (i32, i32, i32)| {
-        Vec3I16::new((p.0 + chdx) as i16, (p.1 + chdy) as i16, (p.2 + chdz) as i16)
+        Vec3I16::new(
+            (p.0 + chdx) as i16,
+            (p.1 + chdy) as i16,
+            (p.2 + chdz) as i16,
+        )
     };
     let inflight = scene::rtpt_kick(lv(verts[0]), lv(verts[1]), lv(verts[2]));
     let tile = face_tile(block, dir) as usize;
@@ -6456,9 +7211,21 @@ fn emit_face(block: u8, lx: i32, by: i32, lz: i32, dir: usize, w: usize, h: usiz
     // SAFETY: V0 just loaded; RT/TR/H/OFX/OFY set by gte_load_camera/begin_chunk.
     unsafe { psx_gte::ops::rtps() };
     let min_sz012 = t[0].sz.min(t[1].sz).min(t[2].sz);
-    let q0 = Proj { x: t[0].sx, y: t[0].sy.clamp(-511, 511), z: t[0].sz as i32 };
-    let q1 = Proj { x: t[1].sx, y: t[1].sy.clamp(-511, 511), z: t[1].sz as i32 };
-    let q2 = Proj { x: t[2].sx, y: t[2].sy.clamp(-511, 511), z: t[2].sz as i32 };
+    let q0 = Proj {
+        x: t[0].sx,
+        y: t[0].sy.clamp(-511, 511),
+        z: t[0].sz as i32,
+    };
+    let q1 = Proj {
+        x: t[1].sx,
+        y: t[1].sy.clamp(-511, 511),
+        z: t[1].sz as i32,
+    };
+    let q2 = Proj {
+        x: t[2].sx,
+        y: t[2].sy.clamp(-511, 511),
+        z: t[2].sz as i32,
+    };
     let sxy3 = psx_gte::mfc2!(14);
     let sz3 = psx_gte::mfc2!(19) as u16;
     let min_sz = min_sz012.min(sz3);
@@ -6479,18 +7246,7 @@ fn emit_face(block: u8, lx: i32, by: i32, lz: i32, dir: usize, w: usize, h: usiz
             && w.max(h) >= MID_SUBDIV_SPAN
             && unsafe { NEAR_TRI_N } < MID_SUBDIV_TRI_CAP)
     {
-        emit_near_face(
-            &verts,
-            dir,
-            w,
-            h,
-            ao,
-            ccmd_row,
-            win,
-            cl_hi,
-            tp_hi,
-            bl != 0,
-        );
+        emit_near_face(&verts, dir, w, h, ao, ccmd_row, win, cl_hi, tp_hi, bl != 0);
         return;
     }
     let mut p0 = q0;
@@ -6877,7 +7633,11 @@ fn project_quad_gte(cam: &Camera, verts: &[(i32, i32, i32); 4]) -> Option<[Proj;
         return project_quad_sw(cam, verts);
     }
     let rel = |p: (i32, i32, i32)| {
-        Vec3I16::new((p.0 - cam.x) as i16, (p.1 - cam.y) as i16, (p.2 - cam.z) as i16)
+        Vec3I16::new(
+            (p.0 - cam.x) as i16,
+            (p.1 - cam.y) as i16,
+            (p.2 - cam.z) as i16,
+        )
     };
     let t = scene::project_triangle_scheduled(rel(verts[0]), rel(verts[1]), rel(verts[2]));
     let p3 = scene::project_vertex_scheduled(rel(verts[3]));
@@ -6888,10 +7648,26 @@ fn project_quad_gte(cam: &Camera, verts: &[(i32, i32, i32); 4]) -> Option<[Proj;
     // Clamp Y like the software path: the GPU drops primitives taller than
     // 511, and GTE saturation alone allows +-1023.
     Some([
-        Proj { x: t[0].sx, y: t[0].sy.clamp(-511, 511), z: t[0].sz as i32 },
-        Proj { x: t[1].sx, y: t[1].sy.clamp(-511, 511), z: t[1].sz as i32 },
-        Proj { x: t[2].sx, y: t[2].sy.clamp(-511, 511), z: t[2].sz as i32 },
-        Proj { x: p3.sx, y: p3.sy.clamp(-511, 511), z: p3.sz as i32 },
+        Proj {
+            x: t[0].sx,
+            y: t[0].sy.clamp(-511, 511),
+            z: t[0].sz as i32,
+        },
+        Proj {
+            x: t[1].sx,
+            y: t[1].sy.clamp(-511, 511),
+            z: t[1].sz as i32,
+        },
+        Proj {
+            x: t[2].sx,
+            y: t[2].sy.clamp(-511, 511),
+            z: t[2].sz as i32,
+        },
+        Proj {
+            x: p3.sx,
+            y: p3.sy.clamp(-511, 511),
+            z: p3.sz as i32,
+        },
     ])
 }
 
@@ -7007,7 +7783,12 @@ fn billboard_blend(cx: i16, cy: i16, hw: i16, hh: i16, col: (u8, u8, u8)) {
 /// A camera-facing flat square (sun, moon, star).
 fn billboard(cx: i16, cy: i16, hw: i16, hh: i16, col: (u8, u8, u8)) {
     ui_quad_flat(
-        [(cx - hw, cy - hh), (cx + hw, cy - hh), (cx - hw, cy + hh), (cx + hw, cy + hh)],
+        [
+            (cx - hw, cy - hh),
+            (cx + hw, cy - hh),
+            (cx - hw, cy + hh),
+            (cx + hw, cy + hh),
+        ],
         col.0,
         col.1,
         col.2,
@@ -7315,7 +8096,12 @@ fn draw_sky(cam: &Camera, day: u32, tod: u32, light: u8, horizon: (u8, u8, u8), 
             let hh = (hw / 3).max(2);
             let step = if i & 1 == 0 { hw / 2 } else { -(hw / 2) };
             ui_quad_flat(
-                [(x - hw, y - hh), (x + hw, y - hh), (x - hw, y + hh), (x + hw, y + hh)],
+                [
+                    (x - hw, y - hh),
+                    (x + hw, y - hh),
+                    (x - hw, y + hh),
+                    (x + hw, y + hh),
+                ],
                 cloud.0,
                 cloud.1,
                 cloud.2,
@@ -7463,7 +8249,6 @@ fn draw_break_overlay(cam: &Camera, pick: Pick, progress: u32, den: u32) {
             _ => cam.z < z0,
         };
         if facing {
-
             draw_break_face(cam, dir, x0, x1, y0, y1, z0, z1, tile);
         }
         dir += 1;
@@ -7486,12 +8271,42 @@ fn draw_break_face(
 ) {
     const E: i32 = 1;
     let v = match dir {
-        0 => [(x1 + E, y1, z0), (x1 + E, y1, z1), (x1 + E, y0, z0), (x1 + E, y0, z1)],
-        1 => [(x0 - E, y1, z1), (x0 - E, y1, z0), (x0 - E, y0, z1), (x0 - E, y0, z0)],
-        2 => [(x0, y1 + E, z0), (x1, y1 + E, z0), (x0, y1 + E, z1), (x1, y1 + E, z1)],
-        3 => [(x0, y0 - E, z1), (x1, y0 - E, z1), (x0, y0 - E, z0), (x1, y0 - E, z0)],
-        4 => [(x1, y1, z1 + E), (x0, y1, z1 + E), (x1, y0, z1 + E), (x0, y0, z1 + E)],
-        _ => [(x0, y1, z0 - E), (x1, y1, z0 - E), (x0, y0, z0 - E), (x1, y0, z0 - E)],
+        0 => [
+            (x1 + E, y1, z0),
+            (x1 + E, y1, z1),
+            (x1 + E, y0, z0),
+            (x1 + E, y0, z1),
+        ],
+        1 => [
+            (x0 - E, y1, z1),
+            (x0 - E, y1, z0),
+            (x0 - E, y0, z1),
+            (x0 - E, y0, z0),
+        ],
+        2 => [
+            (x0, y1 + E, z0),
+            (x1, y1 + E, z0),
+            (x0, y1 + E, z1),
+            (x1, y1 + E, z1),
+        ],
+        3 => [
+            (x0, y0 - E, z1),
+            (x1, y0 - E, z1),
+            (x0, y0 - E, z0),
+            (x1, y0 - E, z0),
+        ],
+        4 => [
+            (x1, y1, z1 + E),
+            (x0, y1, z1 + E),
+            (x1, y0, z1 + E),
+            (x0, y0, z1 + E),
+        ],
+        _ => [
+            (x0, y1, z0 - E),
+            (x1, y1, z0 - E),
+            (x0, y0, z0 - E),
+            (x1, y0, z0 - E),
+        ],
     };
     let mut pp = [(0i16, 0i16); 4];
     let mut i = 0;
@@ -7556,8 +8371,18 @@ fn draw_pick_outline(cam: &Camera, pick: Pick) {
     for &(a, b) in &edges {
         let av = camera_space_world(cam, pts[a]);
         let bv = camera_space_world(cam, pts[b]);
-        let va = ClipVert { x: av.0, y: av.1, z: av.2, ..EMPTY_CLIP_VERT };
-        let vb = ClipVert { x: bv.0, y: bv.1, z: bv.2, ..EMPTY_CLIP_VERT };
+        let va = ClipVert {
+            x: av.0,
+            y: av.1,
+            z: av.2,
+            ..EMPTY_CLIP_VERT
+        };
+        let vb = ClipVert {
+            x: bv.0,
+            y: bv.1,
+            z: bv.2,
+            ..EMPTY_CLIP_VERT
+        };
         if let Some((ca, cb)) = clip_line_segment(va, vb) {
             let pa = clip_project(ca);
             let pb = clip_project(cb);
@@ -7576,12 +8401,12 @@ const HOTBAR_VIS: usize = 9; // the 9 real hotbar slots, vanilla-style
 // `SCREEN_H - 18 - 4 - n` in five places, which is how the XP bar ended up
 // drawing into the tray.
 const HUD_HOTBAR_Y: i16 = SCREEN_H as i16 - 22; // slot top row
-const HUD_XP_Y: i16 = HUD_HOTBAR_Y - 6;         // XP bar (2px tall)
-const HUD_ROW_Y: i16 = HUD_XP_Y - 10;           // hearts + hunger (7px)
-const HUD_ROW2_Y: i16 = HUD_ROW_Y - 9;          // armour (7px)
-const HUD_ROW3_Y: i16 = HUD_ROW2_Y - 9;         // air bubbles (5px)
-const HUD_NAME_Y: i16 = HUD_ROW3_Y - 12;        // item-name popup, clear of every pip row
-// Hotbar tray geometry, shared so the XP bar can line up with it.
+const HUD_XP_Y: i16 = HUD_HOTBAR_Y - 6; // XP bar (2px tall)
+const HUD_ROW_Y: i16 = HUD_XP_Y - 10; // hearts + hunger (7px)
+const HUD_ROW2_Y: i16 = HUD_ROW_Y - 9; // armour (7px)
+const HUD_ROW3_Y: i16 = HUD_ROW2_Y - 9; // air bubbles (5px)
+const HUD_NAME_Y: i16 = HUD_ROW3_Y - 12; // item-name popup, clear of every pip row
+                                         // Hotbar tray geometry, shared so the XP bar can line up with it.
 const HOTBAR_SLOT: i16 = 18;
 const HOTBAR_W: i16 = HOTBAR_VIS as i16 * HOTBAR_SLOT;
 const HOTBAR_X0: i16 = (SCREEN_W as i16 - HOTBAR_W) / 2;
@@ -7607,7 +8432,15 @@ fn draw_hotbar(font: &FontAtlas, tool: (u8, u8)) {
     let slot = HOTBAR_SLOT;
     let x0 = (SCREEN_W as i16 - HOTBAR_VIS as i16 * slot) / 2;
     let y0 = HUD_HOTBAR_Y;
-    rect(x0 - 2, y0 - 2, HOTBAR_VIS as i16 * slot + 4, slot + 4, 24, 24, 30);
+    rect(
+        x0 - 2,
+        y0 - 2,
+        HOTBAR_VIS as i16 * slot + 4,
+        slot + 4,
+        24,
+        24,
+        30,
+    );
     let mut j = 0usize;
     while j < HOTBAR_VIS {
         let b = unsafe { HOTBAR[j] };
@@ -7766,7 +8599,13 @@ fn draw_death(font: &FontAtlas) {
     ui_tri_blend([(0, 0), (w, 0), (0, h)], 96, 8, 8);
     ui_tri_blend([(w, 0), (0, h), (w, h)], 96, 8, 8);
     draw_centered(font, 96, "YOU DIED", (0xFF, 0x58, 0x48));
-    ui_text(font, (SCREEN_W as i16 - 64) / 2 + 1, 96, "YOU DIED", (0xFF, 0x58, 0x48));
+    ui_text(
+        font,
+        (SCREEN_W as i16 - 64) / 2 + 1,
+        96,
+        "YOU DIED",
+        (0xFF, 0x58, 0x48),
+    );
     let bx = (SCREEN_W as i16 - 92) / 2;
     let nx = ui_badge(font, bx, 128, "X", PS_CROSS) + 3;
     ui_text(font, nx, 128, "RESPAWN", (0xE0, 0xE0, 0xE0));
@@ -7778,7 +8617,14 @@ fn draw_inventory(font: &FontAtlas, sel: usize) {
     menu_frame(font, "INVENTORY");
     let hide = unsafe { INV_HIDE };
     let mut hx = hint_item(font, MENU_TEXT_X, MENU_HINT_Y, "X", PS_CROSS, "SELECT");
-    hx = hint_item(font, hx, MENU_HINT_Y, "[]", PS_SQUARE, if hide { "ALL" } else { "OWNED" });
+    hx = hint_item(
+        font,
+        hx,
+        MENU_HINT_Y,
+        "[]",
+        PS_SQUARE,
+        if hide { "ALL" } else { "OWNED" },
+    );
     hint_item(font, hx, MENU_HINT_Y, "O", PS_CIRCLE, "CLOSE");
     let mut list = [0u8; PLACEABLE.len()];
     let n = inv_list(&mut list);
@@ -7792,7 +8638,13 @@ fn draw_inventory(font: &FontAtlas, sel: usize) {
     // it. One line in the footer, where the panel already has the room.
     draw_centered(font, 170, "TOOLS EQUIP THEMSELVES: NO SLOT", MC_INK);
     if n == 0 {
-        ui_text(font, MENU_TEXT_X, MENU_ROWS_Y, "NOTHING YET: GO MINE!", MC_INK);
+        ui_text(
+            font,
+            MENU_TEXT_X,
+            MENU_ROWS_Y,
+            "NOTHING YET: GO MINE!",
+            MC_INK,
+        );
         return;
     }
     let mut j = 0;
@@ -7818,7 +8670,14 @@ fn draw_crafting(font: &FontAtlas, sel: usize) {
     hx = ui_badge(font, hx, MENU_HINT_Y, "R1", PS_KEY) + 3;
     ui_text(font, hx, MENU_HINT_Y, "TAB", MC_INK);
     hx += 3 * 8 + 8;
-    hx = hint_item(font, hx, MENU_HINT_Y, "T", PS_TRIANGLE, if hide { "ALL" } else { "HIDE" });
+    hx = hint_item(
+        font,
+        hx,
+        MENU_HINT_Y,
+        "T",
+        PS_TRIANGLE,
+        if hide { "ALL" } else { "HIDE" },
+    );
     hx = hint_item(font, hx, MENU_HINT_Y, "X", PS_CROSS, "MAKE");
     hint_item(font, hx, MENU_HINT_Y, "O", PS_CIRCLE, "CLOSE");
     let mut list = [0u8; RECIPES.len()];
@@ -7828,7 +8687,13 @@ fn draw_crafting(font: &FontAtlas, sel: usize) {
     menu_scroll_hint(font, n, vis, start, MENU_HINT_X, MENU_ROWS_Y);
     if n == 0 {
         // The filter emptied the tab: say so rather than show a bare panel.
-        ui_text(font, MENU_TEXT_X, MENU_ROWS_Y, "NOTHING CRAFTABLE HERE", MC_INK);
+        ui_text(
+            font,
+            MENU_TEXT_X,
+            MENU_ROWS_Y,
+            "NOTHING CRAFTABLE HERE",
+            MC_INK,
+        );
         return;
     }
     let mut j = 0;
@@ -7859,14 +8724,34 @@ fn draw_crafting(font: &FontAtlas, sel: usize) {
         let have = unsafe { INV[r.in_item[k] as usize] } >= r.in_qty[k];
         let c = if have { MC_LABEL } else { (0xE0, 0x60, 0x60) };
         let qty = [b'0' + (r.in_qty[k] % 10) as u8]; // recipe quantities are all single-digit
-        ui_text(font, MENU_TEXT_X, iy, unsafe { core::str::from_utf8_unchecked(&qty) }, c);
+        ui_text(
+            font,
+            MENU_TEXT_X,
+            iy,
+            unsafe { core::str::from_utf8_unchecked(&qty) },
+            c,
+        );
         ui_text(font, MENU_TEXT_X + 16, iy, block_name(r.in_item[k]), c);
         iy += 13;
         k += 1;
     }
     if !is_tool_recipe(r.out) && r.out != CRAFT_ARMOR && r.out_qty > 1 {
-        let makes = [b'M', b'A', b'K', b'E', b'S', b' ', b'0' + (r.out_qty % 10) as u8];
-        ui_text(font, MENU_TEXT_X, iy, unsafe { core::str::from_utf8_unchecked(&makes) }, MC_HINT);
+        let makes = [
+            b'M',
+            b'A',
+            b'K',
+            b'E',
+            b'S',
+            b' ',
+            b'0' + (r.out_qty % 10) as u8,
+        ];
+        ui_text(
+            font,
+            MENU_TEXT_X,
+            iy,
+            unsafe { core::str::from_utf8_unchecked(&makes) },
+            MC_HINT,
+        );
     }
 }
 
@@ -8407,7 +9292,11 @@ fn draw_options(font: &FontAtlas, sel: usize, player: Player) {
         if i == OPT_FLIGHT || i == OPT_TUTORIAL {
             // Vanilla writes the value into the button label ("Clouds: Fancy"),
             // right-aligned here so the states line up with future toggles.
-            let on = if i == OPT_FLIGHT { player.fly } else { unsafe { TUT_ENABLED } };
+            let on = if i == OPT_FLIGHT {
+                player.fly
+            } else {
+                unsafe { TUT_ENABLED }
+            };
             let (label, tint) = if on {
                 ("ON", (0x70, 0xE0, 0x70))
             } else {
@@ -8512,7 +9401,6 @@ fn draw_furnace(font: &FontAtlas, idx: usize, sel: usize) {
         j += 1;
     }
 }
-
 
 /// Rain streaks: short vertical lines at fixed columns, animated downward.
 /// Rain. Two layers so it has depth: a dense, short, dim far layer and a
@@ -8658,17 +9546,97 @@ fn render_dragon(cam: &Camera, m: mob::MobView, hw: i32, h: i32, count: &mut usi
     let dark = (22, 16, 30);
     let wing = (30, 22, 40);
     // Body along Z, tapering to a tail.
-    emit_box(cam, x - hw / 2, y, z - hw, x + hw / 2, y + h * 2 / 3, z + hw / 2, body, count);
-    emit_box(cam, x - hw / 4, y + h / 6, z + hw / 2, x + hw / 4, y + h / 2, z + hw * 3 / 2, dark, count);
+    emit_box(
+        cam,
+        x - hw / 2,
+        y,
+        z - hw,
+        x + hw / 2,
+        y + h * 2 / 3,
+        z + hw / 2,
+        body,
+        count,
+    );
+    emit_box(
+        cam,
+        x - hw / 4,
+        y + h / 6,
+        z + hw / 2,
+        x + hw / 4,
+        y + h / 2,
+        z + hw * 3 / 2,
+        dark,
+        count,
+    );
     // Head and snout out front.
-    emit_box(cam, x - hw / 3, y + h / 3, z - hw * 3 / 2, x + hw / 3, y + h, z - hw, body, count);
-    emit_box(cam, x - hw / 5, y + h / 3, z - hw * 2, x + hw / 5, y + h * 2 / 3, z - hw * 3 / 2, dark, count);
+    emit_box(
+        cam,
+        x - hw / 3,
+        y + h / 3,
+        z - hw * 3 / 2,
+        x + hw / 3,
+        y + h,
+        z - hw,
+        body,
+        count,
+    );
+    emit_box(
+        cam,
+        x - hw / 5,
+        y + h / 3,
+        z - hw * 2,
+        x + hw / 5,
+        y + h * 2 / 3,
+        z - hw * 3 / 2,
+        dark,
+        count,
+    );
     // Wings, swept out to the sides.
-    emit_box(cam, x - hw * 2, y + h / 2, z - hw / 2, x - hw / 2, y + h * 2 / 3, z + hw / 2, wing, count);
-    emit_box(cam, x + hw / 2, y + h / 2, z - hw / 2, x + hw * 2, y + h * 2 / 3, z + hw / 2, wing, count);
+    emit_box(
+        cam,
+        x - hw * 2,
+        y + h / 2,
+        z - hw / 2,
+        x - hw / 2,
+        y + h * 2 / 3,
+        z + hw / 2,
+        wing,
+        count,
+    );
+    emit_box(
+        cam,
+        x + hw / 2,
+        y + h / 2,
+        z - hw / 2,
+        x + hw * 2,
+        y + h * 2 / 3,
+        z + hw / 2,
+        wing,
+        count,
+    );
     // Two purple eyes, the one bright thing on it.
-    emit_box(cam, x - hw / 4, y + h * 3 / 4, z - hw * 3 / 2 - 2, x - hw / 8, y + h * 7 / 8, z - hw * 3 / 2, (200, 90, 240), count);
-    emit_box(cam, x + hw / 8, y + h * 3 / 4, z - hw * 3 / 2 - 2, x + hw / 4, y + h * 7 / 8, z - hw * 3 / 2, (200, 90, 240), count);
+    emit_box(
+        cam,
+        x - hw / 4,
+        y + h * 3 / 4,
+        z - hw * 3 / 2 - 2,
+        x - hw / 8,
+        y + h * 7 / 8,
+        z - hw * 3 / 2,
+        (200, 90, 240),
+        count,
+    );
+    emit_box(
+        cam,
+        x + hw / 8,
+        y + h * 3 / 4,
+        z - hw * 3 / 2 - 2,
+        x + hw / 4,
+        y + h * 7 / 8,
+        z - hw * 3 / 2,
+        (200, 90, 240),
+        count,
+    );
 }
 
 /// Boss bar across the top, Java-style, whenever the dragon is alive. It is the
@@ -8700,9 +9668,19 @@ fn draw_hud(font: &FontAtlas, player: Player) {
             EQUIP_T -= 1;
             let w = EQUIP_MSG.len() as i16 * 8;
             let x = (SCREEN_W as i16 - w) / 2;
-            let lit = if EQUIP_T >= 30 { 255 } else { (EQUIP_T as u32 * 255 / 30) as u8 };
+            let lit = if EQUIP_T >= 30 {
+                255
+            } else {
+                (EQUIP_T as u32 * 255 / 30) as u8
+            };
             let g = |c: u8| ((c as u32 * lit as u32) >> 8) as u8;
-            ui_text(font, x, HUD_NAME_Y - 12, EQUIP_MSG, (g(0xFF), g(0xE0), g(0x60)));
+            ui_text(
+                font,
+                x,
+                HUD_NAME_Y - 12,
+                EQUIP_MSG,
+                (g(0xFF), g(0xE0), g(0x60)),
+            );
         }
         if player.selected != HUD_NAME_LAST {
             HUD_NAME_LAST = player.selected;
@@ -8723,7 +9701,8 @@ fn draw_hud(font: &FontAtlas, player: Player) {
             };
             let dim = |c: u8| ((c as u32 * lit as u32) >> 8) as u8;
             ui_text(font, x, HUD_NAME_Y, name, (dim(0xF0), dim(0xF0), dim(0xF0)));
-            ui_text(font, 
+            ui_text(
+                font,
                 x + (name.len() as i16 + 1) * 8,
                 HUD_NAME_Y,
                 &cnt,
@@ -8753,7 +9732,6 @@ fn decimal3(v: u16) -> Decimal3 {
         b'0' + ((n % 10) as u8),
     ])
 }
-
 
 struct Decimal3([u8; 3]);
 impl Decimal3 {
@@ -8890,8 +9868,10 @@ fn tnt_tick(player: &mut Player) {
                         spawn_particles(wx, wy, wz, (96, 84, 72), 30, (x ^ z) as u32, 46);
                         sfx::explode();
                         // Java-style falloff: lethal point-blank, 0 at 2*power blocks.
-                        let pd = (player.x - wx).abs() + (player.y - wy).abs() + (player.z - wz).abs();
-                        let dmg = armored(22 - 22 * pd / (6 * BLOCK), player.armor, player.protection);
+                        let pd =
+                            (player.x - wx).abs() + (player.y - wy).abs() + (player.z - wz).abs();
+                        let dmg =
+                            armored(22 - 22 * pd / (6 * BLOCK), player.armor, player.protection);
                         if dmg > 0 && player.hurt_cd == 0 {
                             player.health -= dmg;
                             player.hurt_cd = 16;
@@ -9047,7 +10027,7 @@ fn face_tile(block: u8, dir: usize) -> u8 {
         SAND => tex::T_SAND,
         WATER | WATER_F1..=WATER_F7 => tex::T_WATER,
         SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W => tex::T_COBBLE, // hotbar icon
-        FLINT_STEEL => tex::T_FIRE, // hotbar icon only
+        FLINT_STEEL => tex::T_FIRE,                                        // hotbar icon only
         EMBER_CAP => tex::T_CROP_RIPE, // hotbar icons only; never placed
         VOID_STONE => tex::T_VOID_STONE,
         VOID_EYE | VOID_PEARL => tex::T_PORTAL,
@@ -9090,19 +10070,19 @@ fn face_tile(block: u8, dir: usize) -> u8 {
             2 => tex::T_WOOD_TOP,
             _ => tex::T_WOOD_SIDE,
         },
-        WIRE => tex::T_COAL,   // dark dust stand-in
-        TORCH => tex::T_LAVA,  // glowing red/orange
+        WIRE => tex::T_COAL,  // dark dust stand-in
+        TORCH => tex::T_LAVA, // glowing red/orange
         PISTON => tex::T_WOOD_TOP,
-        TNT => tex::T_TNT,           // red body with a white band
-        WHEAT => tex::T_LEAVES,      // young crop: green
+        TNT => tex::T_TNT,               // red body with a white band
+        WHEAT => tex::T_LEAVES,          // young crop: green
         WHEAT_RIPE => tex::T_WHEAT_RIPE, // golden stalks
-        SEEDS => tex::T_GRASS_TOP,   // hotbar icon only (planting places WHEAT)
+        SEEDS => tex::T_GRASS_TOP,       // hotbar icon only (planting places WHEAT)
         WHEAT_ITEM => tex::T_WHEAT_RIPE, // hotbar icon only (feeds animals)
-        BONEMEAL => tex::T_WOOL,     // hotbar icon only (white powder)
+        BONEMEAL => tex::T_WOOL,         // hotbar icon only (white powder)
         FISHING_ROD => tex::T_WOOD_SIDE, // hotbar icon only
-        BOW => tex::T_WOOD_SIDE,     // hotbar icon only (never placed)
-        BUCKET => tex::T_IRON,       // empty bucket icon (iron)
-        WATER_BUCKET => tex::T_WATER, // filled-bucket icons (never placed as ids)
+        BOW => tex::T_WOOD_SIDE,         // hotbar icon only (never placed)
+        BUCKET => tex::T_IRON,           // empty bucket icon (iron)
+        WATER_BUCKET => tex::T_WATER,    // filled-bucket icons (never placed as ids)
         LAVA_BUCKET => tex::T_LAVA,
         PLANK => tex::T_PLANK,       // horizontal boards
         WOOL => tex::T_WOOL,         // white fuzzy wool
@@ -9270,7 +10250,7 @@ fn apply_sunset(sky: (u8, u8, u8), tod: u32, raining: bool) -> (u8, u8, u8) {
     if warmth == 0 {
         return sky;
     }
-        (
+    (
         lerp_u8(sky.0 as i32, SUNSET.0, warmth, 255),
         lerp_u8(sky.1 as i32, SUNSET.1, warmth, 255),
         lerp_u8(sky.2 as i32, SUNSET.2, warmth, 255),
@@ -9363,11 +10343,17 @@ fn block_name(block: u8) -> &'static str {
 fn drop_of(block: u8) -> u8 {
     match block {
         GRASS => DIRT,
-        STONE => COBBLE, // mining smooth stone yields cobblestone (Java)
+        STONE => COBBLE,  // mining smooth stone yields cobblestone (Java)
         DOOR_O => DOOR_C, // breaking an open door yields the door
         STAIRS_E | STAIRS_S | STAIRS_W => STAIRS_N, // all four facings are one item
         TALL_GRASS => SEEDS, // harvesting grass gives seeds (Java), feeding farming
-        LEAVES | WATER | WATER_F1..=WATER_F7 | LAVA | LAVA_F1..=LAVA_F3 | FIRE | FLOWER_R
+        LEAVES
+        | WATER
+        | WATER_F1..=WATER_F7
+        | LAVA
+        | LAVA_F1..=LAVA_F3
+        | FIRE
+        | FLOWER_R
         | FLOWER_Y => AIR, // flowers are decor only
         _ => block,
     }
@@ -9665,24 +10651,24 @@ fn block_hardness(block: u8) -> u32 {
     match block {
         WIRE | TORCH | WHEAT | WHEAT_RIPE | SAPLING | FLOWER_R | FLOWER_Y | TALL_GRASS | FIRE
         | SUGAR_CANE => 1, // ~instant (Java 0)
-        LADDER | CACTUS => 6,                                // 0.4
-        LEAVES | SNOW | BED => 3,                            // 0.2
-        WOOL => 12,                                          // 0.8
-        GLASS => 5,                                          // 0.3
-        GRASS | DIRT | SAND | TNT | CLAY => 9,               // 0.5-0.6
-        STONE | PISTON => 22,                                // 1.5
-        WOOD | PLANK | COBBLE | DOOR_C | DOOR_O => 30,       // 2.0
+        LADDER | CACTUS => 6,                                   // 0.4
+        LEAVES | SNOW | BED => 3,                               // 0.2
+        WOOL => 12,                                             // 0.8
+        GLASS => 5,                                             // 0.3
+        GRASS | DIRT | SAND | TNT | CLAY => 9,                  // 0.5-0.6
+        STONE | PISTON => 22,                                   // 1.5
+        WOOD | PLANK | COBBLE | DOOR_C | DOOR_O => 30,          // 2.0
         SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W => 30, // as cobble
-        FENCE => 30,                                         // as planks
-        BRICK => 30,                                         // 2.0
-        CHEST | CRAFT_TABLE => 38,                           // 2.5
-        COAL_ORE | IRON_ORE | GOLD_ORE | DIAMOND_ORE => 45,  // all 3.0 in Java
-        ENCHANT => 45,                                       // sturdy
-        FURNACE => 53,                                       // 3.5
-        OBSIDIAN => 200,                                     // Java 50: the long one
-        CINDERSTONE => 6,                                     // 0.4, crumbles
-        VOID_STONE => 45,                                     // 3.0, like Java
-        SINK_SAND | LUMISTONE => 9,                          // 0.5 / 0.3
+        FENCE => 30,                                            // as planks
+        BRICK => 30,                                            // 2.0
+        CHEST | CRAFT_TABLE => 38,                              // 2.5
+        COAL_ORE | IRON_ORE | GOLD_ORE | DIAMOND_ORE => 45,     // all 3.0 in Java
+        ENCHANT => 45,                                          // sturdy
+        FURNACE => 53,                                          // 3.5
+        OBSIDIAN => 200,                                        // Java 50: the long one
+        CINDERSTONE => 6,                                       // 0.4, crumbles
+        VOID_STONE => 45,                                       // 3.0, like Java
+        SINK_SAND | LUMISTONE => 9,                             // 0.5 / 0.3
         _ => 0,
     }
 }
@@ -9768,8 +10754,8 @@ const TOOL_SWORD: u8 = 4;
 fn tool_for(block: u8) -> u8 {
     match block {
         STONE | COBBLE | BRICK | OBSIDIAN | FURNACE | ENCHANT | SLAB | STAIRS_N | STAIRS_E
-        | STAIRS_S | STAIRS_W | PISTON | CINDERSTONE
-        | VOID_STONE | LUMISTONE | COAL_ORE | IRON_ORE | GOLD_ORE | DIAMOND_ORE => TOOL_PICK,
+        | STAIRS_S | STAIRS_W | PISTON | CINDERSTONE | VOID_STONE | LUMISTONE | COAL_ORE
+        | IRON_ORE | GOLD_ORE | DIAMOND_ORE => TOOL_PICK,
         WOOD | PLANK | FENCE | CHEST | CRAFT_TABLE | DOOR_C | DOOR_O | LADDER | BED => TOOL_AXE,
         GRASS | DIRT | SAND | SINK_SAND | SNOW | CLAY => TOOL_SHOVEL,
         _ => TOOL_NONE,

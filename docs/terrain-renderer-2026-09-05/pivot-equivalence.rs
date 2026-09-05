@@ -1,7 +1,9 @@
-struct C { z: i32 }
+struct C {
+    z: i32,
+}
 fn actual(depths: &[i32]) -> usize {
- let a: Vec<C> = depths.iter().map(|&z| C { z }).collect();
- let n = a.len();
+    let a: Vec<C> = depths.iter().map(|&z| C { z }).collect();
+    let n = a.len();
     // The farthest depth from any candidate is one of the two extrema.
     // Keep the first minimum exactly as the former all-pairs search did.
     let mut min_z = a[0].z;
@@ -24,31 +26,47 @@ fn actual(depths: &[i32]) -> usize {
         candidate += 1;
     }
 
- pivot
+    pivot
 }
 fn reference(d: &[i32]) -> usize {
- (0..d.len()).min_by_key(|&i| d.iter().map(|&z| (d[i]-z).abs()).max().unwrap()).unwrap()
+    (0..d.len())
+        .min_by_key(|&i| d.iter().map(|&z| (d[i] - z).abs()).max().unwrap())
+        .unwrap()
 }
 #[test]
 fn exhaustive_order_and_ties() {
- let values = [18, 19, 50, 128, 1024];
- for n in 1..=8 {
-  for code in 0..5usize.pow(n) {
-   let mut v=code; let mut d=vec![0;n as usize];
-   for z in &mut d { *z=values[v%5]; v/=5; }
-   assert_eq!(actual(&d),reference(&d),"{:?}",d);
-  }
- }
+    let values = [18, 19, 50, 128, 1024];
+    for n in 1..=8 {
+        for code in 0..5usize.pow(n) {
+            let mut v = code;
+            let mut d = vec![0; n as usize];
+            for z in &mut d {
+                *z = values[v % 5];
+                v /= 5;
+            }
+            assert_eq!(actual(&d), reference(&d), "{:?}", d);
+        }
+    }
 }
 #[test]
 fn twelve_corners_and_extreme_positive_depths() {
- let mut seed=0x773329abu32;
- for i in 0..100000usize {
-  let n=1+i%12; let mut d=vec![0;n];
-  for z in &mut d { seed^=seed<<13; seed^=seed>>17; seed^=seed<<5; *z=(seed%65535+1) as i32; }
-  assert_eq!(actual(&d),reference(&d),"{:?}",d);
- }
- for d in [[1,65535,32768,32767],[65535,1,32767,32768],[18,18,18,18]] {
-  assert_eq!(actual(&d),reference(&d));
- }
+    let mut seed = 0x773329abu32;
+    for i in 0..100000usize {
+        let n = 1 + i % 12;
+        let mut d = vec![0; n];
+        for z in &mut d {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            *z = (seed % 65535 + 1) as i32;
+        }
+        assert_eq!(actual(&d), reference(&d), "{:?}", d);
+    }
+    for d in [
+        [1, 65535, 32768, 32767],
+        [65535, 1, 32767, 32768],
+        [18, 18, 18, 18],
+    ] {
+        assert_eq!(actual(&d), reference(&d));
+    }
 }

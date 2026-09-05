@@ -19,7 +19,6 @@ const TILES_PER_ROW: usize = 16;
 // page (x=320).
 pub const TILE_COUNT: usize = 80;
 const ATLAS_W: usize = TILE * TILES_PER_ROW; // 256 texels wide
-const ATLAS_H: usize = TILE * (TILE_COUNT / TILES_PER_ROW); // 80 texels tall (5 rows)
 
 // Tile indices into the shared page. Row 0 = tiles 0..15, row 1 = 16..31.
 pub const T_GRASS_TOP: u8 = 0;
@@ -64,9 +63,9 @@ pub const T_HIDE: u8 = 31;
 pub const T_DOOR: u8 = 32; // plank door with a dark window pane
 pub const T_CACTUS: u8 = 33; // ribbed desert green
 pub const T_CLAY: u8 = 34; // smooth blue-grey clay
-// Cross-sprite plant tiles: index 0 is (0,0,0) = 0x0000 = TRANSPARENT on the
-// PS1, so the background texels are not drawn and the plant reads as an
-// X-billboard silhouette. Do NOT set p[0] for these in palette_for.
+                           // Cross-sprite plant tiles: index 0 is (0,0,0) = 0x0000 = TRANSPARENT on the
+                           // PS1, so the background texels are not drawn and the plant reads as an
+                           // X-billboard silhouette. Do NOT set p[0] for these in palette_for.
 pub const T_CROP_YOUNG: u8 = 35; // short green sprouts (immature wheat)
 pub const T_CROP_RIPE: u8 = 36; // golden-headed wheat stalks
 pub const T_SAPLING_CROSS: u8 = 37; // little bush/sapling
@@ -75,13 +74,13 @@ pub const T_FLOWER_Y: u8 = 39; // yellow flower
 pub const T_TALLGRASS: u8 = 40; // fan of grass blades
 pub const T_FIRE: u8 = 41; // flame tongues, drawn as a cross-sprite like the plants
 pub const T_OBSIDIAN: u8 = 42; // near-black with faint purple glints
-// Inferno set.
+                               // Inferno set.
 pub const T_CINDERSTONE: u8 = 43; // dark red, pitted
 pub const T_SINK_SAND: u8 = 44; // brown with sunken faces
 pub const T_LUMISTONE: u8 = 45; // bright yellow speckle
 pub const T_PORTAL: u8 = 46; // purple swirl, drawn as a cross-sprite
 pub const T_VOID_STONE: u8 = 47; // pale yellow
-// Row 3: Inferno mob faces, and the items they drop.
+                                 // Row 3: Inferno mob faces, and the items they drop.
 pub const T_FACE_EMBER: u8 = 48;
 pub const T_FACE_WAILER: u8 = 49;
 pub const T_FACE_CHARRED: u8 = 50;
@@ -170,7 +169,11 @@ fn lerp8(a: u8, b: u8, i: usize, n: usize) -> u8 {
 }
 #[inline]
 fn ramp(a: (u8, u8, u8), b: (u8, u8, u8), i: usize, n: usize) -> (u8, u8, u8) {
-    (lerp8(a.0, b.0, i, n), lerp8(a.1, b.1, i, n), lerp8(a.2, b.2, i, n))
+    (
+        lerp8(a.0, b.0, i, n),
+        lerp8(a.1, b.1, i, n),
+        lerp8(a.2, b.2, i, n),
+    )
 }
 /// Fill p[base..base+n] with a gradient a->b.
 fn fill(p: &mut [(u8, u8, u8); 16], base: usize, a: (u8, u8, u8), b: (u8, u8, u8), n: usize) {
@@ -367,13 +370,52 @@ fn palette_for(tile: u8) -> [(u8, u8, u8); 16] {
             p[4] = (40, 92, 34); // dark base
         }
         T_FACE_EMBER => {
-            face_pal(&mut p, [(250,200,60),(232,170,40),(206,132,24),(255,232,140),(180,96,16),(255,255,255),(40,20,0),(255,120,20),(120,50,0)]);
+            face_pal(
+                &mut p,
+                [
+                    (250, 200, 60),
+                    (232, 170, 40),
+                    (206, 132, 24),
+                    (255, 232, 140),
+                    (180, 96, 16),
+                    (255, 255, 255),
+                    (40, 20, 0),
+                    (255, 120, 20),
+                    (120, 50, 0),
+                ],
+            );
         }
         T_FACE_WAILER => {
-            face_pal(&mut p, [(226,226,222),(206,206,202),(182,182,178),(244,244,240),(160,160,156),(255,255,255),(180,30,30),(120,20,20),(60,10,10)]);
+            face_pal(
+                &mut p,
+                [
+                    (226, 226, 222),
+                    (206, 206, 202),
+                    (182, 182, 178),
+                    (244, 244, 240),
+                    (160, 160, 156),
+                    (255, 255, 255),
+                    (180, 30, 30),
+                    (120, 20, 20),
+                    (60, 10, 10),
+                ],
+            );
         }
         T_FACE_CHARRED => {
-            face_pal(&mut p, [(58,60,56),(46,48,44),(34,36,32),(78,80,74),(24,26,22),(200,200,196),(10,10,10),(120,20,20),(60,60,56)]);
+            face_pal(
+                &mut p,
+                [
+                    (58, 60, 56),
+                    (46, 48, 44),
+                    (34, 36, 32),
+                    (78, 80, 74),
+                    (24, 26, 22),
+                    (200, 200, 196),
+                    (10, 10, 10),
+                    (120, 20, 20),
+                    (60, 60, 56),
+                ],
+            );
         }
         T_VOID_STONE => {
             fill(&mut p, 0, (222, 224, 168), (166, 168, 120), 13);
@@ -423,28 +465,132 @@ fn palette_for(tile: u8) -> [(u8, u8, u8); 16] {
         // 4 accent, 5..8 features (eyes/snout/detail). Prototyped in python
         // against the minecraft.wiki mob looks (hand-authored, not ripped).
         T_FACE_PIG => {
-            face_pal(&mut p, [(238,152,160),(228,138,148),(214,120,132),(246,168,176),(196,100,116),(255,255,255),(30,30,40),(160,60,80),(120,40,60)]);
+            face_pal(
+                &mut p,
+                [
+                    (238, 152, 160),
+                    (228, 138, 148),
+                    (214, 120, 132),
+                    (246, 168, 176),
+                    (196, 100, 116),
+                    (255, 255, 255),
+                    (30, 30, 40),
+                    (160, 60, 80),
+                    (120, 40, 60),
+                ],
+            );
         }
         T_FACE_COW => {
-            face_pal(&mut p, [(96,64,42),(84,54,36),(72,46,30),(110,76,52),(230,226,218),(255,255,255),(30,26,24),(214,160,150),(170,110,104)]);
+            face_pal(
+                &mut p,
+                [
+                    (96, 64, 42),
+                    (84, 54, 36),
+                    (72, 46, 30),
+                    (110, 76, 52),
+                    (230, 226, 218),
+                    (255, 255, 255),
+                    (30, 26, 24),
+                    (214, 160, 150),
+                    (170, 110, 104),
+                ],
+            );
         }
         T_FACE_SHEEP => {
-            face_pal(&mut p, [(226,222,214),(214,208,198),(200,192,180),(238,234,228),(182,172,158),(255,255,255),(40,36,34),(216,186,170),(150,140,130)]);
+            face_pal(
+                &mut p,
+                [
+                    (226, 222, 214),
+                    (214, 208, 198),
+                    (200, 192, 180),
+                    (238, 234, 228),
+                    (182, 172, 158),
+                    (255, 255, 255),
+                    (40, 36, 34),
+                    (216, 186, 170),
+                    (150, 140, 130),
+                ],
+            );
         }
         T_FACE_CHICKEN => {
-            face_pal(&mut p, [(240,236,226),(228,222,210),(214,206,192),(250,248,242),(190,182,168),(255,255,255),(30,30,36),(228,150,40),(200,60,50)]);
+            face_pal(
+                &mut p,
+                [
+                    (240, 236, 226),
+                    (228, 222, 210),
+                    (214, 206, 192),
+                    (250, 248, 242),
+                    (190, 182, 168),
+                    (255, 255, 255),
+                    (30, 30, 36),
+                    (228, 150, 40),
+                    (200, 60, 50),
+                ],
+            );
         }
         T_FACE_ZOMBIE => {
-            face_pal(&mut p, [(70,140,80),(60,124,70),(50,108,60),(84,156,94),(40,90,50),(36,60,40),(20,34,24),(90,170,100),(28,46,32)]);
+            face_pal(
+                &mut p,
+                [
+                    (70, 140, 80),
+                    (60, 124, 70),
+                    (50, 108, 60),
+                    (84, 156, 94),
+                    (40, 90, 50),
+                    (36, 60, 40),
+                    (20, 34, 24),
+                    (90, 170, 100),
+                    (28, 46, 32),
+                ],
+            );
         }
         T_FACE_SKELETON => {
-            face_pal(&mut p, [(198,198,202),(184,184,190),(168,168,176),(214,214,218),(146,146,156),(60,60,68),(36,36,44),(228,228,232),(90,90,100)]);
+            face_pal(
+                &mut p,
+                [
+                    (198, 198, 202),
+                    (184, 184, 190),
+                    (168, 168, 176),
+                    (214, 214, 218),
+                    (146, 146, 156),
+                    (60, 60, 68),
+                    (36, 36, 44),
+                    (228, 228, 232),
+                    (90, 90, 100),
+                ],
+            );
         }
         T_FACE_SAPPER => {
-            face_pal(&mut p, [(58,178,68),(48,158,58),(40,140,50),(70,196,80),(32,120,42),(24,54,28),(12,30,16),(84,214,94),(20,44,24)]);
+            face_pal(
+                &mut p,
+                [
+                    (58, 178, 68),
+                    (48, 158, 58),
+                    (40, 140, 50),
+                    (70, 196, 80),
+                    (32, 120, 42),
+                    (24, 54, 28),
+                    (12, 30, 16),
+                    (84, 214, 94),
+                    (20, 44, 24),
+                ],
+            );
         }
         T_FACE_SPIDER => {
-            face_pal(&mut p, [(46,42,50),(40,36,44),(34,30,38),(54,50,58),(26,24,30),(170,30,34),(210,50,54),(120,20,24),(14,12,16)]);
+            face_pal(
+                &mut p,
+                [
+                    (46, 42, 50),
+                    (40, 36, 44),
+                    (34, 30, 38),
+                    (54, 50, 58),
+                    (26, 24, 30),
+                    (170, 30, 34),
+                    (210, 50, 54),
+                    (120, 20, 24),
+                    (14, 12, 16),
+                ],
+            );
         }
         T_CHEST => {
             fill(&mut p, 0, (178, 128, 64), (128, 88, 44), 10); // chest planks
@@ -480,15 +626,54 @@ fn palette_for(tile: u8) -> [(u8, u8, u8); 16] {
         }
         // Near-black with the magenta eye bar Java gives it.
         T_FACE_WRAITH => {
-            face_pal(&mut p, [(20,20,26),(16,16,22),(12,12,18),(26,26,32),(8,8,12),(196,84,220),(228,140,240),(150,60,180),(6,6,8)]);
+            face_pal(
+                &mut p,
+                [
+                    (20, 20, 26),
+                    (16, 16, 22),
+                    (12, 12, 18),
+                    (26, 26, 32),
+                    (8, 8, 12),
+                    (196, 84, 220),
+                    (228, 140, 240),
+                    (150, 60, 180),
+                    (6, 6, 8),
+                ],
+            );
         }
         // Brown robe, big nose, the heavy brow.
         T_FACE_VILLAGER => {
-            face_pal(&mut p, [(150,116,86),(134,102,74),(118,88,64),(168,132,100),(96,70,50),(72,50,34),(52,36,24),(186,150,116),(40,28,18)]);
+            face_pal(
+                &mut p,
+                [
+                    (150, 116, 86),
+                    (134, 102, 74),
+                    (118, 88, 64),
+                    (168, 132, 100),
+                    (96, 70, 50),
+                    (72, 50, 34),
+                    (52, 36, 24),
+                    (186, 150, 116),
+                    (40, 28, 18),
+                ],
+            );
         }
         // Pale grey coat, dark snout, amber eye.
         T_FACE_WOLF => {
-            face_pal(&mut p, [(206,202,196),(188,184,178),(168,164,158),(226,222,216),(140,136,130),(60,56,52),(34,32,30),(236,180,80),(20,18,16)]);
+            face_pal(
+                &mut p,
+                [
+                    (206, 202, 196),
+                    (188, 184, 178),
+                    (168, 164, 158),
+                    (226, 222, 216),
+                    (140, 136, 130),
+                    (60, 56, 52),
+                    (34, 32, 30),
+                    (236, 180, 80),
+                    (20, 18, 16),
+                ],
+            );
         }
         _ => fill(&mut p, 0, (120, 120, 126), (152, 152, 158), 16),
     }
@@ -541,9 +726,17 @@ fn flower_texel(x: i32, y: i32) -> u8 {
     if d2 == 0 {
         5 // centre
     } else if d2 <= 2 {
-        if hash(x, y, 3) % 4 == 0 { 5 } else { 4 }
+        if hash(x, y, 3) % 4 == 0 {
+            5
+        } else {
+            4
+        }
     } else if d2 <= 6 {
-        if (x + y) & 1 == 1 { 3 } else { 4 } // petals
+        if (x + y) & 1 == 1 {
+            3
+        } else {
+            4
+        } // petals
     } else {
         0
     }
@@ -623,7 +816,11 @@ fn tallgrass_texel(x: i32, y: i32) -> u8 {
             let bx16 = 128 + (top_x - 8) * 16 * ynum / denom; // blade centre * 16
             let thr = if 10 * ynum > 6 * denom { 8 } else { 14 }; // thinner near the tip
             if (x * 16 - bx16).abs() <= thr {
-                let shade = if y > 12 { 4 } else { 1 + (hash(x, y, 11 + slot as i32) % 3) as u8 };
+                let shade = if y > 12 {
+                    4
+                } else {
+                    1 + (hash(x, y, 11 + slot as i32) % 3) as u8
+                };
                 if shade > best {
                     best = shade;
                 }
@@ -704,7 +901,15 @@ fn texel(tile: u8, x: usize, y: usize) -> u8 {
             // surface reads as a swell instead of per-texel static.
             let band = (y as i32 + ((x as i32) >> 2)) & 7;
             let n = hash(xi >> 1, yi >> 1, 5) % 4;
-            (if band < 2 { 3 } else if band < 4 { 2 } else if n == 0 { 0 } else { 1 }) as u8
+            (if band < 2 {
+                3
+            } else if band < 4 {
+                2
+            } else if n == 0 {
+                0
+            } else {
+                1
+            }) as u8
         }
         T_COAL => ore(xi, yi, 15, 21),
         T_IRON => ore(xi, yi, 14, 22),
@@ -744,7 +949,11 @@ fn texel(tile: u8, x: usize, y: usize) -> u8 {
                 if dx * dx + dy * dy >= 11 {
                     13
                 } else {
-                    clampu(3 + (cy as i32 - 1) + (hash(xi, yi, 3) % 3) as i32 - 1, 0, 13)
+                    clampu(
+                        3 + (cy as i32 - 1) + (hash(xi, yi, 3) % 3) as i32 - 1,
+                        0,
+                        13,
+                    )
                 }
             }
         }
@@ -808,7 +1017,11 @@ fn texel(tile: u8, x: usize, y: usize) -> u8 {
             } else if y == 7 || y == 8 || x == 7 || x == 8 {
                 11 // cross joints
             } else if x >= 3 && x <= 6 && y >= 2 && y <= 6 {
-                if (x + y) % 4 == 0 { 13 } else { 12 } // window pane (upper-left)
+                if (x + y) % 4 == 0 {
+                    13
+                } else {
+                    12
+                } // window pane (upper-left)
             } else {
                 clampu((hash(xi, yi, 24) % 6) as i32 + (y as i32 / 8), 0, 9) // planks
             }
@@ -830,7 +1043,11 @@ fn texel(tile: u8, x: usize, y: usize) -> u8 {
             if x == 0 || x == 15 || y == 0 || y == 15 {
                 10 // frame
             } else if (6..=9).contains(&x) && (5..=10).contains(&y) {
-                if y <= 7 { 12 } else { 13 } // latch plate crossing the lid seam
+                if y <= 7 {
+                    12
+                } else {
+                    13
+                } // latch plate crossing the lid seam
             } else if y == 7 || y == 8 {
                 11 // lid seam
             } else {
@@ -850,9 +1067,17 @@ fn texel(tile: u8, x: usize, y: usize) -> u8 {
             if x == 0 || x == 15 || y == 0 || y == 15 {
                 10 // frame
             } else if (3..=6).contains(&x) && (3..=6).contains(&y) {
-                if x + y < 10 { 12 } else { 11 } // saw: blade over dark grip
+                if x + y < 10 {
+                    12
+                } else {
+                    11
+                } // saw: blade over dark grip
             } else if (9..=12).contains(&x) && (4..=7).contains(&y) {
-                if y <= 5 { 11 } else { 13 } // hammer: dark head, brown handle
+                if y <= 5 {
+                    11
+                } else {
+                    13
+                } // hammer: dark head, brown handle
             } else {
                 clampu((hash(xi, yi, 42) % 6) as i32 + 2, 0, 9)
             }
@@ -867,35 +1092,75 @@ fn texel(tile: u8, x: usize, y: usize) -> u8 {
             // of below it. Redrawn: a symmetric arc, two matched prongs, and
             // the handle emerging from the hollow under the middle.
             const PICK: [&[u8; 16]; 16] = [
-                b"................", b"......1111......", b"....12222221....",
-                b"..122222222221..", b"..122......221..", b"..12.....33.21..",
-                b"..1.....33...1..", b".......33.......", b"......33........",
-                b".....33.........", b"....33..........", b"...33...........",
-                b"..33............", b".33.............", b"33..............",
+                b"................",
+                b"......1111......",
+                b"....12222221....",
+                b"..122222222221..",
+                b"..122......221..",
+                b"..12.....33.21..",
+                b"..1.....33...1..",
+                b".......33.......",
+                b"......33........",
+                b".....33.........",
+                b"....33..........",
+                b"...33...........",
+                b"..33............",
+                b".33.............",
+                b"33..............",
                 b"................",
             ];
             const AXE: [&[u8; 16]; 16] = [
-                b".......11111....", b"......1222221...", b".....122222221..",
-                b".....122222221..", b".....12222221...", b"....1222.221....",
-                b"....12..33......", b"....1..33.......", b".....33.........",
-                b"....33..........", b"...33...........", b"..33............",
-                b".33.............", b"33..............", b"3...............",
+                b".......11111....",
+                b"......1222221...",
+                b".....122222221..",
+                b".....122222221..",
+                b".....12222221...",
+                b"....1222.221....",
+                b"....12..33......",
+                b"....1..33.......",
+                b".....33.........",
+                b"....33..........",
+                b"...33...........",
+                b"..33............",
+                b".33.............",
+                b"33..............",
+                b"3...............",
                 b"................",
             ];
             const SHOVEL: [&[u8; 16]; 16] = [
-                b"........1111....", b".......122221...", b".......122221...",
-                b".......122221...", b".......122221...", b"........1221....",
-                b".........33.....", b"........33......", b".......33.......",
-                b"......33........", b".....33.........", b"....33..........",
-                b"...33...........", b"..33............", b".33.............",
+                b"........1111....",
+                b".......122221...",
+                b".......122221...",
+                b".......122221...",
+                b".......122221...",
+                b"........1221....",
+                b".........33.....",
+                b"........33......",
+                b".......33.......",
+                b"......33........",
+                b".....33.........",
+                b"....33..........",
+                b"...33...........",
+                b"..33............",
+                b".33.............",
                 b"................",
             ];
             const SWORD: [&[u8; 16]; 16] = [
-                b"............11..", b"...........1221.", b"..........12221.",
-                b".........12221..", b"........12221...", b".......12221....",
-                b"......12221.....", b".....12221......", b"....12221.......",
-                b"...4444.........", b"..44.33.........", b"...33...........",
-                b"..33............", b".33.............", b"33..............",
+                b"............11..",
+                b"...........1221.",
+                b"..........12221.",
+                b".........12221..",
+                b"........12221...",
+                b".......12221....",
+                b"......12221.....",
+                b".....12221......",
+                b"....12221.......",
+                b"...4444.........",
+                b"..44.33.........",
+                b"...33...........",
+                b"..33............",
+                b".33.............",
+                b"33..............",
                 b"................",
             ];
             let map = match tile {
@@ -905,7 +1170,11 @@ fn texel(tile: u8, x: usize, y: usize) -> u8 {
                 _ => &PICK,
             };
             let c = map[y][x];
-            if c == b'.' { 0 } else { c - b'0' }
+            if c == b'.' {
+                0
+            } else {
+                c - b'0'
+            }
         }
         T_CLAY => clampu((hash(xi / 2, yi / 2, 26) % 10) as i32, 0, 13),
         // Cross-sprite plants. 0 = transparent background; the shape is drawn in
@@ -921,13 +1190,23 @@ fn texel(tile: u8, x: usize, y: usize) -> u8 {
             if x % 3 != 2 || y < 2 {
                 0 // 5 tall stalks: green low, golden grain up top
             } else {
-                let base = if y > 10 { 1 } else if y > 5 { 3 } else { 4 };
+                let base = if y > 10 {
+                    1
+                } else if y > 5 {
+                    3
+                } else {
+                    4
+                };
                 clampu(base + (hash(xi, yi, 36) % 3) as i32, 1, 5)
             }
         }
         T_SAPLING_CROSS => {
             if (7..=8).contains(&x) && y >= 9 {
-                if (x + y) % 2 == 0 { 1 } else { 2 } // stem
+                if (x + y) % 2 == 0 {
+                    1
+                } else {
+                    2
+                } // stem
             } else {
                 let dx = xi - 8;
                 let dy = yi - 7;
@@ -1016,8 +1295,8 @@ fn texel(tile: u8, x: usize, y: usize) -> u8 {
         // faces" report from itch.
         T_FACE_PIG | T_FACE_COW | T_FACE_SHEEP | T_FACE_CHICKEN | T_FACE_ZOMBIE
         | T_FACE_SKELETON | T_FACE_SAPPER | T_FACE_SPIDER | T_FACE_EMBER | T_FACE_WAILER
-        | T_FACE_CHARRED | T_FACE_WRAITH | T_FACE_VILLAGER | T_FACE_WOLF | T_CRACK0
-        | T_CRACK1 | T_CRACK2 | T_CRACK3 => mob_face(tile, x, y),
+        | T_FACE_CHARRED | T_FACE_WRAITH | T_FACE_VILLAGER | T_FACE_WOLF | T_CRACK0 | T_CRACK1
+        | T_CRACK2 | T_CRACK3 => mob_face(tile, x, y),
         T_HIDE => {
             // Soft hide mottle over skin indices 0..3 (denser than the face
             // base dither so bodies read as fur/hide, not flat paint).
@@ -1341,13 +1620,16 @@ fn mob_face(tile: u8, x: usize, y: usize) -> u8 {
 #[inline]
 pub fn tile_uv(tile: u8) -> (u8, u8) {
     let t = tile as usize;
-    (((t % TILES_PER_ROW) * TILE) as u8, ((t / TILES_PER_ROW) * TILE) as u8)
+    (
+        ((t % TILES_PER_ROW) * TILE) as u8,
+        ((t / TILES_PER_ROW) * TILE) as u8,
+    )
 }
 
 /// Build the atlas + CLUT and upload both to VRAM. Call once at boot.
 pub fn upload() -> BlockTex {
     // Pack 4-bit indices: even x -> low nibble, odd x -> high nibble. Two tile
-    // rows now, so iterate the full ATLAS_H and pick the tile from (x,y).
+    // rows now, so iterate the full atlas height and pick the tile from (x,y).
     // Build and upload ONE tile-row at a time. A whole-atlas buffer used to sit
     // on the stack, and the linker only reserves 32 KiB for it; a 2 KiB row
     // scratch keeps that cost flat no matter how many rows the atlas grows to.
@@ -1374,7 +1656,12 @@ pub fn upload() -> BlockTex {
             y += 1;
         }
         upload_bytes(
-            VramRect::new(TPAGE_X, TPAGE_Y + (ty * TILE) as u16, (ATLAS_W / 4) as u16, TILE as u16),
+            VramRect::new(
+                TPAGE_X,
+                TPAGE_Y + (ty * TILE) as u16,
+                (ATLAS_W / 4) as u16,
+                TILE as u16,
+            ),
             &row,
         );
         ty += 1;
