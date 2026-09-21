@@ -43,11 +43,15 @@ use psx_gpu::{
     framebuf::FrameBuffer,
     material::{BlendMode, TextureMaterial, TextureWindow},
     ot::OrderingTable,
-    prim::{QuadFlat, QuadTexturedGouraud, QuadTexturedMaterial, TriTexturedGouraud},
+    prim::{
+        LineMono, QuadFlat, QuadTexturedGouraud, QuadTexturedMaterial, Sprite, TriGouraud,
+        TriTexturedGouraud,
+    },
     Resolution, VideoMode,
 };
 use psx_gte::math::{Mat3I16, Vec3I16, Vec3I32};
 use psx_gte::scene;
+use psx_math::attributed_clip::{clip_convex_plane, AttributedClipPlane, ClipTraversal};
 use psx_math::sincos;
 use psx_pad::{
     button, enable_analog_port1, poll_port1, ActionBinding, ActionMap, ButtonState, Deadzone,
@@ -2298,13 +2302,13 @@ fn main() {
         // Each opener only acts from the world or its own menu -- SQUARE means
         // "withdraw" inside the chest/furnace panels. The world sim pauses
         // while any menu is open.
-        if (menu == 0 || menu == 1) && pressed(pad, previous, button::SQUARE) {
+        if (menu == 0 || menu == 1) && pad.pressed_since(previous, button::SQUARE) {
             menu = if menu == 1 { 0 } else { 1 };
             menu_sel = 0;
             unsafe { AT_BENCH = false }; // the handheld menu is the pocket grid
             sfx::blip();
         }
-        if (menu == 0 || menu == MENU_INV) && pressed(pad, previous, button::TRIANGLE) {
+        if (menu == 0 || menu == MENU_INV) && pad.pressed_since(previous, button::TRIANGLE) {
             if menu == MENU_INV {
                 menu = 0;
             } else {
@@ -2327,7 +2331,7 @@ fn main() {
         }
         // START opens the options menu, and closes whatever menu is open
         // (the death screen excepted -- only respawn leaves it).
-        if menu != MENU_DEAD && pressed(pad, previous, button::START) {
+        if menu != MENU_DEAD && pad.pressed_since(previous, button::START) {
             menu = if menu == 0 { MENU_OPTIONS } else { 0 };
             menu_sel = 0;
         }
@@ -2351,17 +2355,17 @@ fn main() {
             if menu == 1 {
                 // L1/R1 page the category tabs, TRIANGLE toggles the
                 // can-afford filter -- both console-edition conventions.
-                if pressed(pad, previous, button::L1) {
+                if pad.pressed_since(previous, button::L1) {
                     step_craft_tab(-1);
                     menu_sel = 0;
                     sfx::blip();
                 }
-                if pressed(pad, previous, button::R1) {
+                if pad.pressed_since(previous, button::R1) {
                     step_craft_tab(1);
                     menu_sel = 0;
                     sfx::blip();
                 }
-                if pressed(pad, previous, button::TRIANGLE) {
+                if pad.pressed_since(previous, button::TRIANGLE) {
                     unsafe { CRAFT_HIDE = !CRAFT_HIDE };
                     menu_sel = 0;
                     sfx::blip();
@@ -2382,23 +2386,23 @@ fn main() {
             // CIRCLE backs out of any menu, the PS convention -- except the
             // death screen, which only CROSS (respawn) leaves.
             if menu == MENU_DEAD {
-                if pressed(pad, previous, button::CROSS) {
+                if pad.pressed_since(previous, button::CROSS) {
                     player = spawn_player();
                     mob::reset();
                     menu = 0;
                 }
-            } else if pressed(pad, previous, button::CIRCLE) {
+            } else if pad.pressed_since(previous, button::CIRCLE) {
                 if menu == MENU_OPTIONS {
                     persist_shared_settings();
                 }
                 menu = 0;
             } else if menu == MENU_INV {
-                if pressed(pad, previous, button::SQUARE) {
+                if pad.pressed_since(previous, button::SQUARE) {
                     unsafe { INV_HIDE = !INV_HIDE };
                     menu_sel = 0;
                     sfx::blip();
                 }
-                if n > 0 && pressed(pad, previous, button::CROSS) {
+                if n > 0 && pad.pressed_since(previous, button::CROSS) {
                     let item = inv_vis[menu_sel];
                     if unsafe { INV[item as usize] } > 0 {
                         hotbar_pick(item);
@@ -2410,9 +2414,9 @@ fn main() {
             } else if menu == MENU_OPTIONS {
                 // Settings rows adjust with left/right, like the main menu card.
                 if menu_sel >= OPT_SETTINGS {
-                    let dir = if pressed(pad, previous, button::LEFT) {
+                    let dir = if pad.pressed_since(previous, button::LEFT) {
                         -1
-                    } else if pressed(pad, previous, button::RIGHT) {
+                    } else if pad.pressed_since(previous, button::RIGHT) {
                         1
                     } else {
                         0
@@ -2422,7 +2426,7 @@ fn main() {
                         sfx::blip();
                     }
                 }
-                if pressed(pad, previous, button::CROSS) {
+                if pad.pressed_since(previous, button::CROSS) {
                     match menu_sel {
                         OPT_FLIGHT => {
                             player.fly = !player.fly;
@@ -2477,7 +2481,7 @@ fn main() {
                     sfx::confirm();
                 }
             } else if menu == 1 {
-                if n > 0 && pressed(pad, previous, button::CROSS) {
+                if n > 0 && pad.pressed_since(previous, button::CROSS) {
                     let ri = craft_vis[menu_sel] as usize;
                     if craftable_here(ri) {
                         craft(ri, &mut player);
@@ -2488,20 +2492,20 @@ fn main() {
                 }
             } else if menu == 2 {
                 let item = PLACEABLE[menu_sel];
-                if pressed(pad, previous, button::CROSS) {
+                if pad.pressed_since(previous, button::CROSS) {
                     chest_deposit(chest_idx, item);
                     sfx::blip();
                 }
-                if pressed(pad, previous, button::SQUARE) {
+                if pad.pressed_since(previous, button::SQUARE) {
                     chest_withdraw(chest_idx, item);
                     sfx::blip();
                 }
             } else {
-                if pressed(pad, previous, button::CROSS) {
+                if pad.pressed_since(previous, button::CROSS) {
                     furn_deposit(chest_idx, FURN_ITEMS[menu_sel]);
                     sfx::blip();
                 }
-                if pressed(pad, previous, button::SQUARE) {
+                if pad.pressed_since(previous, button::SQUARE) {
                     furn_withdraw(chest_idx);
                     sfx::blip();
                 }
@@ -2513,12 +2517,12 @@ fn main() {
             // straight to an item. Tools are not cycled: crafting a tier
             // equips it and better never hurts (no durability here).
             hotbar_sync(&mut player);
-            if pressed(pad, previous, button::R1) {
+            if pad.pressed_since(previous, button::R1) {
                 unsafe { HOTBAR_SEL = (HOTBAR_SEL + 1) % HOTBAR_VIS };
                 player.selected = unsafe { HOTBAR[HOTBAR_SEL] };
                 sfx::blip();
             }
-            if pressed(pad, previous, button::L1) {
+            if pad.pressed_since(previous, button::L1) {
                 unsafe { HOTBAR_SEL = (HOTBAR_SEL + HOTBAR_VIS - 1) % HOTBAR_VIS };
                 player.selected = unsafe { HOTBAR[HOTBAR_SEL] };
                 sfx::blip();
@@ -2605,7 +2609,7 @@ fn main() {
             // door), then the held item's own action (place, bow, seeds...).
             // Sneak+L2 skips the block interaction and force-places against it,
             // the Java/Bedrock rule.
-            let use_pressed = pressed(pad, previous, button::L2);
+            let use_pressed = pad.pressed_since(previous, button::L2);
             let mut used = false;
             if use_pressed {
                 used = mob_interact(&player);
@@ -2688,12 +2692,12 @@ fn main() {
             }
 
             // Any R2/L2 action swings the arm.
-            if pressed(pad, previous, button::R2) || use_pressed {
+            if pad.pressed_since(previous, button::R2) || use_pressed {
                 swing = 8;
             }
 
             // Melee: tap R2 to strike a mob in front (before block mining).
-            if pressed(pad, previous, button::R2) {
+            if pad.pressed_since(previous, button::R2) {
                 let fx = (cam.sy * cam.cp) >> 12;
                 let fz = (cam.cy * cam.cp) >> 12;
                 // Java sword damage: fist 1, then wood 4 / stone 5 / iron 6 / diamond 7.
@@ -3217,30 +3221,30 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         advance_streaming();
         if credits {
             // Any confirm/back dismisses the card.
-            if pressed(pad, prev, button::CROSS)
-                || pressed(pad, prev, button::CIRCLE)
-                || pressed(pad, prev, button::START)
+            if pad.pressed_since(prev, button::CROSS)
+                || pad.pressed_since(prev, button::CIRCLE)
+                || pad.pressed_since(prev, button::START)
             {
                 credits = false;
                 sfx::blip();
             }
         } else if settings {
-            if pressed(pad, prev, button::CIRCLE) || pressed(pad, prev, button::START) {
+            if pad.pressed_since(prev, button::CIRCLE) || pad.pressed_since(prev, button::START) {
                 persist_shared_settings();
                 settings = false;
                 sfx::blip();
             }
-            if pressed(pad, prev, button::UP) {
+            if pad.pressed_since(prev, button::UP) {
                 set_sel = (set_sel + SETTING_ROWS - 1) % SETTING_ROWS;
                 sfx::blip();
             }
-            if pressed(pad, prev, button::DOWN) {
+            if pad.pressed_since(prev, button::DOWN) {
                 set_sel = (set_sel + 1) % SETTING_ROWS;
                 sfx::blip();
             }
-            let dir = if pressed(pad, prev, button::LEFT) {
+            let dir = if pad.pressed_since(prev, button::LEFT) {
                 -1
-            } else if pressed(pad, prev, button::RIGHT) {
+            } else if pad.pressed_since(prev, button::RIGHT) {
                 1
             } else {
                 0
@@ -3250,18 +3254,18 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
                 sfx::blip();
             }
         } else {
-            if pressed(pad, prev, button::UP) {
+            if pad.pressed_since(prev, button::UP) {
                 sel = (sel + 3) % 4;
                 sfx::blip();
             }
-            if pressed(pad, prev, button::DOWN) {
+            if pad.pressed_since(prev, button::DOWN) {
                 sel = (sel + 1) % 4;
                 sfx::blip();
             }
         }
         let go = !credits
             && !settings
-            && (pressed(pad, prev, button::CROSS) || pressed(pad, prev, button::START));
+            && (pad.pressed_since(prev, button::CROSS) || pad.pressed_since(prev, button::START));
         prev = pad;
         if go && sel == 1 {
             // NEW WORLD: reseed from the menu timing (honest entropy, the PS1
@@ -4502,7 +4506,7 @@ fn update_player(
     // as the double tap, silently launching the player into fly mode. SELECT
     // stays wired in demo builds only -- the headless DEMO_MARCH scripts
     // depend on it.
-    let toggle_fly = DEMO_PLAY && pressed(pad, previous, button::SELECT);
+    let toggle_fly = DEMO_PLAY && pad.pressed_since(previous, button::SELECT);
     if toggle_fly {
         player.fly = !player.fly;
         player.vy = 0;
@@ -4551,7 +4555,7 @@ fn update_player(
         player.sprint_tap = player.sprint_tap.saturating_sub(1);
     }
     player.was_fwd = fwd_now;
-    if pressed(pad, previous, button::L3) {
+    if pad.pressed_since(previous, button::L3) {
         player.sprint_latch = true;
     }
     if !fwd_now {
@@ -4730,7 +4734,7 @@ fn update_player(
         // Jumping works from the ground OR from the water, so you can hop a
         // shore instead of bobbing against it.
         if (player.on_ground || in_water_body(player.x, player.y, player.z))
-            && pressed(pad, previous, button::CROSS)
+            && pad.pressed_since(previous, button::CROSS)
         {
             player.vy = JUMP_VY;
             player.on_ground = false;
@@ -6417,28 +6421,41 @@ fn clip_polygon_plane_c<const P: usize>(
     src_n: usize,
     dst: &mut [ClipVert; CLIP_VERT_CAP],
 ) -> usize {
-    let mut out = 0usize;
-    let mut previous = src[src_n - 1];
-    let mut previous_d = clip_distance_c::<P>(&previous);
-    let mut i = 0usize;
-    while i < src_n {
-        let current = src[i];
-        let current_d = clip_distance_c::<P>(&current);
-        let previous_in = previous_d >= 0;
-        let current_in = current_d >= 0;
-        if previous_in != current_in && out < CLIP_VERT_CAP {
-            dst[out] = clip_intersection(previous, current, previous_d, current_d);
-            out += 1;
-        }
-        if current_in && out < CLIP_VERT_CAP {
-            dst[out] = current;
-            out += 1;
-        }
-        previous = current;
-        previous_d = current_d;
-        i += 1;
+    // The buffers are disjoint scratchpad regions. Capacity checks retain the
+    // old clipper's bounded output policy; interpolation remains Q8.
+    unsafe {
+        clip_convex_plane::<_, _, true>(
+            &src[..src_n],
+            dst,
+            &CellPlane::<P>,
+            ClipTraversal::PreviousToCurrent,
+        )
     }
-    out
+}
+
+struct CellPlane<const P: usize>;
+impl<const P: usize> AttributedClipPlane<ClipVert> for CellPlane<P> {
+    type Distance = i32;
+    #[inline(always)]
+    fn distance(&self, _: usize, vertex: &ClipVert) -> i32 {
+        clip_distance_c::<P>(vertex)
+    }
+    #[inline(always)]
+    fn inside(&self, distance: i32) -> bool {
+        distance >= 0
+    }
+    #[inline(always)]
+    fn intersection(
+        &self,
+        _: usize,
+        a: &ClipVert,
+        da: i32,
+        _: usize,
+        b: &ClipVert,
+        db: i32,
+    ) -> ClipVert {
+        clip_intersection(*a, *b, da, db)
+    }
 }
 
 /// One plane of `emit_clipped_cell`: scan, and clip only when the polygon
@@ -8834,6 +8851,16 @@ fn ui_alloc(words: usize) -> *mut u32 {
     }
 }
 
+/// Copy SDK-generated GP0 words into the arena retained until its DMA fence.
+fn ui_packet(words: &[u32]) -> bool {
+    let packet = ui_alloc(words.len());
+    if packet.is_null() {
+        return false;
+    }
+    unsafe { core::ptr::copy_nonoverlapping(words.as_ptr(), packet.add(1), words.len()) };
+    true
+}
+
 /// Link every packet built since the last flush into `ot`'s `slot`, build
 /// order first.
 ///
@@ -8953,33 +8980,14 @@ fn rgb(r: u8, g: u8, b: u8) -> u32 {
 
 /// Flat-shaded quad (GP0 0x28).
 fn ui_quad_flat(v: [(i16, i16); 4], r: u8, g: u8, b: u8) {
-    let p = ui_alloc(5);
-    if p.is_null() {
-        return;
-    }
-    unsafe {
-        *p.add(1) = 0x2800_0000 | rgb(r, g, b);
-        *p.add(2) = xy(v[0].0, v[0].1);
-        *p.add(3) = xy(v[1].0, v[1].1);
-        *p.add(4) = xy(v[2].0, v[2].1);
-        *p.add(5) = xy(v[3].0, v[3].1);
-    }
+    let q = QuadFlat::new(v, r, g, b);
+    ui_packet(&[q.color_cmd, q.v0, q.v1, q.v2, q.v3]);
 }
 
 /// Gouraud triangle (GP0 0x30).
 fn ui_tri_gouraud(v: [(i16, i16); 3], c: [(u8, u8, u8); 3]) {
-    let p = ui_alloc(6);
-    if p.is_null() {
-        return;
-    }
-    unsafe {
-        *p.add(1) = 0x3000_0000 | rgb(c[0].0, c[0].1, c[0].2);
-        *p.add(2) = xy(v[0].0, v[0].1);
-        *p.add(3) = rgb(c[1].0, c[1].1, c[1].2);
-        *p.add(4) = xy(v[1].0, v[1].1);
-        *p.add(5) = rgb(c[2].0, c[2].1, c[2].2);
-        *p.add(6) = xy(v[2].0, v[2].1);
-    }
+    let t = TriGouraud::new(v, c);
+    ui_packet(&[t.color0_cmd, t.v0, t.color1, t.v1, t.color2, t.v2]);
 }
 
 /// Half-blended flat triangle (GP0 0x22). Carries its own E1 draw-mode and E2
@@ -9024,33 +9032,23 @@ fn ui_quad_blend_depth(v: [(i16, i16); 4], r: u8, g: u8, b: u8, slot: usize) {
 
 /// Monochrome line (GP0 0x40).
 fn ui_line(x0: i16, y0: i16, x1: i16, y1: i16, r: u8, g: u8, b: u8) {
-    let p = ui_alloc(3);
-    if p.is_null() {
-        return;
-    }
-    unsafe {
-        *p.add(1) = 0x4000_0000 | rgb(r, g, b);
-        *p.add(2) = xy(x0, y0);
-        *p.add(3) = xy(x1, y1);
-    }
+    let line = LineMono::new(x0, y0, x1, y1, r, g, b);
+    ui_packet(&[line.color_cmd, line.v0, line.v1]);
 }
 
 /// Variable-size textured sprite (GP0 0x64). Rect primitives read their tpage
 /// from draw-mode state, so the packet leads with the material's E1 + E2 --
 /// exactly what `gpu::draw_sprite_material` writes immediately.
 fn ui_sprite(x: i16, y: i16, w: u16, h: u16, uv: (u8, u8), mat: TextureMaterial) {
-    let p = ui_alloc(6);
-    if p.is_null() {
-        return;
-    }
-    unsafe {
-        *p.add(1) = mat.draw_mode_word();
-        *p.add(2) = mat.texture_window_word();
-        *p.add(3) = mat.textured_rect_header();
-        *p.add(4) = xy(x, y);
-        *p.add(5) = (uv.0 as u32) | ((uv.1 as u32) << 8) | ((mat.clut_word() as u32) << 16);
-        *p.add(6) = (w as u32) | ((h as u32) << 16);
-    }
+    let sprite = Sprite::with_material(x, y, w, h, uv, mat);
+    ui_packet(&[
+        mat.draw_mode_word(),
+        mat.texture_window_word(),
+        sprite.color_cmd,
+        sprite.xy,
+        sprite.uv_clut,
+        sprite.wh,
+    ]);
 }
 
 /// Textured quad with its own texture window (GP0 E2 + 0x2C).
@@ -9072,43 +9070,10 @@ fn ui_quad_textured(v: [(i16, i16); 4], uvs: [(u8, u8); 4], mat: TextureMaterial
 
 /// Text, as one GP0 0x64 sprite per glyph out of the font atlas.
 ///
-/// `psx-font`'s `draw_text` is immediate-mode, so it cannot be used past the
-/// OT kick. The atlas layout it uses is reproduced here: `glyphs_per_row` is
-/// picked at upload time as `min(glyph_count, 256 / glyph_w)`.
+/// The SDK owns atlas padding, packed origins and glyph advances. This sink
+/// only copies its packets into the deferred UI arena.
 fn ui_text(font: &FontAtlas, x: i16, y: i16, text: &str, tint: (u8, u8, u8)) {
-    let f = font.font();
-    let mat = TextureMaterial::opaque(FONT_CLUT.uv_clut_word(), FONT_TPAGE.uv_tpage_word(0), tint);
-    // One draw-mode packet per run, matching draw_text's single tpage apply.
-    let p = ui_alloc(2);
-    if p.is_null() {
-        return;
-    }
-    unsafe {
-        *p.add(1) = mat.draw_mode_word();
-        *p.add(2) = mat.texture_window_word();
-    }
-    let per_row = (f.glyph_count).min(256 / f.glyph_w as u16).max(1);
-    let header = mat.textured_rect_header();
-    let clut_hi = (mat.clut_word() as u32) << 16;
-    let size = (f.glyph_w as u32) | ((f.glyph_h as u32) << 16);
-    let mut cx = x;
-    for ch in text.chars() {
-        if let Some(idx) = f.glyph_index(ch) {
-            let g = ui_alloc(4);
-            if g.is_null() {
-                return;
-            }
-            let u = (idx % per_row) * f.glyph_w as u16;
-            let v = (idx / per_row) * f.glyph_h as u16;
-            unsafe {
-                *g.add(1) = header;
-                *g.add(2) = xy(cx, y);
-                *g.add(3) = (u as u32 & 0xFF) | ((v as u32 & 0xFF) << 8) | clut_hi;
-                *g.add(4) = size;
-            }
-        }
-        cx = cx.wrapping_add(f.glyph_advance(ch) as i16);
-    }
+    font.emit_text_packets(x, y, text, tint, ui_packet);
 }
 
 /// Filled rectangle via a flat quad (polygon path). HUD must use this, not
@@ -10785,17 +10750,6 @@ fn tool_tier(p: &Player, class: u8) -> u8 {
 /// worst (12 frames rather than 4); leaves go from 1 frame to 3.
 fn mine_speed(p: &Player, block: u8) -> u32 {
     1 + tool_tier(p, tool_for(block)) as u32
-}
-
-/// Cycle to the next placeable item that the player actually owns. Previously
-/// R1/L1 walked through the entire 47-item catalogue, so nearly every selection
-/// looked valid but could never place; starter dirt appeared to be the only
-/// working block.
-/// Analog axis with a SMOOTH deadzone: 0 inside the zone, otherwise ramps from 0
-/// (subtracts the zone) so the stick eases in instead of jumping to full speed at
-/// the edge -- the classic dual-stick feel.
-fn pressed(now: ButtonState, previous: ButtonState, mask: u16) -> bool {
-    now.is_held(mask) && !previous.is_held(mask)
 }
 
 fn get_block_i32(x: i32, y: i32, z: i32) -> u8 {

@@ -29,7 +29,7 @@ lto           = true
 default = []
 # PSoXide-only MMIO telemetry so `frontend launch` can stop on guest frames and
 # write profile/counter CSVs. Off for shipping builds (calls compile to no-ops).
-emulator-telemetry = []
+emulator-telemetry = ["psx-telemetry/emit"]
 
 [dependencies]
 psx-telemetry = { path = "../.psoxide/sdk/crates/psx-telemetry" }
