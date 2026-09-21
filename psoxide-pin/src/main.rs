@@ -5,7 +5,7 @@ use std::process::ExitCode;
 
 /// Must match the rev in Cargo.toml: it is what the hydrated tree is stamped
 /// with, so an unchanged pin skips the copy.
-const REV: &str = "a67052ac61b1e9caf078f570dbf238011d3958b6";
+const REV: &str = "ece99be69f77182e46988c007a1f5bbe652934bd";
 
 fn main() -> ExitCode {
     let into = std::env::args()
@@ -19,4 +19,12 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+#[test]
+fn hydration_revision_matches_the_cargo_dependency() {
+    let manifest = include_str!("../Cargo.toml");
+    let lock = include_str!("../Cargo.lock");
+    assert!(manifest.contains(&format!("rev = \"{REV}\"")));
+    assert!(lock.contains(&format!("?rev={REV}#{REV}")));
 }
