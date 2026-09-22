@@ -6,7 +6,7 @@ use std::path::PathBuf;
 fn main() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let repo_root = manifest.parent().expect("crate must live at <repo>/game");
-    // .psoxide is hydrated by psoxide-link from the pin in psoxide-pin/, so
+    // .psoxide is imported from components.lock.json by `make psoxide`, so
     // the linker script sits beside the SDK crates this links rather than in
     // a sibling checkout the layout had to guarantee.
     let psoxide = std::env::var("PSOXIDE")

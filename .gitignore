@@ -3,7 +3,6 @@
 /game/target/
 .DS_Store
 
-# Hydrated by psoxide-link from the pin in psoxide-pin/. Never committed:
-# the pin is the source of truth, this is a cache.
+# Imported by tools/bootstrap-components.py from components.lock.json. Never
+# committed: the lock is the source of truth, this is a cache.
 .psoxide/
-psoxide-pin/target/
