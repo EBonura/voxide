@@ -2250,7 +2250,9 @@ fn main() {
         let fps = (60 / dt).min(99);
         // Fixed-timestep count: run the sim this many times per rendered frame so the
         // game runs at ~60Hz regardless of fps (capped so a hitch can't spiral).
-        let sim_n = dt.min(4);
+        // `lockstep` (A/B validation builds only) runs one sim step per poll,
+        // so two builds of different speed reach identical state at every poll.
+        let sim_n = if cfg!(feature = "lockstep") { 1 } else { dt.min(4) };
 
         telemetry::stage_begin(49); // TEMP: pad poll (SIO exchange)
         let state = poll_port1();

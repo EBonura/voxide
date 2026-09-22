@@ -24,7 +24,7 @@ PSOXIDE_PROFILE_STEPS ?= 900000000
 PSOXIDE_START_PULSE ?= 0x0008@700+60
 
 .DEFAULT_GOAL := build
-.PHONY: help psoxide build compile disc install release run smoke profile clean
+.PHONY: help psoxide build compile disc install release run smoke profile pgo clean
 
 help:
 	@echo "VoXide targets:"
@@ -35,6 +35,7 @@ help:
 	@echo "  make install    - install into $(GAMES_DIR)"
 	@echo "  make smoke      - boot the disc headlessly through PSoXide and capture PPM"
 	@echo "  make profile    - telemetry build + per-frame stage-cycle CSV report"
+	@echo "  make pgo TAPE=x - profile-guided build from an emulator replay of tape x"
 	@echo "  make clean      - remove build output"
 
 # Which PSoXide this is built against. components.lock.json pins the SDK,
@@ -101,6 +102,46 @@ profile: psoxide
 		--dump-hw $(CAPTURE_DIR)/voxide-profile.ppm
 	@echo "PROFILE -> $(CAPTURE_DIR)/voxide-profile.csv (per-frame stage cycles)"
 	@python3 tools/profile_report.py $(CAPTURE_DIR)/voxide-profile.csv
+
+# Profile-guided build from the emulator's own PC samples (psoxide-pgo; same
+# recipe as hl-psx `hl-build pgo`). A build with profiling line tables replays
+# TAPE, psoxide-pgo maps the PC histogram through the matching ELF's DWARF
+# into an LLVM sample profile, and the game is rebuilt with it. The result is
+# $(EXE) and $(DIST)/voxide.cue; nothing is installed into $(GAMES_DIR).
+# Profile names carry crate hashes that depend on the checkout path, so the
+# profile is regenerated here, never committed.
+#   make pgo TAPE=route.pxtape FRONTEND=/path/to/frontend
+# Measured 2026-09-22 with `--features lockstep` A/B builds (identical state at
+# every poll): the profiled build did 2-3% MORE loop-body work per frame than
+# the plain one on the training route and on an unseen one, so it does not ship.
+# Re-measure before using it after large renderer changes.
+TAPE ?=
+PGO_DIR := $(ROOT)/.pgo
+# `--config` appends to game/.cargo/config.toml's flags; RUSTFLAGS would replace them.
+PGO_COLLECT := "-Cdebuginfo=1","-Zdebug-info-for-profiling","-Cstrip=none"
+PGO_USE := $(PGO_COLLECT),"-Zprofile-sample-use=$(PGO_DIR)/voxide.prof"
+CARGO_PSX = cd $(GAME) && PSOXIDE="$(PSOXIDE)" cargo build --release --config
+PACK_EXE = cd $(MKISOPSX) && cargo run --release -- --exe $(EXE) --volume VOXIDE \
+	--world-pack-extra-dir $(ROOT)/assets/sfx/pak --out
+pgo: psoxide
+	@test -n "$(TAPE)" || { echo "usage: make pgo TAPE=route.pxtape [FRONTEND=frontend]"; exit 1; }
+	rm -rf $(PGO_DIR) && mkdir -p $(PGO_DIR) $(DIST)
+	$(CARGO_PSX) 'target.$(TARGET).rustflags=[$(PGO_COLLECT)]'
+	python3 $(PSOXIDE)/tools/hazard_patch.py $(EXE)
+	$(PACK_EXE) $(PGO_DIR)/collect.bin
+	cd $(GAME) && VOXIDE_LINK_ELF=1 PSOXIDE="$(PSOXIDE)" cargo build --release \
+		--config 'target.$(TARGET).rustflags=[$(PGO_COLLECT)]'
+	cp $(EXE) $(PGO_DIR)/voxide.elf
+	$(PSOXIDE_LAUNCH) --path $(PGO_DIR)/collect.cue --embedded-playtest \
+		--steps 40000000000 --input-tape "$(TAPE)" \
+		--pc-sample-log $(PGO_DIR)/pc.csv --pc-sample-instructions 61
+	cargo run -q --release --manifest-path $(PSOXIDE)/tools/psoxide-pgo/Cargo.toml -- \
+		$(PGO_DIR)/voxide.elf $(PGO_DIR)/pc.csv $(PGO_DIR)/voxide.prof
+	rm -f $(PGO_DIR)/pc.csv $(PGO_DIR)/collect.bin $(PGO_DIR)/collect.cue
+	$(CARGO_PSX) 'target.$(TARGET).rustflags=[$(PGO_USE)]'
+	python3 $(PSOXIDE)/tools/hazard_patch.py $(EXE)
+	$(PACK_EXE) $(DIST)/voxide.bin
+	@echo "PGO EXE -> $(EXE)  DISC -> $(DIST)/voxide.cue  PROFILE -> $(PGO_DIR)/voxide.prof"
 
 smoke: disc
 	@mkdir -p $(CAPTURE_DIR)

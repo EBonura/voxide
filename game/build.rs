@@ -16,6 +16,18 @@ fn main() {
     let ld = ld.canonicalize().unwrap_or(ld);
 
     println!("cargo:rustc-link-arg=-T{}", ld.display());
-    println!("cargo:rustc-link-arg=--oformat=binary");
+    // `VOXIDE_LINK_ELF=1` keeps the ELF instead of the flat PSX-EXE, for
+    // psoxide-pgo, which needs the DWARF to symbolize emulator PC samples.
+    // Same code at the same addresses; it does not boot.
+    println!("cargo:rerun-if-env-changed=VOXIDE_LINK_ELF");
+    if std::env::var_os("VOXIDE_LINK_ELF").is_none() {
+        println!("cargo:rustc-link-arg=--oformat=binary");
+    }
+    // Optional linker map (RAM headroom, PC attribution). Link-only: the
+    // emitted bytes do not change.
+    println!("cargo:rerun-if-env-changed=VOXIDE_LINK_MAP");
+    if let Some(map) = std::env::var_os("VOXIDE_LINK_MAP").filter(|m| !m.is_empty()) {
+        println!("cargo:rustc-link-arg=-Map={}", map.to_string_lossy());
+    }
     println!("cargo:rerun-if-changed={}", ld.display());
 }

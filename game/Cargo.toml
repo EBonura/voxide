@@ -30,6 +30,9 @@ default = []
 # PSoXide-only MMIO telemetry so `frontend launch` can stop on guest frames and
 # write profile/counter CSVs. Off for shipping builds (calls compile to no-ops).
 emulator-telemetry = ["psx-telemetry/emit"]
+# One sim step per pad poll instead of one per elapsed vblank. For comparing
+# builds of different speed (PGO, layout changes) state for state; never ship.
+lockstep = []
 
 [dependencies]
 psx-telemetry = { path = "../.psoxide/sdk/crates/psx-telemetry" }
