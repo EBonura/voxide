@@ -111,15 +111,29 @@ profile: psoxide
 # Profile names carry crate hashes that depend on the checkout path, so the
 # profile is regenerated here, never committed.
 #   make pgo TAPE=route.pxtape FRONTEND=/path/to/frontend
-# Measured 2026-09-22 with `--features lockstep` A/B builds (identical state at
-# every poll): the profiled build did 2-3% MORE loop-body work per frame than
-# the plain one on the training route and on an unseen one, so it does not ship.
-# Re-measure before using it after large renderer changes.
+#
+# A/B builds with `--features lockstep` (identical state at every poll) need the
+# profile rebound onto their own names (psoxide-pgo `portable` + `rebind`):
+# cargo features enter -C metadata, so every voxide symbol of a lockstep build
+# is named differently from the shipping build this target profiles, and LLVM
+# silently matches none of them.
+#
+# The two LLVM options below are what made the profile a win. LLVM's default
+# 3000-point inline budget for profile-hot calls grew the image by ~30 KB
+# (inlining box emitters into render_mobs, collision into main) and, with
+# `-sample-profile-use-profi` added, overflowed RAM by 4 KB in the telemetry
+# build; 500 keeps the hot paths inside the 4 KB I-cache. Profile inference
+# (profi) fills in the block counts of code the samples cannot place (line-0
+# code, 15% of samples in the face loop). Measured 2026-09-22 at 9502a58,
+# loop body per frame, plain -> profiled: 973,679 -> 954,312 on the training
+# route, 777,566 -> 760,235 on an unseen one; with LLVM's defaults it was
+# 965,222 and 776,213.
 TAPE ?=
 PGO_DIR := $(ROOT)/.pgo
 # `--config` appends to game/.cargo/config.toml's flags; RUSTFLAGS would replace them.
 PGO_COLLECT := "-Cdebuginfo=1","-Zdebug-info-for-profiling","-Cstrip=none"
-PGO_USE := $(PGO_COLLECT),"-Zprofile-sample-use=$(PGO_DIR)/voxide.prof"
+PGO_USE := $(PGO_COLLECT),"-Zprofile-sample-use=$(PGO_DIR)/voxide.prof", \
+	"-Cllvm-args=-hot-callsite-threshold=500","-Cllvm-args=-sample-profile-use-profi"
 CARGO_PSX = cd $(GAME) && PSOXIDE="$(PSOXIDE)" cargo build --release --config
 PACK_EXE = cd $(MKISOPSX) && cargo run --release -- --exe $(EXE) --volume VOXIDE \
 	--world-pack-extra-dir $(ROOT)/assets/sfx/pak --out
