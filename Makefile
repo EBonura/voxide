@@ -24,7 +24,7 @@ PSOXIDE_PROFILE_STEPS ?= 900000000
 PSOXIDE_START_PULSE ?= 0x0008@700+60
 
 .DEFAULT_GOAL := build
-.PHONY: help psoxide host-lock build compile pack disc install release run smoke profile \
+.PHONY: help psoxide build compile pack disc install release run smoke profile \
 	pgo-collect pgo-choose clean
 
 help:
@@ -57,18 +57,6 @@ psoxide:
 		python3 "$(ROOT)/tools/bootstrap-components.py" --root "$(PSOXIDE)" --lock "$(ROOT)/components.lock.json"; \
 	fi
 
-# The host tools (mkisopsx, psoxide-pgo) build in .psoxide's Cargo workspace,
-# whose Cargo.lock is imported from the editor pin. That lock predates
-# psoxide-pgo's rustc-demangle dependency, so a plain `cargo run` would add it
-# to the imported file and the next `make psoxide` would refuse the edit. Host
-# builds therefore resolve into a private copy under game/target. Drop this
-# (and use `cargo run --locked`) once the pinned editor's Cargo.lock lists it.
-HOST_LOCK  = $(GAME)/target/host/Cargo.lock
-HOST_CARGO = cargo -Zlockfile-path --config 'resolver.lockfile-path="$(HOST_LOCK)"'
-host-lock:
-	@[ "$(HOST_LOCK)" -nt "$(PSOXIDE)/Cargo.lock" ] || { \
-		mkdir -p "$(GAME)/target/host" && cp "$(PSOXIDE)/Cargo.lock" "$(HOST_LOCK)"; }
-
 # Profile-guided optimisation through the SDK's shared driver
 # ($(PSOXIDE)/tools/psoxide-pgo/README.md). pgo/voxide.prof is committed and
 # portable (its names carry no checkout-path or feature hashes), so every build
@@ -76,13 +64,18 @@ host-lock:
 # PGO_VARIANT is the winner of `make pgo-choose`; PGO_VARIANT=off builds the
 # plain image. Either way the driver runs the hazard patcher and scanner and
 # stops on a failure, and the exe lands at $(EXE) as before.
+#
+# The host tools (psoxide-pgo, mkisopsx) build in .psoxide's Cargo workspace
+# against the Cargo.lock imported from the editor pin. --locked keeps a host
+# build from rewriting that imported file, which the next `make psoxide` would
+# refuse as an edit.
 FEATURES    ?=
 GAME_CARGO   = build --release$(if $(strip $(FEATURES)), --features "$(FEATURES)")
-PGO          = $(HOST_CARGO) run -q --release --manifest-path "$(PSOXIDE)/tools/psoxide-pgo/Cargo.toml" --
+PGO          = cargo run -q --release --locked --manifest-path "$(PSOXIDE)/tools/psoxide-pgo/Cargo.toml" --
 PGO_PROFILE  = $(ROOT)/pgo/voxide.prof
 PGO_VARIANT ?= hot=500+profi
 
-compile: psoxide host-lock
+compile: psoxide
 	PSOXIDE="$(PSOXIDE)" $(PGO) apply --crate "$(GAME)" --profile "$(PGO_PROFILE)" \
 		--variant "$(PGO_VARIANT)" -- $(GAME_CARGO)
 	@echo "EXE -> $(EXE)"
@@ -90,9 +83,9 @@ compile: psoxide host-lock
 # `make pack PACK_EXE=x PACK_OUT=y.bin` wraps any exe in the game's disc image.
 PACK_EXE ?= $(EXE)
 PACK_OUT ?= $(DIST)/voxide.bin
-pack: host-lock
+pack:
 	@mkdir -p "$$(dirname "$(PACK_OUT)")"
-	cd "$(MKISOPSX)" && $(HOST_CARGO) run -q --release -- \
+	cd "$(MKISOPSX)" && cargo run -q --release --locked -- \
 		--exe "$(PACK_EXE)" \
 		--out "$(PACK_OUT)" \
 		--volume VOXIDE \
@@ -149,7 +142,7 @@ UNSEEN_TAPE  = $(ROOT)/pgo/unseen.pxtape
 UNSEEN_POLLS = 252..1200
 PGO_LAUNCH_ARGS ?=
 PGO_PACK = '$(MAKE) --no-print-directory -C "$(ROOT)" pack PACK_EXE="$$PSOXIDE_PGO_EXE" PACK_OUT="$$PSOXIDE_PGO_DISC"'
-pgo-collect: psoxide host-lock
+pgo-collect: psoxide
 	PSOXIDE="$(PSOXIDE)" $(PGO) collect --crate "$(GAME)" --frontend "$(FRONTEND)" \
 		--tape "$(TRAIN_TAPE)" --polls $(TRAIN_POLLS) \
 		--pack $(PGO_PACK) --launch-arg --embedded-playtest $(PGO_LAUNCH_ARGS) \
@@ -165,7 +158,7 @@ pgo-collect: psoxide host-lock
 PGO_VARIANTS = off default hot=500 hot=500+profi accurate+hot=500
 PGO_MEASURE  = "$$PSOXIDE_PGO" measure --frontend "$(FRONTEND)" --image "$$PSOXIDE_PGO_IMAGE" \
 	--launch-arg --embedded-playtest $(PGO_LAUNCH_ARGS)
-pgo-choose: psoxide host-lock
+pgo-choose: psoxide
 	PSOXIDE="$(PSOXIDE)" $(PGO) choose --crate "$(GAME)" --profile "$(PGO_PROFILE)" \
 		$(foreach v,$(PGO_VARIANTS),--variant $(v)) --pack $(PGO_PACK) \
 		--gate '$(PGO_MEASURE) --tape "$(TRAIN_TAPE)" --polls $(TRAIN_POLLS) --name train \
