@@ -59,8 +59,12 @@ page, no console needed.
 ## Build
 
 VoXide uses the [PSoXide SDK](https://github.com/EBonura/PSoXide) as Cargo
-path dependencies. `make` hydrates the exact revision in `psoxide-pin/` into
-ignored `.psoxide/`; a sibling checkout is not required.
+path dependencies. `make` imports the exact SDK, editor/engine and
+emulator-library revisions in `components.lock.json` into ignored `.psoxide/`
+(the same lock the other PSoXide games use); a sibling checkout is not
+required. For a checkout that predates the lock, preserve or remove its old
+`.psoxide/` cache once before building: imports refuse to overwrite unowned or
+edited files.
 
 ```bash
 git clone https://github.com/EBonura/voxide.git
@@ -69,6 +73,7 @@ make disc
 ```
 
 ```bash
+make psoxide      # import the revisions in components.lock.json
 make compile      # PSX-EXE only
 make disc         # dist/voxide.cue + dist/voxide.bin
 make install      # copy the disc into the local game library

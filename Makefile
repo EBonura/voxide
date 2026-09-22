@@ -1,13 +1,13 @@
 # VoXide -- a tiny Minecraft-like voxel sandbox for PlayStation 1, built on the
-# sibling PSoXide Rust SDK checkout.
+# PSoXide Rust SDK (imported into .psoxide/ from components.lock.json).
 
 ROOT     := $(CURDIR)
 GAME     := $(ROOT)/game
-# The SDK is hydrated into .psoxide by psoxide-link, from the pin in
-# psoxide-pin/. The crate paths in game/Cargo.toml point there, so this builds
-# from a clean clone with no sibling checkout -- which the old layout required
-# outright, since Cargo resolves path dependencies relative to the manifest and
-# no variable could move them.
+# The locked PSoXide components are imported into .psoxide by
+# tools/bootstrap-components.py. The crate paths in game/Cargo.toml point
+# there, so this builds from a clean clone with no sibling checkout: Cargo
+# resolves path dependencies relative to the manifest and no variable could
+# move them.
 PSOXIDE  ?= $(ROOT)/.psoxide
 MKISOPSX := $(PSOXIDE)/tools/mkisopsx
 TARGET   := mipsel-sony-psx
@@ -28,7 +28,7 @@ PSOXIDE_START_PULSE ?= 0x0008@700+60
 
 help:
 	@echo "VoXide targets:"
-	@echo "  make psoxide    - hydrate the pinned PSoXide SDK into .psoxide"
+	@echo "  make psoxide    - import the components.lock.json revisions into .psoxide"
 	@echo "  make            - build + install into the PSoXide game library"
 	@echo "  make compile    - build PSX-EXE only -> $(EXE)"
 	@echo "  make disc       - compile + pack dist/voxide.cue/.bin"
@@ -37,12 +37,13 @@ help:
 	@echo "  make profile    - telemetry build + per-frame stage-cycle CSV report"
 	@echo "  make clean      - remove build output"
 
-# Which PSoXide this is built against. Cargo owns the pin (psoxide-pin/), and
-# psoxide-link copies the resolved checkout into .psoxide so the crate paths
-# and the linker script resolve. This replaces a check that could only tell you
-# to go and clone a sibling checkout by hand.
+# Which PSoXide this is built against. components.lock.json pins the SDK,
+# editor/engine and emulator-library revisions separately, the same lock the
+# rest of the game fleet uses, and tools/bootstrap-components.py imports them
+# into .psoxide so the crate paths and the linker script resolve. An unchanged
+# lock is verified against its receipt and not fetched again.
 #
-# PSOXIDE_FROM=/path/to/tree overrides the pin with a working tree, which is
+# PSOXIDE_FROM=/path/to/tree overrides the lock with a working tree, which is
 # how the demo disc puts every program it presses on one SDK.
 PSOXIDE_FROM ?=
 psoxide:
@@ -50,7 +51,7 @@ psoxide:
 		cargo run -q --manifest-path $(PSOXIDE_FROM)/tools/psoxide-link/Cargo.toml -- \
 			--from "$(PSOXIDE_FROM)" --into $(PSOXIDE); \
 	else \
-		cargo run -q --manifest-path $(ROOT)/psoxide-pin/Cargo.toml -- $(PSOXIDE); \
+		python3 $(ROOT)/tools/bootstrap-components.py --root $(PSOXIDE) --lock $(ROOT)/components.lock.json; \
 	fi
 
 compile: psoxide
