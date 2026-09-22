@@ -4122,6 +4122,7 @@ fn chunk_occluded(cam: &Camera, cx: i32, cz: i32) -> bool {
 // --- culled face iteration for the renderer ---
 
 #[inline(never)]
+#[export_name = "voxide_plane_in_frustum"] // placed by game/hot-text.order
 fn plane_in_frustum(
     bx0: i32,
     by0: i32,
@@ -4184,31 +4185,26 @@ fn plane_in_frustum(
     }
 }
 
-/// Call `emit(block, lx, wy, lz, dir, w, h)` for every cached face of every
-/// loaded chunk that passes a cheap distance + frustum cull. Face coordinates
-/// are CHUNK-LOCAL: `begin_chunk(oxw, ozw)` fires before a visible chunk's
-/// faces so the caller can point the GTE translation at that chunk's origin
-/// and feed corners to COP2 as tiny i16s (no per-corner CPU subtraction).
-/// inline(never): inlined into main's huge frame the loop's hot state (cull
-/// tables, pool pointers, camera trig) all spilled to stack slots -- ~180
-/// cycles per iterated face. A dedicated frame keeps them in registers.
-#[inline(never)]
-pub fn for_visible_faces<
-    G: FnMut(i32, i32),
-    F: FnMut(u8, i32, i32, i32, usize, usize, usize, usize, u8),
->(
-    cam: &Camera,
-    mut begin_chunk: G,
-    mut emit: F,
-) -> usize {
+/// Faces that survive the per-face cull are gathered here and handed to
+/// `crate::emit_faces` a batch at a time, so the cull loop and the packet
+/// builder each run as their own tight loop. With the builder inlined into the cull loop, its
+/// state spilled around every culled face and the pair spanned twice the
+/// R3000's 4 KB instruction cache. The batch lives in the scratchpad
+/// (single-cycle, no RAM stall) above the near clipper's buffers; main.rs
+/// asserts the two do not overlap. Batching keeps the emission order, so the
+/// ordering table is built exactly as before.
+pub const FACE_BATCH_ADDR: usize = 0x1F80_0360;
+pub const FACE_BATCH: usize = 16;
+pub const FACE_BATCH_END: usize = FACE_BATCH_ADDR + FACE_BATCH * 6;
+const BATCH_F: *mut u32 = FACE_BATCH_ADDR as *mut u32;
+const BATCH_S: *mut u16 = (FACE_BATCH_ADDR + FACE_BATCH * 4) as *mut u16;
+
+/// Emit every cached face of every loaded chunk that passes a cheap distance
+/// + frustum cull, in mesh order, through `crate::emit_faces` (see
+/// chunk_faces). Returns the number of faces iterated.
+pub fn for_visible_faces(cam: &Camera, count: &mut usize) -> usize {
     let mut face_work = 0usize;
     let chunk_r = 12 * BLOCK; // horizontal half-extent of a chunk, world units
-                              // The per-face frustum cull runs ON THE GTE: one MVMVA (rt*v0+tr, ~8 GTE
-                              // cycles) of the face's anchor-cell centre -- chunk-local i16, using the
-                              // per-chunk TR begin_chunk just loaded -- returns camera-space (x, -y, z)
-                              // in MAC1..3. That replaces the old 640 bytes of per-frame cull tables
-                              // (whose base pointers spilled) plus 2 multiplies per face, and the
-                              // tilted-frame values are exact instead of table-split approximations.
     let mut s = 0;
     while s < NCHUNKS {
         let fslot = unsafe { CHUNKS[s].face_slot };
@@ -4236,177 +4232,240 @@ pub fn for_visible_faces<
             // another hill). Near chunks always draw -- the ray would be too short.
             let occluded = OCCLUSION_CULL && chunk_lod(s) == 1 && chunk_occluded(cam, cx, cz);
             if visible && !occluded {
-                let ox = cx * CW;
-                let oz = cz * CW;
-                let oxw = ox * BLOCK;
-                let ozw = oz * BLOCK;
-                begin_chunk(oxw, ozw); // caller notes this chunk's camera-relative origin
-                                       // Camera-relative anchor-centre base for the MVMVA cull (the
-                                       // GTE translation is zero; see gte_begin_chunk's crack note).
-                let ccx0 = oxw + BLOCK / 2 - cam.x;
-                let ccy0 = BLOCK / 2 - cam.y;
-                let ccz0 = ozw + BLOCK / 2 - cam.z;
-                let mut dir = 0;
-                while dir < 6 {
-                    if tops_only && dir != 2 {
-                        dir += 1;
-                        continue;
-                    }
-                    // Sides and bottoms stop at FAR_SIDE_Z; tops carry the
-                    // silhouette out to FAR_Z (see FAR_SIDE_Z in main).
-                    let far_lim = if dir == 2 { FAR_Z } else { FAR_SIDE_Z };
-                    // Visible plane sub-range for this dir: the old per-face
-                    // backface test compared the camera to the face's PLANE
-                    // coordinate only, so cutting the (plane-sorted) range is
-                    // exact -- and skips iterating back-facing faces at all.
-                    let rel = match dir {
-                        0 | 1 => cam.x - oxw,
-                        2 | 3 => cam.y,
-                        _ => cam.z - ozw,
-                    };
-                    let npl = PL_N[dir] as i32;
-                    // dir even (+axis): planes 0..=hi with hi from `cam > plane_centre`;
-                    // dir odd (-axis): planes lo..=npl-1 with lo from `cam < plane_centre`.
-                    let (lo, hi) = if dir & 1 == 0 {
-                        (0, floor_div(rel - BLOCK / 2 - 1, BLOCK).min(npl - 1))
-                    } else {
-                        ((floor_div(rel - BLOCK / 2, BLOCK) + 1).max(0), npl - 1)
-                    };
-                    if lo > hi {
-                        dir += 1;
-                        continue;
-                    }
-                    let off = PL_OFF[dir];
-                    let mut plane = lo as usize;
-                    while plane <= hi as usize {
-                        let start = unsafe { POOL_PLANE_START[p][off + plane] } as usize;
-                        let end = unsafe { POOL_PLANE_START[p][off + plane + 1] } as usize;
-                        if start == end {
-                            plane += 1;
-                            continue;
-                        }
-                        let bounds = unsafe { POOL_PLANE_BOUNDS[p][off + plane] };
-                        let plane_vis = if bounds == 0 {
-                            // The face range, not this optional cache, decides
-                            // whether a plane is empty.
-                            1
-                        } else {
-                            plane_in_frustum(
-                                oxw - cam.x,
-                                -cam.y,
-                                ozw - cam.z,
-                                dir,
-                                plane,
-                                bounds,
-                                far_lim,
-                            )
-                        };
-                        if plane_vis == 0 {
-                            plane += 1;
-                            continue;
-                        }
-                        face_work += end - start;
-                        let mut k = start;
-                        while k < end {
-                            let f = unsafe { POOL_FACES[p][k] };
-                            k += 1;
-                            let lx = (f & 15) as usize;
-                            let wy = ((f >> 4) & 63) as i32;
-                            let lz = ((f >> 10) & 15) as usize;
-                            let w = ((f >> 24) & 15) as usize + 1;
-                            let h = ((f >> 28) & 7) as usize + 1;
-                            // Light comes from the side-band word beside the face,
-                            // read below with AO. Bit 31 of the packed word used to
-                            // hold it, which capped it at ONE bit -- values above 1
-                            // shifted off the end.
-                            // View-frustum cull in camera space, BEFORE the costly
-                            // 4-corner perspective projection in emit(): drop faces
-                            // behind the camera, beyond far, above/below, or outside
-                            // the FOV cone.
-                            if FRUSTUM_CULL && plane_vis != 2 {
-                                // Bounding sphere of the whole merged plate, NOT its
-                                // min corner: a greedy face spans up to 12x12 blocks,
-                                // so sampling the anchor and comparing it against an
-                                // anchor-depth cone dropped plates whose corner sat
-                                // behind/beside the eye while most of the plate was
-                                // dead ahead -- the ground vanished from under the
-                                // player in terraced terrain.
-                                //   centre = anchor + half the face extent
-                                //   r      = conservative half-diagonal. For
-                                //            0<=short<=long, long+27/64*short bounds
-                                //            sqrt(long²+short²), closely following the
-                                //            chord to sqrt(2) without a runtime sqrt.
-                                let hw = (w as i32 - 1) * (BLOCK / 2);
-                                let hh = (h as i32 - 1) * (BLOCK / 2);
-                                let (cox, coy, coz) = match dir {
-                                    0 => (BLOCK / 2, hw, hh),
-                                    1 => (-BLOCK / 2, hw, hh),
-                                    2 => (hw, BLOCK / 2, hh),
-                                    3 => (hw, -BLOCK / 2, hh),
-                                    4 => (hw, hh, BLOCK / 2),
-                                    _ => (hw, hh, -BLOCK / 2),
-                                };
-                                let rw = w as i32 * (BLOCK / 2);
-                                let rh = h as i32 * (BLOCK / 2);
-                                let long = rw.max(rh);
-                                let short = rw.min(rh);
-                                let r = long + (short * 27 + 63) / 64;
-                                // ONE GTE MVMVA gives the sphere centre in camera
-                                // space exactly: c.x = screen-right, c.y = negated
-                                // height (the loaded Y row is negated), c.z = true
-                                // pitch-tilted depth.
-                                let c = scene::transform_vertex_scheduled(Vec3I16::new(
-                                    (ccx0 + lx as i32 * BLOCK + cox) as i16,
-                                    (ccy0 + wy * BLOCK + coy) as i16,
-                                    (ccz0 + lz as i32 * BLOCK + coz) as i16,
-                                ));
-                                let z2 = c.z;
-                                // Far cull on the sphere CENTRE, not its near point.
-                                // emit_face throws a face away after full GTE
-                                // projection when the average of its four projected
-                                // corner depths reaches FAR_Z -- and that average is
-                                // this same centre depth. Culling on `z2 - r` was
-                                // looser than the test the face would face anyway, so
-                                // every face in that band paid a full projection to be
-                                // discarded. A profiling pass counted 77 of 393 faces
-                                // a frame dying exactly there.
-                                if z2 + r < 0 || z2 > far_lim {
-                                    continue;
-                                }
-                                // Cone tests against the sphere: compare the nearest
-                                // possible screen offset (|c| - r) with the FARTHEST
-                                // possible depth (z2 + r). Half-height 120 + the emit
-                                // bbox's +-80 margin = 200; half-width 160.
-                                // No near-exemption needed: the sphere bound is exact
-                                // enough that close off-axis plates survive on their
-                                // own (the old +-3-block escape hatch existed only to
-                                // paper over the min-corner sampling above).
-                                let zs = z2 + r;
-                                if zs > 0 {
-                                    if (c.y.abs() - r) * PROJ_H > zs * 200 {
-                                        continue;
-                                    }
-                                    if (c.x.abs() - r) * PROJ_H > zs * 160 {
-                                        continue;
-                                    }
-                                }
-                            }
-                            let block = ((f >> 17) & 127) as u8;
-                            // AO byte read only for faces that SURVIVED the cull:
-                            // it is a second uncached array, so paying it per
-                            // iterated face would cost on the ones we throw away.
-                            let side = unsafe { POOL_AO[p][k - 1] };
-                            let ao = (side & 0xFF) as u8;
-                            let light = ((side >> 8) & 7) as usize;
-                            emit(block, lx as i32, wy, lz as i32, dir, w, h, light, ao);
-                        }
-                        plane += 1;
-                    }
-                    dir += 1;
-                }
+                let oxw = cx * CW * BLOCK;
+                let ozw = cz * CW * BLOCK;
+                face_work += chunk_faces(cam, p, oxw, ozw, tops_only, count);
             }
         }
         s += 1;
+    }
+    face_work
+}
+
+/// One visible chunk's faces: the plane-range and per-face frustum cull, with
+/// the survivors handed to `crate::emit_faces` a batch at a time. Face
+/// coordinates are CHUNK-LOCAL: gte_begin_chunk notes the chunk's
+/// camera-relative origin so emit_face feeds corners to COP2 as tiny i16s.
+/// The per-face frustum cull runs ON THE GTE: one MVMVA of the face's bounding
+/// sphere centre returns camera-space (x, -y, z) in MAC1..3.
+///
+/// This, plane_in_frustum and emit_faces are the per-frame hot path.
+/// game/hot-text.order links them first and adjacent (hence the stable export
+/// names), so their I-cache sets no longer depend on where the rest of the
+/// link happens to put them.
+#[inline(never)]
+#[export_name = "voxide_chunk_faces"]
+fn chunk_faces(
+    cam: &Camera,
+    p: usize,
+    oxw: i32,
+    ozw: i32,
+    tops_only: bool,
+    count: &mut usize,
+) -> usize {
+    let mut face_work = 0usize;
+    // Note this chunk's camera-relative origin for emit_face.
+    crate::gte_begin_chunk(cam, oxw, ozw);
+    // Camera-relative anchor-centre base for the MVMVA cull (the GTE
+    // translation is zero; see gte_begin_chunk's crack note).
+    let ccx0 = oxw + BLOCK / 2 - cam.x;
+    let ccy0 = BLOCK / 2 - cam.y;
+    let ccz0 = ozw + BLOCK / 2 - cam.z;
+    // SAFETY: p < POOL (a meshed slot); every index below stays
+    // inside this slot's rows (plane ranges are built by the mesher).
+    let (starts, bounds_row, fp, sp) = unsafe {
+        (
+            POOL_PLANE_START[p].as_ptr(),
+            POOL_PLANE_BOUNDS[p].as_ptr(),
+            POOL_FACES[p].as_ptr(),
+            POOL_AO[p].as_ptr(),
+        )
+    };
+    let mut dir = 0;
+    while dir < 6 {
+        if tops_only && dir != 2 {
+            dir += 1;
+            continue;
+        }
+        // Sides and bottoms stop at FAR_SIDE_Z; tops carry the
+        // silhouette out to FAR_Z (see FAR_SIDE_Z in main).
+        let far_lim = if dir == 2 { FAR_Z } else { FAR_SIDE_Z };
+        // Visible plane sub-range for this dir: the old per-face
+        // backface test compared the camera to the face's PLANE
+        // coordinate only, so cutting the (plane-sorted) range is
+        // exact -- and skips iterating back-facing faces at all.
+        let rel = match dir {
+            0 | 1 => cam.x - oxw,
+            2 | 3 => cam.y,
+            _ => cam.z - ozw,
+        };
+        let npl = PL_N[dir] as i32;
+        // dir even (+axis): planes 0..=hi with hi from `cam > plane_centre`;
+        // dir odd (-axis): planes lo..=npl-1 with lo from `cam < plane_centre`.
+        let (lo, hi) = if dir & 1 == 0 {
+            (0, floor_div(rel - BLOCK / 2 - 1, BLOCK).min(npl - 1))
+        } else {
+            ((floor_div(rel - BLOCK / 2, BLOCK) + 1).max(0), npl - 1)
+        };
+        if lo > hi {
+            dir += 1;
+            continue;
+        }
+        // Per-dir pieces of the cull sphere's centre, hoisted out of
+        // the face loop: the normal axis takes +-BLOCK/2, and the
+        // face's w / h half-extents land on the axes the greedy merge
+        // spans (x-faces: w->y, h->z; y-faces: w->x, h->z; z-faces:
+        // w->x, h->y). Masks instead of a per-face match on dir.
+        let (nx, ny, nz) = match dir {
+            0 => (BLOCK / 2, 0, 0),
+            1 => (-BLOCK / 2, 0, 0),
+            2 => (0, BLOCK / 2, 0),
+            3 => (0, -BLOCK / 2, 0),
+            4 => (0, 0, BLOCK / 2),
+            _ => (0, 0, -BLOCK / 2),
+        };
+        let bx = ccx0 + nx;
+        let by = ccy0 + ny;
+        let bz = ccz0 + nz;
+        let x_w = if dir >= 2 { -1i32 } else { 0 };
+        let y_w = !x_w;
+        let y_h = if dir >= 4 { -1i32 } else { 0 };
+        let z_h = !y_h;
+        let off = PL_OFF[dir];
+        let mut plane = lo as usize;
+        while plane <= hi as usize {
+            let (start, end, bounds) = unsafe {
+                (
+                    *starts.add(off + plane) as usize,
+                    *starts.add(off + plane + 1) as usize,
+                    *bounds_row.add(off + plane),
+                )
+            };
+            if start == end {
+                plane += 1;
+                continue;
+            }
+            let plane_vis = if bounds == 0 {
+                // The face range, not this optional cache, decides
+                // whether a plane is empty.
+                1
+            } else {
+                plane_in_frustum(
+                    oxw - cam.x,
+                    -cam.y,
+                    ozw - cam.z,
+                    dir,
+                    plane,
+                    bounds,
+                    far_lim,
+                )
+            };
+            if plane_vis == 0 {
+                plane += 1;
+                continue;
+            }
+            face_work += end - start;
+            // Light and AO come from the side-band word beside the
+            // face. Bit 31 of the packed word used to hold light,
+            // which capped it at ONE bit.
+            if !FRUSTUM_CULL || plane_vis == 2 {
+                // The whole plane is inside the view: every face
+                // survives, straight from the pool.
+                unsafe { crate::emit_faces(fp.add(start), sp.add(start), end - start, dir, count) };
+                plane += 1;
+                continue;
+            }
+            let mut n = 0usize;
+            let mut k = start;
+            while k < end {
+                let f = unsafe { *fp.add(k) };
+                // View-frustum cull in camera space, BEFORE the costly
+                // 4-corner perspective projection in crate::emit_faces(): drop faces
+                // behind the camera, beyond far, above/below, or outside
+                // the FOV cone.
+                //
+                // Bounding sphere of the whole merged plate, NOT its
+                // min corner: a greedy face spans up to 12x12 blocks,
+                // so sampling the anchor and comparing it against an
+                // anchor-depth cone dropped plates whose corner sat
+                // behind/beside the eye while most of the plate was
+                // dead ahead -- the ground vanished from under the
+                // player in terraced terrain.
+                //   centre = anchor + half the face extent
+                //   r      = conservative half-diagonal. For
+                //            0<=short<=long, long+27/64*short bounds
+                //            sqrt(long²+short²), closely following the
+                //            chord to sqrt(2) without a runtime sqrt.
+                let lx = (f & 15) as i32;
+                let wy = ((f >> 4) & 63) as i32;
+                let lz = ((f >> 10) & 15) as i32;
+                let hw = ((f >> 24) & 15) as i32 * (BLOCK / 2);
+                let hh = ((f >> 28) & 7) as i32 * (BLOCK / 2);
+                let rw = hw + BLOCK / 2;
+                let rh = hh + BLOCK / 2;
+                let long = rw.max(rh);
+                let short = rw.min(rh);
+                let r = long + (short * 27 + 63) / 64;
+                // ONE GTE MVMVA gives the sphere centre in camera
+                // space exactly: c.x = screen-right, c.y = negated
+                // height (the loaded Y row is negated), c.z = true
+                // pitch-tilted depth.
+                let c = scene::transform_vertex_scheduled(Vec3I16::new(
+                    (bx + lx * BLOCK + (hw & x_w)) as i16,
+                    (by + wy * BLOCK + (hw & y_w) + (hh & y_h)) as i16,
+                    (bz + lz * BLOCK + (hh & z_h)) as i16,
+                ));
+                k += 1;
+                let z2 = c.z;
+                // Far cull on the sphere CENTRE, not its near point.
+                // emit_face throws a face away after full GTE
+                // projection when the average of its four projected
+                // corner depths reaches FAR_Z -- and that average is
+                // this same centre depth. Culling on `z2 - r` was
+                // looser than the test the face would face anyway, so
+                // every face in that band paid a full projection to be
+                // discarded. A profiling pass counted 77 of 393 faces
+                // a frame dying exactly there.
+                if z2 + r < 0 || z2 > far_lim {
+                    continue;
+                }
+                // Cone tests against the sphere: compare the nearest
+                // possible screen offset (|c| - r) with the FARTHEST
+                // possible depth (z2 + r). Half-height 120 + the emit
+                // bbox's +-80 margin = 200; half-width 160.
+                // No near-exemption needed: the sphere bound is exact
+                // enough that close off-axis plates survive on their
+                // own (the old +-3-block escape hatch existed only to
+                // paper over the min-corner sampling above).
+                let zs = z2 + r;
+                if zs > 0 {
+                    if (c.y.abs() - r) * PROJ_H > zs * 200 {
+                        continue;
+                    }
+                    if (c.x.abs() - r) * PROJ_H > zs * 160 {
+                        continue;
+                    }
+                }
+                // The side-band word is read only for faces that
+                // SURVIVED the cull: it is a second uncached array,
+                // so paying it per iterated face would cost on the
+                // ones we throw away.
+                unsafe {
+                    *BATCH_F.add(n) = f;
+                    *BATCH_S.add(n) = *sp.add(k - 1);
+                }
+                n += 1;
+                if n == FACE_BATCH {
+                    crate::emit_faces(BATCH_F, BATCH_S, n, dir, count);
+                    n = 0;
+                }
+            }
+            if n != 0 {
+                crate::emit_faces(BATCH_F, BATCH_S, n, dir, count);
+            }
+            plane += 1;
+        }
+        dir += 1;
     }
     face_work
 }

@@ -900,12 +900,26 @@ static mut AO_N: usize = 0;
 /// keeps the contact shadows and costs two extra shifts on that one level.
 #[inline(always)]
 fn ao_shade(rgb: u32, level: u32) -> u32 {
-    match level & 3 {
-        3 => rgb,
-        2 => rgb - ((rgb >> 3) & 0x001F_1F1F) - ((rgb >> 4) & 0x000F_0F0F),
-        1 => ((rgb >> 1) & 0x007F_7F7F) + ((rgb >> 3) & 0x001F_1F1F),
-        _ => (rgb >> 1) & 0x007F_7F7F,
-    }
+    let half = (rgb >> 1) & 0x007F_7F7F;
+    let eighth = (rgb >> 3) & 0x001F_1F1F;
+    let sixteenth = (rgb >> 4) & 0x000F_0F0F;
+    let hi = opaque(0u32.wrapping_sub((level >> 1) & 1)); // levels 2 and 3
+    let lo = opaque(0u32.wrapping_sub(level & 1)); // levels 1 and 3
+    let base = (rgb & hi) | (half & !hi);
+    base.wrapping_add(eighth & lo & !hi)
+        .wrapping_sub(eighth.wrapping_add(sixteenth) & hi & !lo)
+}
+
+/// Hide a value from LLVM so a mask or 0/1 flag built from a comparison stays
+/// arithmetic. The R3000 has no conditional move, so LLVM lowers every
+/// `select` it recognises to a branch and then duplicates the tails around
+/// it. Keeping `ao_shade` and `seal_edge` arithmetic took emit_faces from
+/// 4,580 to 3,800 bytes of a 4 KB instruction cache. Emits no instruction.
+#[inline(always)]
+fn opaque(mut x: u32) -> u32 {
+    // SAFETY: an empty asm body; `x` passes through unchanged.
+    unsafe { core::arch::asm!("/* {0} */", inout(reg) x, options(pure, nomem, nostack)) };
+    x
 }
 
 // Prepacked per-tile material words (borrowed idea: psx-gpu's
@@ -1037,6 +1051,17 @@ fn init_mat_tables() {
             MAT_TPAGE_HI[1][t] = a.tpage_high_word;
         }
         t += 1;
+    }
+    let mut b = 0;
+    while b < 128 {
+        let mut dir = 0;
+        while dir < 6 {
+            let tile = face_tile(b as u8, dir) as usize;
+            let bl = is_transparent(b as u8) as usize;
+            unsafe { FACE_MAT[b][dir] = (bl * tex::TILE_COUNT + tile) as u8 };
+            dir += 1;
+        }
+        b += 1;
     }
 }
 
@@ -4953,20 +4978,14 @@ fn render_world(cam: &Camera) -> (usize, usize) {
     if PROFILE_SKIP_WORLD {
         return (0, 0);
     }
-    // world::for_visible_faces does the distance + backface cull inline; the
-    // closure only fires for faces that will project.
+    // world::for_visible_faces does the distance + backface + frustum cull and
+    // hands only faces that will project to emit_faces.
     unsafe {
         AO_N = 0;
         NEAR_TRI_N = 0;
     }
     telemetry::stage_begin(ST_OTCLEAR); // TEMP: whole face-loop span
-    let face_work = world::for_visible_faces(
-        cam,
-        |oxw, ozw| gte_begin_chunk(cam, oxw, ozw),
-        |block, lx, wy, lz, dir, w, h, light, ao| {
-            emit_face(block, lx, wy, lz, dir, w, h, light, ao, &mut count);
-        },
-    );
+    let face_work = world::for_visible_faces(cam, &mut count);
     render_near_block_shell(cam);
     telemetry::stage_end(ST_OTCLEAR);
     let near_tris = unsafe { NEAR_TRI_N };
@@ -6431,8 +6450,11 @@ const SCRATCHPAD: usize = 0x1F80_0000;
 const CLIP_SCRATCH_A: usize = SCRATCHPAD;
 const CLIP_SCRATCH_B: usize = SCRATCHPAD + CLIP_VERT_CAP * core::mem::size_of::<ClipVert>();
 const CLIP_SCRATCH_P: usize = CLIP_SCRATCH_B + CLIP_VERT_CAP * core::mem::size_of::<ClipVert>();
-const _: () =
-    assert!(CLIP_SCRATCH_P + CLIP_VERT_CAP * core::mem::size_of::<Proj>() <= SCRATCHPAD + 1024);
+// world::for_visible_faces keeps its survivor batch just above these.
+const _: () = assert!(
+    CLIP_SCRATCH_P + CLIP_VERT_CAP * core::mem::size_of::<Proj>() <= world::FACE_BATCH_ADDR
+);
+const _: () = assert!(world::FACE_BATCH_END <= SCRATCHPAD + 1024);
 /// `clip_distance` with the plane known at compile time. The runtime-`plane`
 /// form below compiled to a jump table inside the clipper's per-vertex loop
 /// (an indirect branch plus the plane arithmetic per vertex per plane, about
@@ -6957,20 +6979,18 @@ fn render_near_block_shell(cam: &Camera) {
 /// per cell. Geometry that crosses the eye is clipped into a convex polygon
 /// before projection; it is never represented by moving arbitrary quad
 /// corners to the near plane.
-#[allow(clippy::too_many_arguments)]
+/// Takes the packed face and side-band words and re-derives the corners and
+/// material itself, so the common path never materialises them in memory.
 #[inline(never)] // Keep tessellation temporaries out of the common face loop.
-fn emit_near_face(
-    verts: &[(i32, i32, i32); 4],
-    dir: usize,
-    w: usize,
-    h: usize,
-    ao: u8,
-    ccmd_row: &[u32; FOG_BANDS],
-    win: u32,
-    cl_hi: u32,
-    tp_hi: u32,
-    blended: bool,
-) {
+fn emit_near_face(f: u32, side: u16, dir: usize) {
+    let (lx, by, lz, w, h, block) = face_fields(f);
+    let ao = (side & 0xFF) as u8;
+    let light = ((side >> 8) & 3) as usize;
+    let verts = face_verts(lx, by, lz, dir, w, h);
+    let (bl, mi) = face_mat(block, dir);
+    let ccmd_row = unsafe { &MAT_CCMD[light][bl][dir] };
+    let (win, cl_hi, tp_hi) = mat_words(mi);
+    let blended = bl != 0;
     let (uc, vc) = if dir < 2 { (h, w) } else { (w, h) };
     let ao_corner = [
         ao_factor(ao as u8),
@@ -7182,31 +7202,48 @@ fn emit_near_face(
     }
 }
 
-/// inline(always): was outlined while for_visible_faces carried 640B of cull
-/// tables; the MVMVA cull shrank that frame to 192B, so the ~60-cycle call ABI
-/// per surviving face now costs more than the register pressure it saved.
-/// (Re-tested 2026-07-30 after the body grew: outlining measured ~2% WORSE on
-/// the route -- the note stands.)
-#[inline(always)]
-fn emit_face(
-    block: u8,
-    lx: i32,
-    by: i32,
-    lz: i32,
+/// One culled batch of faces from world::for_visible_faces, all of one dir.
+/// inline(never): the packet builder gets a frame of its own instead of
+/// sharing registers with the cull loop, which used to spill its state around
+/// every iterated face and made the pair twice the size of the I-cache.
+#[inline(never)]
+#[export_name = "voxide_emit_faces"] // placed by game/hot-text.order
+pub(crate) fn emit_faces(
+    faces: *const u32,
+    sides: *const u16,
+    n: usize,
     dir: usize,
-    w: usize,
-    h: usize,
-    light: usize,
-    ao: u8,
     count: &mut usize,
 ) {
-    if *count >= MAX_QUADS {
-        return;
+    let mut i = 0;
+    while i < n {
+        // SAFETY: for_visible_faces hands over n valid words in each array.
+        let (f, side) = unsafe { (*faces.add(i), *sides.add(i)) };
+        emit_face(f, side, dir, count);
+        i += 1;
     }
+}
 
-    // A greedy-merged face spans w x h blocks. Which world axes (w,h) cover
-    // depends on the face plane (matches world::cell_to_local):
-    //   x-face (0,1): w->y, h->z ; y-face (2,3): w->x, h->z ; z-face (4,5): w->x, h->y
+/// A packed face word's fields (see world::pack): chunk-local anchor cell,
+/// greedy extent, block. `side` is its AO + light side-band word.
+#[inline(always)]
+fn face_fields(f: u32) -> (i32, i32, i32, usize, usize, u8) {
+    (
+        (f & 15) as i32,
+        ((f >> 4) & 63) as i32,
+        ((f >> 10) & 15) as i32,
+        ((f >> 24) & 15) as usize + 1,
+        ((f >> 28) & 7) as usize + 1,
+        ((f >> 17) & 127) as u8,
+    )
+}
+
+/// Corners of a greedy-merged face in emit order (v0 v1 v2 v3), CHUNK-LOCAL.
+/// A greedy-merged face spans w x h blocks. Which world axes (w,h) cover
+/// depends on the face plane (matches world::cell_to_local):
+///   x-face (0,1): w->y, h->z ; y-face (2,3): w->x, h->z ; z-face (4,5): w->x, h->y
+#[inline(always)]
+fn face_verts(lx: i32, by: i32, lz: i32, dir: usize, w: usize, h: usize) -> [(i32, i32, i32); 4] {
     let (ex, ey, ez) = match dir {
         0 | 1 => (1, w as i32, h as i32),
         2 | 3 => (w as i32, 1, h as i32),
@@ -7220,15 +7257,70 @@ fn emit_face(
     let y1 = y0 + ey * BLOCK;
     let z0 = lz * BLOCK;
     let z1 = z0 + ez * BLOCK;
-
-    let verts = match dir {
+    match dir {
         0 => [(x1, y1, z0), (x1, y1, z1), (x1, y0, z0), (x1, y0, z1)],
         1 => [(x0, y1, z1), (x0, y1, z0), (x0, y0, z1), (x0, y0, z0)],
         2 => [(x0, y1, z0), (x1, y1, z0), (x0, y1, z1), (x1, y1, z1)],
         3 => [(x0, y0, z1), (x1, y0, z1), (x0, y0, z0), (x1, y0, z0)],
         4 => [(x1, y1, z1), (x0, y1, z1), (x1, y0, z1), (x0, y0, z1)],
         _ => [(x0, y1, z0), (x1, y1, z0), (x0, y0, z0), (x1, y0, z0)],
-    };
+    }
+}
+
+/// Packet material for a face: whether it blends (0 opaque, 1 blended) and
+/// its row in the flattened [blend][tile] MAT_* tables. One table load instead
+/// of face_tile's switch (an out-of-line call per face) plus is_transparent.
+#[inline(always)]
+fn face_mat(block: u8, dir: usize) -> (usize, usize) {
+    // SAFETY: block < 128 (a 7-bit field), dir < 6.
+    let mi = unsafe { *(FACE_MAT.as_ptr() as *const u8).add(block as usize * 6 + dir) } as usize;
+    ((mi >= tex::TILE_COUNT) as usize, mi)
+}
+
+/// [block][dir] -> blend * TILE_COUNT + face_tile(block, dir); built at boot.
+static mut FACE_MAT: [[u8; 6]; 128] = [[0; 6]; 128];
+
+/// Flat [blend][tile] reads of the MAT_* word tables (index from face_mat).
+#[inline(always)]
+fn mat_words(mi: usize) -> (u32, u32, u32) {
+    // SAFETY: mi < 2 * TILE_COUNT by construction of FACE_MAT.
+    unsafe {
+        (
+            *(MAT_WIN.as_ptr() as *const u32).add(mi),
+            *(MAT_CLUT_HI.as_ptr() as *const u32).add(mi),
+            *(MAT_TPAGE_HI.as_ptr() as *const u32).add(mi),
+        )
+    }
+}
+
+/// One corner of the T-junction seal: two pixels away from the quad's centre
+/// (`sum` is four times the centre), short of the GPU's screen rail `lim`.
+/// Same as the branchy form
+/// `if v*4 >= sum { if v < lim { v+2 } else { v } } else if v > -lim { v-2 } else { v }`.
+#[inline(always)]
+fn seal_edge(v: i32, sum: i32, lim: i32) -> i32 {
+    let out = opaque((v * 4 >= sum) as u32) as i32;
+    let up = out & (v < lim) as i32;
+    let down = (out ^ 1) & (v > -lim) as i32;
+    v + ((up - down) << 1)
+}
+
+/// A GPU vertex word from screen coordinates already inside the i16 range.
+#[inline(always)]
+fn screen_xy(x: i32, y: i32) -> u32 {
+    (x as u32 & 0xFFFF) | ((y as u32) << 16)
+}
+
+/// inline(always) into emit_faces, whose loop is the only caller.
+#[inline(always)]
+fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize) {
+    if *count >= MAX_QUADS {
+        return;
+    }
+    let (lx, by, lz, w, h, block) = face_fields(f);
+    let ao = (side & 0xFF) as u8;
+    let light = ((side >> 8) & 3) as usize; // 0..LIGHT_BUCKETS-1 (= SKY_LEVELS)
+    let verts = face_verts(lx, by, lz, dir, w, h);
 
     // Kick RTPT for corners 0..2, then do the material lookups WHILE the GTE
     // grinds through its 23-cycle flight -- overlapped work is free.
@@ -7244,18 +7336,21 @@ fn emit_face(
         )
     };
     let inflight = scene::rtpt_kick(lv(verts[0]), lv(verts[1]), lv(verts[2]));
-    let tile = face_tile(block, dir) as usize;
     let (su, sv) = match dir {
         0 | 1 => ((h * 16) as u32, (w * 16) as u32),
         _ => ((w * 16) as u32, (h * 16) as u32),
     };
-    let bl = is_transparent(block) as usize;
-    let win = unsafe { MAT_WIN[bl][tile] };
+    let (bl, mi) = face_mat(block, dir);
     // Row now, band later: the depth is not known until the corners project,
     // and this lookup is deliberately here to overlap the GTE's flight time.
-    let ccmd_row = unsafe { &MAT_CCMD[light][bl][dir] };
-    let cl_hi = unsafe { MAT_CLUT_HI[bl][tile] };
-    let tp_hi = unsafe { MAT_TPAGE_HI[bl][tile] };
+    // SAFETY: light < SKY_LEVELS (2 bits), bl < 2, dir < 6 (a face dir).
+    let ccmd_row = unsafe {
+        MAT_CCMD
+            .get_unchecked(light)
+            .get_unchecked(bl)
+            .get_unchecked(dir)
+    };
+    let (win, cl_hi, tp_hi) = mat_words(mi);
     let t = inflight.read();
     // Kick RTPS for corner 3 and assemble corners 0..2 while its 15-cycle
     // divide grinds -- the read below lands after the op has settled.
@@ -7265,21 +7360,23 @@ fn emit_face(
     // SAFETY: V0 just loaded; RT/TR/H/OFX/OFY set by gte_load_camera/begin_chunk.
     unsafe { psx_gte::ops::rtps() };
     let min_sz012 = t[0].sz.min(t[1].sz).min(t[2].sz);
-    let q0 = Proj {
-        x: t[0].sx,
-        y: t[0].sy.clamp(-511, 511),
-        z: t[0].sz as i32,
-    };
-    let q1 = Proj {
-        x: t[1].sx,
-        y: t[1].sy.clamp(-511, 511),
-        z: t[1].sz as i32,
-    };
-    let q2 = Proj {
-        x: t[2].sx,
-        y: t[2].sy.clamp(-511, 511),
-        z: t[2].sz as i32,
-    };
+    // Screen corners as plain i32 locals (the values Proj's i16 fields held),
+    // sign-extended once here rather than at every use.
+    let (mut x0, mut y0, z0) = (
+        t[0].sx as i32,
+        (t[0].sy as i32).clamp(-511, 511),
+        t[0].sz as i32,
+    );
+    let (mut x1, mut y1, z1) = (
+        t[1].sx as i32,
+        (t[1].sy as i32).clamp(-511, 511),
+        t[1].sz as i32,
+    );
+    let (mut x2, mut y2, z2) = (
+        t[2].sx as i32,
+        (t[2].sy as i32).clamp(-511, 511),
+        t[2].sz as i32,
+    );
     let sxy3 = psx_gte::mfc2!(14);
     let sz3 = psx_gte::mfc2!(19) as u16;
     let min_sz = min_sz012.min(sz3);
@@ -7300,17 +7397,12 @@ fn emit_face(
             && w.max(h) >= MID_SUBDIV_SPAN
             && unsafe { NEAR_TRI_N } < MID_SUBDIV_TRI_CAP)
     {
-        emit_near_face(&verts, dir, w, h, ao, ccmd_row, win, cl_hi, tp_hi, bl != 0);
+        emit_near_face(f, side, dir);
         return;
     }
-    let mut p0 = q0;
-    let mut p1 = q1;
-    let mut p2 = q2;
-    let mut p3 = Proj {
-        x: sxy3 as i16,
-        y: ((sxy3 >> 16) as i16).clamp(-511, 511),
-        z: sz3 as i32,
-    };
+    let mut x3 = sxy3 as i16 as i32;
+    let mut y3 = ((sxy3 >> 16) as i16 as i32).clamp(-511, 511);
+    let z3 = sz3 as i32;
 
     // Seal T-junction hairlines. A greedy mesh is full of T-junctions: a large
     // merged quad's screen edge is subdivided by the corners of several smaller
@@ -7332,8 +7424,8 @@ fn emit_face(
     // BlendMode::Average, and overlapping two blended quads double-blends into
     // a seam that reads worse than the hairline does.
     if bl == 0 {
-        let sx = p0.x as i32 + p1.x as i32 + p2.x as i32 + p3.x as i32;
-        let sy = p0.y as i32 + p1.y as i32 + p2.y as i32 + p3.y as i32;
+        let sx = x0 + x1 + x2 + x3;
+        let sy = y0 + y1 + y2 + y3;
         // Do NOT push a corner past the GPU's 11-bit screen rail: a corner the
         // SW near-fallback clamped to 1023 would become 1024, which the GPU
         // reads as -1024 (bit 10 is the sign), flipping it to the far side and
@@ -7346,37 +7438,25 @@ fn emit_face(
         // disagrees by another pixel. One pixel left dashed hairlines on flat
         // ground; two, on both paths, closed every truncation seam in the
         // orbit-vista audit. Same-texture overlap is invisible.
-        let grow = |p: &mut Proj| {
-            if (p.x as i32) * 4 >= sx {
-                if p.x < 1022 {
-                    p.x += 2;
-                }
-            } else if p.x > -1022 {
-                p.x -= 2;
-            }
-            if (p.y as i32) * 4 >= sy {
-                if p.y < 510 {
-                    p.y += 2;
-                }
-            } else if p.y > -510 {
-                p.y -= 2;
-            }
-        };
-        grow(&mut p0);
-        grow(&mut p1);
-        grow(&mut p2);
-        grow(&mut p3);
+        x0 = seal_edge(x0, sx, 1022);
+        x1 = seal_edge(x1, sx, 1022);
+        x2 = seal_edge(x2, sx, 1022);
+        x3 = seal_edge(x3, sx, 1022);
+        y0 = seal_edge(y0, sy, 510);
+        y1 = seal_edge(y1, sy, 510);
+        y2 = seal_edge(y2, sy, 510);
+        y3 = seal_edge(y3, sy, 510);
     }
 
-    let min_x = min(min(p0.x, p1.x), min(p2.x, p3.x));
-    let max_x = max(max(p0.x, p1.x), max(p2.x, p3.x));
-    let min_y = min(min(p0.y, p1.y), min(p2.y, p3.y));
-    let max_y = max(max(p0.y, p1.y), max(p2.y, p3.y));
+    let min_x = min(min(x0, x1), min(x2, x3));
+    let max_x = max(max(x0, x1), max(x2, x3));
+    let min_y = min(min(y0, y1), min(y2, y3));
+    let max_y = max(max(y0, y1), max(y2, y3));
     if max_x < -80 || min_x > 400 || max_y < -80 || min_y > 320 {
         return;
     }
 
-    let depth = (p0.z + p1.z + p2.z + p3.z) >> 2;
+    let depth = (z0 + z1 + z2 + z3) >> 2;
     // The GTE has no far plane; match the old projector's far cull on the
     // face average (depth_slot clamps stragglers to the back OT slot).
     if depth >= FAR_Z {
@@ -7392,8 +7472,8 @@ fn emit_face(
     // adjacent blocks in a terrace row in different bands, "a chequerboard of
     // hazy and clear cubes". Sampling each corner lets the GPU interpolate the
     // haze across the quad instead.
-    let (b0, b1) = (fog_band(p0.z), fog_band(p1.z));
-    let (b2, b3) = (fog_band(p2.z), fog_band(p3.z));
+    let (b0, b1) = (fog_band(z0), fog_band(z1));
+    let (b2, b3) = (fog_band(z2), fog_band(z3));
     let spans_fog = b0 != b1 || b0 != b2 || b0 != b3;
     // AO faces take the 13-word Gouraud packet; everything else keeps the
     // 9-data-word flat one.
@@ -7417,18 +7497,19 @@ fn emit_face(
                 let rgb2 = ccmd_row[b2] & 0x00FF_FFFF;
                 let rgb3 = ccmd_row[b3] & 0x00FF_FFFF;
                 q.color0_cmd = (ccmd & 0xFF00_0000) | 0x1000_0000 | ao_shade(rgb0, ao as u32);
-                q.v0 = (p0.x as u16 as u32) | ((p0.y as u16 as u32) << 16);
+                q.v0 = screen_xy(x0, y0);
                 q.uv0_clut = cl_hi;
                 q.color1 = ao_shade(rgb1, (ao >> 2) as u32);
-                q.v1 = (p1.x as u16 as u32) | ((p1.y as u16 as u32) << 16);
+                q.v1 = screen_xy(x1, y1);
                 q.uv1_tpage = tp_hi | su;
                 q.color2 = ao_shade(rgb2, (ao >> 4) as u32);
-                q.v2 = (p2.x as u16 as u32) | ((p2.y as u16 as u32) << 16);
+                q.v2 = screen_xy(x2, y2);
                 q.uv2 = sv << 8;
                 q.color3 = ao_shade(rgb3, (ao >> 6) as u32);
-                q.v3 = (p3.x as u16 as u32) | ((p3.y as u16 as u32) << 16);
+                q.v3 = screen_xy(x3, y3);
                 q.uv3 = (sv << 8) | su;
-                OT[RENDER_ARENA].insert(
+                // depth_slot is 1..=OT_LEN-1.
+                OT[RENDER_ARENA].insert_unchecked(
                     slot,
                     q as *mut QuadTexturedGouraud as *mut u32,
                     QuadTexturedGouraud::WORDS,
@@ -7445,15 +7526,15 @@ fn emit_face(
         let q = &mut QUADS[RENDER_ARENA][*count];
         q.tex_window = win;
         q.color_cmd = ccmd;
-        q.v0 = (p0.x as u16 as u32) | ((p0.y as u16 as u32) << 16);
+        q.v0 = screen_xy(x0, y0);
         q.uv0_clut = cl_hi;
-        q.v1 = (p1.x as u16 as u32) | ((p1.y as u16 as u32) << 16);
+        q.v1 = screen_xy(x1, y1);
         q.uv1_tpage = tp_hi | su;
-        q.v2 = (p2.x as u16 as u32) | ((p2.y as u16 as u32) << 16);
+        q.v2 = screen_xy(x2, y2);
         q.uv2 = sv << 8;
-        q.v3 = (p3.x as u16 as u32) | ((p3.y as u16 as u32) << 16);
+        q.v3 = screen_xy(x3, y3);
         q.uv3 = (sv << 8) | su;
-        OT[RENDER_ARENA].insert(
+        OT[RENDER_ARENA].insert_unchecked(
             slot,
             q as *mut QuadTexturedMaterial as *mut u32,
             QuadTexturedMaterial::WORDS,
@@ -7596,7 +7677,7 @@ static mut CH_BZ: i32 = 0;
 /// chunk borders projected 1px apart (visible cracks all over the terrain).
 /// Camera-relative corners give byte-identical values on both sides of a
 /// border, so shared edges project identically.
-fn gte_begin_chunk(cam: &Camera, oxw: i32, ozw: i32) {
+pub(crate) fn gte_begin_chunk(cam: &Camera, oxw: i32, ozw: i32) {
     unsafe {
         CH_DX = oxw - cam.x;
         CH_DY = -cam.y;

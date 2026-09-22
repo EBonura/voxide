@@ -29,5 +29,15 @@ fn main() {
     if let Some(map) = std::env::var_os("VOXIDE_LINK_MAP").filter(|m| !m.is_empty()) {
         println!("cargo:rustc-link-arg=-Map={}", map.to_string_lossy());
     }
+    // The per-frame face path (see world::chunk_faces) is linked first and
+    // contiguous, so it shares the R3000's direct-mapped 4 KB I-cache with
+    // nothing else it calls. The functions carry stable export names because
+    // mangled names change with the checkout path.
+    let order = manifest.join("hot-text.order");
+    println!(
+        "cargo:rustc-link-arg=--symbol-ordering-file={}",
+        order.display()
+    );
+    println!("cargo:rerun-if-changed={}", order.display());
     println!("cargo:rerun-if-changed={}", ld.display());
 }
