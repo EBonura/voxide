@@ -1,0 +1,25 @@
+# `trim-paths` is a nightly cargo feature; these crates are nightly-pinned
+# anyway (bare-metal MIPS needs build-std), so the gate costs nothing.
+cargo-features = ["trim-paths"]
+
+# The workspace root is the repo root, not game/, so the hydrated .psoxide
+# crates sit INSIDE it. Cargo hashes a path dependency by its path relative to
+# the workspace root when it can (SourceId::stable_hash); outside the root it
+# hashes the absolute path, which made every crate disambiguator, and so the
+# image layout, depend on where the repo was checked out.
+[workspace]
+resolver = "2"
+members  = ["game"]
+# .psoxide is a generated tree with its own host workspace; keep its crates
+# path dependencies, never members.
+exclude  = [".psoxide"]
+
+[profile.release]
+# Keep absolute host paths out of the shipped binary. rustc records the
+# source path of every panic/assert site (core::panic::Location) as a
+# string in .rodata, which on the PS1 means the developer's home directory
+# occupies console RAM and ships on the public disc image.
+trim-paths    = "all"
+panic         = "abort"
+codegen-units = 1
+lto           = true
