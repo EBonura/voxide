@@ -3376,11 +3376,13 @@ fn finish_world_gen(fb: &mut FrameBuffer, font: &FontAtlas, pocket_done: &mut bo
     loop {
         let left = menu_world_pump(pocket_done) as usize;
         if left == 0 && *pocket_done {
+            finish_loading(fb, font);
             return;
         }
         if left == last_left {
             stalled += 1;
             if stalled > 4000 {
+                finish_loading(fb, font);
                 return;
             }
         } else {
@@ -3857,6 +3859,31 @@ fn show_intro(fb: &mut FrameBuffer, font: &FontAtlas) {
 /// The world-generation bar: just the text and the progress, Minecraft's own
 /// spartan style -- the logo lives on the main menu now, nowhere else.
 fn draw_loading(fb: &mut FrameBuffer, font: &FontAtlas, done: usize, total: usize) {
+    // At most one flip per display period. Generation reports progress several
+    // times a vblank, and waiting out a whole period for each report stretched
+    // the load; an update that arrives before the next vblank is only noted,
+    // and the next one to land on a new vblank (or finish_loading) shows it.
+    if interrupts::vblank_count() == unsafe { LOADING_FLIP_VBL } {
+        unsafe { LOADING_SKIPPED = Some((done, total)) };
+        return;
+    }
+    present_loading(fb, font, done, total);
+}
+
+/// Show the progress `draw_loading` last skipped, if any, so a stage never
+/// ends with its final state unshown.
+fn finish_loading(fb: &mut FrameBuffer, font: &FontAtlas) {
+    if let Some((done, total)) = unsafe { LOADING_SKIPPED } {
+        present_loading(fb, font, done, total);
+    }
+}
+
+/// VBlank count at the last loading-screen flip.
+static mut LOADING_FLIP_VBL: u32 = 0;
+/// Progress `draw_loading` skipped since that flip, as (done, total).
+static mut LOADING_SKIPPED: Option<(usize, usize)> = None;
+
+fn present_loading(fb: &mut FrameBuffer, font: &FontAtlas, done: usize, total: usize) {
     // Immediate-mode: this runs during world generation, with no ordering table
     // in flight, so it cannot use the UI display list (`rect`).
     gpu::draw_rect_flat(0, 0, 320, 240, 14, 14, 22);
@@ -3869,6 +3896,10 @@ fn draw_loading(fb: &mut FrameBuffer, font: &FontAtlas, done: usize, total: usiz
     // shows a stable tear line on silicon, which emulators do not reproduce.
     wait_vblank();
     fb.swap();
+    unsafe {
+        LOADING_FLIP_VBL = interrupts::vblank_count();
+        LOADING_SKIPPED = None;
+    }
 }
 
 /// Draw the front-end mark from flat pixel runs instead of textured quads.
@@ -4212,6 +4243,7 @@ fn portal_travel(player: &mut Player, fb: &mut FrameBuffer, font: &FontAtlas) {
     world::set_dimension(to, nx, nz, |done, total| {
         draw_loading(fb, font, done, total)
     });
+    finish_loading(fb, font);
     // Land on solid ground, and carve out a return portal so you are never
     // stranded: Java builds one for you too.
     let sy = world::surface_y(nx, nz);
