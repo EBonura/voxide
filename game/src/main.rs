@@ -6551,7 +6551,7 @@ fn clip_cell_plane_c<'s, const P: usize>(
 }
 
 #[inline]
-fn clip_distance(p: ClipVert, plane: usize) -> i32 {
+fn clip_distance(p: &ClipVert, plane: usize) -> i32 {
     match plane {
         // Real camera plane. Software division is valid below the GTE's H/2
         // saturation point, so only actual eye-crossing geometry is removed.
@@ -6593,8 +6593,8 @@ fn clip_intersection(a: ClipVert, b: ClipVert, da: i32, db: i32) -> ClipVert {
 fn clip_line_segment(mut a: ClipVert, mut b: ClipVert) -> Option<(ClipVert, ClipVert)> {
     let mut plane = 0usize;
     while plane < 6 {
-        let da = clip_distance(a, plane);
-        let db = clip_distance(b, plane);
+        let da = clip_distance(&a, plane);
+        let db = clip_distance(&b, plane);
         if da < 0 && db < 0 {
             return None;
         }
@@ -6622,37 +6622,119 @@ fn clip_project(p: ClipVert) -> Proj {
 }
 
 #[inline]
-fn pack_clip_color(p: ClipVert) -> u32 {
+fn pack_clip_color(p: &ClipVert) -> u32 {
     p.r.clamp(0, 255) as u32
         | ((p.g.clamp(0, 255) as u32) << 8)
         | ((p.b.clamp(0, 255) as u32) << 16)
 }
 
 #[inline]
-fn pack_clip_uv(p: ClipVert) -> u32 {
+fn pack_clip_uv(p: &ClipVert) -> u32 {
     ((p.u + 128) >> 8).clamp(0, 255) as u32 | ((((p.v + 128) >> 8).clamp(0, 255) as u32) << 8)
+}
+
+/// Clipper-buffer slots of a cell's corners: perimeter order (see set_clip_cell).
+const CELL_TL: usize = 0;
+const CELL_TR: usize = 1;
+const CELL_BR: usize = 2;
+const CELL_BL: usize = 3;
+
+/// What an emit_near_face grid vertex depends on: the face's exact q12
+/// camera-space planes (base + du*u + dv*v), its four AO corner weights and
+/// the tint row of its light, dir and blend.
+struct NearGrid {
+    base: [i32; 3],
+    du: [i32; 3],
+    dv: [i32; 3],
+    ao: [i32; 4],
+    ao_flat: bool,
+    uc: i32,
+    vc: i32,
+    denom: i32,
+    row: &'static [u32; FOG_BANDS],
+}
+
+/// Shade grid point (u, v) of a near face and write it to clipper slot `slot`.
+/// inline(never): inlined at its eight call sites it made emit_near_face 8 KB,
+/// twice the instruction cache, so the patch loop evicted itself.
+#[inline(never)]
+fn near_vertex(g: &NearGrid, u: usize, v: usize, tu: i32, tv: i32, slot: usize) {
+    let (ui, vi) = (u as i32, v as i32);
+    let x = (g.base[0] + g.du[0] * ui + g.dv[0] * vi) >> 12;
+    let y = (g.base[1] + g.du[1] * ui + g.dv[1] * vi) >> 12;
+    let z = (g.base[2] + g.du[2] * ui + g.dv[2] * vi) >> 12;
+    let rgb = g.row[fog_band(z)] & 0x00FF_FFFF;
+    // Equal corners skip the bilinear divide and its eight multiplies (most
+    // near plates are unoccluded ground), and a fully lit level (256) leaves
+    // the tint unchanged, so it skips those three multiplies too.
+    let f = if g.ao_flat {
+        g.ao[0]
+    } else {
+        let u0 = g.uc - ui;
+        let v0 = g.vc - vi;
+        (g.ao[0] * u0 * v0 + g.ao[1] * ui * v0 + g.ao[2] * u0 * vi + g.ao[3] * ui * vi) / g.denom
+    };
+    let (r, gg, b) = if f == 256 {
+        (
+            (rgb & 0xFF) as i32,
+            ((rgb >> 8) & 0xFF) as i32,
+            ((rgb >> 16) & 0xFF) as i32,
+        )
+    } else {
+        tint_factor(rgb, f)
+    };
+    // SAFETY: slot < 4 <= CLIP_VERT_CAP; see set_clip_cell.
+    unsafe {
+        (CLIP_SCRATCH_A as *mut ClipVert).add(slot).write(ClipVert {
+            x,
+            y,
+            z,
+            u: tu << 8,
+            v: tv << 8,
+            r,
+            g: gg,
+            b,
+        })
+    };
+}
+
+/// Write a cell's corners (TL, TR, BL, BR, the PS1 quad order) straight into
+/// the clipper's input buffer in perimeter order (TL, TR, BR, BL), ready for
+/// emit_clipped_cell. Passing them by value copied 128 bytes per cell into the
+/// callee and another 128 from there into the buffer; a profiled build turned
+/// those copies into memcpy calls.
+#[inline(always)]
+fn set_clip_cell(tl: ClipVert, tr: ClipVert, bl: ClipVert, br: ClipVert) {
+    let a = CLIP_SCRATCH_A as *mut ClipVert;
+    // SAFETY: scratchpad buffer A holds CLIP_VERT_CAP >= 4 vertices and no
+    // reference to it is alive outside emit_clipped_cell.
+    unsafe {
+        a.write(tl);
+        a.add(1).write(tr);
+        a.add(2).write(br);
+        a.add(3).write(bl);
+    }
+}
+
+/// The cell set_clip_cell just wrote, read-only.
+#[inline(always)]
+fn clip_cell() -> &'static [ClipVert; 4] {
+    // SAFETY: see set_clip_cell; the four entries were written just before.
+    unsafe { &*(CLIP_SCRATCH_A as *const [ClipVert; 4]) }
 }
 
 /// Clip one block-sized terrain cell against the near/far and display planes,
 /// then fan-triangulate the surviving convex polygon. The fan pivot is the
 /// vertex whose depth is closest to the rest, matching the diagonal choice
 /// that measured best on real PS1 affine texture interpolation.
-#[allow(clippy::too_many_arguments)]
-fn emit_clipped_cell(
-    corners: [ClipVert; 4],
-    win: u32,
-    cl_hi: u32,
-    tp_hi: u32,
-    blended: bool,
-    depth_bias: i32,
-) {
-    // Perimeter order for the PS1 quad convention (TL, TR, BL, BR).
+fn emit_clipped_cell(win: u32, cl_hi: u32, tp_hi: u32, blended: bool, depth_bias: i32) {
     // The two polygon buffers are static scratch, not locals: as locals the
     // compiler zeroed 768 bytes per call (memset was 3% of a spawn-meadow
     // frame, all from here) and `swap` copied both arrays every clipped
     // plane. The renderer is single-threaded and this never recurses, so the
     // buffers are only ever alive for one call; swapping the references
-    // replaces the copies.
+    // replaces the copies. The caller has already written the cell's corners
+    // into the first one with set_clip_cell.
     // SAFETY: single-threaded guest; the buffers are used only inside this
     // call and every element read is one written earlier in the same call.
     let (mut a, mut b): (
@@ -6664,10 +6746,6 @@ fn emit_clipped_cell(
             &mut *(CLIP_SCRATCH_B as *mut [ClipVert; CLIP_VERT_CAP]),
         )
     };
-    a[0] = corners[0];
-    a[1] = corners[1];
-    a[2] = corners[3];
-    a[3] = corners[2];
     let mut n = 4usize;
     // Most close block cells are wholly inside five of the six planes: scan
     // first and clip only a straddled plane, so an identity clip never copies
@@ -6760,9 +6838,9 @@ fn emit_clipped_cell(
         if tri_n >= MAX_NEAR_TRIS {
             return;
         }
-        let c0 = a[pivot];
-        let c1 = a[(pivot + fan) % n];
-        let c2 = a[(pivot + fan + 1) % n];
+        let c0 = &a[pivot];
+        let c1 = &a[(pivot + fan) % n];
+        let c2 = &a[(pivot + fan + 1) % n];
         let p0 = pp[pivot];
         let p1 = pp[(pivot + fan) % n];
         let p2 = pp[(pivot + fan + 1) % n];
@@ -6950,19 +7028,13 @@ fn render_near_block_shell(cam: &Camera) {
                                     b: ((rgb >> 16) & 0xFF) as i32,
                                 }
                             };
-                            emit_clipped_cell(
-                                [
-                                    make(0, 0, 0),
-                                    make(1, 16, 0),
-                                    make(2, 0, 16),
-                                    make(3, 16, 16),
-                                ],
-                                win,
-                                cl_hi,
-                                tp_hi,
-                                false,
-                                BLOCK / 2,
+                            set_clip_cell(
+                                make(0, 0, 0),
+                                make(1, 16, 0),
+                                make(2, 0, 16),
+                                make(3, 16, 16),
                             );
+                            emit_clipped_cell(win, cl_hi, tp_hi, false, BLOCK / 2);
                         }
                         dir += 1;
                     }
@@ -6988,7 +7060,7 @@ fn emit_near_face(f: u32, side: u16, dir: usize) {
     let light = ((side >> 8) & 3) as usize;
     let verts = face_verts(lx, by, lz, dir, w, h);
     let (bl, mi) = face_mat(block, dir);
-    let ccmd_row = unsafe { &MAT_CCMD[light][bl][dir] };
+    let ccmd_row: &'static [u32; FOG_BANDS] = unsafe { &MAT_CCMD[light][bl][dir] };
     let (win, cl_hi, tp_hi) = mat_words(mi);
     let blended = bl != 0;
     let (uc, vc) = if dir < 2 { (h, w) } else { (w, h) };
@@ -7047,15 +7119,6 @@ fn emit_near_face(f: u32, side: u16, dir: usize) {
     let grid_z = |u: usize, v: usize| -> i32 {
         (camera_base[2] + camera_du[2] * u as i32 + camera_dv[2] * v as i32) >> 12
     };
-    let grid_camera = |u: usize, v: usize| -> (i32, i32, i32) {
-        let u = u as i32;
-        let v = v as i32;
-        (
-            (camera_base[0] + camera_du[0] * u + camera_dv[0] * v) >> 12,
-            (camera_base[1] + camera_du[1] * u + camera_dv[1] * v) >> 12,
-            (camera_base[2] + camera_du[2] * u + camera_dv[2] * v) >> 12,
-        )
-    };
     let point = |u: usize, v: usize| -> (i32, i32, i32) {
         let u = u as i32;
         let v = v as i32;
@@ -7096,29 +7159,20 @@ fn emit_near_face(f: u32, side: u16, dir: usize) {
             && bz >= cbz - 1
             && bz <= cbz + 1
     };
-    let factor = |u: usize, v: usize| -> i32 {
-        let u0 = uc as i32 - u as i32;
-        let v0 = vc as i32 - v as i32;
-        (ao_corner[0] * u0 * v0
-            + ao_corner[1] * u as i32 * v0
-            + ao_corner[2] * u0 * v as i32
-            + ao_corner[3] * u as i32 * v as i32)
-            / denom
-    };
-    let vertex = |u: usize, v: usize, tu: i32, tv: i32| -> ClipVert {
-        let (x, y, z) = grid_camera(u, v);
-        let rgb = ccmd_row[fog_band(z)] & 0x00FF_FFFF;
-        let (r, g, b) = tint_factor(rgb, factor(u, v));
-        ClipVert {
-            x,
-            y,
-            z,
-            u: tu << 8,
-            v: tv << 8,
-            r,
-            g,
-            b,
-        }
+    let grid = NearGrid {
+        base: camera_base,
+        du: camera_du,
+        dv: camera_dv,
+        ao: ao_corner,
+        // Four equal corners make the bilinear weight that one level
+        // everywhere: a*(u0+u)*(v0+v) / (uc*vc) == a exactly.
+        ao_flat: ao_corner[0] == ao_corner[1]
+            && ao_corner[0] == ao_corner[2]
+            && ao_corner[0] == ao_corner[3],
+        uc: uc as i32,
+        vc: vc as i32,
+        denom,
+        row: ccmd_row,
     };
 
     // Start from the old, inexpensive 4x4-cell fallback, then refine only the
@@ -7132,12 +7186,14 @@ fn emit_near_face(f: u32, side: u16, dir: usize) {
         let mut u = 0usize;
         while u < uc {
             let u1 = (u + COARSE_PATCH).min(uc);
-            let coarse = [
-                vertex(u, v, 0, 0),
-                vertex(u1, v, ((u1 - u) * 16) as i32, 0),
-                vertex(u, v1, 0, ((v1 - v) * 16) as i32),
-                vertex(u1, v1, ((u1 - u) * 16) as i32, ((v1 - v) * 16) as i32),
-            ];
+            // The patch goes straight into the clipper's input buffer, in its
+            // perimeter order (see emit_clipped_cell).
+            let (su, sv) = (((u1 - u) * 16) as i32, ((v1 - v) * 16) as i32);
+            near_vertex(&grid, u, v, 0, 0, CELL_TL);
+            near_vertex(&grid, u1, v, su, 0, CELL_TR);
+            near_vertex(&grid, u, v1, 0, sv, CELL_BL);
+            near_vertex(&grid, u1, v1, su, sv, CELL_BR);
+            let coarse = clip_cell();
             let coarse_min_z = coarse[0]
                 .z
                 .min(coarse[1].z)
@@ -7150,10 +7206,10 @@ fn emit_near_face(f: u32, side: u16, dir: usize) {
             let mut coarse_outside = false;
             let mut plane = 0usize;
             while plane < 6 {
-                if clip_distance(coarse[0], plane) < 0
-                    && clip_distance(coarse[1], plane) < 0
-                    && clip_distance(coarse[2], plane) < 0
-                    && clip_distance(coarse[3], plane) < 0
+                if clip_distance(&coarse[0], plane) < 0
+                    && clip_distance(&coarse[1], plane) < 0
+                    && clip_distance(&coarse[2], plane) < 0
+                    && clip_distance(&coarse[3], plane) < 0
                 {
                     coarse_outside = true;
                     break;
@@ -7182,19 +7238,17 @@ fn emit_near_face(f: u32, side: u16, dir: usize) {
                             cu += 1;
                             continue;
                         }
-                        let cell = [
-                            vertex(cu, cv, 0, 0),
-                            vertex(cu + 1, cv, 16, 0),
-                            vertex(cu, cv + 1, 0, 16),
-                            vertex(cu + 1, cv + 1, 16, 16),
-                        ];
-                        emit_clipped_cell(cell, win, cl_hi, tp_hi, blended, 0);
+                        near_vertex(&grid, cu, cv, 0, 0, CELL_TL);
+                        near_vertex(&grid, cu + 1, cv, 16, 0, CELL_TR);
+                        near_vertex(&grid, cu, cv + 1, 0, 16, CELL_BL);
+                        near_vertex(&grid, cu + 1, cv + 1, 16, 16, CELL_BR);
+                        emit_clipped_cell(win, cl_hi, tp_hi, blended, 0);
                         cu += 1;
                     }
                     cv += 1;
                 }
             } else {
-                emit_clipped_cell(coarse, win, cl_hi, tp_hi, blended, 0);
+                emit_clipped_cell(win, cl_hi, tp_hi, blended, 0);
             }
             u = u1;
         }
