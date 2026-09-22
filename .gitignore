@@ -6,3 +6,6 @@
 # Imported by tools/bootstrap-components.py from components.lock.json. Never
 # committed: the lock is the source of truth, this is a cache.
 .psoxide/
+
+# make pgo work dir: profile, ELF twin (checkout-path specific, never committed).
+/.pgo/
