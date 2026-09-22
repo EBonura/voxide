@@ -3865,6 +3865,9 @@ fn draw_loading(fb: &mut FrameBuffer, font: &FontAtlas, done: usize, total: usiz
     let w = (done * 156 / total.max(1)) as i16;
     gpu::draw_rect_flat(82, 126, w.max(2) as u16, 6, 120, 220, 120);
     gpu::draw_sync();
+    // Flip on a true vblank edge like every other screen: a swap mid-scanout
+    // shows a stable tear line on silicon, which emulators do not reproduce.
+    wait_vblank();
     fb.swap();
 }
 
