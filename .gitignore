@@ -7,5 +7,6 @@
 # committed: the lock is the source of truth, this is a cache.
 .psoxide/
 
-# make pgo work dir: profile, ELF twin (checkout-path specific, never committed).
+# Work dir of the retired per-game `make pgo` (psoxide-pgo's driver now works
+# under game/target); still ignored so an old checkout's leftovers stay out.
 /.pgo/

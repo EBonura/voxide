@@ -24,18 +24,20 @@ PSOXIDE_PROFILE_STEPS ?= 900000000
 PSOXIDE_START_PULSE ?= 0x0008@700+60
 
 .DEFAULT_GOAL := build
-.PHONY: help psoxide build compile disc install release run smoke profile pgo clean
+.PHONY: help psoxide host-lock build compile pack disc install release run smoke profile \
+	pgo-collect pgo-choose clean
 
 help:
 	@echo "VoXide targets:"
 	@echo "  make psoxide    - import the components.lock.json revisions into .psoxide"
 	@echo "  make            - build + install into the PSoXide game library"
-	@echo "  make compile    - build PSX-EXE only -> $(EXE)"
+	@echo "  make compile    - build PSX-EXE only -> $(EXE) (PGO_VARIANT=off for no PGO)"
 	@echo "  make disc       - compile + pack dist/voxide.cue/.bin"
 	@echo "  make install    - install into $(GAMES_DIR)"
 	@echo "  make smoke      - boot the disc headlessly through PSoXide and capture PPM"
 	@echo "  make profile    - telemetry build + per-frame stage-cycle CSV report"
-	@echo "  make pgo TAPE=x - profile-guided build from an emulator replay of tape x"
+	@echo "  make pgo-collect FRONTEND=x - regenerate the committed PGO profile"
+	@echo "  make pgo-choose FRONTEND=x  - build and gate every PGO variant"
 	@echo "  make clean      - remove build output"
 
 # Which PSoXide this is built against. components.lock.json pins the SDK,
@@ -50,25 +52,56 @@ PSOXIDE_FROM ?=
 psoxide:
 	@if [ -n "$(PSOXIDE_FROM)" ]; then \
 		cargo run -q --manifest-path $(PSOXIDE_FROM)/tools/psoxide-link/Cargo.toml -- \
-			--from "$(PSOXIDE_FROM)" --into $(PSOXIDE); \
+			--from "$(PSOXIDE_FROM)" --into "$(PSOXIDE)"; \
 	else \
-		python3 $(ROOT)/tools/bootstrap-components.py --root $(PSOXIDE) --lock $(ROOT)/components.lock.json; \
+		python3 "$(ROOT)/tools/bootstrap-components.py" --root "$(PSOXIDE)" --lock "$(ROOT)/components.lock.json"; \
 	fi
 
-compile: psoxide
-	cd $(GAME) && PSOXIDE="$(PSOXIDE)" cargo build --release
-	python3 $(PSOXIDE)/tools/hazard_patch.py $(EXE)
+# The host tools (mkisopsx, psoxide-pgo) build in .psoxide's Cargo workspace,
+# whose Cargo.lock is imported from the editor pin. That lock predates
+# psoxide-pgo's rustc-demangle dependency, so a plain `cargo run` would add it
+# to the imported file and the next `make psoxide` would refuse the edit. Host
+# builds therefore resolve into a private copy under game/target. Drop this
+# (and use `cargo run --locked`) once the pinned editor's Cargo.lock lists it.
+HOST_LOCK  = $(GAME)/target/host/Cargo.lock
+HOST_CARGO = cargo -Zlockfile-path --config 'resolver.lockfile-path="$(HOST_LOCK)"'
+host-lock:
+	@[ "$(HOST_LOCK)" -nt "$(PSOXIDE)/Cargo.lock" ] || { \
+		mkdir -p "$(GAME)/target/host" && cp "$(PSOXIDE)/Cargo.lock" "$(HOST_LOCK)"; }
+
+# Profile-guided optimisation through the SDK's shared driver
+# ($(PSOXIDE)/tools/psoxide-pgo/README.md). pgo/voxide.prof is committed and
+# portable (its names carry no checkout-path or feature hashes), so every build
+# applies it with no emulator: `make compile`, `make disc`, the demo disc.
+# PGO_VARIANT is the winner of `make pgo-choose`; PGO_VARIANT=off builds the
+# plain image. Either way the driver runs the hazard patcher and scanner and
+# stops on a failure, and the exe lands at $(EXE) as before.
+FEATURES    ?=
+GAME_CARGO   = build --release$(if $(strip $(FEATURES)), --features "$(FEATURES)")
+PGO          = $(HOST_CARGO) run -q --release --manifest-path "$(PSOXIDE)/tools/psoxide-pgo/Cargo.toml" --
+PGO_PROFILE  = $(ROOT)/pgo/voxide.prof
+PGO_VARIANT ?= hot=500+profi
+
+compile: psoxide host-lock
+	PSOXIDE="$(PSOXIDE)" $(PGO) apply --crate "$(GAME)" --profile "$(PGO_PROFILE)" \
+		--variant "$(PGO_VARIANT)" -- $(GAME_CARGO)
 	@echo "EXE -> $(EXE)"
+
+# `make pack PACK_EXE=x PACK_OUT=y.bin` wraps any exe in the game's disc image.
+PACK_EXE ?= $(EXE)
+PACK_OUT ?= $(DIST)/voxide.bin
+pack: host-lock
+	@mkdir -p "$$(dirname "$(PACK_OUT)")"
+	cd "$(MKISOPSX)" && $(HOST_CARGO) run -q --release -- \
+		--exe "$(PACK_EXE)" \
+		--out "$(PACK_OUT)" \
+		--volume VOXIDE \
+		--world-pack-extra-dir "$(ROOT)/assets/sfx/pak"
 
 # disc always installs into the game library too, so EVERY build (disc, smoke,
 # install, default) lands in $(GAMES_DIR) and the latest is always testable there.
 disc: compile
-	@mkdir -p $(DIST)
-	cd $(MKISOPSX) && cargo run --release -- \
-		--exe $(EXE) \
-		--out $(DIST)/voxide.bin \
-		--volume VOXIDE \
-		--world-pack-extra-dir $(ROOT)/assets/sfx/pak
+	@$(MAKE) --no-print-directory pack PACK_EXE="$(EXE)" PACK_OUT="$(DIST)/voxide.bin"
 	@echo "DISC -> $(DIST)/voxide.cue"
 	@mkdir -p "$(GAMES_DIR)/$(GAME_NAME)"
 	@cp "$(DIST)/voxide.bin" "$(GAMES_DIR)/$(GAME_NAME)/$(GAME_NAME).bin"
@@ -86,10 +119,9 @@ run: install
 # so without pressing START the game sits on the title screen and the profiler
 # records ZERO frames (silently -- you get a CSV with only a header). 0x0008 is
 # START; the tick is after world gen finishes.
-profile: psoxide
-	cd $(GAME) && PSOXIDE="$(PSOXIDE)" cargo build --release --features emulator-telemetry
-	python3 $(PSOXIDE)/tools/hazard_patch.py $(EXE)
-	cd $(MKISOPSX) && cargo run --release -- --exe $(EXE) --out $(DIST)/voxide.bin --volume VOXIDE --world-pack-extra-dir $(ROOT)/assets/sfx/pak
+profile:
+	@$(MAKE) --no-print-directory compile FEATURES=emulator-telemetry
+	@$(MAKE) --no-print-directory pack PACK_EXE="$(EXE)" PACK_OUT="$(DIST)/voxide.bin"
 	@mkdir -p $(CAPTURE_DIR)
 	$(PSOXIDE_LAUNCH) \
 		--path $(DIST)/voxide.cue \
@@ -103,59 +135,43 @@ profile: psoxide
 	@echo "PROFILE -> $(CAPTURE_DIR)/voxide-profile.csv (per-frame stage cycles)"
 	@python3 tools/profile_report.py $(CAPTURE_DIR)/voxide-profile.csv
 
-# Profile-guided build from the emulator's own PC samples (psoxide-pgo; same
-# recipe as hl-psx `hl-build pgo`). A build with profiling line tables replays
-# TAPE, psoxide-pgo maps the PC histogram through the matching ELF's DWARF
-# into an LLVM sample profile, and the game is rebuilt with it. The result is
-# $(EXE) and $(DIST)/voxide.cue; nothing is installed into $(GAMES_DIR).
-# Profile names carry crate hashes that depend on the checkout path, so the
-# profile is regenerated here, never committed.
-#   make pgo TAPE=route.pxtape FRONTEND=/path/to/frontend
-#
-# A/B builds with `--features lockstep` (identical state at every poll) need the
-# profile rebound onto their own names (psoxide-pgo `portable` + `rebind`):
-# cargo features enter -C metadata, so every voxide symbol of a lockstep build
-# is named differently from the shipping build this target profiles, and LLVM
-# silently matches none of them.
-#
-# The two LLVM options below are what made the profile a win. LLVM's default
-# 3000-point inline budget for profile-hot calls grew the image by ~30 KB
-# (inlining box emitters into render_mobs, collision into main) and, with
-# `-sample-profile-use-profi` added, overflowed RAM by 4 KB in the telemetry
-# build; 500 keeps the hot paths inside the 4 KB I-cache. Profile inference
-# (profi) fills in the block counts of code the samples cannot place (line-0
-# code, 15% of samples in the face loop). Measured 2026-09-22 at 9502a58,
-# loop body per frame, plain -> profiled: 973,679 -> 954,312 on the training
-# route, 777,566 -> 760,235 on an unseen one; with LLVM's defaults it was
-# 965,222 and 776,213.
-TAPE ?=
-PGO_DIR := $(ROOT)/.pgo
-# `--config` appends to game/.cargo/config.toml's flags; RUSTFLAGS would replace them.
-PGO_COLLECT := "-Cdebuginfo=1","-Zdebug-info-for-profiling","-Cstrip=none"
-PGO_USE := $(PGO_COLLECT),"-Zprofile-sample-use=$(PGO_DIR)/voxide.prof", \
-	"-Cllvm-args=-hot-callsite-threshold=500","-Cllvm-args=-sample-profile-use-profi"
-CARGO_PSX = cd $(GAME) && PSOXIDE="$(PSOXIDE)" cargo build --release --config
-PACK_EXE = cd $(MKISOPSX) && cargo run --release -- --exe $(EXE) --volume VOXIDE \
-	--world-pack-extra-dir $(ROOT)/assets/sfx/pak --out
-pgo: psoxide
-	@test -n "$(TAPE)" || { echo "usage: make pgo TAPE=route.pxtape [FRONTEND=frontend]"; exit 1; }
-	rm -rf $(PGO_DIR) && mkdir -p $(PGO_DIR) $(DIST)
-	$(CARGO_PSX) 'target.$(TARGET).rustflags=[$(PGO_COLLECT)]'
-	python3 $(PSOXIDE)/tools/hazard_patch.py $(EXE)
-	$(PACK_EXE) $(PGO_DIR)/collect.bin
-	cd $(GAME) && VOXIDE_LINK_ELF=1 PSOXIDE="$(PSOXIDE)" cargo build --release \
-		--config 'target.$(TARGET).rustflags=[$(PGO_COLLECT)]'
-	cp $(EXE) $(PGO_DIR)/voxide.elf
-	$(PSOXIDE_LAUNCH) --path $(PGO_DIR)/collect.cue --embedded-playtest \
-		--steps 40000000000 --input-tape "$(TAPE)" \
-		--pc-sample-log $(PGO_DIR)/pc.csv --pc-sample-instructions 61
-	cargo run -q --release --manifest-path $(PSOXIDE)/tools/psoxide-pgo/Cargo.toml -- \
-		$(PGO_DIR)/voxide.elf $(PGO_DIR)/pc.csv $(PGO_DIR)/voxide.prof
-	rm -f $(PGO_DIR)/pc.csv $(PGO_DIR)/collect.bin $(PGO_DIR)/collect.cue
-	$(CARGO_PSX) 'target.$(TARGET).rustflags=[$(PGO_USE)]'
-	python3 $(PSOXIDE)/tools/hazard_patch.py $(EXE)
-	$(PACK_EXE) $(DIST)/voxide.bin
-	@echo "PGO EXE -> $(EXE)  DISC -> $(DIST)/voxide.cue  PROFILE -> $(PGO_DIR)/voxide.prof"
+# Regenerating the profile and picking the variant need the emulator:
+#   make pgo-collect FRONTEND=/path/to/frontend   (after gameplay code changes or an SDK repin)
+#   make pgo-choose  FRONTEND=/path/to/frontend   (then commit the winner as PGO_VARIANT)
+# PGO_LAUNCH_ARGS adds frontend arguments (--launch-arg X per word). Both tapes
+# press PLAY at the same point; polls 252..1200 are gameplay on both (the
+# world load ends near poll 154 and the first ~100 polls stream in chunks).
+# The profile trains on the shipping build and the recorded tape alone, so the
+# unseen tape (a different walk, on the sticks) stays a holdout for the gate.
+TRAIN_TAPE   = $(ROOT)/pgo/train.pxtape
+TRAIN_POLLS  = 252..1200
+UNSEEN_TAPE  = $(ROOT)/pgo/unseen.pxtape
+UNSEEN_POLLS = 252..1200
+PGO_LAUNCH_ARGS ?=
+PGO_PACK = '$(MAKE) --no-print-directory -C "$(ROOT)" pack PACK_EXE="$$PSOXIDE_PGO_EXE" PACK_OUT="$$PSOXIDE_PGO_DISC"'
+pgo-collect: psoxide host-lock
+	PSOXIDE="$(PSOXIDE)" $(PGO) collect --crate "$(GAME)" --frontend "$(FRONTEND)" \
+		--tape "$(TRAIN_TAPE)" --polls $(TRAIN_POLLS) \
+		--pack $(PGO_PACK) --launch-arg --embedded-playtest $(PGO_LAUNCH_ARGS) \
+		--out "$(PGO_PROFILE)" -- $(GAME_CARGO)
+	@$(MAKE) --no-print-directory compile
+
+# Every variant is built with --features lockstep (one sim step per pad poll),
+# so all of them reach the same state at every poll: a display hash that
+# differs from the `off` row is a miscompile, and ticks over the gameplay
+# window compare state for state. The vram hash can differ by which of the two
+# framebuffers holds the frame (loading screens flip on wall time). The last
+# build is a lockstep exe, so this rebuilds the shipping one at the end.
+PGO_VARIANTS = off default hot=500 hot=500+profi accurate+hot=500
+PGO_MEASURE  = "$$PSOXIDE_PGO" measure --frontend "$(FRONTEND)" --image "$$PSOXIDE_PGO_IMAGE" \
+	--launch-arg --embedded-playtest $(PGO_LAUNCH_ARGS)
+pgo-choose: psoxide host-lock
+	PSOXIDE="$(PSOXIDE)" $(PGO) choose --crate "$(GAME)" --profile "$(PGO_PROFILE)" \
+		$(foreach v,$(PGO_VARIANTS),--variant $(v)) --pack $(PGO_PACK) \
+		--gate '$(PGO_MEASURE) --tape "$(TRAIN_TAPE)" --polls $(TRAIN_POLLS) --name train \
+			&& $(PGO_MEASURE) --tape "$(UNSEEN_TAPE)" --polls $(UNSEEN_POLLS) --name unseen' \
+		-- build --release --features lockstep
+	@$(MAKE) --no-print-directory compile
 
 smoke: disc
 	@mkdir -p $(CAPTURE_DIR)
