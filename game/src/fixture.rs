@@ -4,8 +4,11 @@
 //! can reach every menu without mining and crafting its way there first.
 //! SELECT while sneaking sets the enchant levels and the food pouch, or, at a
 //! chest, crosses dimensions in place and builds a chest at the same spot;
-//! at a crafting table, opens a void portal underfoot; in the Void, slays
-//! the dragon.
+//! at a crafting table, opens a void portal underfoot; at a furnace, builds
+//! and lights an obsidian portal there; at portal sheet, opens it underfoot;
+//! at obsidian, regenerates every loaded chunk; in the Inferno at portal
+//! sheet, steps you out to face it if you stand in it, else regenerates; in
+//! the Void, slays the dragon.
 //!
 //! SELECT on a non-station block places a crafting table in front of it;
 //! SELECT on a station turns it into the next one (table, chest, furnace).
@@ -107,6 +110,49 @@ pub fn select(pick: &Pick, player: &mut Player) {
             set_block_i32(bx, by + 1, bz, VOID_PORTAL);
             return;
         }
+        match if pick.hit {
+            get_block_i32(pick.bx, pick.by, pick.bz)
+        } else {
+            AIR
+        } {
+            FURNACE => {
+                build_lit_portal(pick, player);
+                return;
+            }
+            // Standing in a portal (the crosshair starts inside it): step
+            // out and face a portal, another one if there is one near.
+            PORTAL
+                if get_block_i32(
+                    world_to_block_x(player.x),
+                    world_to_block_y(player.y + 8),
+                    world_to_block_z(player.z),
+                ) == PORTAL =>
+            {
+                face_portal(player);
+                return;
+            }
+            // Facing a portal in the Inferno: regenerate.
+            PORTAL if world::dimension() == world::DIM_INFERNO => {
+                regenerate_ring(player);
+                return;
+            }
+            PORTAL => {
+                // Inferno sheet at your feet: the real portal path takes you.
+                let (bx, by, bz) = (
+                    world_to_block_x(player.x),
+                    world_to_block_y(player.y + 8),
+                    world_to_block_z(player.z),
+                );
+                set_block_i32(bx, by, bz, PORTAL);
+                set_block_i32(bx, by + 1, bz, PORTAL);
+                return;
+            }
+            OBSIDIAN if world::dimension() != world::DIM_INFERNO => {
+                regenerate_ring(player);
+                return;
+            }
+            _ => {}
+        }
         // In the Void: the dragon dies as if to a last hit.
         if world::dimension() == world::DIM_VOID {
             mob::slay_dragon();
@@ -195,4 +241,103 @@ fn same_spot_elsewhere(pick: &Pick, player: &Player) {
     record_edit(pick.bx, pick.by, pick.bz, CHEST); // so a save keeps the spot
     chest_register(pick.bx, pick.by, pick.bz);
     world::remesh_loaded();
+}
+
+/// Replace the aimed furnace with an obsidian frame a player could have built,
+/// across the line of sight, and light it with the game's own flint path.
+/// Every block goes in the edit log, as the player's placements do.
+fn build_lit_portal(pick: &Pick, player: &Player) {
+    let (ix, iy, iz) = (pick.bx, pick.by, pick.bz);
+    if let Some(i) = furn_find(ix, iy, iz) {
+        unsafe { FURN_USED[i] = false };
+    }
+    let dx = ix - world_to_block_x(player.x);
+    let dz = iz - world_to_block_z(player.z);
+    // Looking along X, the frame runs along Z, and the other way round.
+    let (ax, az) = if dx.abs() > dz.abs() { (0, 1) } else { (1, 0) };
+    let put = |x: i32, y: i32, z: i32, b: u8| {
+        set_block_i32(x, y, z, b);
+        record_edit(x, y, z, b);
+    };
+    let mut w = -1;
+    while w <= 2 {
+        let mut h = -1;
+        while h <= 3 {
+            let (x, z) = (ix + ax * w, iz + az * w);
+            let edge = w == -1 || w == 2 || h == -1 || h == 3;
+            put(x, iy + h, z, if edge { OBSIDIAN } else { AIR });
+            h += 1;
+        }
+        w += 1;
+    }
+    light_portal(ix, iy, iz);
+}
+
+/// Throw away and regenerate every loaded chunk, the way walking out of range
+/// and back does: out to the other dimension and home again, in place.
+fn regenerate_ring(player: &Player) {
+    let (bx, bz) = (world_to_block_x(player.x), world_to_block_z(player.z));
+    let here = world::dimension();
+    let other = if here == world::DIM_OVERWORLD {
+        world::DIM_INFERNO
+    } else {
+        world::DIM_OVERWORLD
+    };
+    world::set_dimension(other, bx, bz, |_, _| {});
+    world::set_dimension(here, bx, bz, |_, _| {});
+    // set_dimension also digs an arrival pocket around the player, raw, after
+    // the edit replay; streaming never does. Replay the log over it, as a load
+    // does, so what is left is what regeneration alone keeps.
+    crate::save::apply_edits();
+}
+
+/// Stand two cells in front of a near portal's lower-left sheet cell, looking
+/// level at it along +Z (return portals run along X, and so do the fixture's
+/// own when built looking along Z, as at spawn).
+fn face_portal(player: &mut Player) {
+    let (bx, by, bz) = (
+        world_to_block_x(player.x),
+        world_to_block_y(player.y),
+        world_to_block_z(player.z),
+    );
+    // Two passes: first skip the sheet you stand in, then take any.
+    let mut pass = 0;
+    while pass < 2 {
+        if face_portal_pass(player, bx, by, bz, pass == 0) {
+            return;
+        }
+        pass += 1;
+    }
+}
+
+fn face_portal_pass(player: &mut Player, bx: i32, by: i32, bz: i32, other: bool) -> bool {
+    let mut dx = -12;
+    while dx <= 12 {
+        let mut dz = -12;
+        while dz <= 12 {
+            let mut dy = -8;
+            while dy <= 8 {
+                let (x, y, z) = (bx + dx, by + dy, bz + dz);
+                let mine = z == bz && (x == bx || x + 1 == bx);
+                if get_block_i32(x, y, z) == PORTAL
+                    && get_block_i32(x - 1, y, z) != PORTAL
+                    && get_block_i32(x, y - 1, z) != PORTAL
+                    && !(other && mine)
+                {
+                    player.x = block_to_world_x(x + 1);
+                    player.z = block_to_world_z(z - 2) + BLOCK / 2;
+                    player.y = y * BLOCK;
+                    player.vy = 0;
+                    player.fall_peak = player.y;
+                    player.yaw = 0;
+                    player.pitch = 0;
+                    return true;
+                }
+                dy += 1;
+            }
+            dz += 1;
+        }
+        dx += 1;
+    }
+    false
 }
