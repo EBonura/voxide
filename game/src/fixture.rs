@@ -161,9 +161,11 @@ fn same_spot_elsewhere(pick: &Pick, player: &Player) {
         let mut z = z0;
         while z <= z1 {
             set_block_i32(x, py - 1, z, COBBLE);
+            record_edit(x, py - 1, z, COBBLE);
             let mut y = py;
             while y <= py + 3 {
                 set_block_i32(x, y, z, AIR);
+                record_edit(x, y, z, AIR);
                 y += 1;
             }
             z += 1;
@@ -171,6 +173,7 @@ fn same_spot_elsewhere(pick: &Pick, player: &Player) {
         x += 1;
     }
     set_block_i32(pick.bx, pick.by, pick.bz, CHEST);
+    record_edit(pick.bx, pick.by, pick.bz, CHEST); // so a save keeps the spot
     chest_register(pick.bx, pick.by, pick.bz);
     world::remesh_loaded();
 }

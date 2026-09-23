@@ -25,7 +25,7 @@ const MAGIC_V1: [u8; 4] = *b"MCPX";
 /// VERSION and teaches `layout` where its sections moved; every older version
 /// still loads.
 const MAGIC: [u8; 4] = *b"VOXS";
-const VERSION: u16 = 4;
+const VERSION: u16 = 5;
 /// BIOS file name: region+product code + label, 20 ASCII chars max.
 const FILE_NAME: &str = "BESLES-00000VOXIDE01";
 /// Human-readable label shown by the console's memory-card manager.
@@ -50,6 +50,8 @@ const V1_HDR: usize = V1_PROGRESS + 9; // armor u8, efficiency u8, xp i32, 3 too
 // pad u16, food_items i32), moving the counts to 316 and the records to 320.
 // Version 4 adds the dimension to each chest and furnace record, as a byte
 // (and a pad byte) after x y z; earlier saves' containers are overworld ones.
+// Version 5 puts the player's dimension in byte 6 (was reserved, written 0),
+// so a game saved in the Inferno loads there; earlier saves load overworld.
 const OFF_HOTBAR_SEL: usize = 41;
 const OFF_HOTBAR: usize = 42;
 const OFF_INV: usize = 52;
@@ -59,6 +61,8 @@ const OFF_EXTRA: usize = OFF_INV + BLOCK_KINDS * 2;
 #[derive(Copy, Clone)]
 struct Layout {
     extras: bool,
+    /// Byte 6 holds the player's dimension.
+    dim: bool,
     counts: usize,
     hdr: usize,
     /// Where x,y,z end in a container record: 8 with the dimension, else 6.
@@ -70,6 +74,7 @@ const fn layout(version: u16) -> Layout {
     let counts = OFF_EXTRA + if extras { 8 } else { 0 };
     Layout {
         extras,
+        dim: version >= 5,
         counts,
         hdr: counts + 4,
         pos: if version >= 4 { 8 } else { 6 },
@@ -147,7 +152,8 @@ pub fn save(p: &Player) -> bool {
     let buf = unsafe { &mut BUF[..] };
     buf[..4].copy_from_slice(&MAGIC);
     put_u16(buf, 4, VERSION);
-    put_u16(buf, 6, 0);
+    buf[6] = crate::world::dimension();
+    buf[7] = 0;
     put_i32(buf, 8, p.x);
     put_i32(buf, 12, p.y);
     put_i32(buf, 16, p.z);
@@ -256,25 +262,38 @@ pub fn save(p: &Player) -> bool {
     card.write(FILE_NAME, FILE_TITLE, &buf[..off]).is_ok()
 }
 
-/// Load a save from the card. Returns false, touching nothing, if there is no
-/// save it understands. Edits land in the EDIT log; call [`apply_edits`] to
+/// Load a save from the card: the dimension the player saved in, or None,
+/// touching nothing, if there is no save it understands. Edits land in the
+/// EDIT log; the caller enters that dimension, then calls [`apply_edits`] to
 /// replay them into the world (raw sets, then one remesh).
+///
+/// Saves before version 5 load in the overworld. A version 1 save's edit log
+/// does know each edit's dimension, but not where the player stood, so it
+/// cannot say which dimension the player was in without guessing.
 #[inline(never)]
 #[optimize(size)] // card I/O dominates; keep the bytes
-pub fn load(p: &mut Player) -> bool {
+pub fn load(p: &mut Player) -> Option<u8> {
     let buf = unsafe { &mut BUF[..] };
     let len = match card().read(FILE_NAME, buf) {
         Ok(len) => len.min(buf.len()),
-        Err(_) => return false,
+        Err(_) => return None,
     };
     if len >= V1_HDR && buf[..4] == MAGIC_V1 {
         load_v1(p, &buf[..len]);
-        true
+        Some(crate::world::DIM_OVERWORLD)
     } else if len >= 6 && buf[..4] == MAGIC && (2..=VERSION).contains(&get_u16(buf, 4)) {
         let l = layout(get_u16(buf, 4));
-        len >= l.hdr && load_versioned(p, &buf[..len], l)
+        if len < l.hdr || !load_versioned(p, &buf[..len], l) {
+            return None;
+        }
+        let d = buf[6];
+        Some(if l.dim && d <= crate::world::DIM_VOID {
+            d
+        } else {
+            crate::world::DIM_OVERWORLD
+        })
     } else {
-        false
+        None
     }
 }
 
