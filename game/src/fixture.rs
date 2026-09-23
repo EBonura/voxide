@@ -11,7 +11,7 @@ use crate::*;
 /// Starting stock: a spread of blocks and materials, one count past what a
 /// byte holds (the old save clamped at 255), and the ingredients for the
 /// stone pickaxe short a stick.
-const STOCK: [(u8, u16); 22] = [
+const STOCK: [(u8, u16); 50] = [
     (GRASS, 4),
     (STONE, 21),
     (COBBLE, 300),
@@ -34,6 +34,35 @@ const STOCK: [(u8, u16); 22] = [
     (ARROW, 0),
     (CLAY, 6),
     (FURNACE, 1),
+    // One of each item that got its own icon in the second set.
+    (WATER_BUCKET, 1),
+    (LAVA_BUCKET, 1),
+    (FLINT_STEEL, 1),
+    (BOTTLE, 3),
+    (POTION_AWKWARD, 1),
+    (POTION_SPEED, 1),
+    (POTION_STRENGTH, 1),
+    (POTION_REGEN, 1),
+    (POTION_FIRE, 1),
+    (BONEMEAL, 6),
+    (WIRE, 16),
+    (SUGAR_CANE, 5),
+    (WHEAT_ITEM, 9),
+    (FISHING_ROD, 1),
+    (EMBER_CAP, 2),
+    (EMBER_ROD, 2),
+    (WAILER_TEAR, 1),
+    (MAGMA_PASTE, 1),
+    (VOID_PEARL, 2),
+    (VOID_EYE, 1),
+    (BED, 1),
+    (PISTON, 2),
+    (ENCHANT, 1),
+    (FENCE, 8),
+    (GLASS, 6),
+    (SLAB, 12),
+    (STAIRS_N, 4),
+    (SAPLING, 3),
 ];
 
 pub fn seed() {
