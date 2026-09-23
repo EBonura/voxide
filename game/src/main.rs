@@ -15,6 +15,7 @@ extern crate psx_rt;
 mod bonnie;
 #[cfg(feature = "ui-fixture")]
 mod fixture;
+mod inv;
 mod mob;
 mod save;
 mod sfx;
@@ -2372,11 +2373,11 @@ fn main() {
             let mut inv_vis = [0u8; PLACEABLE.len()];
             let n = match menu {
                 1 => craft_list(&mut craft_vis),
-                2 => PLACEABLE.len(),
+                2 => inv::chest_list(chest_idx, &mut [0u8; BLOCK_KINDS]),
                 MENU_INV => inv_list(&mut inv_vis),
                 MENU_OPTIONS => OPTIONS.len(),
                 MENU_DEAD => 1,
-                _ => FURN_ITEMS.len(),
+                _ => inv::FURN_ROWS,
             };
             // Crafting can shrink under the cursor (tab switch, filter, the
             // last affordable recipe crafted); keep the selection in the list.
@@ -2522,24 +2523,9 @@ fn main() {
                     }
                 }
             } else if menu == 2 {
-                let item = PLACEABLE[menu_sel];
-                if pad.pressed_since(previous, button::CROSS) {
-                    chest_deposit(chest_idx, item);
-                    sfx::blip();
-                }
-                if pad.pressed_since(previous, button::SQUARE) {
-                    chest_withdraw(chest_idx, item);
-                    sfx::blip();
-                }
+                inv::chest_input(chest_idx, menu_sel, pad, previous);
             } else {
-                if pad.pressed_since(previous, button::CROSS) {
-                    furn_deposit(chest_idx, FURN_ITEMS[menu_sel]);
-                    sfx::blip();
-                }
-                if pad.pressed_since(previous, button::SQUARE) {
-                    furn_withdraw(chest_idx);
-                    sfx::blip();
-                }
+                inv::furnace_input(chest_idx, menu_sel, pad, previous);
             }
         } else {
             // Hotbar select: L1/R1 step the 9 real slots (Bedrock's shoulder
@@ -2666,6 +2652,7 @@ fn main() {
                         menu = 2;
                         chest_idx = ci;
                         menu_sel = 0;
+                        inv::chest_open();
                         sfx::chest_open();
                     }
                 } else if tb == FURNACE {
@@ -8778,9 +8765,9 @@ fn draw_menu(font: &FontAtlas, menu: u8, sel: usize, chest_idx: usize, player: P
     if menu == 1 {
         draw_crafting(font, sel);
     } else if menu == 2 {
-        draw_chest(font, chest_idx, sel);
+        inv::draw_chest(font, chest_idx, sel);
     } else if menu == 3 {
-        draw_furnace(font, chest_idx, sel);
+        inv::draw_furnace(font, chest_idx, sel);
     } else if menu == MENU_OPTIONS {
         draw_options(font, sel, player);
     } else if menu == MENU_INV {
@@ -9466,86 +9453,6 @@ fn draw_options(font: &FontAtlas, sel: usize, player: Player) {
     let msg = unsafe { OPT_MSG };
     if !msg.is_empty() {
         draw_centered(font, 170, msg, (0xF0, 0xE0, 0x80));
-    }
-}
-
-/// Chest overlay: each placeable item with the count in the player inventory
-/// (U) and in this chest (C); Cross deposits, Square withdraws.
-fn draw_chest(font: &FontAtlas, idx: usize, sel: usize) {
-    menu_frame(font, "CHEST");
-    let mut hx = hint_item(font, MENU_TEXT_X, MENU_HINT_Y, "X", PS_CROSS, "PUT");
-    hx = hint_item(font, hx, MENU_HINT_Y, "[]", PS_SQUARE, "TAKE");
-    hint_item(font, hx, MENU_HINT_Y, "O", PS_CIRCLE, "CLOSE");
-    let n = PLACEABLE.len();
-    let vis = 8;
-    let start = list_window(n, vis, sel);
-    menu_scroll_hint(font, n, vis, start, MENU_HINT_X, MENU_ROWS_Y);
-    let mut j = 0;
-    while j < vis && start + j < n {
-        let i = start + j;
-        let b = PLACEABLE[i];
-        let y = menu_row(j, i == sel);
-        let color = if i == sel { MC_LABEL_SEL } else { MC_LABEL };
-        ui_text(font, MENU_TEXT_X, y, block_name(b), color);
-        let inv_c = decimal3(unsafe { INV[b as usize] });
-        let ch_c = decimal3(unsafe { CHEST_INV[idx][b as usize] });
-        ui_text(font, 166, y, "U", (0x90, 0xC0, 0x90));
-        ui_text(font, 178, y, &inv_c, color);
-        ui_text(font, 222, y, "C", (0x90, 0xC0, 0x90));
-        ui_text(font, 234, y, &ch_c, color);
-        j += 1;
-    }
-}
-
-/// Furnace overlay: input / fuel / output slots, a smelt progress bar, and the
-/// depositable items (ore + sand smelt; coal is fuel). Cross loads, Square takes.
-fn draw_furnace(font: &FontAtlas, idx: usize, sel: usize) {
-    menu_frame(font, "FURNACE");
-    let mut hx = hint_item(font, MENU_TEXT_X, MENU_HINT_Y, "X", PS_CROSS, "PUT");
-    hx = hint_item(font, hx, MENU_HINT_Y, "[]", PS_SQUARE, "TAKE");
-    hint_item(font, hx, MENU_HINT_Y, "O", PS_CIRCLE, "CLOSE");
-    let inn = unsafe { FURN_IN[idx] };
-    let in_n = unsafe { FURN_IN_N[idx] };
-    let fuel = unsafe { FURN_FUEL[idx] };
-    let outt = unsafe { FURN_OUT[idx] };
-    let out_n = unsafe { FURN_OUT_N[idx] };
-    let prog = unsafe { FURN_PROG[idx] };
-
-    let in_name = if inn == AIR { "--" } else { block_name(inn) };
-    let out_name = if outt == AIR { "--" } else { block_name(outt) };
-    // The three slots are read-outs, not choices, so they get vanilla's inset
-    // slot bevel rather than a button.
-    mc_slot(MENU_BTN_X, 41, MENU_BTN_W, 52);
-    ui_text(font, MENU_TEXT_X, 44, "IN", MC_HINT);
-    ui_text(font, MENU_TEXT_X + 48, 44, in_name, MC_LABEL);
-    ui_text(font, 230, 44, &decimal3(in_n), MC_LABEL);
-    ui_text(font, MENU_TEXT_X, 60, "FUEL", MC_HINT);
-    ui_text(font, 230, 60, &decimal3(fuel), (0xF0, 0xC0, 0x50));
-    ui_text(font, MENU_TEXT_X, 76, "OUT", MC_HINT);
-    ui_text(font, MENU_TEXT_X + 48, 76, out_name, MC_LABEL);
-    ui_text(font, 230, 76, &decimal3(out_n), MC_LABEL);
-    // Smelt progress, the arrow in vanilla's furnace.
-    mc_slot(MENU_BTN_X, 96, MENU_BTN_W, 9);
-    let w = prog as i16 * (MENU_BTN_W - 4) / SMELT_TIME as i16;
-    if w > 0 {
-        rect(MENU_BTN_X + 2, 98, w, 5, 230, 140, 40);
-    }
-
-    let n = FURN_ITEMS.len();
-    let vis = 4; // what fits between the progress bar and the HUD
-    let start = list_window(n, vis, sel);
-    menu_scroll_hint(font, n, vis, start, MENU_HINT_X, 112);
-    let mut j = 0;
-    while j < vis && start + j < n {
-        let i = start + j;
-        let b = FURN_ITEMS[i];
-        let y = 112 + (j * MENU_ROW_H) as i16;
-        mc_button(y - 3, i == sel);
-        let color = if i == sel { MC_LABEL_SEL } else { MC_LABEL };
-        ui_text(font, MENU_TEXT_X, y, block_name(b), color);
-        ui_text(font, 200, y, "U", (0x90, 0xC0, 0x90));
-        ui_text(font, 212, y, &decimal3(unsafe { INV[b as usize] }), color);
-        j += 1;
     }
 }
 
@@ -10656,24 +10563,6 @@ fn chest_remove(x: i32, y: i32, z: i32) {
     }
 }
 
-fn chest_deposit(i: usize, item: u8) {
-    unsafe {
-        if INV[item as usize] > 0 {
-            INV[item as usize] -= 1;
-            CHEST_INV[i][item as usize] += 1;
-        }
-    }
-}
-
-fn chest_withdraw(i: usize, item: u8) {
-    unsafe {
-        if CHEST_INV[i][item as usize] > 0 {
-            CHEST_INV[i][item as usize] -= 1;
-            inv_give(item, 1);
-        }
-    }
-}
-
 fn furn_find(x: i32, y: i32, z: i32) -> Option<usize> {
     let mut i = 0;
     while i < MAX_FURNACES {
@@ -10735,7 +10624,7 @@ fn furn_deposit(i: usize, item: u8) {
         if f > 0 {
             if INV[item as usize] > 0 {
                 INV[item as usize] -= 1;
-                FURN_FUEL[i] += f; // coal 8 smelts, wood/planks 2
+                FURN_FUEL[i] = FURN_FUEL[i].saturating_add(f); // coal 8 smelts, wood/planks 2
             }
         } else if smelt_result(item) != AIR
             && INV[item as usize] > 0
@@ -10743,17 +10632,7 @@ fn furn_deposit(i: usize, item: u8) {
         {
             INV[item as usize] -= 1;
             FURN_IN[i] = item;
-            FURN_IN_N[i] += 1;
-        }
-    }
-}
-
-fn furn_withdraw(i: usize) {
-    unsafe {
-        if FURN_OUT_N[i] > 0 {
-            inv_give(FURN_OUT[i], FURN_OUT_N[i]);
-            FURN_OUT_N[i] = 0;
-            FURN_OUT[i] = AIR;
+            FURN_IN_N[i] = FURN_IN_N[i].saturating_add(1);
         }
     }
 }
