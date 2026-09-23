@@ -14,6 +14,7 @@
 extern crate psx_rt;
 
 mod bonnie;
+mod craft;
 #[cfg(feature = "ui-fixture")]
 mod fixture;
 mod inv;
@@ -1850,12 +1851,6 @@ const RECIPES: [Recipe; 50] = [
 // PS4 UI keeps the same category tabs, so L1/R1 pages these. TRIANGLE hides
 // recipes the inventory cannot pay for.
 const CRAFT_TABS: usize = 4;
-const CRAFT_TAB_TITLE: [&str; CRAFT_TABS] = [
-    "CRAFTING < BLOCKS >",
-    "CRAFTING < GEAR >",
-    "CRAFTING < ITEMS >",
-    "CRAFTING < FOOD >",
-];
 static mut CRAFT_TAB: usize = 0;
 static mut CRAFT_HIDE: bool = false;
 /// True while the crafting menu was opened at a placed crafting table; the
@@ -2042,45 +2037,6 @@ fn recipe_tab(i: usize) -> usize {
         | POTION_FIRE => 3,
         _ => 0,
     }
-}
-
-/// Page the category tab, skipping any tab that would come up empty -- the
-/// pocket grid only reaches a few recipes, so most tabs are blank without a
-/// table and paging through them looks broken.
-fn step_craft_tab(dir: i32) {
-    let mut scratch = [0u8; RECIPES.len()];
-    let mut i = 0;
-    while i < CRAFT_TABS {
-        unsafe {
-            CRAFT_TAB = (CRAFT_TAB as i32 + dir).rem_euclid(CRAFT_TABS as i32) as usize;
-        }
-        if craft_list(&mut scratch) > 0 {
-            return; // landed on a tab with something in it
-        }
-        i += 1;
-    }
-    // Every tab is empty (nothing craftable at all): leave the tab where it is.
-}
-
-/// The working set the crafting menu shows and selects over: recipe indices on
-/// the current tab, minus the unaffordable ones while the filter is on.
-fn craft_list(out: &mut [u8; RECIPES.len()]) -> usize {
-    let (tab, hide) = unsafe { (CRAFT_TAB, CRAFT_HIDE) };
-    let mut n = 0;
-    let mut i = 0;
-    while i < RECIPES.len() {
-        // Away from a table, bench-only recipes are not listed at all. They
-        // used to sit greyed with a "NEEDS CRAFTING TABLE" note, which made
-        // the pocket menu look mostly broken; the table's own menu still
-        // shows the full book.
-        let reachable = unsafe { AT_BENCH } || !needs_bench(i);
-        if recipe_tab(i) == tab && reachable && (!hide || craftable_here(i)) {
-            out[n] = i as u8;
-            n += 1;
-        }
-        i += 1;
-    }
-    n
 }
 
 #[inline(never)]
@@ -2319,6 +2275,7 @@ fn main() {
             menu = if menu == 1 { 0 } else { 1 };
             menu_sel = 0;
             unsafe { AT_BENCH = false }; // the handheld menu is the pocket grid
+            craft::craft_open(&player);
             sfx::blip();
         }
         // Inside the inventory TRIANGLE is Quick Move; CIRCLE or START close.
@@ -2335,9 +2292,8 @@ fn main() {
         }
 
         if menu != 0 {
-            let mut craft_vis = [0u8; RECIPES.len()];
             let n = match menu {
-                1 => craft_list(&mut craft_vis),
+                1 => 0, // the crafting strip navigates itself (craft.rs)
                 2 => inv::chest_list(chest_idx, &mut [0u8; BLOCK_KINDS]),
                 MENU_INV => 0, // the grid navigates itself (inv.rs)
                 MENU_OPTIONS => OPTIONS.len(),
@@ -2348,25 +2304,6 @@ fn main() {
             // last affordable recipe crafted); keep the selection in the list.
             if menu_sel >= n {
                 menu_sel = n.saturating_sub(1);
-            }
-            if menu == 1 {
-                // L1/R1 page the category tabs, TRIANGLE toggles the
-                // can-afford filter -- both console-edition conventions.
-                if pad.pressed_since(previous, button::L1) {
-                    step_craft_tab(-1);
-                    menu_sel = 0;
-                    sfx::blip();
-                }
-                if pad.pressed_since(previous, button::R1) {
-                    step_craft_tab(1);
-                    menu_sel = 0;
-                    sfx::blip();
-                }
-                if pad.pressed_since(previous, button::TRIANGLE) {
-                    unsafe { CRAFT_HIDE = !CRAFT_HIDE };
-                    menu_sel = 0;
-                    sfx::blip();
-                }
             }
             // Hold-to-scroll: the first press steps once; keep holding and
             // after a short delay it repeats fast, the console list feel.
@@ -2467,15 +2404,7 @@ fn main() {
                     sfx::confirm();
                 }
             } else if menu == 1 {
-                if n > 0 && pad.pressed_since(previous, button::CROSS) {
-                    let ri = craft_vis[menu_sel] as usize;
-                    if craftable_here(ri) {
-                        craft(ri, &mut player);
-                        sfx::confirm();
-                    } else {
-                        sfx::blip();
-                    }
-                }
+                craft::craft_input(pad, previous, &mut player);
             } else if menu == 2 {
                 inv::chest_input(chest_idx, menu_sel, pad, previous);
             } else {
@@ -2599,6 +2528,7 @@ fn main() {
                         AT_BENCH = true;
                         TUT_BENCHED = true;
                     }
+                    craft::craft_open(&player);
                     sfx::confirm();
                 } else if tb == CHEST {
                     used = true;
@@ -8775,7 +8705,7 @@ fn draw_food(food: i32) {
 #[optimize(size)] // menus pause the sim: its bytes are worth more than its cycles
 fn draw_menu(font: &FontAtlas, menu: u8, sel: usize, chest_idx: usize, player: Player) {
     if menu == 1 {
-        draw_crafting(font, sel);
+        craft::draw_crafting(font, &player);
     } else if menu == 2 {
         inv::draw_chest(font, chest_idx, sel);
     } else if menu == 3 {
@@ -8807,103 +8737,6 @@ fn draw_death(font: &FontAtlas) {
     let bx = (SCREEN_W as i16 - 92) / 2;
     let nx = ui_badge(font, bx, 128, "X", PS_CROSS) + 3;
     ui_text(font, nx, 128, "RESPAWN", (0xE0, 0xE0, 0xE0));
-}
-
-/// Crafting overlay: the current tab's recipes with the selected one marked,
-/// craftable ones bright, and the selected recipe's cost on the bottom line.
-/// Drawn over the dimmed world while the menu is open.
-#[optimize(size)] // menus pause the sim: its bytes are worth more than its cycles
-fn draw_crafting(font: &FontAtlas, sel: usize) {
-    let hide = unsafe { CRAFT_HIDE };
-    menu_frame(font, CRAFT_TAB_TITLE[unsafe { CRAFT_TAB }]);
-    let mut hx = MENU_PANEL_X + 6;
-    hx = ui_badge(font, hx, MENU_HINT_Y, "L1", PS_KEY) + 2;
-    hx = ui_badge(font, hx, MENU_HINT_Y, "R1", PS_KEY) + 3;
-    ui_text(font, hx, MENU_HINT_Y, "TAB", MC_INK);
-    hx += 3 * 8 + 8;
-    hx = hint_item(
-        font,
-        hx,
-        MENU_HINT_Y,
-        "T",
-        PS_TRIANGLE,
-        if hide { "ALL" } else { "HIDE" },
-    );
-    hx = hint_item(font, hx, MENU_HINT_Y, "X", PS_CROSS, "MAKE");
-    hint_item(font, hx, MENU_HINT_Y, "O", PS_CIRCLE, "CLOSE");
-    let mut list = [0u8; RECIPES.len()];
-    let n = craft_list(&mut list);
-    let vis = 5; // 5 recipe rows; the bottom of the panel is the cost box
-    let start = list_window(n, vis, sel);
-    menu_scroll_hint(font, n, vis, start, MENU_HINT_X, MENU_ROWS_Y);
-    if n == 0 {
-        // The filter emptied the tab: say so rather than show a bare panel.
-        ui_text(
-            font,
-            MENU_TEXT_X,
-            MENU_ROWS_Y,
-            "NOTHING CRAFTABLE HERE",
-            MC_INK,
-        );
-        return;
-    }
-    let mut j = 0;
-    while j < vis && start + j < n {
-        let i = start + j;
-        let ri = list[i] as usize;
-        let y = menu_row(j, i == sel);
-        let color = if i == sel {
-            MC_LABEL_SEL
-        } else if craftable_here(ri) {
-            MC_LABEL
-        } else {
-            MC_LABEL_OFF
-        };
-        ui_text(font, MENU_TEXT_X, y, RECIPES[ri].label, color);
-        j += 1;
-    }
-    // The cost box: a recessed slot listing the selected recipe's
-    // ingredients, one per line, red until the inventory covers it; the list
-    // row above already names the recipe. A grey MAKES line carries the yield
-    // when it is more than one.
-    let r = &RECIPES[list[sel] as usize];
-    let by = MENU_ROWS_Y + (5 * MENU_ROW_H) as i16 + 2;
-    mc_slot(MENU_BTN_X, by, MENU_BTN_W, 50);
-    let mut iy = by + 6;
-    let mut k = 0;
-    while k < r.n_in as usize {
-        let have = unsafe { INV[r.in_item[k] as usize] } >= r.in_qty[k];
-        let c = if have { MC_LABEL } else { (0xE0, 0x60, 0x60) };
-        let qty = [b'0' + (r.in_qty[k] % 10) as u8]; // recipe quantities are all single-digit
-        ui_text(
-            font,
-            MENU_TEXT_X,
-            iy,
-            unsafe { core::str::from_utf8_unchecked(&qty) },
-            c,
-        );
-        ui_text(font, MENU_TEXT_X + 16, iy, block_name(r.in_item[k]), c);
-        iy += 13;
-        k += 1;
-    }
-    if !is_tool_recipe(r.out) && r.out != CRAFT_ARMOR && r.out_qty > 1 {
-        let makes = [
-            b'M',
-            b'A',
-            b'K',
-            b'E',
-            b'S',
-            b' ',
-            b'0' + (r.out_qty % 10) as u8,
-        ];
-        ui_text(
-            font,
-            MENU_TEXT_X,
-            iy,
-            unsafe { core::str::from_utf8_unchecked(&makes) },
-            MC_HINT,
-        );
-    }
 }
 
 /// Scroll marker at the panel's right edge, level with the first row, when the
@@ -9504,8 +9337,8 @@ fn draw_all_hud(font: &FontAtlas, player: Player, menu: u8, tool: (u8, u8)) {
         draw_tutorial(font);
         draw_sleep_prompt(font);
     }
-    if menu != MENU_INV {
-        draw_hotbar(tool); // the inventory draws it over its dimming
+    if menu != MENU_INV && menu != 1 {
+        draw_hotbar(tool); // these menus draw it over their dimming
     }
     draw_xp(player.xp);
     draw_armor(player.armor);
