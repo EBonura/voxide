@@ -2293,12 +2293,12 @@ fn main() {
 
         if menu != 0 {
             let n = match menu {
-                1 => 0, // the crafting strip navigates itself (craft.rs)
-                2 => inv::chest_list(chest_idx, &mut [0u8; BLOCK_KINDS]),
+                1 => 0,        // the crafting strip navigates itself (craft.rs)
+                2 => 0,        // the container panes navigate themselves (inv.rs)
                 MENU_INV => 0, // the grid navigates itself (inv.rs)
                 MENU_OPTIONS => OPTIONS.len(),
                 MENU_DEAD => 1,
-                _ => inv::FURN_ROWS,
+                _ => 0,
             };
             // Crafting can shrink under the cursor (tab switch, filter, the
             // last affordable recipe crafted); keep the selection in the list.
@@ -2406,9 +2406,9 @@ fn main() {
             } else if menu == 1 {
                 craft::craft_input(pad, previous, &mut player);
             } else if menu == 2 {
-                inv::chest_input(chest_idx, menu_sel, pad, previous);
+                inv::chest_input(chest_idx, pad, previous);
             } else {
-                inv::furnace_input(chest_idx, menu_sel, pad, previous);
+                inv::furnace_input(chest_idx, pad, previous);
             }
         } else {
             // Hotbar select: L1/R1 step the 9 real slots (Bedrock's shoulder
@@ -2536,7 +2536,7 @@ fn main() {
                         menu = 2;
                         chest_idx = ci;
                         menu_sel = 0;
-                        inv::chest_open();
+                        inv::container_open();
                         sfx::chest_open();
                     }
                 } else if tb == FURNACE {
@@ -2545,6 +2545,7 @@ fn main() {
                         menu = 3;
                         chest_idx = fi;
                         menu_sel = 0;
+                        inv::container_open();
                         sfx::chest_open();
                     }
                 } else if tb == BED {
@@ -8707,9 +8708,9 @@ fn draw_menu(font: &FontAtlas, menu: u8, sel: usize, chest_idx: usize, player: P
     if menu == 1 {
         craft::draw_crafting(font, &player);
     } else if menu == 2 {
-        inv::draw_chest(font, chest_idx, sel);
+        inv::draw_chest(font, chest_idx, &player);
     } else if menu == 3 {
-        inv::draw_furnace(font, chest_idx, sel);
+        inv::draw_furnace(font, chest_idx, &player);
     } else if menu == MENU_OPTIONS {
         draw_options(font, sel, player);
     } else if menu == MENU_INV {
@@ -9071,7 +9072,6 @@ const MENU_HINT_X: i16 = MENU_BTN_X + MENU_BTN_W + 4;
 const MC_LABEL: (u8, u8, u8) = (0xE0, 0xE0, 0xE0);
 const MC_LABEL_SEL: (u8, u8, u8) = (0xFF, 0xFF, 0xA0);
 const MC_LABEL_OFF: (u8, u8, u8) = (0x9E, 0x9E, 0x9E);
-const MC_HINT: (u8, u8, u8) = (0xA8, 0xA8, 0xA8);
 
 /// Half-blend black over the whole frame. Vanilla darkens the world rather than
 /// hiding it behind an opaque panel, and the frozen world is still legible
@@ -9337,7 +9337,7 @@ fn draw_all_hud(font: &FontAtlas, player: Player, menu: u8, tool: (u8, u8)) {
         draw_tutorial(font);
         draw_sleep_prompt(font);
     }
-    if menu != MENU_INV && menu != 1 {
+    if menu != MENU_INV && !(1..=3).contains(&menu) {
         draw_hotbar(tool); // these menus draw it over their dimming
     }
     draw_xp(player.xp);

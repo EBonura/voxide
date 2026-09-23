@@ -1705,7 +1705,12 @@ const I_COAL: Icon = icon(
     ],
 );
 const I_INGOT: Icon = icon(
-    [(64, 64, 72), (150, 150, 160), (196, 196, 206), (236, 236, 244)],
+    [
+        (64, 64, 72),
+        (150, 150, 160),
+        (196, 196, 206),
+        (236, 236, 244),
+    ],
     [
         b"................",
         b"................",
@@ -1810,7 +1815,12 @@ const I_POWDER: Icon = icon(
     ],
 );
 const I_ARROW: Icon = icon(
-    [(64, 64, 70), (170, 170, 178), (122, 84, 42), (232, 232, 236)],
+    [
+        (64, 64, 70),
+        (170, 170, 178),
+        (122, 84, 42),
+        (232, 232, 236),
+    ],
     [
         b"................",
         b"..........1111..",
@@ -1915,7 +1925,12 @@ const I_SEEDS: Icon = icon(
     ],
 );
 const I_ARMOR: Icon = icon(
-    [(40, 40, 48), (120, 120, 132), (184, 184, 196), (226, 226, 236)],
+    [
+        (40, 40, 48),
+        (120, 120, 132),
+        (184, 184, 196),
+        (226, 226, 236),
+    ],
     [
         b"................",
         b"................",
@@ -1958,8 +1973,19 @@ const I_BOW: Icon = icon(
 );
 
 const ICONS: [&Icon; 13] = [
-    &I_COAL, &I_INGOT, &I_STICK, &I_STRING, &I_BONE, &I_POWDER, &I_ARROW, &I_RAW_MEAT,
-    &I_STEAK, &I_BREAD, &I_SEEDS, &I_ARMOR, &I_BOW,
+    &I_COAL,
+    &I_INGOT,
+    &I_STICK,
+    &I_STRING,
+    &I_BONE,
+    &I_POWDER,
+    &I_ARROW,
+    &I_RAW_MEAT,
+    &I_STEAK,
+    &I_BREAD,
+    &I_SEEDS,
+    &I_ARMOR,
+    &I_BOW,
 ];
 
 /// The 3x5 digits, one bit per pixel, rows top to bottom, 3 bits each.
