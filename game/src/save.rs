@@ -267,7 +267,12 @@ fn load_v1(p: &mut Player, buf: &[u8]) {
     let mut i = 0;
     while i < n {
         let (x, y, z, b) = unsafe {
-            (EDIT_X[i] as i32, EDIT_Y[i] as i32, EDIT_Z[i] as i32, EDIT_B[i])
+            (
+                EDIT_X[i] as i32,
+                EDIT_Y[i] as i32,
+                EDIT_Z[i] as i32,
+                EDIT_B[i],
+            )
         };
         if b == CHEST {
             crate::chest_register(x, y, z);

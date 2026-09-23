@@ -1,16 +1,32 @@
-//! Container menus: what the chest and furnace panels list, and how many items
-//! a press moves. Kept out of main.rs so the menus can grow without reshaping
-//! the gameplay loop (whose PGO profile is keyed to its line layout).
+//! The inventory, chest and furnace menus. Kept out of main.rs so the menus
+//! can grow without reshaping the gameplay loop (whose PGO profile is keyed
+//! to its line layout). All of it is built for size: the sim is paused while
+//! a menu is up, and RAM is the budget that binds.
 //!
-//! Button grammar, the Legacy Console one: CROSS moves one (hold to repeat,
-//! accelerating), SQUARE moves half (rounded up), TRIANGLE moves all.
+//! Containers use the Legacy Console grammar: CROSS moves one (hold to
+//! repeat, accelerating), SQUARE moves half (rounded up), TRIANGLE moves all.
 
 use crate::*;
 
-/// Chest transfer direction, flipped with LEFT/RIGHT: true = into the chest.
-static mut CHEST_PUT: bool = true;
+// -- chest and furnace: two panes on the grid ---------------------------------
+//
+// YOU on the left, the container on the right, on the inventory's 18px slots.
+// The cursor crosses between the panes; what it sits on moves the other way.
+
+const PANE_COLS: usize = 7;
+const PANE_ROWS: usize = 4;
+const PANE_PAGE: usize = PANE_COLS * PANE_ROWS;
+const YOU_X: i16 = 22;
+const BOX_X: i16 = 176;
+const PANE_Y: i16 = 53;
+
 /// Frames CROSS has been held in a container menu.
 static mut HOLD_T: u16 = 0;
+/// Cursor: column 0..6 is your pane, 7.. the container's; row 0..3.
+static mut BOX_X_CUR: usize = 0;
+static mut BOX_Y_CUR: usize = 0;
+/// Page of each pane (L2/R2 page the pane under the cursor).
+static mut BOX_PAGE: [usize; 2] = [0; 2];
 
 /// How many items a held CROSS moves this frame: one on the press, then after
 /// a short delay a repeat that speeds up the longer it is held, ending at a
@@ -32,67 +48,126 @@ fn hold_step(held: bool) -> u16 {
     }
 }
 
-/// Half a stack, rounded up, so one item still moves.
-#[optimize(size)]
-fn half(n: u16) -> u16 {
-    n - n / 2
-}
-
-/// How many to move for this frame's buttons, given `have` at the source.
+/// How many to move for this frame's buttons, given `have` at the source:
+/// CROSS one (held, repeating), SQUARE half rounded up, TRIANGLE all.
 #[optimize(size)]
 fn press_count(pad: ButtonState, previous: ButtonState, have: u16) -> u16 {
     if pad.pressed_since(previous, button::TRIANGLE) {
         have
     } else if pad.pressed_since(previous, button::SQUARE) {
-        half(have)
+        have - have / 2
     } else {
         hold_step(pad.is_held(button::CROSS)).min(have)
     }
 }
 
-/// Every kind the player or this chest holds, in id order: blocks and
-/// materials alike (the chest used to list placeables only, so coal, ingots,
-/// sticks and the rest could not be stored).
-#[inline(never)]
+/// Reset the container cursor onto your pane.
 #[optimize(size)]
-pub fn chest_list(idx: usize, out: &mut [u8; BLOCK_KINDS]) -> usize {
-    let mut n = 0;
-    let mut k = 1;
-    while k < BLOCK_KINDS {
-        if unsafe { INV[k] > 0 || CHEST_INV[idx][k] > 0 } {
-            out[n] = k as u8;
-            n += 1;
-        }
-        k += 1;
-    }
-    n
-}
-
-#[optimize(size)]
-pub fn chest_open() {
+pub fn container_open() {
     unsafe {
-        CHEST_PUT = true;
         HOLD_T = 0;
+        BOX_X_CUR = 0;
+        BOX_Y_CUR = 0;
+        BOX_PAGE = [0; 2];
+        NAV_T = [0; 4];
+        TAB = 0;
+    }
+}
+
+/// Snap the cursor over `cols` columns (both panes) and `rows` rows.
+#[optimize(size)]
+fn box_nav(pad: ButtonState, cols: usize, rows: usize) {
+    let t = unsafe { &mut NAV_T };
+    let dirs = [button::UP, button::DOWN, button::LEFT, button::RIGHT];
+    let mut d = 0;
+    while d < 4 {
+        if nav_repeat(pad.is_held(dirs[d]), &mut t[d]) {
+            unsafe {
+                match d {
+                    0 => BOX_Y_CUR = (BOX_Y_CUR + rows - 1) % rows,
+                    1 => BOX_Y_CUR = (BOX_Y_CUR + 1) % rows,
+                    2 => BOX_X_CUR = (BOX_X_CUR + cols - 1) % cols,
+                    _ => BOX_X_CUR = (BOX_X_CUR + 1) % cols,
+                }
+            }
+            sfx::blip();
+        }
+        d += 1;
+    }
+}
+
+/// The kind under the cursor in a pane listing `list[..n]`.
+#[optimize(size)]
+fn pane_item(list: &[u8; BLOCK_KINDS], n: usize, pane: usize, col: usize) -> u8 {
+    let i = unsafe { BOX_PAGE[pane] } * PANE_PAGE + unsafe { BOX_Y_CUR } * PANE_COLS + col;
+    if i < n {
+        list[i]
+    } else {
+        AIR
+    }
+}
+
+/// L1/R1 tabs and L2/R2 pages, shared by the chest's panes.
+#[optimize(size)]
+fn box_pages(pad: ButtonState, previous: ButtonState, pane: usize, n: usize) {
+    let np = pages_of(n, PANE_PAGE);
+    unsafe {
+        if np > 1 && pad.pressed_since(previous, button::R2) {
+            BOX_PAGE[pane] = (BOX_PAGE[pane] + 1) % np;
+            sfx::blip();
+        }
+        if np > 1 && pad.pressed_since(previous, button::L2) {
+            BOX_PAGE[pane] = (BOX_PAGE[pane] + np - 1) % np;
+            sfx::blip();
+        }
+        if BOX_PAGE[pane] >= np {
+            BOX_PAGE[pane] = np - 1;
+        }
+    }
+}
+
+fn pages_of(n: usize, per: usize) -> usize {
+    if n == 0 {
+        1
+    } else {
+        (n + per - 1) / per
     }
 }
 
 #[inline(never)]
 #[optimize(size)]
-pub fn chest_input(idx: usize, sel: usize, pad: ButtonState, previous: ButtonState) {
-    if pad.pressed_since(previous, button::LEFT) || pad.pressed_since(previous, button::RIGHT) {
-        unsafe { CHEST_PUT = pad.is_held(button::RIGHT) };
+pub fn chest_input(idx: usize, pad: ButtonState, previous: ButtonState) {
+    let pressed = |b: u16| pad.pressed_since(previous, b);
+    if pressed(button::L1) || pressed(button::R1) {
+        unsafe {
+            TAB = if pressed(button::R1) {
+                (TAB + 1) % TABS
+            } else {
+                (TAB + TABS - 1) % TABS
+            };
+            BOX_PAGE = [0; 2];
+        }
         sfx::blip();
     }
+    box_nav(pad, 2 * PANE_COLS, PANE_ROWS);
+    let (x, tab) = unsafe { (BOX_X_CUR, TAB) };
+    let pane = (x >= PANE_COLS) as usize;
     let mut list = [0u8; BLOCK_KINDS];
-    let n = chest_list(idx, &mut list);
-    if sel >= n {
+    let n = unsafe {
+        if pane == 0 {
+            tab_kinds(tab, false, &INV, &mut list)
+        } else {
+            tab_kinds(tab, false, &CHEST_INV[idx], &mut list)
+        }
+    };
+    box_pages(pad, previous, pane, n);
+    let item = pane_item(&list, n, pane, x % PANE_COLS) as usize;
+    if item == AIR as usize {
         hold_step(false);
         return;
     }
-    let item = list[sel] as usize;
-    let put = unsafe { CHEST_PUT };
     let have = unsafe {
-        if put {
+        if pane == 0 {
             INV[item]
         } else {
             CHEST_INV[idx][item]
@@ -103,7 +178,7 @@ pub fn chest_input(idx: usize, sel: usize, pad: ButtonState, previous: ButtonSta
         return;
     }
     unsafe {
-        if put {
+        if pane == 0 {
             INV[item] -= m;
             CHEST_INV[idx][item] = CHEST_INV[idx][item].saturating_add(m);
         } else {
@@ -114,101 +189,244 @@ pub fn chest_input(idx: usize, sel: usize, pad: ButtonState, previous: ButtonSta
     sfx::blip();
 }
 
-/// Furnace rows: row 0 takes from the output slot, the rest load the input or
-/// the fuel from FURN_ITEMS.
-pub const FURN_ROWS: usize = FURN_ITEMS.len() + 1;
+/// Your smeltables and fuels, in FURN_ITEMS order.
+#[optimize(size)]
+fn furnace_list(out: &mut [u8; BLOCK_KINDS]) -> usize {
+    let mut n = 0;
+    let mut i = 0;
+    while i < FURN_ITEMS.len() {
+        if unsafe { INV[FURN_ITEMS[i] as usize] } > 0 {
+            out[n] = FURN_ITEMS[i];
+            n += 1;
+        }
+        i += 1;
+    }
+    n
+}
+
+/// The furnace pane's three slots, as cursor rows: input, output, fuel.
+const F_IN: usize = 0;
+const F_OUT: usize = 1;
+const F_FUEL: usize = 2;
 
 #[inline(never)]
 #[optimize(size)]
-pub fn furnace_input(idx: usize, sel: usize, pad: ButtonState, previous: ButtonState) {
-    if sel == 0 {
-        let have = unsafe { FURN_OUT_N[idx] };
-        let m = press_count(pad, previous, have);
-        if m > 0 {
-            unsafe {
-                inv_give(FURN_OUT[idx], m);
-                FURN_OUT_N[idx] -= m;
-                if FURN_OUT_N[idx] == 0 {
-                    FURN_OUT[idx] = AIR;
-                }
+pub fn furnace_input(idx: usize, pad: ButtonState, previous: ButtonState) {
+    // Your pane is 7x4; the furnace pane is one column of three slots.
+    let right = unsafe { BOX_X_CUR } >= PANE_COLS;
+    box_nav(pad, PANE_COLS + 1, if right { 3 } else { PANE_ROWS });
+    let (x, y) = unsafe {
+        if BOX_X_CUR >= PANE_COLS {
+            BOX_X_CUR = PANE_COLS;
+            if BOX_Y_CUR > F_FUEL {
+                BOX_Y_CUR = F_FUEL;
             }
+        }
+        (BOX_X_CUR, BOX_Y_CUR)
+    };
+    if x < PANE_COLS {
+        let mut list = [0u8; BLOCK_KINDS];
+        let n = furnace_list(&mut list);
+        let item = pane_item(&list, n, 0, x);
+        if item == AIR {
+            hold_step(false);
+            return;
+        }
+        let m = press_count(pad, previous, unsafe { INV[item as usize] });
+        let mut moved = false;
+        let mut i = 0;
+        while i < m {
+            let before = unsafe { INV[item as usize] };
+            furn_deposit(idx, item);
+            if unsafe { INV[item as usize] } == before {
+                break; // the input slot holds a different ore
+            }
+            moved = true;
+            i += 1;
+        }
+        if moved {
             sfx::blip();
         }
         return;
     }
-    let item = FURN_ITEMS[sel - 1];
-    let m = press_count(pad, previous, unsafe { INV[item as usize] });
-    let mut moved = false;
-    let mut i = 0;
-    while i < m {
-        let before = unsafe { INV[item as usize] };
-        furn_deposit(idx, item);
-        if unsafe { INV[item as usize] } == before {
-            break; // the input slot holds a different ore
+    unsafe {
+        let (kind, count) = match y {
+            F_IN => (&mut FURN_IN[idx], &mut FURN_IN_N[idx]),
+            F_OUT => (&mut FURN_OUT[idx], &mut FURN_OUT_N[idx]),
+            _ => {
+                hold_step(false);
+                return; // fuel is burnt as it goes: it does not come back
+            }
+        };
+        let m = press_count(pad, previous, *count);
+        if m > 0 {
+            inv_give(*kind, m);
+            *count -= m;
+            if *count == 0 {
+                *kind = AIR;
+                if y == F_IN {
+                    FURN_PROG[idx] = 0;
+                }
+            }
+            sfx::blip();
         }
-        moved = true;
-        i += 1;
-    }
-    if moved {
-        sfx::blip();
     }
 }
 
-/// Chest overlay: every kind either side holds, with both counts and the
-/// direction a press moves them.
-#[inline(never)]
+/// A pane of kinds with counts from `counts`, and its page marker.
 #[optimize(size)]
-pub fn draw_chest(font: &FontAtlas, idx: usize, sel: usize) {
-    menu_frame(font, "CHEST");
-    let mut hx = hint_item(font, MENU_TEXT_X, MENU_HINT_Y, "X", PS_CROSS, "MOVE");
-    hx = hint_item(font, hx, MENU_HINT_Y, "[]", PS_SQUARE, "HALF");
-    hx = hint_item(font, hx, MENU_HINT_Y, "T", PS_TRIANGLE, "ALL");
-    hint_item(font, hx, MENU_HINT_Y, "O", PS_CIRCLE, "CLOSE");
-    let put = unsafe { CHEST_PUT };
-    let hx = hint_item(
+fn draw_pane(
+    font: &FontAtlas,
+    x0: i16,
+    list: &[u8; BLOCK_KINDS],
+    n: usize,
+    page: usize,
+    counts: &[u16; BLOCK_KINDS],
+) {
+    let mut k = 0;
+    while k < PANE_PAGE {
+        let x = x0 + (k % PANE_COLS) as i16 * SLOT;
+        let y = PANE_Y + (k / PANE_COLS) as i16 * SLOT;
+        slot(x, y);
+        let i = page * PANE_PAGE + k;
+        if i < n {
+            let b = list[i];
+            draw_icon(x + 1, y + 1, b, 128);
+            let c = counts[b as usize];
+            if c > 1 {
+                draw_count(x, y, c);
+            }
+        }
+        k += 1;
+    }
+    let np = pages_of(n, PANE_PAGE);
+    if np > 1 {
+        let mut a = [0u8; 5];
+        let mut b = [0u8; 5];
+        let s1 = number(page as u16 + 1, &mut a);
+        let s2 = number(np as u16, &mut b);
+        let x = x0 + 126 - (s1.len() + s2.len() + 1) as i16 * 8;
+        ui_text(font, x, 43, s1, MC_INK);
+        ui_text(font, x + s1.len() as i16 * 8, 43, "/", MC_INK);
+        ui_text(font, x + (s1.len() as i16 + 1) * 8, 43, s2, MC_INK);
+    }
+}
+
+/// The controls line both containers share.
+#[optimize(size)]
+fn container_hints(font: &FontAtlas, tabs: bool, pages: bool) {
+    let (y1, y2) = (174, 190);
+    let x = hint_item(font, 16, y1, "X", PS_CROSS, "MOVE 1");
+    let x = hint_item(font, x, y1, "[]", PS_SQUARE, "HALF");
+    hint_item(font, x, y1, "T", PS_TRIANGLE, "ALL");
+    let mut x = 16;
+    if tabs {
+        x = hint_item(font, x, y2, "L1R1", PS_KEY, "TAB");
+    }
+    x = if pages {
+        hint_item(font, x, y2, "L2R2", PS_KEY, "PAGE")
+    } else {
+        hint_item(font, x, y2, "HOLD X", PS_KEY, "REPEAT")
+    };
+    hint_item(font, x, y2, "O", PS_CIRCLE, "CLOSE");
+}
+
+/// "YOU 37   CHEST 12" style counts line.
+#[optimize(size)]
+fn two_counts(font: &FontAtlas, y: i16, a: &str, an: u16, b: &str, bn: u16) {
+    let mut ab = [0u8; 5];
+    let mut bb = [0u8; 5];
+    let s1 = number(an, &mut ab);
+    ui_text(font, 42, y, a, GREY);
+    let x = 42 + (a.len() as i16 + 1) * 8;
+    ui_text(font, x, y, s1, GREY);
+    let x = x + (s1.len() as i16 + 3) * 8;
+    ui_text(font, x, y, b, GREY);
+    ui_text(
         font,
-        MENU_TEXT_X,
-        170,
-        "< >",
-        PS_KEY,
-        if put { "PUT IN" } else { "TAKE OUT" },
+        x + (b.len() as i16 + 1) * 8,
+        y,
+        number(bn, &mut bb),
+        GREY,
     );
-    hint_item(font, hx, 170, "HOLD X", PS_CROSS, "FASTER");
-    let mut list = [0u8; BLOCK_KINDS];
-    let n = chest_list(idx, &mut list);
-    if n == 0 {
-        ui_text(font, MENU_TEXT_X, MENU_ROWS_Y, "NOTHING TO STORE", MC_INK);
-        return;
-    }
-    let vis = 7;
-    let start = list_window(n, vis, sel);
-    menu_scroll_hint(font, n, vis, start, MENU_HINT_X, MENU_ROWS_Y);
-    let mut j = 0;
-    while j < vis && start + j < n {
-        let i = start + j;
-        let b = list[i];
-        let y = menu_row(j, i == sel);
-        let color = if i == sel { MC_LABEL_SEL } else { MC_LABEL };
-        ui_text(font, MENU_TEXT_X, y, block_name(b), color);
-        ui_text(font, 158, y, "U", (0x90, 0xC0, 0x90));
-        ui_text(font, 170, y, &decimal3(unsafe { INV[b as usize] }), color);
-        ui_text(font, 202, y, if put { ">" } else { "<" }, color);
-        ui_text(font, 222, y, "C", (0x90, 0xC0, 0x90));
-        ui_text(font, 234, y, &decimal3(unsafe { CHEST_INV[idx][b as usize] }), color);
-        j += 1;
-    }
 }
 
-/// Furnace overlay: input / fuel / output read-outs, the smelt progress bar,
-/// then the rows: TAKE OUTPUT first, then what can be loaded.
 #[inline(never)]
 #[optimize(size)]
-pub fn draw_furnace(font: &FontAtlas, idx: usize, sel: usize) {
-    menu_frame(font, "FURNACE");
-    let mut hx = hint_item(font, MENU_TEXT_X, MENU_HINT_Y, "X", PS_CROSS, "MOVE");
-    hx = hint_item(font, hx, MENU_HINT_Y, "[]", PS_SQUARE, "HALF");
-    hx = hint_item(font, hx, MENU_HINT_Y, "T", PS_TRIANGLE, "ALL");
-    hint_item(font, hx, MENU_HINT_Y, "O", PS_CIRCLE, "CLOSE");
+pub fn draw_chest(font: &FontAtlas, idx: usize, player: &Player) {
+    let (tab, x, y, pg) = unsafe { (TAB, BOX_X_CUR, BOX_Y_CUR, BOX_PAGE) };
+    dim_screen();
+    panel(8, 3, 304, 207);
+    draw_centered(font, 8, "CHEST", MC_INK);
+    tabs(font, 20, &TAB_TILES, tab);
+    ui_text(font, YOU_X, 43, "YOU", MC_INK);
+    ui_text(font, BOX_X, 43, "CHEST", MC_INK);
+    let (inv, boxed) = unsafe { (&INV, &CHEST_INV[idx]) };
+    let mut mine = [0u8; BLOCK_KINDS];
+    let mut theirs = [0u8; BLOCK_KINDS];
+    let nm = tab_kinds(tab, false, inv, &mut mine);
+    let nt = tab_kinds(tab, false, boxed, &mut theirs);
+    draw_pane(font, YOU_X, &mine, nm, pg[0], inv);
+    draw_pane(font, BOX_X, &theirs, nt, pg[1], boxed);
+    ui_text(font, 154, 70, ">", MC_INK);
+    ui_text(font, 154, 86, "<", MC_INK);
+
+    let pane = (x >= PANE_COLS) as usize;
+    let item = if pane == 0 {
+        pane_item(&mine, nm, 0, x)
+    } else {
+        pane_item(&theirs, nt, 1, x - PANE_COLS)
+    };
+    mc_slot(16, 130, 288, 34);
+    if item != AIR {
+        draw_icon(22, 135, item, 128);
+        ui_text(font, 42, 134, block_name(item), LABEL);
+        two_counts(
+            font,
+            148,
+            "YOU",
+            inv[item as usize],
+            "CHEST",
+            boxed[item as usize],
+        );
+    } else {
+        ui_text(
+            font,
+            42,
+            141,
+            if pane == 0 {
+                "NOTHING OF YOURS HERE"
+            } else {
+                "NOTHING STORED HERE"
+            },
+            GREY,
+        );
+    }
+    container_hints(
+        font,
+        true,
+        pages_of(nm, PANE_PAGE) > 1 || pages_of(nt, PANE_PAGE) > 1,
+    );
+    draw_hotbar(hud_tool(player, AIR));
+    let cx = if pane == 0 {
+        YOU_X + x as i16 * SLOT
+    } else {
+        BOX_X + (x - PANE_COLS) as i16 * SLOT
+    };
+    frame(cx, PANE_Y + y as i16 * SLOT, CURSOR);
+}
+
+// Furnace pane geometry: input over fuel on the left, the arrow, the output.
+const F_SLOT_X: i16 = 206;
+const F_IN_Y: i16 = 53;
+const F_FUEL_Y: i16 = 107;
+const F_OUT_X: i16 = 270;
+const F_OUT_Y: i16 = 80;
+
+#[inline(never)]
+#[optimize(size)]
+pub fn draw_furnace(font: &FontAtlas, idx: usize, player: &Player) {
+    let (x, y, pg) = unsafe { (BOX_X_CUR, BOX_Y_CUR, BOX_PAGE[0]) };
     let (inn, in_n, fuel, outt, out_n, prog) = unsafe {
         (
             FURN_IN[idx],
@@ -219,47 +437,126 @@ pub fn draw_furnace(font: &FontAtlas, idx: usize, sel: usize) {
             FURN_PROG[idx],
         )
     };
-    let in_name = if inn == AIR { "--" } else { block_name(inn) };
-    let out_name = if outt == AIR { "--" } else { block_name(outt) };
-    // The slots are read-outs, not choices: vanilla's inset slot bevel.
-    mc_slot(MENU_BTN_X, 41, MENU_BTN_W, 36);
-    ui_text(font, MENU_TEXT_X, 44, "IN", MC_HINT);
-    ui_text(font, MENU_TEXT_X + 40, 44, in_name, MC_LABEL);
-    ui_text(font, 150, 44, &decimal3(in_n), MC_LABEL);
-    ui_text(font, 190, 44, "FUEL", MC_HINT);
-    ui_text(font, 238, 44, &decimal3(fuel), (0xF0, 0xC0, 0x50));
-    ui_text(font, MENU_TEXT_X, 60, "OUT", MC_HINT);
-    ui_text(font, MENU_TEXT_X + 40, 60, out_name, MC_LABEL);
-    ui_text(font, 150, 60, &decimal3(out_n), MC_LABEL);
-    // Smelt progress, the arrow in vanilla's furnace.
-    mc_slot(MENU_BTN_X, 80, MENU_BTN_W, 9);
-    let w = prog as i16 * (MENU_BTN_W - 4) / SMELT_TIME as i16;
+    dim_screen();
+    panel(8, 3, 304, 207);
+    draw_centered(font, 8, "FURNACE", MC_INK);
+    ui_text(font, YOU_X, 43, "YOU", MC_INK);
+    ui_text(font, F_SLOT_X - 22, F_IN_Y + 5, "IN", MC_INK);
+    let mut mine = [0u8; BLOCK_KINDS];
+    let nm = furnace_list(&mut mine);
+    draw_pane(font, YOU_X, &mine, nm, pg, unsafe { &INV });
+    ui_text(font, 154, 78, ">", MC_INK);
+
+    // Input, fuel (coal-ish icon with the smelts left), progress, output.
+    slot(F_SLOT_X, F_IN_Y);
+    if inn != AIR {
+        draw_icon(F_SLOT_X + 1, F_IN_Y + 1, inn, 128);
+        draw_count(F_SLOT_X, F_IN_Y, in_n);
+    }
+    ui_text(font, F_SLOT_X - 38, F_FUEL_Y + 5, "FUEL", MC_INK);
+    slot(F_SLOT_X, F_FUEL_Y);
+    if fuel > 0 {
+        draw_icon(F_SLOT_X + 1, F_FUEL_Y + 1, COAL_ORE, 128);
+        draw_count(F_SLOT_X, F_FUEL_Y, fuel);
+    }
+    // Flame between input and fuel: lit while there is fuel.
+    let lit = if fuel > 0 {
+        (240, 150, 40)
+    } else {
+        (90, 90, 96)
+    };
+    rect(F_SLOT_X + 5, F_IN_Y + 22, 8, 6, lit.0, lit.1, lit.2);
+    rect(F_SLOT_X + 7, F_IN_Y + 20, 4, 2, lit.0, lit.1, lit.2);
+    // Arrow: grey track filling orange with the smelt progress.
+    let (ax, ay, aw) = (F_SLOT_X + 24, F_OUT_Y + 6, 38i16);
+    rect(ax, ay, aw, 5, 0x8B, 0x8B, 0x8B);
+    let w = prog as i16 * aw / SMELT_TIME as i16;
     if w > 0 {
-        rect(MENU_BTN_X + 2, 82, w, 5, 230, 140, 40);
+        rect(ax, ay, w, 5, 230, 140, 40);
+    }
+    ui_text(font, F_OUT_X - 4, F_OUT_Y - 10, "OUT", MC_INK);
+    slot(F_OUT_X, F_OUT_Y);
+    if outt != AIR {
+        draw_icon(F_OUT_X + 1, F_OUT_Y + 1, outt, 128);
+        draw_count(F_OUT_X, F_OUT_Y, out_n);
     }
 
-    let vis = 4;
-    let top = 96;
-    let start = list_window(FURN_ROWS, vis, sel);
-    menu_scroll_hint(font, FURN_ROWS, vis, start, MENU_HINT_X, top);
-    let mut j = 0;
-    while j < vis && start + j < FURN_ROWS {
-        let i = start + j;
-        let y = top + (j * MENU_ROW_H) as i16;
-        mc_button(y - 3, i == sel);
-        let color = if i == sel { MC_LABEL_SEL } else { MC_LABEL };
-        if i == 0 {
-            ui_text(font, MENU_TEXT_X, y, "TAKE OUTPUT", color);
-            ui_text(font, 212, y, &decimal3(out_n), color);
-        } else {
-            let b = FURN_ITEMS[i - 1];
-            ui_text(font, MENU_TEXT_X, y, block_name(b), color);
-            ui_text(font, 200, y, "U", (0x90, 0xC0, 0x90));
-            ui_text(font, 212, y, &decimal3(unsafe { INV[b as usize] }), color);
+    // Info strip.
+    mc_slot(16, 130, 288, 34);
+    let right = x >= PANE_COLS;
+    let item = if right {
+        match y {
+            F_IN => inn,
+            F_OUT => outt,
+            _ => {
+                if fuel > 0 {
+                    COAL_ORE
+                } else {
+                    AIR
+                }
+            }
         }
-        j += 1;
+    } else {
+        pane_item(&mine, nm, 0, x)
+    };
+    if right && y == F_FUEL {
+        ui_text(font, 42, 134, "FUEL", LABEL);
+        let mut b = [0u8; 5];
+        ui_text(font, 42, 148, number(fuel, &mut b), GREY);
+        ui_text(
+            font,
+            50 + number(fuel, &mut [0u8; 5]).len() as i16 * 8,
+            148,
+            "SMELTS LEFT",
+            GREY,
+        );
+    } else if item != AIR {
+        draw_icon(22, 135, item, 128);
+        ui_text(font, 42, 134, block_name(item), LABEL);
+        if right {
+            let (what, n) = if y == F_IN {
+                ("SMELTING", in_n)
+            } else {
+                ("READY", out_n)
+            };
+            two_counts(font, 148, what, n, "YOU", unsafe { INV[item as usize] });
+        } else {
+            let f = fuel_smelts(item);
+            if f > 0 {
+                ui_text(font, 42, 148, "FUEL: SMELTS", GREY);
+                let mut b = [0u8; 5];
+                ui_text(font, 42 + 13 * 8, 148, number(f, &mut b), GREY);
+                ui_text(font, 42 + 15 * 8, 148, "EACH", GREY);
+            } else {
+                ui_text(font, 42, 148, "SMELTS INTO", GREY);
+                ui_text(font, 42 + 12 * 8, 148, block_name(smelt_result(item)), GREY);
+            }
+        }
+    } else {
+        ui_text(
+            font,
+            42,
+            141,
+            if right {
+                "EMPTY"
+            } else {
+                "NOTHING TO SMELT OR BURN"
+            },
+            GREY,
+        );
     }
-    hint_item(font, MENU_TEXT_X, 170, "HOLD X", PS_CROSS, "FASTER");
+    container_hints(font, false, pages_of(nm, PANE_PAGE) > 1);
+    draw_hotbar(hud_tool(player, AIR));
+    let (cx, cy) = if right {
+        match y {
+            F_IN => (F_SLOT_X, F_IN_Y),
+            F_OUT => (F_OUT_X, F_OUT_Y),
+            _ => (F_SLOT_X, F_FUEL_Y),
+        }
+    } else {
+        (YOU_X + x as i16 * SLOT, PANE_Y + y as i16 * SLOT)
+    };
+    frame(cx, cy, CURSOR);
 }
 
 // ---------------------------------------------------------------------------
@@ -284,18 +581,75 @@ const CURSOR: (u8, u8, u8) = (0xFF, 0xE0, 0x40);
 const TABS: usize = 4;
 const TAB_NAME: [&str; TABS] = ["BLOCKS", "ITEMS", "FOOD", "MATERIALS"];
 const TAB_BLOCKS: [u8; 33] = [
-    GRASS, DIRT, STONE, COBBLE, SLAB, STAIRS_N, BRICK, WOOD, PLANK, FENCE, LEAVES, SAND, SNOW,
-    GLASS, WOOL, OBSIDIAN, CINDERSTONE, SINK_SAND, LUMISTONE, VOID_STONE, CACTUS, SAPLING,
-    LADDER, DOOR_C, CRAFT_TABLE, CHEST, FURNACE, ENCHANT, BED, TORCH, WIRE, PISTON, TNT,
+    GRASS,
+    DIRT,
+    STONE,
+    COBBLE,
+    SLAB,
+    STAIRS_N,
+    BRICK,
+    WOOD,
+    PLANK,
+    FENCE,
+    LEAVES,
+    SAND,
+    SNOW,
+    GLASS,
+    WOOL,
+    OBSIDIAN,
+    CINDERSTONE,
+    SINK_SAND,
+    LUMISTONE,
+    VOID_STONE,
+    CACTUS,
+    SAPLING,
+    LADDER,
+    DOOR_C,
+    CRAFT_TABLE,
+    CHEST,
+    FURNACE,
+    ENCHANT,
+    BED,
+    TORCH,
+    WIRE,
+    PISTON,
+    TNT,
 ];
 const TAB_ITEMS: [u8; 13] = [
-    BOW, FISHING_ROD, BUCKET, WATER_BUCKET, LAVA_BUCKET, FLINT_STEEL, VOID_EYE, BONEMEAL, BOTTLE,
-    POTION_SPEED, POTION_STRENGTH, POTION_REGEN, POTION_FIRE,
+    BOW,
+    FISHING_ROD,
+    BUCKET,
+    WATER_BUCKET,
+    LAVA_BUCKET,
+    FLINT_STEEL,
+    VOID_EYE,
+    BONEMEAL,
+    BOTTLE,
+    POTION_SPEED,
+    POTION_STRENGTH,
+    POTION_REGEN,
+    POTION_FIRE,
 ];
 const TAB_FOOD: [u8; 5] = [BREAD, COOKED_MEAT, RAW_MEAT, WHEAT_ITEM, SEEDS];
 const TAB_MATERIALS: [u8; 18] = [
-    COAL_ORE, IRON_ORE, IRON_INGOT, GOLD_ORE, DIAMOND_ORE, STICK, STRING, BONE, GUNPOWDER, ARROW,
-    CLAY, SUGAR_CANE, EMBER_CAP, EMBER_ROD, MAGMA_PASTE, WAILER_TEAR, VOID_PEARL, POTION_AWKWARD,
+    COAL_ORE,
+    IRON_ORE,
+    IRON_INGOT,
+    GOLD_ORE,
+    DIAMOND_ORE,
+    STICK,
+    STRING,
+    BONE,
+    GUNPOWDER,
+    ARROW,
+    CLAY,
+    SUGAR_CANE,
+    EMBER_CAP,
+    EMBER_ROD,
+    MAGMA_PASTE,
+    WAILER_TEAR,
+    VOID_PEARL,
+    POTION_AWKWARD,
 ];
 
 #[optimize(size)]
@@ -323,14 +677,25 @@ fn listed(item: u8) -> bool {
 /// A tab's kinds: owned ones, or the whole tab with SELECT's ALL view. The
 /// materials tab also collects anything owned that no tab lists, so no owned
 /// kind is ever invisible.
-#[inline(never)]
 #[optimize(size)]
 fn tab_list(tab: usize, all: bool, out: &mut [u8; BLOCK_KINDS]) -> usize {
+    tab_kinds(tab, all, unsafe { &INV }, out)
+}
+
+/// `tab_list` over any count table: the player's, or a chest's.
+#[inline(never)]
+#[optimize(size)]
+fn tab_kinds(
+    tab: usize,
+    all: bool,
+    counts: &[u16; BLOCK_KINDS],
+    out: &mut [u8; BLOCK_KINDS],
+) -> usize {
     let table = tab_table(tab);
     let mut n = 0;
     let mut i = 0;
     while i < table.len() {
-        if all || unsafe { INV[table[i] as usize] } > 0 {
+        if all || counts[table[i] as usize] > 0 {
             out[n] = table[i];
             n += 1;
         }
@@ -339,7 +704,7 @@ fn tab_list(tab: usize, all: bool, out: &mut [u8; BLOCK_KINDS]) -> usize {
     if tab == TABS - 1 {
         let mut k = 1;
         while k < BLOCK_KINDS {
-            if unsafe { INV[k] } > 0 && !listed(k as u8) {
+            if counts[k] > 0 && !listed(k as u8) {
                 out[n] = k as u8;
                 n += 1;
             }
@@ -715,15 +1080,19 @@ fn purpose(item: u8) -> &'static str {
     }
 }
 
-const TAB_TILES: [u8; TABS] = [tex::T_GRASS_SIDE, tex::T_I_BOW, tex::T_I_BREAD, tex::T_I_COAL];
+const TAB_TILES: [u8; TABS] = [
+    tex::T_GRASS_SIDE,
+    tex::T_I_BOW,
+    tex::T_I_BREAD,
+    tex::T_I_COAL,
+];
 const LABEL: (u8, u8, u8) = (0xE0, 0xE0, 0xE0);
 const GREY: (u8, u8, u8) = (0xA8, 0xA8, 0xA8);
 
 #[inline(never)]
 #[optimize(size)]
 pub fn draw_inventory(font: &FontAtlas, player: &Player) {
-    let (tab, page, all, cx, cy, carry) =
-        unsafe { (TAB, PAGE, SHOW_ALL, CUR_X, CUR_Y, CARRY) };
+    let (tab, page, all, cx, cy, carry) = unsafe { (TAB, PAGE, SHOW_ALL, CUR_X, CUR_Y, CARRY) };
     let mut list = [0u8; BLOCK_KINDS];
     let n = tab_list(tab, all, &mut list);
     let np = pages(n);
@@ -841,7 +1210,13 @@ pub fn draw_inventory(font: &FontAtlas, player: &Player) {
                 Some(j) => {
                     ui_text(font, x, 148, "SLOT ", GREY);
                     let d = [b'1' + j as u8];
-                    ui_text(font, x + 40, 148, unsafe { core::str::from_utf8_unchecked(&d) }, GREY);
+                    ui_text(
+                        font,
+                        x + 40,
+                        148,
+                        unsafe { core::str::from_utf8_unchecked(&d) },
+                        GREY,
+                    );
                 }
                 None => ui_text(font, x, 148, "NOT ON HOTBAR", GREY),
             }
@@ -852,12 +1227,33 @@ pub fn draw_inventory(font: &FontAtlas, player: &Player) {
 
     // Controls.
     let (y1, y2) = (174, 190);
-    let x = hint_item(font, 16, y1, "X", PS_CROSS, if carry != AIR { "PUT" } else { "MOVE" });
+    let x = hint_item(
+        font,
+        16,
+        y1,
+        "X",
+        PS_CROSS,
+        if carry != AIR { "PUT" } else { "MOVE" },
+    );
     let x = hint_item(font, x, y1, "T", PS_TRIANGLE, "TO HOTBAR");
     hint_item(font, x, y1, "[]", PS_SQUARE, "CLEAR SLOT");
     let x = hint_item(font, 16, y2, "L1R1", PS_KEY, "TAB");
-    let x = hint_item(font, x, y2, "SEL", PS_KEY, if all { "OWNED" } else { "ALL" });
-    let x = hint_item(font, x, y2, "O", PS_CIRCLE, if carry != AIR { "CANCEL" } else { "CLOSE" });
+    let x = hint_item(
+        font,
+        x,
+        y2,
+        "SEL",
+        PS_KEY,
+        if all { "OWNED" } else { "ALL" },
+    );
+    let x = hint_item(
+        font,
+        x,
+        y2,
+        "O",
+        PS_CIRCLE,
+        if carry != AIR { "CANCEL" } else { "CLOSE" },
+    );
     if np > 1 {
         hint_item(font, x, y2, "L2R2", PS_KEY, "PAGE");
     }

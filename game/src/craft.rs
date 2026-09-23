@@ -434,7 +434,13 @@ pub fn draw_crafting(font: &FontAtlas, p: &Player) {
         ui_text(font, 186, 144, "MAKES", GREY);
         ui_text(font, 234, 144, number(r.out_qty, &mut mb), GREY);
         ui_text(font, 166, 156, "YOU HAVE", GREY);
-        ui_text(font, 238, 156, number(unsafe { INV[r.out as usize] }, &mut hb), GREY);
+        ui_text(
+            font,
+            238,
+            156,
+            number(unsafe { INV[r.out as usize] }, &mut hb),
+            GREY,
+        );
     }
     hints(font, nt > 1);
     draw_hotbar(hud_tool(p, AIR));
@@ -450,7 +456,11 @@ fn hints(font: &FontAtlas, tiers: bool) {
         y1,
         "T",
         PS_TRIANGLE,
-        if unsafe { CRAFT_HIDE } { "SHOW ALL" } else { "CAN MAKE" },
+        if unsafe { CRAFT_HIDE } {
+            "SHOW ALL"
+        } else {
+            "CAN MAKE"
+        },
     );
     hint_item(font, x, y1, "O", PS_CIRCLE, "CLOSE");
     let x = hint_item(font, 16, y2, "L1R1", PS_KEY, "TAB");
