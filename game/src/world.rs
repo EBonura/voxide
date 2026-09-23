@@ -1380,7 +1380,7 @@ pub fn dimension() -> u8 {
 /// instead would return with no chunks loaded, and everything the caller then
 /// writes -- the return portal above all -- would land in an unloaded slot and
 /// be silently dropped, leaving the player in the Inferno with no way home.
-pub fn set_dimension<F: FnMut(usize, usize)>(dim: u8, bx: i32, bz: i32, progress: F) {
+pub fn set_dimension<F: FnMut(usize, usize)>(dim: u8, bx: i32, bz: i32, mut progress: F) {
     unsafe {
         if DIM == dim {
             return;
@@ -1403,14 +1403,17 @@ pub fn set_dimension<F: FnMut(usize, usize)>(dim: u8, bx: i32, bz: i32, progress
             p += 1;
         }
     }
-    sync_init(bx, bz, progress);
+    sync_init(bx, bz, &mut progress);
 }
 
 /// Synchronous gen + spawn pocket + mesh of the whole ring, behind a progress
 /// bar. Only DIMENSION TRAVEL uses this now (a loading screen there is what
 /// Minecraft does too); boot goes through boot_prepare + the menu's amortized
 /// pump instead.
-fn sync_init<F: FnMut(usize, usize)>(wx: i32, wz: i32, mut progress: F) {
+///
+/// The progress callback is `dyn` so every caller shares one copy of the
+/// generator: a generic parameter linked a copy per closure type.
+fn sync_init(wx: i32, wz: i32, progress: &mut dyn FnMut(usize, usize)) {
     init_block_class();
     let pcx = floor_div(wx, CW);
     let pcz = floor_div(wz, CW);

@@ -2384,6 +2384,10 @@ fn main() {
                         }
                         OPT_LOAD => {
                             if load_game(&mut player, &mut fb, &font) {
+                                // A save made at the Void arrival point loads
+                                // standing in the rebuilt return portal: be
+                                // immune until you step out, as on arrival.
+                                portal_dwell = PORTAL_IMMUNE;
                                 unsafe { OPT_MSG = "LOADED" };
                             } else {
                                 unsafe {
@@ -4098,15 +4102,20 @@ fn load_game(player: &mut Player, fb: &mut FrameBuffer, font: &FontAtlas) -> boo
     }
     save::apply_edits();
     world::recenter(bx, bz);
+    // Set the Void up as a portal arrival does. Its return portal is raw-set
+    // rather than an edit, so it is not in the save: rebuild it where arrival
+    // puts it, on the island's centre. Then the dragon, unless it is slain.
+    if dim == world::DIM_VOID {
+        build_return_portal(0, world::surface_y(0, 0), 0);
+    }
+    mob::settle_dragon(dim == world::DIM_VOID, player.x, player.z);
     player.vy = 0;
     player.fall_peak = player.y;
     true
 }
 
-/// Switch the chunk ring to `dim` around (bx, bz) behind the loading bar.
-/// One caller-side instance for portals and loads alike: set_dimension is
-/// generic over its progress closure, and each closure type would carry its
-/// own copy of the whole ring generator.
+/// Switch the chunk ring to `dim` around (bx, bz) behind the loading bar,
+/// for portals and loads alike.
 #[inline(never)]
 #[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
 fn enter_dimension(dim: u8, bx: i32, bz: i32, fb: &mut FrameBuffer, font: &FontAtlas) {
@@ -4195,9 +4204,7 @@ fn portal_travel(player: &mut Player, fb: &mut FrameBuffer, font: &FontAtlas) {
     player.y = sy * BLOCK;
     player.vy = 0;
     player.fall_peak = player.y;
-    if to == world::DIM_VOID {
-        mob::spawn_dragon(player.x, player.z);
-    }
+    mob::settle_dragon(to == world::DIM_VOID, player.x, player.z);
     sfx::splash();
 }
 
