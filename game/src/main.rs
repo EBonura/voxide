@@ -8,7 +8,8 @@
 #![no_std]
 #![no_main]
 #![allow(static_mut_refs)]
-#![feature(asm_experimental_arch)] // psx_gte::mtc2!/mfc2! expand to MIPS asm
+#![feature(asm_experimental_arch)]
+#![feature(optimize_attribute)] // menu code is built for size (inv.rs) // psx_gte::mtc2!/mfc2! expand to MIPS asm
 
 extern crate psx_rt;
 
@@ -1881,26 +1882,6 @@ fn nav_repeat(held: bool, t: &mut u16) -> bool {
 static mut EQUIP_MSG: &str = "";
 static mut EQUIP_T: u16 = 0;
 
-/// Inventory panel filter: owned items only. Defaults ON -- the full catalogue
-/// is the browsing view, not the working one.
-static mut INV_HIDE: bool = true;
-
-/// The inventory panel's working set: item ids, filtered to owned stacks
-/// while the filter is on.
-fn inv_list(out: &mut [u8; PLACEABLE.len()]) -> usize {
-    let hide = unsafe { INV_HIDE };
-    let mut n = 0;
-    let mut i = 0;
-    while i < PLACEABLE.len() {
-        if !hide || unsafe { INV[PLACEABLE[i] as usize] } > 0 {
-            out[n] = PLACEABLE[i];
-            n += 1;
-        }
-        i += 1;
-    }
-    n
-}
-
 /// Recipes the 2x2 pocket grid cannot make -- everything beyond planks,
 /// sticks, torches and the table itself wants the 3x3 bench, as in Java.
 fn needs_bench(i: usize) -> bool {
@@ -2340,25 +2321,10 @@ fn main() {
             unsafe { AT_BENCH = false }; // the handheld menu is the pocket grid
             sfx::blip();
         }
-        if (menu == 0 || menu == MENU_INV) && pad.pressed_since(previous, button::TRIANGLE) {
-            if menu == MENU_INV {
-                menu = 0;
-            } else {
-                menu = MENU_INV;
-                // Open on the item currently in hand, not the top of the list
-                // (its position in the FILTERED list, which is what shows).
-                let mut l = [0u8; PLACEABLE.len()];
-                let ln = inv_list(&mut l);
-                menu_sel = 0;
-                let mut k = 0;
-                while k < ln {
-                    if l[k] == player.selected {
-                        menu_sel = k;
-                        break;
-                    }
-                    k += 1;
-                }
-            }
+        // Inside the inventory TRIANGLE is Quick Move; CIRCLE or START close.
+        if menu == 0 && pad.pressed_since(previous, button::TRIANGLE) {
+            menu = MENU_INV;
+            inv::inventory_open(player.selected);
             sfx::blip();
         }
         // START opens the options menu, and closes whatever menu is open
@@ -2370,11 +2336,10 @@ fn main() {
 
         if menu != 0 {
             let mut craft_vis = [0u8; RECIPES.len()];
-            let mut inv_vis = [0u8; PLACEABLE.len()];
             let n = match menu {
                 1 => craft_list(&mut craft_vis),
                 2 => inv::chest_list(chest_idx, &mut [0u8; BLOCK_KINDS]),
-                MENU_INV => inv_list(&mut inv_vis),
+                MENU_INV => 0, // the grid navigates itself (inv.rs)
                 MENU_OPTIONS => OPTIONS.len(),
                 MENU_DEAD => 1,
                 _ => inv::FURN_ROWS,
@@ -2423,26 +2388,15 @@ fn main() {
                     mob::reset();
                     menu = 0;
                 }
+            } else if menu == MENU_INV {
+                if inv::inventory_input(pad, previous) {
+                    menu = 0;
+                }
             } else if pad.pressed_since(previous, button::CIRCLE) {
                 if menu == MENU_OPTIONS {
                     persist_shared_settings();
                 }
                 menu = 0;
-            } else if menu == MENU_INV {
-                if pad.pressed_since(previous, button::SQUARE) {
-                    unsafe { INV_HIDE = !INV_HIDE };
-                    menu_sel = 0;
-                    sfx::blip();
-                }
-                if n > 0 && pad.pressed_since(previous, button::CROSS) {
-                    let item = inv_vis[menu_sel];
-                    if unsafe { INV[item as usize] } > 0 {
-                        hotbar_pick(item);
-                        player.selected = item;
-                        menu = 0;
-                        sfx::blip();
-                    }
-                }
             } else if menu == MENU_OPTIONS {
                 // Settings rows adjust with left/right, like the main menu card.
                 if menu_sel >= OPT_SETTINGS {
@@ -3212,6 +3166,7 @@ fn menu_world_pump(pocket_done: &mut bool) -> u32 {
 /// terrain behind the buttons over the first few seconds, and PLAY finishes
 /// whatever is left behind the plain progress bar. NEW WORLD reseeds and the
 /// vista dissolves into the fresh terrain without leaving the menu.
+#[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
 fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
     let mut pocket_done = false;
     // The world loads FIRST, behind the plain bar, and the menu appears over a
@@ -3388,6 +3343,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
 /// Finish whatever generation and meshing the menu pump has not covered yet,
 /// behind the plain progress bar. Usually over in a blink; at worst (PLAY
 /// mashed at frame zero) it is the old boot bar.
+#[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
 fn finish_world_gen(fb: &mut FrameBuffer, font: &FontAtlas, pocket_done: &mut bool) {
     let total = menu_world_pump(pocket_done) as usize;
     // A defensive ceiling: the full boot is ~150 pump steps, so thousands of
@@ -3721,6 +3677,7 @@ fn menu_button_now(font: &FontAtlas, y: i16, label: &str, sel: bool) {
 /// Reset every gameplay registry for the "NEW WORLD" path: inventory back to
 /// the starter kit, edit log, chests/furnaces/crops/saplings, respawn point,
 /// mobs + arrows. World-side state is world::prepare_new_world's job.
+#[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
 fn reset_game_state() {
     tut_reset();
     unsafe {
@@ -3797,6 +3754,7 @@ const BONNIE_CLUT_POS: Clut = Clut::new(768, 256);
 /// Boot intro, ported from the celeste collection: fade the Bonnie Studios
 /// logo in, hold, fade out, with the "Built with PSoXide" sheen line. Any
 /// face button skips it.
+#[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
 fn show_intro(fb: &mut FrameBuffer, font: &FontAtlas) {
     psx_vram::upload_16bpp(
         psx_vram::VramRect::new(BONNIE_TPAGE.x(), BONNIE_TPAGE.y(), 32, 128),
@@ -4231,6 +4189,7 @@ fn portal_tick(player: &Player, dwell: &mut u16) -> bool {
 /// Do the crossing. Separate from the dwell check because regenerating the ring
 /// needs the framebuffer and font for a loading screen.
 #[inline(never)]
+#[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
 fn portal_travel(player: &mut Player, fb: &mut FrameBuffer, font: &FontAtlas) {
     let bx = world_to_block_x(player.x);
     let bz = world_to_block_z(player.z);
@@ -4286,6 +4245,7 @@ fn portal_travel(player: &mut Player, fb: &mut FrameBuffer, font: &FontAtlas) {
 /// Obsidian frame + sheet at the arrival point, with the ground under it made
 /// solid. Without this you can arrive inside a lava sea or in mid-air.
 #[inline(never)]
+#[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
 fn build_return_portal(bx: i32, by: i32, bz: i32) {
     let mut dx = -2i32;
     while dx <= 3 {
@@ -8609,7 +8569,67 @@ fn list_window(n: usize, vis: usize, sel: usize) -> usize {
     }
 }
 
-fn draw_hotbar(font: &FontAtlas, tool: (u8, u8)) {
+/// The picture an item shows in a slot: its own icon where it has one, else
+/// its block face. Materials used to fall through to the stone tile.
+fn icon_tile(item: u8) -> u8 {
+    match item {
+        COAL_ORE => tex::T_I_COAL,
+        IRON_INGOT => tex::T_I_INGOT,
+        STICK => tex::T_I_STICK,
+        STRING => tex::T_I_STRING,
+        BONE => tex::T_I_BONE,
+        GUNPOWDER => tex::T_I_POWDER,
+        ARROW => tex::T_I_ARROW,
+        RAW_MEAT => tex::T_I_RAW_MEAT,
+        COOKED_MEAT => tex::T_I_STEAK,
+        BREAD => tex::T_I_BREAD,
+        SEEDS => tex::T_I_SEEDS,
+        BOW => tex::T_I_BOW,
+        _ => face_tile(item, 0),
+    }
+}
+
+/// A 16x16 atlas tile as a UI sprite, tinted (128 = as authored).
+#[inline(never)]
+fn draw_tile(x: i16, y: i16, tile: u8, tint: (u8, u8, u8)) {
+    let bt = unsafe { BLOCK_TEX };
+    let mat = TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, tint);
+    ui_sprite(x, y, 16, 16, tex::tile_uv(tile), mat);
+}
+
+#[inline(never)]
+fn draw_icon(x: i16, y: i16, item: u8, lum: u8) {
+    draw_tile(x, y, icon_tile(item), (lum, lum, lum));
+}
+
+/// Stack count in the bottom-right of the 17px slot at (x, y), in the 3x5
+/// digits (one sprite each, shadow baked in). Capped at 999.
+#[inline(never)]
+fn draw_count(x: i16, y: i16, n: u16) {
+    let bt = unsafe { BLOCK_TEX };
+    let n = if n > 999 { 999 } else { n };
+    let len: i16 = if n >= 100 {
+        3
+    } else if n >= 10 {
+        2
+    } else {
+        1
+    };
+    let mut v = n;
+    let mut i = len - 1;
+    loop {
+        let (tile, uv) = tex::digit_uv((v % 10) as u8);
+        let mat = TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, (128, 128, 128));
+        ui_sprite(x + 17 - len * 4 + i * 4, y + 11, 4, 6, uv, mat);
+        v /= 10;
+        if i == 0 {
+            break;
+        }
+        i -= 1;
+    }
+}
+
+fn draw_hotbar(tool: (u8, u8)) {
     // Vanilla hotbar: 9 real slots. Only stacks you actually own appear (no
     // greyed-out catalogue -- the original never shows what you don't have),
     // empty slots are just chrome, and the fat white frame overhangs the
@@ -8637,23 +8657,14 @@ fn draw_hotbar(font: &FontAtlas, tool: (u8, u8)) {
         ui_line(sx, y0 + 16, sx + 16, y0 + 16, 96, 96, 106); // light bottom
         ui_line(sx + 16, y0, sx + 16, y0 + 16, 96, 96, 106); // light right
         if b != AIR {
-            let tile = face_tile(b, 0);
-            let uv = tex::tile_uv(tile);
-            let mat = TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, (128, 128, 128));
-            ui_sprite(sx + 1, y0 + 1, 16, 16, uv, mat);
-            // Stack count in the slot's top-right corner, shadowed so it
-            // reads over any tile. Hidden at 1, like vanilla; capped at 99.
-            // 0 IS shown: a menu craft can drain a stack while hotbar_sync
-            // is paused, and an unnumbered icon would read as "one left".
+            draw_icon(sx + 1, y0 + 1, b, 128);
+            // Stack count in the slot's bottom-right corner in the 3x5
+            // digits, shadow baked in. Hidden at 1, like vanilla. 0 IS shown:
+            // a menu craft can drain a stack while hotbar_sync is paused, and
+            // an unnumbered icon would read as "one left".
             let cnt = unsafe { INV[b as usize] };
             if cnt != 1 {
-                let c = if cnt > 99 { 99 } else { cnt };
-                let d = [b'0' + (c / 10) as u8, b'0' + (c % 10) as u8];
-                let from = if c >= 10 { 0 } else { 1 };
-                let txt = unsafe { core::str::from_utf8_unchecked(&d[from..]) };
-                let tx = sx + 16 - (2 - from as i16) * 8;
-                ui_text(font, tx + 1, y0 + 2, txt, (0, 0, 0));
-                ui_text(font, tx, y0 + 1, txt, (255, 255, 255));
+                draw_count(sx, y0, cnt);
             }
         }
         if j == unsafe { HOTBAR_SEL } {
@@ -8761,6 +8772,7 @@ fn draw_food(food: i32) {
 /// Whichever overlay is open, if any. Outlined out of the gameplay loop: MIPS
 /// branches only reach +/-128KB and the loop is at that edge.
 #[inline(never)]
+#[optimize(size)] // menus pause the sim: its bytes are worth more than its cycles
 fn draw_menu(font: &FontAtlas, menu: u8, sel: usize, chest_idx: usize, player: Player) {
     if menu == 1 {
         draw_crafting(font, sel);
@@ -8771,7 +8783,7 @@ fn draw_menu(font: &FontAtlas, menu: u8, sel: usize, chest_idx: usize, player: P
     } else if menu == MENU_OPTIONS {
         draw_options(font, sel, player);
     } else if menu == MENU_INV {
-        draw_inventory(font, sel);
+        inv::draw_inventory(font, &player);
     } else if menu == MENU_DEAD {
         draw_death(font);
     }
@@ -8797,57 +8809,10 @@ fn draw_death(font: &FontAtlas) {
     ui_text(font, nx, 128, "RESPAWN", (0xE0, 0xE0, 0xE0));
 }
 
-/// Inventory overlay: every placeable with the carried count; Cross equips it
-/// to the hand. The direct-pick answer to a hotbar that R1-cycles one at a time.
-fn draw_inventory(font: &FontAtlas, sel: usize) {
-    menu_frame(font, "INVENTORY");
-    let hide = unsafe { INV_HIDE };
-    let mut hx = hint_item(font, MENU_TEXT_X, MENU_HINT_Y, "X", PS_CROSS, "SELECT");
-    hx = hint_item(
-        font,
-        hx,
-        MENU_HINT_Y,
-        "[]",
-        PS_SQUARE,
-        if hide { "ALL" } else { "OWNED" },
-    );
-    hint_item(font, hx, MENU_HINT_Y, "O", PS_CIRCLE, "CLOSE");
-    let mut list = [0u8; PLACEABLE.len()];
-    let n = inv_list(&mut list);
-    let vis = 8;
-    let start = list_window(n, vis, sel);
-    menu_scroll_hint(font, n, vis, start, MENU_HINT_X, MENU_ROWS_Y);
-    // This panel lists PLACEABLES, and tools are not among them: they have no
-    // durability and the best tier equips itself into the slot left of the
-    // hotbar. Nothing said so, so a player on itch spent the session hunting
-    // for a way to "equip my pickaxe" and concluded a full hotbar had blocked
-    // it. One line in the footer, where the panel already has the room.
-    draw_centered(font, 170, "TOOLS EQUIP THEMSELVES: NO SLOT", MC_INK);
-    if n == 0 {
-        ui_text(
-            font,
-            MENU_TEXT_X,
-            MENU_ROWS_Y,
-            "NOTHING YET: GO MINE!",
-            MC_INK,
-        );
-        return;
-    }
-    let mut j = 0;
-    while j < vis && start + j < n {
-        let i = start + j;
-        let b = list[i];
-        let y = menu_row(j, i == sel);
-        let color = if i == sel { MC_LABEL_SEL } else { MC_LABEL };
-        ui_text(font, MENU_TEXT_X, y, block_name(b), color);
-        ui_text(font, 222, y, &decimal3(unsafe { INV[b as usize] }), color);
-        j += 1;
-    }
-}
-
 /// Crafting overlay: the current tab's recipes with the selected one marked,
 /// craftable ones bright, and the selected recipe's cost on the bottom line.
 /// Drawn over the dimmed world while the menu is open.
+#[optimize(size)] // menus pause the sim: its bytes are worth more than its cycles
 fn draw_crafting(font: &FontAtlas, sel: usize) {
     let hide = unsafe { CRAFT_HIDE };
     menu_frame(font, CRAFT_TAB_TITLE[unsafe { CRAFT_TAB }]);
@@ -9408,6 +9373,7 @@ const OPTIONS: [&str; OPT_SETTINGS + SETTING_ROWS] = [
 /// Result of the last card operation, shown under the list.
 static mut OPT_MSG: &str = "";
 
+#[optimize(size)] // menus pause the sim: its bytes are worth more than its cycles
 fn draw_options(font: &FontAtlas, sel: usize, player: Player) {
     menu_frame(font, "OPTIONS");
     let mut hx = hint_item(font, MENU_TEXT_X, MENU_HINT_Y, "X", PS_CROSS, "TOGGLE");
@@ -9538,7 +9504,9 @@ fn draw_all_hud(font: &FontAtlas, player: Player, menu: u8, tool: (u8, u8)) {
         draw_tutorial(font);
         draw_sleep_prompt(font);
     }
-    draw_hotbar(font, tool);
+    if menu != MENU_INV {
+        draw_hotbar(tool); // the inventory draws it over its dimming
+    }
     draw_xp(player.xp);
     draw_armor(player.armor);
     draw_hearts(player.health);
@@ -10467,22 +10435,6 @@ fn hotbar_add(item: u8) {
             }
             i += 1;
         }
-    }
-}
-
-/// Inventory-panel pick: jump to the item's slot if it has one (vanilla),
-/// otherwise it takes over the currently selected slot.
-fn hotbar_pick(item: u8) {
-    unsafe {
-        let mut i = 0;
-        while i < HOTBAR_VIS {
-            if HOTBAR[i] == item {
-                HOTBAR_SEL = i;
-                return;
-            }
-            i += 1;
-        }
-        HOTBAR[HOTBAR_SEL] = item;
     }
 }
 

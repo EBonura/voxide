@@ -107,6 +107,7 @@ pub fn selftest() -> bool {
 /// Persist player, inventory, hotbar, chests, furnaces and edit deltas as one
 /// card file. Formats a blank card first; overwrites any previous VOXIDE save.
 #[inline(never)]
+#[optimize(size)] // card I/O dominates; keep the bytes
 pub fn save(p: &Player) -> bool {
     let buf = unsafe { &mut BUF[..] };
     buf[..4].copy_from_slice(&MAGIC);
@@ -215,6 +216,7 @@ pub fn save(p: &Player) -> bool {
 /// save it understands. Edits land in the EDIT log; call [`apply_edits`] to
 /// replay them into the world (raw sets, then one remesh).
 #[inline(never)]
+#[optimize(size)] // card I/O dominates; keep the bytes
 pub fn load(p: &mut Player) -> bool {
     let buf = unsafe { &mut BUF[..] };
     let len = match card().read(FILE_NAME, buf) {
@@ -232,6 +234,7 @@ pub fn load(p: &mut Player) -> bool {
 }
 
 #[inline(never)]
+#[optimize(size)] // card I/O dominates; keep the bytes
 fn load_v1(p: &mut Player, buf: &[u8]) {
     p.x = get_i32(buf, 4);
     p.y = get_i32(buf, 8);
@@ -290,6 +293,7 @@ fn load_v1(p: &mut Player, buf: &[u8]) {
 }
 
 #[inline(never)]
+#[optimize(size)] // card I/O dominates; keep the bytes
 fn load_v2(p: &mut Player, buf: &[u8]) -> bool {
     let chests = buf[OFF_COUNTS] as usize;
     let furnaces = buf[OFF_COUNTS + 1] as usize;
@@ -369,6 +373,7 @@ fn load_v2(p: &mut Player, buf: &[u8]) -> bool {
 }
 
 #[inline(never)]
+#[optimize(size)] // card I/O dominates; keep the bytes
 fn read_edits(buf: &[u8], base: usize, n: usize) {
     let mut idx = 0;
     while idx < n {
@@ -391,6 +396,7 @@ fn read_edits(buf: &[u8], base: usize, n: usize) {
 /// rather than merging with them: the old code kept them, so a chest placed
 /// before a load stayed registered at a spot the loaded world may not have.
 #[inline(never)]
+#[optimize(size)] // card I/O dominates; keep the bytes
 fn clear_containers() {
     unsafe {
         CHEST_USED = [false; MAX_CHESTS];

@@ -70,6 +70,7 @@ pub fn set_volume_pct(p: i32) {
 /// Reset the SPU and stream the cooked sample bank from the disc's WORLD.PAK
 /// straight into SPU RAM, one sector at a time -- the ~88 KiB blob never
 /// touches main RAM (it used to sit in .data forever). Call once at boot.
+#[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
 pub fn init() {
     psx_spu::init();
     let ok = unsafe { stream_bank() };

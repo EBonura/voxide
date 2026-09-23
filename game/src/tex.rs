@@ -112,6 +112,27 @@ pub const T_AXE: u8 = 62;
 pub const T_SHOVEL: u8 = 63;
 pub const T_SWORD: u8 = 64;
 
+/// Item icons (own pixel art, drawn for VoXide): the hotbar and inventory show
+/// these instead of borrowing a block face, which is how coal, ingots, sticks
+/// and the rest used to all read as stone. Index 0 is transparent (the plant
+/// trick), so they sit on the slot face.
+pub const T_I_COAL: u8 = 65;
+pub const T_I_INGOT: u8 = 66;
+pub const T_I_STICK: u8 = 67;
+pub const T_I_STRING: u8 = 68;
+pub const T_I_BONE: u8 = 69;
+pub const T_I_POWDER: u8 = 70;
+pub const T_I_ARROW: u8 = 71;
+pub const T_I_RAW_MEAT: u8 = 72;
+pub const T_I_STEAK: u8 = 73;
+pub const T_I_BREAD: u8 = 74;
+pub const T_I_SEEDS: u8 = 75;
+pub const T_I_ARMOR: u8 = 76;
+pub const T_I_BOW: u8 = 77;
+/// Stack-count digits, 3x5 with a baked 1px shadow in 4x6 cells: 0..7 in the
+/// first tile (two rows of four), 8 and 9 in the second.
+pub const T_DIGITS: u8 = 78;
+
 // VRAM placement: framebuffers own x<320, the font page sits at x=320, so the
 // next free 4-bit page column is x=384. CLUTs live in the band at y=256.
 const TPAGE_X: u16 = 384;
@@ -186,6 +207,7 @@ fn fill(p: &mut [(u8, u8, u8); 16], base: usize, a: (u8, u8, u8), b: (u8, u8, u8
 
 /// The 16-colour palette (one CLUT) for a tile. Tiles the CC0 pack covers use its
 /// quantised palette (crate::texdata); the rest fall back to procedural ramps.
+#[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
 fn palette_for(tile: u8) -> [(u8, u8, u8); 16] {
     let ti = tile as usize;
     if ti < 32 && crate::texdata::PACK_HAS[ti] {
@@ -675,6 +697,17 @@ fn palette_for(tile: u8) -> [(u8, u8, u8); 16] {
                 ],
             );
         }
+        T_I_COAL..=T_I_BOW => {
+            let pal = ICONS[(tile - T_I_COAL) as usize].pal;
+            p[1] = pal[0];
+            p[2] = pal[1];
+            p[3] = pal[2];
+            p[4] = pal[3];
+        }
+        T_DIGITS | 79 => {
+            p[1] = (255, 255, 255);
+            p[2] = (16, 16, 16);
+        }
         _ => fill(&mut p, 0, (120, 120, 126), (152, 152, 158), 16),
     }
     p
@@ -834,6 +867,7 @@ fn tallgrass_texel(x: i32, y: i32) -> u8 {
 /// Palette index (into this tile's own CLUT) for texel (x,y). Hand-authored to
 /// match the classic Minecraft block art -- grass drips, log rings, cobble stones,
 /// plank seams -- now over a full per-block shade ramp. Pure: the capture is the test.
+#[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
 fn texel(tile: u8, x: usize, y: usize) -> u8 {
     let ti = tile as usize;
     if ti < 32 && crate::texdata::PACK_HAS[ti] {
@@ -842,6 +876,15 @@ fn texel(tile: u8, x: usize, y: usize) -> u8 {
     let xi = x as i32;
     let yi = y as i32;
     match tile {
+        T_I_COAL..=T_I_BOW => {
+            let b = ICONS[(tile - T_I_COAL) as usize].px[y * 8 + x / 2];
+            if x & 1 == 0 {
+                b & 0x0F
+            } else {
+                b >> 4
+            }
+        }
+        T_DIGITS | 79 => digit_texel(tile, x, y),
         T_GRASS_TOP => clampu(4 + (hash(xi, yi, 0) % 14) as i32 % 5 - 2, 0, 11),
         T_GRASS_SIDE => {
             // Green cap (0..5) with a jagged bottom edge, then shaded dirt (6..14).
@@ -1616,6 +1659,350 @@ fn mob_face(tile: u8, x: usize, y: usize) -> u8 {
     }
 }
 
+/// A 16x16 icon: four colours (1..=4) plus transparent 0, packed two texels
+/// a byte. `icon` packs the readable rows at compile time, so only the 128
+/// packed bytes reach RAM.
+struct Icon {
+    pal: [(u8, u8, u8); 4],
+    px: [u8; 128],
+}
+
+const fn icon(pal: [(u8, u8, u8); 4], rows: [&[u8; 16]; 16]) -> Icon {
+    let mut px = [0u8; 128];
+    let mut y = 0;
+    while y < 16 {
+        let mut x = 0;
+        while x < 16 {
+            let c = rows[y][x];
+            let v = if c == b'.' { 0 } else { c - b'0' };
+            px[y * 8 + x / 2] |= if x & 1 == 0 { v } else { v << 4 };
+            x += 1;
+        }
+        y += 1;
+    }
+    Icon { pal, px }
+}
+
+const I_COAL: Icon = icon(
+    [(18, 18, 22), (44, 44, 52), (72, 72, 82), (116, 116, 128)],
+    [
+        b"................",
+        b"................",
+        b"......1111......",
+        b"....11222211....",
+        b"...1223322221...",
+        b"..122344322221..",
+        b"..123443222221..",
+        b".12223322222221.",
+        b".12222222332221.",
+        b".12222223342221.",
+        b"..1222222332221.",
+        b"..122232222221..",
+        b"...1222222221...",
+        b"....11122111....",
+        b".......11.......",
+        b"................",
+    ],
+);
+const I_INGOT: Icon = icon(
+    [(64, 64, 72), (150, 150, 160), (196, 196, 206), (236, 236, 244)],
+    [
+        b"................",
+        b"................",
+        b"................",
+        b"................",
+        b"................",
+        b"......11111111..",
+        b".....1444444431.",
+        b"....14333333321.",
+        b"...143333333221.",
+        b"..1432222222221.",
+        b"..1111111111221.",
+        b"..1222222222221.",
+        b"..1222222222211.",
+        b"..111111111111..",
+        b"................",
+        b"................",
+    ],
+);
+const I_STICK: Icon = icon(
+    [(58, 38, 18), (122, 84, 42), (164, 118, 64), (0, 0, 0)],
+    [
+        b"................",
+        b"............13..",
+        b"...........1231.",
+        b"..........12321.",
+        b".........1232...",
+        b"........1231....",
+        b".......1231.....",
+        b"......1231......",
+        b".....1231.......",
+        b"....1231........",
+        b"...1231.........",
+        b"..1231..........",
+        b".1221...........",
+        b".121............",
+        b"..1.............",
+        b"................",
+    ],
+);
+const I_STRING: Icon = icon(
+    [(150, 150, 158), (226, 226, 232), (0, 0, 0), (0, 0, 0)],
+    [
+        b"................",
+        b"................",
+        b"..........22....",
+        b".........2..2...",
+        b".........2..2...",
+        b"..........22....",
+        b".........2......",
+        b"........1.......",
+        b".......2........",
+        b"......2.........",
+        b"....22..........",
+        b"...2..2.........",
+        b"...2..2.........",
+        b"....22..........",
+        b"................",
+        b"................",
+    ],
+);
+const I_BONE: Icon = icon(
+    [(120, 118, 104), (208, 204, 186), (244, 242, 230), (0, 0, 0)],
+    [
+        b"................",
+        b"............11..",
+        b"...........1331.",
+        b"..........13331.",
+        b"..........12331.",
+        b".........1321...",
+        b"........1321....",
+        b".......1321.....",
+        b"......1321......",
+        b".....1321.......",
+        b"....1321........",
+        b".13321..........",
+        b".13331..........",
+        b".1331...........",
+        b"..11............",
+        b"................",
+    ],
+);
+const I_POWDER: Icon = icon(
+    [(40, 40, 44), (78, 78, 84), (116, 116, 122), (160, 160, 166)],
+    [
+        b"................",
+        b"................",
+        b"................",
+        b"................",
+        b"................",
+        b"................",
+        b".......3........",
+        b"......343.......",
+        b".....32323......",
+        b"....3232323.....",
+        b"...323222323....",
+        b"..32322122223...",
+        b".3221212122123..",
+        b".1111111111111..",
+        b"................",
+        b"................",
+    ],
+);
+const I_ARROW: Icon = icon(
+    [(64, 64, 70), (170, 170, 178), (122, 84, 42), (232, 232, 236)],
+    [
+        b"................",
+        b"..........1111..",
+        b"...........221..",
+        b"..........2221..",
+        b".........3.121..",
+        b"........3....1..",
+        b".......3........",
+        b"......3.........",
+        b".....3..........",
+        b"....3...........",
+        b"...3............",
+        b"4.3.............",
+        b".43.............",
+        b"4.44............",
+        b"...4............",
+        b"................",
+    ],
+);
+const I_RAW_MEAT: Icon = icon(
+    [(96, 24, 28), (178, 46, 52), (222, 94, 96), (246, 214, 206)],
+    [
+        b"................",
+        b"................",
+        b"................",
+        b".....111111.....",
+        b"...1122222211...",
+        b"..122233322221..",
+        b".12234443322221.",
+        b".12233344332221.",
+        b".12222233443321.",
+        b".12222222334421.",
+        b"..122222222341..",
+        b"...1122222221...",
+        b".....1111111....",
+        b"................",
+        b"................",
+        b"................",
+    ],
+);
+const I_STEAK: Icon = icon(
+    [(56, 30, 16), (112, 64, 34), (158, 98, 54), (220, 190, 150)],
+    [
+        b"................",
+        b"................",
+        b"................",
+        b".....111111.....",
+        b"...1122222211...",
+        b"..122233322221..",
+        b".12234443322221.",
+        b".12233344332221.",
+        b".12222233443321.",
+        b".12222222334421.",
+        b"..122222222341..",
+        b"...1122222221...",
+        b".....1111111....",
+        b"................",
+        b"................",
+        b"................",
+    ],
+);
+const I_BREAD: Icon = icon(
+    [(110, 66, 24), (196, 136, 64), (234, 190, 118), (0, 0, 0)],
+    [
+        b"................",
+        b"................",
+        b"................",
+        b"................",
+        b"......11111.....",
+        b"....112222211...",
+        b"...12232232321..",
+        b"..1223223223221.",
+        b"..1222222222221.",
+        b"..1222222222221.",
+        b"...12222222221..",
+        b"....111111111...",
+        b"................",
+        b"................",
+        b"................",
+        b"................",
+    ],
+);
+const I_SEEDS: Icon = icon(
+    [(44, 96, 34), (98, 150, 58), (150, 190, 92), (0, 0, 0)],
+    [
+        b"................",
+        b"................",
+        b"................",
+        b"......3.....2...",
+        b"..2..21.........",
+        b".........3......",
+        b"....3....21..2..",
+        b"....21.2........",
+        b"..........3.....",
+        b"...2..3...21....",
+        b"......21......2.",
+        b"..3........3....",
+        b"..21...2...21...",
+        b"......3.........",
+        b"......21........",
+        b"................",
+    ],
+);
+const I_ARMOR: Icon = icon(
+    [(40, 40, 48), (120, 120, 132), (184, 184, 196), (226, 226, 236)],
+    [
+        b"................",
+        b"................",
+        b"...111....111...",
+        b"..1331111.1331..",
+        b"..13331..13331..",
+        b"..1333211233331.",
+        b"...1232222321...",
+        b"....12322321....",
+        b"....12222321....",
+        b"....12232221....",
+        b"....12222221....",
+        b"....12232221....",
+        b"....12222221....",
+        b"....11111111....",
+        b"................",
+        b"................",
+    ],
+);
+const I_BOW: Icon = icon(
+    [(58, 38, 18), (122, 84, 42), (200, 200, 206), (0, 0, 0)],
+    [
+        b"................",
+        b"......1111......",
+        b"....1122......3.",
+        b"...12.......3...",
+        b"..12......3.....",
+        b"..1.....3.......",
+        b".12...3.........",
+        b".1..3...........",
+        b".1.3............",
+        b".13.............",
+        b".3..............",
+        b"................",
+        b"................",
+        b"................",
+        b"................",
+        b"................",
+    ],
+);
+
+const ICONS: [&Icon; 13] = [
+    &I_COAL, &I_INGOT, &I_STICK, &I_STRING, &I_BONE, &I_POWDER, &I_ARROW, &I_RAW_MEAT,
+    &I_STEAK, &I_BREAD, &I_SEEDS, &I_ARMOR, &I_BOW,
+];
+
+/// The 3x5 digits, one bit per pixel, rows top to bottom, 3 bits each.
+const MINI_DIGITS: [u16; 10] = [
+    0b111_101_101_101_111,
+    0b010_110_010_010_111,
+    0b111_001_111_100_111,
+    0b111_001_111_001_111,
+    0b101_101_111_001_001,
+    0b111_100_111_001_111,
+    0b111_100_111_101_111,
+    0b111_001_010_010_010,
+    0b111_101_111_101_111,
+    0b111_101_111_001_111,
+];
+
+fn mini_on(d: usize, x: i32, y: i32) -> bool {
+    x >= 0 && x < 3 && y >= 0 && y < 5 && MINI_DIGITS[d] >> ((4 - y) * 3 + (2 - x)) & 1 != 0
+}
+
+/// Digit tiles: 1 = white glyph, 2 = its shadow one texel down-right.
+fn digit_texel(tile: u8, x: usize, y: usize) -> u8 {
+    let d = (tile - T_DIGITS) as usize * 8 + (y / 6) * 4 + x / 4;
+    let (cx, cy) = ((x % 4) as i32, (y % 6) as i32);
+    if y >= 12 || d > 9 {
+        0
+    } else if mini_on(d, cx, cy) {
+        1
+    } else if mini_on(d, cx - 1, cy - 1) {
+        2
+    } else {
+        0
+    }
+}
+
+/// Tile and UV of digit `d`'s 4x6 cell (glyph plus shadow).
+pub fn digit_uv(d: u8) -> (u8, (u8, u8)) {
+    let tile = T_DIGITS + d / 8;
+    let (u, v) = tile_uv(tile);
+    let k = d % 8;
+    (tile, (u + (k % 4) * 4, v + (k / 4) * 6))
+}
+
 /// Texel-space UV origin of a tile within the shared page (2D: row 0 or 1).
 #[inline]
 pub fn tile_uv(tile: u8) -> (u8, u8) {
@@ -1627,6 +2014,7 @@ pub fn tile_uv(tile: u8) -> (u8, u8) {
 }
 
 /// Build the atlas + CLUT and upload both to VRAM. Call once at boot.
+#[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
 pub fn upload() -> BlockTex {
     // Pack 4-bit indices: even x -> low nibble, odd x -> high nibble. Two tile
     // rows now, so iterate the full atlas height and pick the tile from (x,y).
