@@ -888,10 +888,84 @@ fn shape_tiles(ox: i32, oz: i32) -> ShapeTiles {
     }
 }
 
-/// Pseudo-3D noise for caves: a single 2D field sheared by y (cheap; one
-/// vnoise per block dominates gen cost). Returns 0..255.
-fn cave_density(x: i32, y: i32, z: i32) -> i32 {
-    vnoise::<13>(x + y * 7, z - y * 5 + x, seedx() + 77)
+/// Cave lattice spacing and the chunk-wide corner table's extent.
+///
+/// The cave field is pseudo-3D noise: one 2D value noise sheared by y,
+/// `vnoise::<13>(x + 7y, z - 5y + x, seed + 77)`, 0..255. gen_column samples
+/// it at y = 4, 8, .. 40 of every column, and each sample hashed its four
+/// lattice corners: about 9,000 `hash2` calls a chunk, each four multiplies. The shear keeps the whole chunk's samples
+/// inside a small lattice window: x + 7y spans at most 23 corners and
+/// z - 5y + x at most 19, so hashing that window once per chunk (480 calls)
+/// and reading it back gives the same corners.
+const CAVE_S: i32 = 13;
+const CAVE_NX: usize = 24;
+const CAVE_NZ: usize = 20;
+/// Lowest and highest y gen_column samples the cave field at.
+const CAVE_Y0: i32 = 4;
+const CAVE_Y1: i32 = CAVE_TOP;
+
+struct CaveTile {
+    gx0: i32,
+    gz0: i32,
+    h: [u8; CAVE_NX * CAVE_NZ],
+}
+
+static mut CAVE_TILE: CaveTile = CaveTile {
+    gx0: 0,
+    gz0: 0,
+    h: [0; CAVE_NX * CAVE_NZ],
+};
+/// Chunk origin and seed CAVE_TILE was hashed for; streaming generates a chunk
+/// over many calls, so the table is built on its first.
+static mut CAVE_TILE_KEY: (i32, i32, i32) = (i32::MIN, i32::MIN, 0);
+
+/// Hash the cave lattice window covering the chunk at block origin (ox, oz).
+fn cave_tile(ox: i32, oz: i32) -> &'static CaveTile {
+    let seed = seedx() + 77;
+    unsafe {
+        if CAVE_TILE_KEY != (ox, oz, seed) {
+            let gx0 = floor_div(ox + 7 * CAVE_Y0, CAVE_S);
+            let gz0 = floor_div(oz + ox - 5 * CAVE_Y1, CAVE_S);
+            // The window must hold the last sample's +1 corners.
+            let gx1 = floor_div(ox + (CWU as i32 - 1) + 7 * CAVE_Y1, CAVE_S) + 1;
+            let gz1 = floor_div(oz + ox + 2 * (CWU as i32 - 1) - 5 * CAVE_Y0, CAVE_S) + 1;
+            assert!(gx1 - gx0 < CAVE_NX as i32 && gz1 - gz0 < CAVE_NZ as i32);
+            let t = &mut *core::ptr::addr_of_mut!(CAVE_TILE);
+            t.gx0 = gx0;
+            t.gz0 = gz0;
+            let mut j = 0;
+            while j < CAVE_NZ {
+                let mut i = 0;
+                while i < CAVE_NX {
+                    t.h[j * CAVE_NX + i] = hash2(gx0 + i as i32, gz0 + j as i32, seed) as u8;
+                    i += 1;
+                }
+                j += 1;
+            }
+            CAVE_TILE_KEY = (ox, oz, seed);
+        }
+        &*core::ptr::addr_of!(CAVE_TILE)
+    }
+}
+
+/// The cave field at (x, y, z) from the chunk's corner table: the same
+/// arithmetic as `vnoise::<13>`, with the four hashes read instead of computed.
+#[inline(always)]
+fn cave_density_tiled(t: &CaveTile, x: i32, y: i32, z: i32) -> i32 {
+    let xx = x + y * 7;
+    let zz = z - y * 5 + x;
+    let gx = floor_div(xx, CAVE_S);
+    let gz = floor_div(zz, CAVE_S);
+    let fx = smooth((xx - gx * CAVE_S) * 256 / CAVE_S);
+    let fz = smooth((zz - gz * CAVE_S) * 256 / CAVE_S);
+    let r0 = (gz - t.gz0) as usize * CAVE_NX + (gx - t.gx0) as usize;
+    let h00 = t.h[r0] as i32;
+    let h10 = t.h[r0 + 1] as i32;
+    let h01 = t.h[r0 + CAVE_NX] as i32;
+    let h11 = t.h[r0 + CAVE_NX + 1] as i32;
+    let a = h00 + (h10 - h00) * fx / 256;
+    let b = h01 + (h11 - h01) * fx / 256;
+    a + (b - a) * fz / 256
 }
 
 // --- terrain shape ---
@@ -1178,7 +1252,15 @@ fn scatter_ores(blk: &mut [u8; CHUNK_VOL], cx: i32, cz: i32) {
     }
 }
 
-fn gen_column(blk: &mut [u8; CHUNK_VOL], t: &ShapeTiles, lx: usize, lz: usize, wx: i32, wz: i32) {
+fn gen_column(
+    blk: &mut [u8; CHUNK_VOL],
+    t: &ShapeTiles,
+    caves: &CaveTile,
+    lx: usize,
+    lz: usize,
+    wx: i32,
+    wz: i32,
+) {
     let h = height_at_tiled(t, wx, wz);
     let bm = biome_at_tiled(t, wx, wz, h);
     // Cache height+biome for finish_chunk's decoration pass (see GEN_H/GEN_BM).
@@ -1242,7 +1324,7 @@ fn gen_column(blk: &mut [u8; CHUNK_VOL], t: &ShapeTiles, lx: usize, lz: usize, w
         let mut i = base + 3 * STRIDE;
         while y < hi {
             if y & 3 == 0 {
-                let d = cave_density(wx, y, wz);
+                let d = cave_density_tiled(caves, wx, y, wz);
                 cave_air = d > 196 && d < 208;
             }
             if cave_air {
@@ -1589,6 +1671,7 @@ fn gen_columns(ox: i32, oz: i32, from: usize, count: usize) -> usize {
     // per column (5120). Streaming calls this several times per chunk with the
     // same origin, so the rebuild is amortised anyway.
     let t = shape_tiles(ox, oz);
+    let caves = cave_tile(ox, oz);
     if from == 0 {
         blk.fill(AIR);
     }
@@ -1596,7 +1679,7 @@ fn gen_columns(ox: i32, oz: i32, from: usize, count: usize) -> usize {
     while col < end {
         let lx = col % CWU;
         let lz = col / CWU;
-        gen_column(blk, &t, lx, lz, ox + lx as i32, oz + lz as i32);
+        gen_column(blk, &t, caves, lx, lz, ox + lx as i32, oz + lz as i32);
         col += 1;
     }
     col
