@@ -2383,16 +2383,7 @@ fn main() {
                             unsafe { OPT_MSG = "" };
                         }
                         OPT_LOAD => {
-                            if save::load(&mut player) {
-                                // Edits are raw-set into the world, then the
-                                // touched chunks remesh; the player may have
-                                // landed in a different chunk, so recentre the
-                                // streaming ring before the next frame draws.
-                                save::apply_edits();
-                                world::recenter(
-                                    world_to_block_x(player.x),
-                                    world_to_block_z(player.z),
-                                );
+                            if load_game(&mut player, &mut fb, &font) {
                                 unsafe { OPT_MSG = "LOADED" };
                             } else {
                                 unsafe {
@@ -4090,6 +4081,41 @@ fn enchant_next(p: &Player) -> u8 {
     }
 }
 
+/// Load the card save and put the world in the state it describes: the
+/// dimension it was saved in (a loading screen when that differs from this
+/// one), then its edits, raw-set with the touched chunks remeshed, then the
+/// streaming ring recentred on the player, who may have landed in a
+/// different chunk. False, with nothing changed, when there is no save.
+#[inline(never)]
+#[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
+fn load_game(player: &mut Player, fb: &mut FrameBuffer, font: &FontAtlas) -> bool {
+    let Some(dim) = save::load(player) else {
+        return false;
+    };
+    let (bx, bz) = (world_to_block_x(player.x), world_to_block_z(player.z));
+    if dim != world::dimension() {
+        enter_dimension(dim, bx, bz, fb, font);
+    }
+    save::apply_edits();
+    world::recenter(bx, bz);
+    player.vy = 0;
+    player.fall_peak = player.y;
+    true
+}
+
+/// Switch the chunk ring to `dim` around (bx, bz) behind the loading bar.
+/// One caller-side instance for portals and loads alike: set_dimension is
+/// generic over its progress closure, and each closure type would carry its
+/// own copy of the whole ring generator.
+#[inline(never)]
+#[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
+fn enter_dimension(dim: u8, bx: i32, bz: i32, fb: &mut FrameBuffer, font: &FontAtlas) {
+    world::set_dimension(dim, bx, bz, |done, total| {
+        draw_loading(fb, font, done, total)
+    });
+    finish_loading(fb, font);
+}
+
 /// Standing in portal sheet for long enough swaps dimensions. The world side is
 /// a generator switch over the same chunk ring (world::set_dimension); this side
 /// owns moving the player and giving them somewhere to stand.
@@ -4159,10 +4185,7 @@ fn portal_travel(player: &mut Player, fb: &mut FrameBuffer, font: &FontAtlas) {
     } else {
         (bx * 8, bz * 8)
     };
-    world::set_dimension(to, nx, nz, |done, total| {
-        draw_loading(fb, font, done, total)
-    });
-    finish_loading(fb, font);
+    enter_dimension(to, nx, nz, fb, font);
     // Land on solid ground, and carve out a return portal so you are never
     // stranded: Java builds one for you too.
     let sy = world::surface_y(nx, nz);
