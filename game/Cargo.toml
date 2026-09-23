@@ -15,6 +15,9 @@ emulator-telemetry = ["psx-telemetry/emit"]
 # One sim step per pad poll instead of one per elapsed vblank. For comparing
 # builds of different speed (PGO, layout changes) state for state; never ship.
 lockstep = []
+# Headless UI captures only (src/fixture.rs): a stocked inventory and SELECT
+# to build a table/chest/furnace at the crosshair. Never ship.
+ui-fixture = []
 
 [dependencies]
 psx-telemetry = { path = "../.psoxide/sdk/crates/psx-telemetry" }
