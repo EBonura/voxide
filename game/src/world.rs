@@ -401,11 +401,17 @@ static mut FMASK_ROWS: u64 = 0;
 /// cell of a non-empty row; the merge clears the bits of the cells it
 /// consumes as it zeroes them.
 static mut FMASK_BITS: [u64; CHU as usize] = [0; CHU as usize];
-/// OR over all columns of the +Y / -Y candidate masks: bit ly set when some
-/// column has a face cell in y-plane ly for that direction. Rebuilt whenever
-/// the column masks change (decode or edit), tracked by the epoch below.
-static mut Y_ANY: [u64; 2] = [0; 2];
-static mut Y_ANY_EPOCH: u32 = u32::MAX;
+/// The +Y or -Y candidate cells of every y-plane, bucketed by plane: bit lx
+/// of `Y_COLS[ly][lz]` is set when column (lx, lz) has a meshable cell at ly
+/// whose neighbour along the normal can be seen through. One pass over the
+/// 256 column masks fills it for a direction, so a y-plane's mask build
+/// visits its candidate cells instead of testing all 256 columns. `Y_ANY` is
+/// the OR over columns (bit ly: plane ly has a candidate at all). Rebuilt
+/// when the direction or the column masks change (decode or edit), tracked
+/// by the key below.
+static mut Y_COLS: [[u16; CWU]; CHU as usize] = [[0; CWU]; CHU as usize];
+static mut Y_ANY: u64 = 0;
+static mut Y_COLS_KEY: (usize, u32) = (usize::MAX, 0);
 static mut COL_MASKS_EPOCH: u32 = 0;
 /// Per-column occupancy of the chunk in MESH_SCRATCH, one bit per ly: which
 /// cells are meshable (CLS_MESH) and which can be seen through (CLS_SEE).
@@ -2802,6 +2808,40 @@ fn init_block_class() {
 // MESH_SCRATCH index deltas for the six face directions: lidx is
 // ly*256 + lz*16 + lx, so each axis step is a constant stride.
 
+/// Bucket every column's +Y (dir 2) or -Y (dir 3) candidate cells by plane
+/// into Y_COLS: a cell is a candidate when it is meshable and its neighbour
+/// along the normal can be seen through (the same 64-bit AND the per-plane
+/// test did). Sets Y_ANY and the key.
+#[inline(never)]
+fn build_y_cols(dir: usize) {
+    unsafe {
+        // In place: a 2 KB temporary would not fit the scratchpad stack.
+        core::ptr::write_bytes(core::ptr::addr_of_mut!(Y_COLS), 0, 1);
+        let mut any = 0u64;
+        let mut c = 0usize;
+        while c < CWU * CWU {
+            let see = COL_SEE[c];
+            let m = COL_MESH[c] & if dir == 2 { see >> 1 } else { see << 1 };
+            any |= m;
+            let bit = 1u16 << (c & (CWU - 1));
+            let lz = c / CWU;
+            let mut half = 0;
+            while half < 2 {
+                let mut w = (m >> (32 * half)) as u32;
+                while w != 0 {
+                    let ly = 32 * half + w.trailing_zeros() as usize;
+                    w &= w - 1;
+                    Y_COLS[ly][lz] |= bit;
+                }
+                half += 1;
+            }
+            c += 1;
+        }
+        Y_ANY = any;
+        Y_COLS_KEY = (dir, COL_MASKS_EPOCH);
+    }
+}
+
 /// Fill FMASK for one `dir`-plane: FMASK[cell] = the block whose face shows
 /// there, or AIR.
 ///
@@ -2824,24 +2864,47 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
     };
     let mut any = false;
     if border {
-        // Cold: the neighbour lives in the next chunk, so go through `get`.
-        // The dense fill below writes every cell; the row bitmaps are
-        // rebuilt from it afterwards.
+        // The neighbour lives in the next chunk. Every cell of a border plane
+        // reads the same neighbour chunk, so resolve it once here (what `get`
+        // did per cell: floor_div, the slot hash and the residency test) and
+        // unpack its blocks directly. Past the top or bottom of the world, or
+        // with the neighbour not resident, the neighbour is AIR, as `get`
+        // answered. The dense fill writes every cell and builds the row
+        // bitmaps as it goes.
         let (cx, cz) = unsafe { (CHUNKS[s].cx, CHUNKS[s].cz) };
         let d = DIRS[dir];
+        let (ncx, ncz) = (cx + d.0, cz + d.2);
+        let ns = slot(ncx, ncz);
+        let nblocks = unsafe {
+            if d.1 == 0 && CHUNKS[ns].loaded && CHUNKS[ns].cx == ncx && CHUNKS[ns].cz == ncz {
+                Some(&*core::ptr::addr_of!(CHUNKS[ns].blocks))
+            } else {
+                None
+            }
+        };
+        let mut rows = 0u64;
+        let mut bbit = 1u64;
         let mut b = 0;
         while b < b_dim {
+            let mut bits = 0u64;
+            let mut abit = 1u64;
             let mut a = 0;
             while a < a_dim {
                 let (lx, ly, lz) = cell_to_local(dir, plane, a, b);
                 let blk = unsafe { MESH_SCRATCH[lidx(lx, ly, lz)] };
                 let mut f = AIR;
                 if unsafe { BCLASS[blk as usize] } & CLS_MESH != 0 {
-                    let nb = get(
-                        cx * CW + lx as i32 + d.0,
-                        ly as i32 + d.1,
-                        cz * CW + lz as i32 + d.2,
-                    );
+                    let nb = match nblocks {
+                        Some(nbk) => bget(
+                            nbk,
+                            lidx(
+                                ((lx as i32 + d.0) & (CW - 1)) as usize,
+                                ly,
+                                ((lz as i32 + d.2) & (CW - 1)) as usize,
+                            ),
+                        ),
+                        None => AIR,
+                    };
                     if unsafe { BCLASS[nb as usize] } & CLS_SEE != 0 && nb != blk {
                         f = blk;
                     }
@@ -2849,29 +2912,22 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                 let cell = if f == AIR {
                     0
                 } else {
+                    bits |= abit;
                     f as u16 | (sky_bucket(lx, ly, lz) << 7)
                 };
                 unsafe { FMASK[b * a_dim + a] = cell };
-                any |= f != AIR;
-                a += 1;
-            }
-            b += 1;
-        }
-        let mut b = 0;
-        while b < b_dim {
-            let mut bits = 0u64;
-            let mut a = 0;
-            while a < a_dim {
-                if unsafe { FMASK[b * a_dim + a] } != 0 {
-                    bits |= 1u64 << a;
-                }
+                abit <<= 1;
                 a += 1;
             }
             unsafe { FMASK_BITS[b] = bits };
+            if bits != 0 {
+                rows |= bbit;
+            }
+            bbit <<= 1;
             b += 1;
         }
-        unsafe { FMASK_ROWS = !0 };
-        return any;
+        unsafe { FMASK_ROWS = rows };
+        return rows != 0;
     }
     let _ = (base, sa, sb);
     // Interior planes: a face cell is a meshable block whose neighbour along
@@ -2891,47 +2947,26 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
         2 | 3 => {
             // a = lx, b = lz, both 16: FMASK index is the column index.
             let nplane = if dir == 2 { plane + 1 } else { plane - 1 };
-            // Which y-planes hold any candidate at all, for this direction:
-            // OR of every column's (mesh & shifted see). Rebuilt when the
-            // column masks changed since the last time.
             unsafe {
-                if Y_ANY_EPOCH != COL_MASKS_EPOCH {
-                    let mut up = 0u64;
-                    let mut down = 0u64;
-                    let mut c = 0usize;
-                    while c < CWU * CWU {
-                        let m = COL_MESH[c];
-                        let v = COL_SEE[c];
-                        up |= m & (v >> 1);
-                        down |= m & (v << 1);
-                        c += 1;
-                    }
-                    Y_ANY = [up, down];
-                    Y_ANY_EPOCH = COL_MASKS_EPOCH;
+                if Y_COLS_KEY != (dir, COL_MASKS_EPOCH) {
+                    build_y_cols(dir);
                 }
-                if (Y_ANY[dir - 2] >> plane) & 1 == 0 {
+                if (Y_ANY >> plane) & 1 == 0 {
                     FMASK_ROWS = 0;
                     return false;
                 }
             }
-            // Test the plane's bit through 32-bit halves: a 64-bit shift by a
-            // runtime count is a branchy multi-word sequence on the R3000, and
-            // this ran once per column per plane.
-            let (hp, sp) = (plane >> 5, (plane & 31) as u32);
-            let (hn, sn) = (nplane >> 5, (nplane & 31) as u32);
-            let mesh_words =
-                unsafe { &*(core::ptr::addr_of!(COL_MESH) as *const [[u32; 2]; CWU * CWU]) };
-            let see_words =
-                unsafe { &*(core::ptr::addr_of!(COL_SEE) as *const [[u32; 2]; CWU * CWU]) };
-            let mut col = 0usize;
-            while col < CWU * CWU {
-                let cand = (mesh_words[col][hp] >> sp) & (see_words[col][hn] >> sn) & 1;
-                if cand != 0 {
+            let row_cols = unsafe { &*core::ptr::addr_of!(Y_COLS[plane]) };
+            let mut lz = 0usize;
+            while lz < CWU {
+                let mut cand = row_cols[lz] as u32;
+                while cand != 0 {
+                    let lx = cand.trailing_zeros() as usize;
+                    cand &= cand - 1;
+                    let col = lz * CWU + lx;
                     let blk = unsafe { MESH_SCRATCH[col + plane * CWU * CWU] };
                     let nb = unsafe { MESH_SCRATCH[col + nplane * CWU * CWU] };
                     if blk != nb {
-                        let lx = col & (CWU - 1);
-                        let lz = col / CWU;
                         unsafe {
                             FMASK[col] = blk as u16 | (sky_bucket(lx, plane, lz) << 7);
                             FMASK_BITS[lz] |= 1u64 << lx;
@@ -2940,7 +2975,7 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                         any = true;
                     }
                 }
-                col += 1;
+                lz += 1;
             }
         }
         0 | 1 => {
@@ -3178,9 +3213,13 @@ fn greedy_plane(
     let mut amax = 0usize;
     let mut bmin = 127usize;
     let mut bmax = 0usize;
-    let _ = unsafe { FMASK_ROWS };
-    let mut b0 = 0;
-    while b0 < b_dim {
+    // Only rows build_mask found a face cell in are visited, in ascending
+    // order. A merge only clears rows at or below its seed row, so a listed
+    // row it emptied reads as zero here and is skipped.
+    let mut pending_rows = unsafe { FMASK_ROWS };
+    while pending_rows != 0 {
+        let b0 = pending_rows.trailing_zeros() as usize;
+        pending_rows &= pending_rows - 1;
         // Seeds come from the row's cell bitmap: the next set bit is the next
         // unconsumed face cell, so empty cells are never read.
         let mut row_bits = unsafe { FMASK_BITS[b0] };
@@ -3234,7 +3273,6 @@ fn greedy_plane(
             bmin = bmin.min(b0);
             bmax = bmax.max(b0 + h);
         }
-        b0 += 1;
     }
     unsafe {
         MESH_PLANE_BOUNDS[bound_i] =
