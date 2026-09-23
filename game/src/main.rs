@@ -13,6 +13,8 @@
 extern crate psx_rt;
 
 mod bonnie;
+#[cfg(feature = "ui-fixture")]
+mod fixture;
 mod mob;
 mod save;
 mod sfx;
@@ -2222,6 +2224,8 @@ fn main() {
     // reseeds happened in the menu.
     reset_game_state();
     let mut player = spawn_player();
+    #[cfg(feature = "ui-fixture")]
+    fixture::spawn_pitch(&mut player);
     mob::populate(player.x, player.z);
     // Prime the edge detector with whatever is ACTUALLY held right now, not
     // NONE. The title screen exits on START, world generation then runs for
@@ -2636,6 +2640,10 @@ fn main() {
             // door), then the held item's own action (place, bow, seeds...).
             // Sneak+L2 skips the block interaction and force-places against it,
             // the Java/Bedrock rule.
+            #[cfg(feature = "ui-fixture")]
+            if pad.pressed_since(previous, button::SELECT) {
+                fixture::select(&pick);
+            }
             let use_pressed = pad.pressed_since(previous, button::L2);
             let mut used = false;
             if use_pressed {
@@ -3758,6 +3766,8 @@ fn reset_game_state() {
         if DEMO_PLAY && !DEMO_MARCH {
             hotbar_add(STONE);
         }
+        #[cfg(feature = "ui-fixture")]
+        fixture::seed();
         EDIT_N = 0;
         let mut c = 0;
         while c < MAX_CHESTS {
