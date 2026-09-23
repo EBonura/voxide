@@ -1015,6 +1015,7 @@ pub fn biome_at(wx: i32, wz: i32, h: i32) -> u8 {
 /// temperature are both pure noise -- no terrain needed. It walks outward in
 /// rings and takes the first cell that is plains at a sensible altitude, so it
 /// follows a new seed instead of being re-tuned for one.
+#[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
 pub fn pick_spawn(bx: i32, bz: i32) -> (i32, i32) {
     /// Open plains at an altitude worth looking at: above the waterline, below
     /// the point where the surface turns to mountain snow and stone.

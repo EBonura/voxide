@@ -45,9 +45,11 @@ pub fn seed() {
 }
 
 /// Look a little down at spawn so the crosshair lands on the ground within
-/// reach, where SELECT can build.
+/// reach, where SELECT can build; and start with some gear.
 pub fn spawn_pitch(p: &mut Player) {
     p.pitch = -300;
+    p.pick = 1; // a wood pickaxe and iron armour, so the gear column shows
+    p.armor = 1;
 }
 
 pub fn select(pick: &Pick) {
