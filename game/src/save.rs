@@ -4,7 +4,8 @@
 //! alongside retail saves instead of clobbering raw frames like the old
 //! hand-rolled driver did. Old raw-frame dev saves are orphaned by the switch.
 //!
-//! Payload: a versioned header (player, hotbar, 16-bit inventory counts),
+//! Payload: a versioned header (player with its enchant levels and food
+//! pouch, hotbar, 16-bit inventory counts),
 //! then every chest and furnace, then 8-byte edit-delta records. Version 1
 //! saves (one-byte counts, no containers or hotbar) still load.
 
@@ -20,10 +21,11 @@ use psx_mc::{Card, HardwareCard, Slot};
 /// each, and chests, furnaces and the hotbar layout were not saved at all.
 /// Still read, never written.
 const MAGIC_V1: [u8; 4] = *b"MCPX";
-/// Version 2 on: this magic, then a u16 layout version. A future layout bumps
-/// VERSION and adds an arm to `load` instead of a new magic.
+/// Version 2 on: this magic, then a u16 layout version. A new layout bumps
+/// VERSION and teaches `layout` where its sections moved; every older version
+/// still loads.
 const MAGIC: [u8; 4] = *b"VOXS";
-const VERSION: u16 = 2;
+const VERSION: u16 = 3;
 /// BIOS file name: region+product code + label, 20 ASCII chars max.
 const FILE_NAME: &str = "BESLES-00000VOXIDE01";
 /// Human-readable label shown by the console's memory-card manager.
@@ -43,11 +45,33 @@ const V1_HDR: usize = V1_PROGRESS + 9; // armor u8, efficiency u8, xp i32, 3 too
 //  52 inventory counts [u16; BLOCK_KINDS], full 16-bit
 // 308 chest count u8, furnace count u8, edit count u16
 // 312 chests (CHEST_REC each), then furnaces (FURN_REC), then edits (EDIT_STRIDE)
+//
+// Version 3 inserts the player extras at 308 (sharpness u8, protection u8,
+// pad u16, food_items i32), moving the counts to 316 and the records to 320.
 const OFF_HOTBAR_SEL: usize = 41;
 const OFF_HOTBAR: usize = 42;
 const OFF_INV: usize = 52;
-const OFF_COUNTS: usize = OFF_INV + BLOCK_KINDS * 2;
-const V2_HDR: usize = OFF_COUNTS + 4;
+const OFF_EXTRA: usize = OFF_INV + BLOCK_KINDS * 2;
+
+/// Where a layout version keeps its sections.
+#[derive(Copy, Clone)]
+struct Layout {
+    extras: bool,
+    counts: usize,
+    hdr: usize,
+}
+
+const fn layout(version: u16) -> Layout {
+    let extras = version >= 3;
+    let counts = OFF_EXTRA + if extras { 8 } else { 0 };
+    Layout {
+        extras,
+        counts,
+        hdr: counts + 4,
+    }
+}
+
+const CUR: Layout = layout(VERSION);
 /// x y z i16, then every kind's count as u16. Stored whole rather than sparse:
 /// it keeps the buffer bound simple, and 16 full chests still fit two blocks.
 const CHEST_REC: usize = 6 + BLOCK_KINDS * 2;
@@ -55,7 +79,7 @@ const CHEST_REC: usize = 6 + BLOCK_KINDS * 2;
 const FURN_REC: usize = 16;
 const EDIT_STRIDE: usize = 8;
 const MAX_PAYLOAD: usize =
-    V2_HDR + MAX_CHESTS * CHEST_REC + MAX_FURNACES * FURN_REC + MAX_EDITS * EDIT_STRIDE;
+    CUR.hdr + MAX_CHESTS * CHEST_REC + MAX_FURNACES * FURN_REC + MAX_EDITS * EDIT_STRIDE;
 const _: () = assert!(HOTBAR_VIS <= OFF_INV - OFF_HOTBAR);
 const _: () = assert!(MAX_PAYLOAD >= V1_HDR + MAX_EDITS * EDIT_STRIDE);
 
@@ -141,8 +165,12 @@ pub fn save(p: &Player) -> bool {
             k += 1;
         }
     }
+    buf[OFF_EXTRA] = p.sharpness;
+    buf[OFF_EXTRA + 1] = p.protection;
+    put_u16(buf, OFF_EXTRA + 2, 0);
+    put_i32(buf, OFF_EXTRA + 4, p.food_items);
 
-    let mut off = V2_HDR;
+    let mut off = CUR.hdr;
     let mut chests = 0u8;
     let mut i = 0;
     while i < MAX_CHESTS {
@@ -183,9 +211,9 @@ pub fn save(p: &Player) -> bool {
         i += 1;
     }
     let n = unsafe { EDIT_N }.min(MAX_EDITS);
-    buf[OFF_COUNTS] = chests;
-    buf[OFF_COUNTS + 1] = furnaces;
-    put_u16(buf, OFF_COUNTS + 2, n as u16);
+    buf[CUR.counts] = chests;
+    buf[CUR.counts + 1] = furnaces;
+    put_u16(buf, CUR.counts + 2, n as u16);
     let mut idx = 0;
     while idx < n {
         unsafe {
@@ -226,8 +254,9 @@ pub fn load(p: &mut Player) -> bool {
     if len >= V1_HDR && buf[..4] == MAGIC_V1 {
         load_v1(p, &buf[..len]);
         true
-    } else if len >= V2_HDR && buf[..4] == MAGIC && get_u16(buf, 4) == VERSION {
-        load_v2(p, &buf[..len])
+    } else if len >= 6 && buf[..4] == MAGIC && (2..=VERSION).contains(&get_u16(buf, 4)) {
+        let l = layout(get_u16(buf, 4));
+        len >= l.hdr && load_versioned(p, &buf[..len], l)
     } else {
         false
     }
@@ -299,15 +328,15 @@ fn load_v1(p: &mut Player, buf: &[u8]) {
 
 #[inline(never)]
 #[optimize(size)] // card I/O dominates; keep the bytes
-fn load_v2(p: &mut Player, buf: &[u8]) -> bool {
-    let chests = buf[OFF_COUNTS] as usize;
-    let furnaces = buf[OFF_COUNTS + 1] as usize;
-    let edits = get_u16(buf, OFF_COUNTS + 2) as usize;
+fn load_versioned(p: &mut Player, buf: &[u8], l: Layout) -> bool {
+    let chests = buf[l.counts] as usize;
+    let furnaces = buf[l.counts + 1] as usize;
+    let edits = get_u16(buf, l.counts + 2) as usize;
     // Refuse a truncated or out-of-range file before changing any state.
     if chests > MAX_CHESTS
         || furnaces > MAX_FURNACES
         || edits > MAX_EDITS
-        || buf.len() < V2_HDR + chests * CHEST_REC + furnaces * FURN_REC + edits * EDIT_STRIDE
+        || buf.len() < l.hdr + chests * CHEST_REC + furnaces * FURN_REC + edits * EDIT_STRIDE
     {
         return false;
     }
@@ -325,6 +354,12 @@ fn load_v2(p: &mut Player, buf: &[u8]) -> bool {
     p.axe = buf[38];
     p.shovel = buf[39];
     p.sword = buf[40];
+    // Saves before version 3 did not carry these; the session keeps its own.
+    if l.extras {
+        p.sharpness = buf[OFF_EXTRA];
+        p.protection = buf[OFF_EXTRA + 1];
+        p.food_items = get_i32(buf, OFF_EXTRA + 4);
+    }
     unsafe {
         HOTBAR_SEL = (buf[OFF_HOTBAR_SEL] as usize).min(HOTBAR_VIS - 1);
         let mut h = 0;
@@ -339,7 +374,7 @@ fn load_v2(p: &mut Player, buf: &[u8]) -> bool {
         }
     }
     clear_containers();
-    let mut off = V2_HDR;
+    let mut off = l.hdr;
     let mut i = 0;
     while i < chests {
         unsafe {
