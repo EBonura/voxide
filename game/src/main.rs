@@ -1260,6 +1260,10 @@ static mut CHEST_Y: [i32; MAX_CHESTS] = [0; MAX_CHESTS];
 static mut CHEST_Z: [i32; MAX_CHESTS] = [0; MAX_CHESTS];
 static mut CHEST_INV: [[u16; BLOCK_KINDS]; MAX_CHESTS] = [[0; BLOCK_KINDS]; MAX_CHESTS];
 static mut CHEST_USED: [bool; MAX_CHESTS] = [false; MAX_CHESTS];
+/// The dimension each chest stands in. The three dimensions share one
+/// coordinate space, so x,y,z alone let an Inferno chest open an overworld
+/// chest's contents at the same spot.
+static mut CHEST_D: [u8; MAX_CHESTS] = [0; MAX_CHESTS];
 
 // Per-furnace state, keyed by the furnace block's world position.
 const MAX_FURNACES: usize = 8;
@@ -1270,6 +1274,7 @@ static mut FURN_X: [i32; MAX_FURNACES] = [0; MAX_FURNACES];
 static mut FURN_Y: [i32; MAX_FURNACES] = [0; MAX_FURNACES];
 static mut FURN_Z: [i32; MAX_FURNACES] = [0; MAX_FURNACES];
 static mut FURN_USED: [bool; MAX_FURNACES] = [false; MAX_FURNACES];
+static mut FURN_D: [u8; MAX_FURNACES] = [0; MAX_FURNACES]; // dimension, as CHEST_D
 static mut FURN_IN: [u8; MAX_FURNACES] = [AIR; MAX_FURNACES]; // input ore (AIR = empty)
 static mut FURN_IN_N: [u16; MAX_FURNACES] = [0; MAX_FURNACES];
 static mut FURN_FUEL: [u16; MAX_FURNACES] = [0; MAX_FURNACES]; // coal units
@@ -10329,11 +10334,21 @@ fn inv_take(block: u8) -> bool {
     }
 }
 
+/// The chest at x,y,z in the current dimension.
 fn chest_find(x: i32, y: i32, z: i32) -> Option<usize> {
+    chest_find_in(x, y, z, world::dimension())
+}
+
+fn chest_find_in(x: i32, y: i32, z: i32, d: u8) -> Option<usize> {
     let mut i = 0;
     while i < MAX_CHESTS {
         unsafe {
-            if CHEST_USED[i] && CHEST_X[i] == x && CHEST_Y[i] == y && CHEST_Z[i] == z {
+            if CHEST_USED[i]
+                && CHEST_X[i] == x
+                && CHEST_Y[i] == y
+                && CHEST_Z[i] == z
+                && CHEST_D[i] == d
+            {
                 return Some(i);
             }
         }
@@ -10343,7 +10358,11 @@ fn chest_find(x: i32, y: i32, z: i32) -> Option<usize> {
 }
 
 fn chest_register(x: i32, y: i32, z: i32) {
-    if chest_find(x, y, z).is_some() {
+    chest_register_in(x, y, z, world::dimension());
+}
+
+fn chest_register_in(x: i32, y: i32, z: i32, d: u8) {
+    if chest_find_in(x, y, z, d).is_some() {
         return;
     }
     let mut i = 0;
@@ -10354,6 +10373,7 @@ fn chest_register(x: i32, y: i32, z: i32) {
                 CHEST_X[i] = x;
                 CHEST_Y[i] = y;
                 CHEST_Z[i] = z;
+                CHEST_D[i] = d;
                 CHEST_INV[i] = [0; BLOCK_KINDS];
                 return;
             }
@@ -10379,11 +10399,17 @@ fn chest_remove(x: i32, y: i32, z: i32) {
     }
 }
 
+/// The furnace at x,y,z in the current dimension.
 fn furn_find(x: i32, y: i32, z: i32) -> Option<usize> {
+    furn_find_in(x, y, z, world::dimension())
+}
+
+fn furn_find_in(x: i32, y: i32, z: i32, d: u8) -> Option<usize> {
     let mut i = 0;
     while i < MAX_FURNACES {
         unsafe {
-            if FURN_USED[i] && FURN_X[i] == x && FURN_Y[i] == y && FURN_Z[i] == z {
+            if FURN_USED[i] && FURN_X[i] == x && FURN_Y[i] == y && FURN_Z[i] == z && FURN_D[i] == d
+            {
                 return Some(i);
             }
         }
@@ -10393,7 +10419,11 @@ fn furn_find(x: i32, y: i32, z: i32) -> Option<usize> {
 }
 
 fn furn_register(x: i32, y: i32, z: i32) {
-    if furn_find(x, y, z).is_some() {
+    furn_register_in(x, y, z, world::dimension());
+}
+
+fn furn_register_in(x: i32, y: i32, z: i32, d: u8) {
+    if furn_find_in(x, y, z, d).is_some() {
         return;
     }
     let mut i = 0;
@@ -10404,6 +10434,7 @@ fn furn_register(x: i32, y: i32, z: i32) {
                 FURN_X[i] = x;
                 FURN_Y[i] = y;
                 FURN_Z[i] = z;
+                FURN_D[i] = d;
                 FURN_IN[i] = AIR;
                 FURN_IN_N[i] = 0;
                 FURN_FUEL[i] = 0;
