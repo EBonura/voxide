@@ -2,6 +2,7 @@
 //! starting inventory, and SELECT in the world to stand up a crafting table,
 //! chest or furnace at the crosshair, so a `frontend launch --press` script
 //! can reach every menu without mining and crafting its way there first.
+//! SELECT while sneaking sets the enchant levels and the food pouch instead.
 //!
 //! SELECT on a non-station block places a crafting table in front of it;
 //! SELECT on a station turns it into the next one (table, chest, furnace).
@@ -81,7 +82,15 @@ pub fn spawn_pitch(p: &mut Player) {
     p.armor = 1;
 }
 
-pub fn select(pick: &Pick) {
+pub fn select(pick: &Pick, player: &mut Player) {
+    // SELECT while sneaking (CIRCLE held) grants the state only the enchanting
+    // table and fishing give, so a save test can see it round-trip.
+    if player.sneaking {
+        player.sharpness = 2;
+        player.protection = 3;
+        player.food_items += 5;
+        return;
+    }
     if !pick.hit {
         return;
     }

@@ -2511,7 +2511,7 @@ fn main() {
             // the Java/Bedrock rule.
             #[cfg(feature = "ui-fixture")]
             if pad.pressed_since(previous, button::SELECT) {
-                fixture::select(&pick);
+                fixture::select(&pick, &mut player);
             }
             let use_pressed = pad.pressed_since(previous, button::L2);
             let mut used = false;
