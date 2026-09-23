@@ -225,7 +225,13 @@ static mut CHUNKS: [Chunk; NCHUNKS] = [EMPTY_CHUNK; NCHUNKS];
 // face RAM is bounded by how many chunks can be ON SCREEN at once, not by GRID^2.
 // Only chunks within render range carry a slot; a chunk that leaves range frees
 // its slot (and re-meshes if it comes back). This is what lets GRID grow large.
-const POOL: usize = 28; // RENDER_R=2 means up to 5x5 chunks meshed at once
+// Sized from RENDER_R rather than by hand: every in-range chunk owns one slot,
+// plus the one a streaming commit reserves while the chunk's old mesh stays on
+// screen (reserve_stream_slot). Slots only ever go to in-range chunks -- recenter
+// frees the rest and alloc/reserve evict any stragglers -- so nothing beyond this
+// is ever touched. It was 28, a leftover from the 5x5 mesh ring, which left 18
+// slots (~350 KB) that only a RENDER_R of 2 could reach.
+const POOL: usize = ((2 * RENDER_R + 1) * (2 * RENDER_R + 1) + 1) as usize;
 const NO_SLOT: u16 = u16::MAX;
 static mut POOL_FACES: [[u32; MAX_FACES]; POOL] = [[0; MAX_FACES]; POOL];
 /// Per-face vertex ambient occlusion, ONE BYTE beside each packed face word:
@@ -281,7 +287,7 @@ static mut POOL_OWNER: [usize; POOL] = [usize::MAX; POOL]; // chunk slot owning 
 static mut PLAYER_CX: i32 = 0;
 static mut PLAYER_CZ: i32 = 0;
 // Chunk-radius that gets meshed (covers the draw distance in any facing). POOL
-// must be >= (2*RENDER_R+1)^2.
+// follows it.
 // Mesh ring: 3x3 around the player up to a 16-block draw. A chunk entering it
 // is 16+ blocks out -- past the far plane -- so it meshes before it can be
 // seen. The old 5x5 ring meshed 25 chunks per boundary cross; that streaming
