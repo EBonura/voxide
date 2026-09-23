@@ -10,10 +10,10 @@
 //! saves (one-byte counts, no containers or hotbar) still load.
 
 use crate::{
-    Player, AIR, BLOCK_KINDS, CHEST, CHEST_INV, CHEST_USED, CHEST_X, CHEST_Y, CHEST_Z, EDIT_B,
-    EDIT_D, EDIT_N, EDIT_X, EDIT_Y, EDIT_Z, FURNACE, FURN_FUEL, FURN_IN, FURN_IN_N, FURN_OUT,
-    FURN_OUT_N, FURN_PROG, FURN_USED, FURN_X, FURN_Y, FURN_Z, HOTBAR, HOTBAR_SEL, HOTBAR_VIS, INV,
-    MAX_CHESTS, MAX_EDITS, MAX_FURNACES, PLACEABLE,
+    Player, AIR, BLOCK_KINDS, CHEST, CHEST_D, CHEST_INV, CHEST_USED, CHEST_X, CHEST_Y, CHEST_Z,
+    EDIT_B, EDIT_D, EDIT_N, EDIT_X, EDIT_Y, EDIT_Z, FURNACE, FURN_D, FURN_FUEL, FURN_IN, FURN_IN_N,
+    FURN_OUT, FURN_OUT_N, FURN_PROG, FURN_USED, FURN_X, FURN_Y, FURN_Z, HOTBAR, HOTBAR_SEL,
+    HOTBAR_VIS, INV, MAX_CHESTS, MAX_EDITS, MAX_FURNACES, PLACEABLE,
 };
 use psx_mc::{Card, HardwareCard, Slot};
 
@@ -25,7 +25,7 @@ const MAGIC_V1: [u8; 4] = *b"MCPX";
 /// VERSION and teaches `layout` where its sections moved; every older version
 /// still loads.
 const MAGIC: [u8; 4] = *b"VOXS";
-const VERSION: u16 = 3;
+const VERSION: u16 = 4;
 /// BIOS file name: region+product code + label, 20 ASCII chars max.
 const FILE_NAME: &str = "BESLES-00000VOXIDE01";
 /// Human-readable label shown by the console's memory-card manager.
@@ -48,6 +48,8 @@ const V1_HDR: usize = V1_PROGRESS + 9; // armor u8, efficiency u8, xp i32, 3 too
 //
 // Version 3 inserts the player extras at 308 (sharpness u8, protection u8,
 // pad u16, food_items i32), moving the counts to 316 and the records to 320.
+// Version 4 adds the dimension to each chest and furnace record, as a byte
+// (and a pad byte) after x y z; earlier saves' containers are overworld ones.
 const OFF_HOTBAR_SEL: usize = 41;
 const OFF_HOTBAR: usize = 42;
 const OFF_INV: usize = 52;
@@ -59,6 +61,8 @@ struct Layout {
     extras: bool,
     counts: usize,
     hdr: usize,
+    /// Where x,y,z end in a container record: 8 with the dimension, else 6.
+    pos: usize,
 }
 
 const fn layout(version: u16) -> Layout {
@@ -68,18 +72,25 @@ const fn layout(version: u16) -> Layout {
         extras,
         counts,
         hdr: counts + 4,
+        pos: if version >= 4 { 8 } else { 6 },
     }
 }
 
 const CUR: Layout = layout(VERSION);
-/// x y z i16, then every kind's count as u16. Stored whole rather than sparse:
-/// it keeps the buffer bound simple, and 16 full chests still fit two blocks.
-const CHEST_REC: usize = 6 + BLOCK_KINDS * 2;
-/// x y z i16, input u8, output u8, input count, fuel, output count, progress u16.
-const FURN_REC: usize = 16;
+/// x y z i16 (and, from version 4, dimension u8 + pad), then every kind's
+/// count as u16. Stored whole rather than sparse: it keeps the buffer bound
+/// simple, and 16 full chests still fit two blocks.
+const fn chest_rec(l: Layout) -> usize {
+    l.pos + BLOCK_KINDS * 2
+}
+/// Position as above, then input u8, output u8, input count, fuel, output
+/// count, progress u16.
+const fn furn_rec(l: Layout) -> usize {
+    l.pos + 10
+}
 const EDIT_STRIDE: usize = 8;
 const MAX_PAYLOAD: usize =
-    CUR.hdr + MAX_CHESTS * CHEST_REC + MAX_FURNACES * FURN_REC + MAX_EDITS * EDIT_STRIDE;
+    CUR.hdr + MAX_CHESTS * chest_rec(CUR) + MAX_FURNACES * furn_rec(CUR) + MAX_EDITS * EDIT_STRIDE;
 const _: () = assert!(HOTBAR_VIS <= OFF_INV - OFF_HOTBAR);
 const _: () = assert!(MAX_PAYLOAD >= V1_HDR + MAX_EDITS * EDIT_STRIDE);
 
@@ -179,12 +190,14 @@ pub fn save(p: &Player) -> bool {
                 put_i16(buf, off, CHEST_X[i] as i16);
                 put_i16(buf, off + 2, CHEST_Y[i] as i16);
                 put_i16(buf, off + 4, CHEST_Z[i] as i16);
+                buf[off + 6] = CHEST_D[i];
+                buf[off + 7] = 0;
                 let mut k = 0;
                 while k < BLOCK_KINDS {
-                    put_u16(buf, off + 6 + k * 2, CHEST_INV[i][k]);
+                    put_u16(buf, off + CUR.pos + k * 2, CHEST_INV[i][k]);
                     k += 1;
                 }
-                off += CHEST_REC;
+                off += chest_rec(CUR);
                 chests += 1;
             }
         }
@@ -198,13 +211,16 @@ pub fn save(p: &Player) -> bool {
                 put_i16(buf, off, FURN_X[i] as i16);
                 put_i16(buf, off + 2, FURN_Y[i] as i16);
                 put_i16(buf, off + 4, FURN_Z[i] as i16);
-                buf[off + 6] = FURN_IN[i];
-                buf[off + 7] = FURN_OUT[i];
-                put_u16(buf, off + 8, FURN_IN_N[i]);
-                put_u16(buf, off + 10, FURN_FUEL[i]);
-                put_u16(buf, off + 12, FURN_OUT_N[i]);
-                put_u16(buf, off + 14, FURN_PROG[i]);
-                off += FURN_REC;
+                buf[off + 6] = FURN_D[i];
+                buf[off + 7] = 0;
+                let o = off + CUR.pos;
+                buf[o] = FURN_IN[i];
+                buf[o + 1] = FURN_OUT[i];
+                put_u16(buf, o + 2, FURN_IN_N[i]);
+                put_u16(buf, o + 4, FURN_FUEL[i]);
+                put_u16(buf, o + 6, FURN_OUT_N[i]);
+                put_u16(buf, o + 8, FURN_PROG[i]);
+                off += furn_rec(CUR);
                 furnaces += 1;
             }
         }
@@ -295,18 +311,20 @@ fn load_v1(p: &mut Player, buf: &[u8]) {
     clear_containers();
     let mut i = 0;
     while i < n {
-        let (x, y, z, b) = unsafe {
+        // Each edit knows its dimension, so a rebuilt container does too.
+        let (x, y, z, b, d) = unsafe {
             (
                 EDIT_X[i] as i32,
                 EDIT_Y[i] as i32,
                 EDIT_Z[i] as i32,
                 EDIT_B[i],
+                EDIT_D[i],
             )
         };
         if b == CHEST {
-            crate::chest_register(x, y, z);
+            crate::chest_register_in(x, y, z, d);
         } else if b == FURNACE {
-            crate::furn_register(x, y, z);
+            crate::furn_register_in(x, y, z, d);
         }
         i += 1;
     }
@@ -336,7 +354,7 @@ fn load_versioned(p: &mut Player, buf: &[u8], l: Layout) -> bool {
     if chests > MAX_CHESTS
         || furnaces > MAX_FURNACES
         || edits > MAX_EDITS
-        || buf.len() < l.hdr + chests * CHEST_REC + furnaces * FURN_REC + edits * EDIT_STRIDE
+        || buf.len() < l.hdr + chests * chest_rec(l) + furnaces * furn_rec(l) + edits * EDIT_STRIDE
     {
         return false;
     }
@@ -382,13 +400,15 @@ fn load_versioned(p: &mut Player, buf: &[u8], l: Layout) -> bool {
             CHEST_X[i] = get_i16(buf, off) as i32;
             CHEST_Y[i] = get_i16(buf, off + 2) as i32;
             CHEST_Z[i] = get_i16(buf, off + 4) as i32;
+            // Before version 4 every container was an overworld one.
+            CHEST_D[i] = if l.pos > 6 { buf[off + 6] } else { 0 };
             let mut k = 0;
             while k < BLOCK_KINDS {
-                CHEST_INV[i][k] = get_u16(buf, off + 6 + k * 2);
+                CHEST_INV[i][k] = get_u16(buf, off + l.pos + k * 2);
                 k += 1;
             }
         }
-        off += CHEST_REC;
+        off += chest_rec(l);
         i += 1;
     }
     let mut i = 0;
@@ -398,14 +418,16 @@ fn load_versioned(p: &mut Player, buf: &[u8], l: Layout) -> bool {
             FURN_X[i] = get_i16(buf, off) as i32;
             FURN_Y[i] = get_i16(buf, off + 2) as i32;
             FURN_Z[i] = get_i16(buf, off + 4) as i32;
-            FURN_IN[i] = buf[off + 6];
-            FURN_OUT[i] = buf[off + 7];
-            FURN_IN_N[i] = get_u16(buf, off + 8);
-            FURN_FUEL[i] = get_u16(buf, off + 10);
-            FURN_OUT_N[i] = get_u16(buf, off + 12);
-            FURN_PROG[i] = get_u16(buf, off + 14);
+            FURN_D[i] = if l.pos > 6 { buf[off + 6] } else { 0 };
+            let o = off + l.pos;
+            FURN_IN[i] = buf[o];
+            FURN_OUT[i] = buf[o + 1];
+            FURN_IN_N[i] = get_u16(buf, o + 2);
+            FURN_FUEL[i] = get_u16(buf, o + 4);
+            FURN_OUT_N[i] = get_u16(buf, o + 6);
+            FURN_PROG[i] = get_u16(buf, o + 8);
         }
-        off += FURN_REC;
+        off += furn_rec(l);
         i += 1;
     }
     read_edits(buf, off, edits);

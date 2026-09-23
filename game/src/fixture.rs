@@ -2,7 +2,8 @@
 //! starting inventory, and SELECT in the world to stand up a crafting table,
 //! chest or furnace at the crosshair, so a `frontend launch --press` script
 //! can reach every menu without mining and crafting its way there first.
-//! SELECT while sneaking sets the enchant levels and the food pouch instead.
+//! SELECT while sneaking sets the enchant levels and the food pouch, or, at a
+//! chest, crosses dimensions in place and builds a chest at the same spot.
 //!
 //! SELECT on a non-station block places a crafting table in front of it;
 //! SELECT on a station turns it into the next one (table, chest, furnace).
@@ -84,8 +85,14 @@ pub fn spawn_pitch(p: &mut Player) {
 
 pub fn select(pick: &Pick, player: &mut Player) {
     // SELECT while sneaking (CIRCLE held) grants the state only the enchanting
-    // table and fishing give, so a save test can see it round-trip.
+    // table and fishing give, so a save test can see it round-trip. Aimed at a
+    // chest, it instead crosses to the other dimension in place and stands a
+    // chest at the very same x,y,z there, the case the dimension key is for.
     if player.sneaking {
+        if pick.hit && get_block_i32(pick.bx, pick.by, pick.bz) == CHEST {
+            same_spot_elsewhere(pick, player);
+            return;
+        }
         player.sharpness = 2;
         player.protection = 3;
         player.food_items += 5;
@@ -133,4 +140,37 @@ pub fn select(pick: &Pick, player: &mut Player) {
     } else if next == FURNACE {
         furn_register(bx, by, bz);
     }
+}
+
+/// Swap overworld and Inferno without moving, then put a chest at the aimed
+/// block with a clear line to it and floor underfoot.
+fn same_spot_elsewhere(pick: &Pick, player: &Player) {
+    let to = if world::dimension() == world::DIM_OVERWORLD {
+        world::DIM_INFERNO
+    } else {
+        world::DIM_OVERWORLD
+    };
+    let px = world_to_block_x(player.x);
+    let py = world_to_block_y(player.y);
+    let pz = world_to_block_z(player.z);
+    world::set_dimension(to, px, pz, |_, _| {});
+    let (x0, x1) = (px.min(pick.bx) - 1, px.max(pick.bx) + 1);
+    let (z0, z1) = (pz.min(pick.bz) - 1, pz.max(pick.bz) + 1);
+    let mut x = x0;
+    while x <= x1 {
+        let mut z = z0;
+        while z <= z1 {
+            set_block_i32(x, py - 1, z, COBBLE);
+            let mut y = py;
+            while y <= py + 3 {
+                set_block_i32(x, y, z, AIR);
+                y += 1;
+            }
+            z += 1;
+        }
+        x += 1;
+    }
+    set_block_i32(pick.bx, pick.by, pick.bz, CHEST);
+    chest_register(pick.bx, pick.by, pick.bz);
+    world::remesh_loaded();
 }
