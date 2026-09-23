@@ -8981,12 +8981,25 @@ fn ui_frame_begin() {
     ui_reset();
 }
 
+/// One empty DMA node per arena that ends the gameplay sky chain by jumping
+/// to the head of that arena's world/tail OT, so a frame goes out as a single
+/// linked-list walk (see submit_built_frame).
+static mut SKY_TO_OT: [u32; RENDER_ARENAS] = [0; RENDER_ARENAS];
+
 /// Link the sky batch. The title screen may submit it immediately because it
-/// uses a synchronous renderer; gameplay leaves it queued until frame_present.
+/// uses a synchronous renderer; gameplay leaves it queued until frame_present,
+/// with the sky chain continuing straight into the world/tail OT.
 #[inline(never)]
 fn ui_finish_sky(submit_now: bool) {
     unsafe {
         let arena = RENDER_ARENA;
+        if !submit_now {
+            // Linked into slot 0 before the sky packets, so it is walked
+            // after all of them (insertion prepends within a slot).
+            let link = core::ptr::addr_of_mut!(SKY_TO_OT[arena]) as *mut u32;
+            (*core::ptr::addr_of_mut!(SKY_OT))[arena].insert(0, link, 0);
+            *link = OT[arena].submit_head() as u32 & 0x00FF_FFFF;
+        }
         ui_flush(&mut (*core::ptr::addr_of_mut!(SKY_OT))[arena], 0);
         if submit_now && !PROFILE_SKIP_SUBMIT {
             SKY_OT[arena].submit();
@@ -9006,14 +9019,15 @@ fn ui_submit_tail() {
 
 /// Submit the arena just built and switch CPU packet allocation to the other.
 ///
-/// The second kick waits only for the sky's DMA walk, not its raster, so both
-/// chains remain contiguous in the GPU command queue.
+/// One kick: the sky chain ends in a node that jumps to the world/tail OT
+/// (ui_finish_sky). Kicking the two tables separately made the second kick
+/// wait out the first walk, which the GPU paces with the full-screen sky fill:
+/// ~80K CPU cycles blocked at the top of every frame.
 #[inline(never)]
 fn submit_built_frame() {
     unsafe {
         let arena = RENDER_ARENA;
         SKY_OT[arena].submit_async();
-        OT[arena].submit_async();
         RENDER_ARENA ^= 1;
     }
 }
