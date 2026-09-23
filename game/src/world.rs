@@ -3811,7 +3811,8 @@ pub fn gen_tick() {
         // hitch when a chunk completed while you were walking.
         match GEN_PHASE {
             0 => {
-                GEN_COL = gen_columns(GEN_CX * CW, GEN_CZ * CW, GEN_COL, GEN_BATCH);
+                let (ox, oz, from) = (GEN_CX * CW, GEN_CZ * CW, GEN_COL);
+                GEN_COL = StreamStack::run(|| gen_columns(ox, oz, from, GEN_BATCH));
                 if GEN_COL >= CHUNK_AREA {
                     scatter_ores(&mut GEN_SCRATCH, GEN_CX, GEN_CZ);
                     GEN_PHASE = 1;
@@ -3819,7 +3820,8 @@ pub fn gen_tick() {
                 }
             }
             1 => {
-                GEN_COL = decorate_columns(GEN_CX, GEN_CZ, GEN_COL, DECORATE_BATCH);
+                let (cx, cz, from) = (GEN_CX, GEN_CZ, GEN_COL);
+                GEN_COL = StreamStack::run(|| decorate_columns(cx, cz, from, DECORATE_BATCH));
                 if GEN_COL >= CHUNK_AREA {
                     GEN_PHASE = 2;
                     GEN_COL = 0;
@@ -3849,9 +3851,23 @@ pub fn gen_tick() {
 /// measured quad load leaves room.
 #[inline(never)]
 pub fn stream_tick_claim(allow_claim: bool) {
-    unsafe { ALLOW_CLAIM = allow_claim };
-    stream_tick();
+    unsafe {
+        ALLOW_CLAIM = allow_claim;
+        StreamStack::run(stream_tick);
+    }
 }
+
+/// The stack the generator and mesher run on: the whole scratchpad.
+///
+/// Streaming runs from the main loop after the frame's world pass and from the
+/// title's world pump, never inside a render pass, so the scratchpad's other
+/// users (the near clipper's polygon buffers and the face batch, see
+/// main.rs) are dead while it runs. Their loops spill heavily, and a
+/// scratchpad reload is one cycle where a main-RAM one stalls for about six.
+/// The pack phase stays on the RAM stack: its misaligned-cursor guard prints
+/// through the BIOS, which pushes onto whatever stack it is called on.
+/// tools/stack_guard.py proves each call tree fits after every link.
+type StreamStack = psx_rt::scratchpad::ScratchpadStack<0, 1024>;
 
 /// Pending streaming work, split by urgency: `near` is work within one chunk of
 /// the player (inside the ~21-block fog radius, so its absence is visible pop-in)
