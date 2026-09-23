@@ -233,14 +233,36 @@ static mut CHUNKS: [Chunk; NCHUNKS] = [EMPTY_CHUNK; NCHUNKS];
 // slots (~350 KB) that only a RENDER_R of 2 could reach.
 const POOL: usize = ((2 * RENDER_R + 1) * (2 * RENDER_R + 1) + 1) as usize;
 const NO_SLOT: u16 = u16::MAX;
-static mut POOL_FACES: [[u32; MAX_FACES]; POOL] = [[0; MAX_FACES]; POOL];
+/// Face storage for every pool slot, shared. A slot's faces live contiguously
+/// at ARENA_F[POOL_BASE[p]..][..POOL_CAP[p]], so RAM follows the faces meshes
+/// actually have rather than POOL x MAX_FACES: a fixed 3000-face slot averaged
+/// ~20% full (48-chunk survey: mean 643 faces, p90 993, max 1219).
+///
+/// ARENA_PER_SLOT is a budget, not a per-chunk cap: one chunk may still use up
+/// to MAX_FACES as long as the ring's total fits. At 1280 a ring where every
+/// chunk hit the survey maximum still fits. Past that, arena_alloc compacts and
+/// then truncates the mesh (the same failure the fixed slots have at MAX_FACES).
+const ARENA_PER_SLOT: usize = if cfg!(feature = "ram-stress") { 500 } else { 1280 };
+const ARENA_FACES: usize = POOL * ARENA_PER_SLOT;
+static mut ARENA_F: [u32; ARENA_FACES] = [0; ARENA_FACES];
+/// Start and capacity of each slot's region in ARENA_F/ARENA_S. A region is
+/// held while POOL_CAP > 0; one whose owner has gone (POOL_OWNER == MAX) is
+/// dropped the next time anything allocates.
+static mut POOL_BASE: [u16; POOL] = [0; POOL];
+static mut POOL_CAP: [u16; POOL] = [0; POOL];
+/// Meshes cut short because the arena was full even after compacting.
+static mut ARENA_SHORT: u32 = 0;
+/// Compactions run (arena_alloc found no gap).
+static mut ARENA_COMPACTS: u32 = 0;
+/// ram-stress builds only: invariant violations found after an allocation.
+#[cfg(feature = "ram-stress")]
+static mut ARENA_BAD: u32 = 0;
 /// Per-face vertex ambient occlusion, ONE BYTE beside each packed face word:
 /// two bits per corner in emit_face's v0..v3 order, 3 = fully lit, 0 = darkest.
 /// It rides alongside rather than inside the face word because that word is
 /// exactly full (4+6+4+3+7+4+3+1 = 32) and the only bits left to steal are the
 /// greedy merge run caps, which measured 50% of the frame (see `pack`).
-/// 28 x 3000 = 84KB, which a 2MB machine can spare.
-/// Per-face side-band, one entry per face, parallel to POOL_FACES.
+/// Per-face side-band, one entry per face, parallel to ARENA_F.
 ///   bits 0-7   ambient-occlusion, 2 bits per corner
 ///   bits 8-10  skylight level, 0..LIGHT_BUCKETS-1
 /// Light lives here rather than in the packed face word because that word is
@@ -251,7 +273,7 @@ static mut POOL_FACES: [[u32; MAX_FACES]; POOL] = [[0; MAX_FACES]; POOL];
 // Zero-initialized (.bss) rather than the AO_LIT fill it semantically wants:
 // the fill shipped 164 KiB of repeated bytes in the EXE. boot_prepare stamps
 // the real default.
-static mut POOL_AO: [[u16; MAX_FACES]; POOL] = [[0; MAX_FACES]; POOL];
+static mut ARENA_S: [u16; ARENA_FACES] = [0; ARENA_FACES];
 static mut POOL_DIR_START: [[u16; 7]; POOL] = [[0; 7]; POOL];
 static mut POOL_NFACE: [u16; POOL] = [0; POOL];
 // Optional per-plane rectangle bounds. The face start/end range remains the
@@ -279,7 +301,12 @@ static mut MESH_NPLANT: usize = 0;
 const PL_OFF: [usize; 6] = [0, 17, 34, 99, 164, 181];
 const PL_N: [usize; 6] = [16, 16, 64, 64, 16, 16];
 const PL_TOTAL: usize = 198;
+/// Entries are ABSOLUTE arena indices (the slot's POOL_BASE already added), so
+/// the renderer indexes ARENA_F directly and never needs the slot's base: a
+/// per-slot base pointer cost chunk_faces a register it spilled around the
+/// empty-plane skip. Moving a region (arena_alloc) rebases its table.
 static mut POOL_PLANE_START: [[u16; PL_TOTAL]; POOL] = [[0; PL_TOTAL]; POOL];
+const _: () = assert!(ARENA_FACES <= u16::MAX as usize);
 static mut POOL_OWNER: [usize; POOL] = [usize::MAX; POOL]; // chunk slot owning each, or MAX
 
 // Player chunk, refreshed by recenter() each frame; stream_tick uses it to mesh
@@ -3412,6 +3439,181 @@ fn mesh_dir(s: usize, dir: usize, mut n: usize) -> usize {
     n
 }
 
+/// Give slot `p` an arena region of at least `n` faces and return how many
+/// faces it can hold (`n`, unless the arena is full even after compacting).
+///
+/// A region that already fits is kept, so an edit that changes a few faces
+/// rewrites in place. Otherwise the slot's old region is dropped (its faces
+/// were already copied into the mesh scratch) and a new one is found: first
+/// the lowest gap between live regions, then, failing that, the live regions
+/// are slid down to the bottom of the arena and the space above them is used.
+/// Regions are only ever read through POOL_BASE, so moving one is invisible
+/// to the renderer and to a streaming commit already part-way through its copy.
+#[inline(never)]
+fn arena_alloc(p: usize, n: usize) -> usize {
+    let got = arena_alloc_inner(p, n);
+    #[cfg(feature = "ram-stress")]
+    arena_check(p, got);
+    got
+}
+
+/// Every held region inside the arena and disjoint from the others, and every
+/// published slot's plane table inside its own region.
+#[cfg(feature = "ram-stress")]
+fn arena_check(p: usize, got: usize) {
+    unsafe {
+        let mut bad = 0u32;
+        if (POOL_CAP[p] as usize) < got {
+            bad += 1;
+        }
+        let mut a = 0;
+        while a < POOL {
+            let (ba, ca) = (POOL_BASE[a] as usize, POOL_CAP[a] as usize);
+            if ca != 0 {
+                if ba + ca > ARENA_FACES {
+                    bad += 1;
+                }
+                let mut b = a + 1;
+                while b < POOL {
+                    let (bb, cb) = (POOL_BASE[b] as usize, POOL_CAP[b] as usize);
+                    if cb != 0 && ba < bb + cb && bb < ba + ca {
+                        bad += 1;
+                    }
+                    b += 1;
+                }
+            }
+            a += 1;
+        }
+        let mut s = 0;
+        while s < NCHUNKS {
+            let q = CHUNKS[s].face_slot;
+            if CHUNKS[s].loaded && q != NO_SLOT && q as usize != p {
+                let q = q as usize;
+                let (b0, c0) = (POOL_BASE[q] as usize, POOL_CAP[q] as usize);
+                let mut e = 0;
+                while e < PL_TOTAL {
+                    let v = POOL_PLANE_START[q][e] as usize;
+                    if v < b0 || v > b0 + c0 {
+                        bad += 1;
+                        break;
+                    }
+                    e += 1;
+                }
+            }
+            s += 1;
+        }
+        ARENA_BAD += bad;
+    }
+}
+
+#[inline(always)]
+fn arena_alloc_inner(p: usize, n: usize) -> usize {
+    unsafe {
+        if POOL_CAP[p] as usize >= n {
+            return n;
+        }
+        POOL_CAP[p] = 0;
+        // Regions still held by released slots are free space now.
+        let mut q = 0;
+        while q < POOL {
+            if POOL_OWNER[q] == usize::MAX {
+                POOL_CAP[q] = 0;
+            }
+            q += 1;
+        }
+        // Small slack so the next edit of this chunk usually fits in place.
+        let want = ((n + 32) & !15).min(ARENA_FACES);
+        // Live regions in address order (at most POOL of them).
+        let mut order = [0usize; POOL];
+        let mut nl = 0;
+        let mut q = 0;
+        while q < POOL {
+            if POOL_CAP[q] != 0 {
+                let mut k = nl;
+                while k > 0 && POOL_BASE[order[k - 1]] > POOL_BASE[q] {
+                    order[k] = order[k - 1];
+                    k -= 1;
+                }
+                order[k] = q;
+                nl += 1;
+            }
+            q += 1;
+        }
+        // First fit.
+        let mut cur = 0usize;
+        let mut k = 0;
+        while k <= nl {
+            let next = if k < nl { POOL_BASE[order[k]] as usize } else { ARENA_FACES };
+            if next - cur >= want {
+                POOL_BASE[p] = cur as u16;
+                POOL_CAP[p] = want as u16;
+                return n;
+            }
+            if k < nl {
+                cur = next + POOL_CAP[order[k]] as usize;
+            }
+            k += 1;
+        }
+        // Compact: slide every live region down, in address order, so the
+        // copies never overwrite a region that has not moved yet.
+        ARENA_COMPACTS += 1;
+        let mut cur = 0usize;
+        let mut k = 0;
+        while k < nl {
+            let q = order[k];
+            let b = POOL_BASE[q] as usize;
+            let c = POOL_CAP[q] as usize;
+            if b != cur {
+                let mut i = 0;
+                while i < c {
+                    ARENA_F[cur + i] = ARENA_F[b + i];
+                    ARENA_S[cur + i] = ARENA_S[b + i];
+                    i += 1;
+                }
+                POOL_BASE[q] = cur as u16;
+                let delta = (b - cur) as u16;
+                let mut e = 0;
+                while e < PL_TOTAL {
+                    POOL_PLANE_START[q][e] = POOL_PLANE_START[q][e].wrapping_sub(delta);
+                    e += 1;
+                }
+            }
+            cur += c;
+            k += 1;
+        }
+        let room = ARENA_FACES - cur;
+        POOL_BASE[p] = cur as u16;
+        if room >= want {
+            POOL_CAP[p] = want as u16;
+            return n;
+        }
+        POOL_CAP[p] = room as u16;
+        ARENA_SHORT += 1;
+        room.min(n)
+    }
+}
+
+/// Clamp the scratch plane table to the `n` faces the arena could take (only
+/// reached when arena_alloc had to cut a mesh short).
+fn clamp_plane_starts(n: usize) {
+    unsafe {
+        let mut q = 0;
+        while q < PL_TOTAL {
+            if MESH_PLANE_START[q] as usize > n {
+                MESH_PLANE_START[q] = n as u16;
+            }
+            q += 1;
+        }
+        let mut d = 0;
+        while d < 7 {
+            if MESH_DIR_START[d] as usize > n {
+                MESH_DIR_START[d] = n as u16;
+            }
+            d += 1;
+        }
+    }
+}
+
 /// Copy the finished scratch mesh into chunk `s`'s pool slot (allocating one).
 #[inline(never)]
 fn commit_mesh_inner(s: usize, n: usize, scan_plants: bool) {
@@ -3428,10 +3630,16 @@ fn commit_mesh_inner(s: usize, n: usize, scan_plants: bool) {
             return;
         }
         let p = slot as usize;
+        let got = arena_alloc(p, n);
+        if got < n {
+            clamp_plane_starts(got);
+        }
+        let n = got;
+        let base = POOL_BASE[p] as usize;
         let mut i = 0;
         while i < n {
-            POOL_FACES[p][i] = MESH_FACES[i];
-            POOL_AO[p][i] = MESH_AO[i];
+            ARENA_F[base + i] = MESH_FACES[i];
+            ARENA_S[base + i] = MESH_AO[i];
             i += 1;
         }
         let mut d = 0;
@@ -3441,7 +3649,7 @@ fn commit_mesh_inner(s: usize, n: usize, scan_plants: bool) {
         }
         let mut q = 0;
         while q < PL_TOTAL {
-            POOL_PLANE_START[p][q] = MESH_PLANE_START[q];
+            POOL_PLANE_START[p][q] = MESH_PLANE_START[q] + base as u16;
             POOL_PLANE_BOUNDS[p][q] = MESH_PLANE_BOUNDS[q];
             q += 1;
         }
@@ -3488,6 +3696,11 @@ fn begin_stream_commit(s: usize) -> bool {
         return false;
     }
     unsafe {
+        let got = arena_alloc(slot as usize, MESH_N);
+        if got < MESH_N {
+            clamp_plane_starts(got);
+            MESH_N = got;
+        }
         MESH_COMMIT_SLOT = slot;
         MESH_COMMIT_I = 0;
         MESH_PREP = 3;
@@ -3506,11 +3719,12 @@ fn stream_commit_tick(s: usize, n: usize) {
             return;
         }
         let p = MESH_COMMIT_SLOT as usize;
+        let base = POOL_BASE[p] as usize;
         let end = (MESH_COMMIT_I + STREAM_COMMIT_BATCH).min(n);
         let mut i = MESH_COMMIT_I;
         while i < end {
-            POOL_FACES[p][i] = MESH_FACES[i];
-            POOL_AO[p][i] = MESH_AO[i];
+            ARENA_F[base + i] = MESH_FACES[i];
+            ARENA_S[base + i] = MESH_AO[i];
             i += 1;
         }
         MESH_COMMIT_I = end;
@@ -3525,7 +3739,7 @@ fn stream_commit_tick(s: usize, n: usize) {
         }
         let mut q = 0usize;
         while q < PL_TOTAL {
-            POOL_PLANE_START[p][q] = MESH_PLANE_START[q];
+            POOL_PLANE_START[p][q] = MESH_PLANE_START[q] + base as u16;
             POOL_PLANE_BOUNDS[p][q] = MESH_PLANE_BOUNDS[q];
             q += 1;
         }
@@ -3726,8 +3940,8 @@ fn mesh_edit_tick() {
                         let old_end = POOL_PLANE_START[EDIT_MESH_POOL][off + plane + 1] as usize;
                         let mut i = old_start;
                         while i < old_end && n < MAX_FACES {
-                            MESH_FACES[n] = POOL_FACES[EDIT_MESH_POOL][i];
-                            MESH_AO[n] = POOL_AO[EDIT_MESH_POOL][i];
+                            MESH_FACES[n] = ARENA_F[i];
+                            MESH_AO[n] = ARENA_S[i];
                             n += 1;
                             i += 1;
                         }
@@ -3790,20 +4004,16 @@ pub fn boot_prepare(wx: i32, wz: i32) {
     init_block_class();
     unsafe {
         // Stamp the non-zero defaults the statics above gave up so their
-        // initializers could be all-zero (.bss) -- see EMPTY_CHUNK/POOL_AO.
+        // initializers could be all-zero (.bss) -- see EMPTY_CHUNK/ARENA_S.
         let mut i = 0;
         while i < CHUNKS.len() {
             CHUNKS[i].face_slot = NO_SLOT;
             i += 1;
         }
-        let mut p = 0;
-        while p < POOL {
-            let mut f = 0;
-            while f < MAX_FACES {
-                POOL_AO[p][f] = AO_LIT as u16;
-                f += 1;
-            }
-            p += 1;
+        let mut f = 0;
+        while f < ARENA_FACES {
+            ARENA_S[f] = AO_LIT as u16;
+            f += 1;
         }
         let mut f = 0;
         while f < MAX_FACES {
@@ -4483,14 +4693,14 @@ fn chunk_faces(
     let ccx0 = oxw + BLOCK / 2 - cam.x;
     let ccy0 = BLOCK / 2 - cam.y;
     let ccz0 = ozw + BLOCK / 2 - cam.z;
-    // SAFETY: p < POOL (a meshed slot); every index below stays
-    // inside this slot's rows (plane ranges are built by the mesher).
+    // SAFETY: p < POOL (a meshed slot); plane ranges are absolute arena
+    // indices inside this slot's region (see POOL_PLANE_START).
     let (starts, bounds_row, fp, sp) = unsafe {
         (
             POOL_PLANE_START[p].as_ptr(),
             POOL_PLANE_BOUNDS[p].as_ptr(),
-            POOL_FACES[p].as_ptr(),
-            POOL_AO[p].as_ptr(),
+            ARENA_F.as_ptr(),
+            ARENA_S.as_ptr(),
         )
     };
     let mut dir = 0;

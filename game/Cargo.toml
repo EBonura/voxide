@@ -18,6 +18,9 @@ lockstep = []
 # Headless UI captures only (src/fixture.rs): a stocked inventory and SELECT
 # to build a table/chest/furnace at the crosshair. Never ship.
 ui-fixture = []
+# Mesh arena stress: a small arena so compaction runs constantly, plus an
+# invariant check after every allocation. Never ship.
+ram-stress = []
 
 [dependencies]
 psx-telemetry = { path = "../.psoxide/sdk/crates/psx-telemetry" }
