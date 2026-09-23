@@ -15,6 +15,7 @@ static mut HOLD_T: u16 = 0;
 /// How many items a held CROSS moves this frame: one on the press, then after
 /// a short delay a repeat that speeds up the longer it is held, ending at a
 /// handful per frame so a stack of hundreds still empties in a few seconds.
+#[optimize(size)]
 fn hold_step(held: bool) -> u16 {
     let t = unsafe { &mut HOLD_T };
     if !held {
@@ -32,11 +33,13 @@ fn hold_step(held: bool) -> u16 {
 }
 
 /// Half a stack, rounded up, so one item still moves.
+#[optimize(size)]
 fn half(n: u16) -> u16 {
     n - n / 2
 }
 
 /// How many to move for this frame's buttons, given `have` at the source.
+#[optimize(size)]
 fn press_count(pad: ButtonState, previous: ButtonState, have: u16) -> u16 {
     if pad.pressed_since(previous, button::TRIANGLE) {
         have
@@ -65,6 +68,7 @@ pub fn chest_list(idx: usize, out: &mut [u8; BLOCK_KINDS]) -> usize {
     n
 }
 
+#[optimize(size)]
 pub fn chest_open() {
     unsafe {
         CHEST_PUT = true;
@@ -294,6 +298,7 @@ const TAB_MATERIALS: [u8; 18] = [
     CLAY, SUGAR_CANE, EMBER_CAP, EMBER_ROD, MAGMA_PASTE, WAILER_TEAR, VOID_PEARL, POTION_AWKWARD,
 ];
 
+#[optimize(size)]
 fn tab_table(tab: usize) -> &'static [u8] {
     match tab {
         0 => &TAB_BLOCKS,
@@ -303,6 +308,7 @@ fn tab_table(tab: usize) -> &'static [u8] {
     }
 }
 
+#[optimize(size)]
 fn listed(item: u8) -> bool {
     let mut t = 0;
     while t < TABS {
@@ -360,6 +366,7 @@ static mut NAV_T: [u16; 4] = [0; 4];
 /// Set on open: the TRIANGLE that opened the menu must not also Quick Move.
 static mut FRESH: bool = false;
 
+#[optimize(size)]
 fn note(s: &'static str) {
     unsafe {
         NOTE = s;
@@ -367,6 +374,7 @@ fn note(s: &'static str) {
     }
 }
 
+#[optimize(size)]
 fn pages(n: usize) -> usize {
     if n == 0 {
         1
@@ -375,6 +383,7 @@ fn pages(n: usize) -> usize {
     }
 }
 
+#[optimize(size)]
 fn hotbar_slot_of(item: u8) -> Option<usize> {
     let mut i = 0;
     while i < HOTBAR_VIS {
@@ -427,6 +436,7 @@ pub fn inventory_open(selected: u8) {
 }
 
 /// The grid kind under the cursor, if any.
+#[optimize(size)]
 fn cursor_item(list: &[u8; BLOCK_KINDS], n: usize) -> u8 {
     let (y, x, page) = unsafe { (CUR_Y, CUR_X, PAGE) };
     if y >= ROWS {
@@ -620,7 +630,7 @@ pub fn inventory_input(pad: ButtonState, previous: ButtonState) -> bool {
 /// Inventory-sized dialog: black outline, light face, vanilla bevel.
 #[inline(never)]
 #[optimize(size)]
-fn panel(x: i16, y: i16, w: i16, h: i16) {
+pub fn panel(x: i16, y: i16, w: i16, h: i16) {
     rect(x, y, w, h, 0, 0, 0);
     rect(x + 1, y + 1, w - 2, h - 2, 0xC6, 0xC6, 0xC6);
     rect(x + 1, y + 1, w - 3, 1, 0xFF, 0xFF, 0xFF);
@@ -674,6 +684,7 @@ pub fn tabs(font: &FontAtlas, y: i16, tiles: &[u8], sel: usize) {
 }
 
 /// Unpadded decimal into `buf`, returned as text.
+#[optimize(size)]
 pub fn number(v: u16, buf: &mut [u8; 5]) -> &str {
     let mut i = 5;
     let mut v = v;
@@ -689,6 +700,7 @@ pub fn number(v: u16, buf: &mut [u8; 5]) -> &str {
 }
 
 /// What an item is for, one line for the info strip.
+#[optimize(size)]
 fn purpose(item: u8) -> &'static str {
     match item {
         BREAD | COOKED_MEAT | RAW_MEAT => "EATEN WHEN YOU GET HUNGRY",
