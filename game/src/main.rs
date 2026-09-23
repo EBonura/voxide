@@ -3098,6 +3098,7 @@ fn menu_world_pump(pocket_done: &mut bool) -> u32 {
 /// whatever is left behind the plain progress bar. NEW WORLD reseeds and the
 /// vista dissolves into the fresh terrain without leaving the menu.
 #[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
+#[inline(never)] // once, at boot: kept out of main() so the size attribute holds
 fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
     let mut pocket_done = false;
     // The world loads FIRST, behind the plain bar, and the menu appears over a
@@ -3275,6 +3276,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
 /// behind the plain progress bar. Usually over in a blink; at worst (PLAY
 /// mashed at frame zero) it is the old boot bar.
 #[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
+#[inline(never)] // once, at boot: kept out of main() so the size attribute holds
 fn finish_world_gen(fb: &mut FrameBuffer, font: &FontAtlas, pocket_done: &mut bool) {
     let total = menu_world_pump(pocket_done) as usize;
     // A defensive ceiling: the full boot is ~150 pump steps, so thousands of
@@ -3609,6 +3611,7 @@ fn menu_button_now(font: &FontAtlas, y: i16, label: &str, sel: bool) {
 /// the starter kit, edit log, chests/furnaces/crops/saplings, respawn point,
 /// mobs + arrows. World-side state is world::prepare_new_world's job.
 #[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
+#[inline(never)] // once, at boot: kept out of main() so the size attribute holds
 fn reset_game_state() {
     tut_reset();
     unsafe {
@@ -3686,6 +3689,7 @@ const BONNIE_CLUT_POS: Clut = Clut::new(768, 256);
 /// logo in, hold, fade out, with the "Built with PSoXide" sheen line. Any
 /// face button skips it.
 #[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
+#[inline(never)] // once, at boot: kept out of main() so the size attribute holds
 fn show_intro(fb: &mut FrameBuffer, font: &FontAtlas) {
     psx_vram::upload_16bpp(
         psx_vram::VramRect::new(BONNIE_TPAGE.x(), BONNIE_TPAGE.y(), 32, 128),
@@ -4102,11 +4106,19 @@ fn load_game(player: &mut Player, fb: &mut FrameBuffer, font: &FontAtlas) -> boo
     }
     save::apply_edits();
     world::recenter(bx, bz);
-    // Set the Void up as a portal arrival does. Its return portal is raw-set
-    // rather than an edit, so it is not in the save: rebuild it where arrival
-    // puts it, on the island's centre. Then the dragon, unless it is slain.
+    // Set the Void up as a portal arrival does: its return portal on the
+    // island's centre (saves before return portals were logged edits do not
+    // have it), then the dragon, unless it is slain. In the Inferno an older
+    // save has no return portal either, and its arrival point is unknown: if
+    // no portal stands near, build one where the player stands. Either way
+    // the way home is there.
     if dim == world::DIM_VOID {
         build_return_portal(0, world::surface_y(0, 0), 0);
+    } else if dim == world::DIM_INFERNO {
+        let by = world_to_block_y(player.y);
+        if !portal_near(bx, by, bz) {
+            build_return_portal(bx, by, bz);
+        }
     }
     mob::settle_dragon(dim == world::DIM_VOID, player.x, player.z);
     player.vy = 0;
@@ -4195,6 +4207,11 @@ fn portal_travel(player: &mut Player, fb: &mut FrameBuffer, font: &FontAtlas) {
         (bx * 8, bz * 8)
     };
     enter_dimension(to, nx, nz, fb, font);
+    // The ring generator digs its arrival pocket raw, after replaying the
+    // edit log, so it erased whatever the player had built there, the linked
+    // portal you came back to included. Put the edits back over it, as a load
+    // does.
+    save::apply_edits();
     // Land on solid ground, and carve out a return portal so you are never
     // stranded: Java builds one for you too.
     let sy = world::surface_y(nx, nz);
@@ -4210,17 +4227,34 @@ fn portal_travel(player: &mut Player, fb: &mut FrameBuffer, font: &FontAtlas) {
 
 /// Obsidian frame + sheet at the arrival point, with the ground under it made
 /// solid. Without this you can arrive inside a lava sea or in mid-air.
+///
+/// Its blocks go in the edit log, like blocks the player placed: raw-set
+/// alone, the portal was not in the save and vanished when its chunk
+/// regenerated, which left no way home from the Inferno. Only real changes
+/// are logged, so an arrival costs a few dozen of the log's 1024 entries
+/// rather than 166, with one exception: the arrival pocket was already dug by
+/// the ring generator (world::sync_init, raw and unlogged), so "already air"
+/// says nothing about what regenerates there. The walk-in space in front of
+/// and behind the sheet is logged as air whatever it holds now, so the portal
+/// can always be stepped into.
 #[inline(never)]
 #[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
 fn build_return_portal(bx: i32, by: i32, bz: i32) {
+    let put = |x: i32, y: i32, z: i32, b: u8, always: bool| {
+        if always || get_block_i32(x, y, z) != b {
+            world::set_raw_pub(x, y, z, b);
+            record_edit(x, y, z, b);
+        }
+    };
     let mut dx = -2i32;
     while dx <= 3 {
         let mut dz = -2i32;
         while dz <= 2 {
-            world::set_raw_pub(bx + dx, by - 1, bz + dz, OBSIDIAN); // standing pad
+            put(bx + dx, by - 1, bz + dz, OBSIDIAN, false); // standing pad
+            let walk_in = (0..=1).contains(&dx) && dz != 0;
             let mut h = 0;
             while h < 4 {
-                world::set_raw_pub(bx + dx, by + h, bz + dz, AIR);
+                put(bx + dx, by + h, bz + dz, AIR, walk_in && h < 3);
                 h += 1;
             }
             dz += 1;
@@ -4230,18 +4264,40 @@ fn build_return_portal(bx: i32, by: i32, bz: i32) {
     // 2x3 frame along X, sheet inside.
     let mut w = -1i32;
     while w <= 2 {
-        world::set_raw_pub(bx + w, by + 3, bz, OBSIDIAN);
+        put(bx + w, by + 3, bz, OBSIDIAN, false);
         w += 1;
     }
     let mut h = 0i32;
     while h < 3 {
-        world::set_raw_pub(bx - 1, by + h, bz, OBSIDIAN);
-        world::set_raw_pub(bx + 2, by + h, bz, OBSIDIAN);
-        world::set_raw_pub(bx, by + h, bz, PORTAL);
-        world::set_raw_pub(bx + 1, by + h, bz, PORTAL);
+        put(bx - 1, by + h, bz, OBSIDIAN, false);
+        put(bx + 2, by + h, bz, OBSIDIAN, false);
+        put(bx, by + h, bz, PORTAL, false);
+        put(bx + 1, by + h, bz, PORTAL, false);
         h += 1;
     }
     world::remesh_loaded();
+}
+
+/// True when portal sheet stands within a few blocks of (bx, by, bz).
+#[optimize(size)] // load-time only
+fn portal_near(bx: i32, by: i32, bz: i32) -> bool {
+    const R: i32 = 12;
+    let mut dx = -R;
+    while dx <= R {
+        let mut dz = -R;
+        while dz <= R {
+            let mut dy = -8;
+            while dy <= 8 {
+                if is_portal(get_block_i32(bx + dx, by + dy, bz + dz)) {
+                    return true;
+                }
+                dy += 1;
+            }
+            dz += 1;
+        }
+        dx += 1;
+    }
+    false
 }
 
 /// Environmental survival: lava + drowning damage (with i-frames via
