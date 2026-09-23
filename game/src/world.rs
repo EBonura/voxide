@@ -431,12 +431,23 @@ fn col_masks_reset() {
 /// per-column sky top, light sources and plants.
 #[inline(never)]
 fn decode_blocks<const FULL: bool>(src: &[u8; PACKED_SIZE], i0: usize, i1: usize, top: &mut usize) {
+    // Layers that are all air (every layer above the terrain, a third or more
+    // of a chunk) only clear their scratch row and mark every column
+    // see-through; their see bits are ORed in once per call.
+    let mut air_layers = 0u64;
     let mut i = i0;
     while i < i1 {
         // One layer: the y bit of the column masks is fixed for 256 blocks.
         let ly = i >> 8;
         let bit = 1u64 << ly;
         let layer_end = i + CWU * CWU;
+        // 256 7-bit fields are exactly 224 bytes, starting on a byte.
+        if packed_zero(src, ly * (CWU * CWU * BLOCK_BITS / 8), CWU * CWU * BLOCK_BITS / 8) {
+            unsafe { core::ptr::write_bytes(core::ptr::addr_of_mut!(MESH_SCRATCH[i]), AIR, CWU * CWU) };
+            air_layers |= bit;
+            i = layer_end;
+            continue;
+        }
         while i < layer_end {
             let blk = bget8(src, i >> 3);
             let mut k = 0;
@@ -485,6 +496,42 @@ fn decode_blocks<const FULL: bool>(src: &[u8; PACKED_SIZE], i0: usize, i1: usize
             i += 8;
         }
     }
+    if air_layers != 0 {
+        let mut col = 0;
+        while col < CWU * CWU {
+            unsafe { COL_SEE[col] |= air_layers };
+            col += 1;
+        }
+    }
+}
+
+/// True when `len` packed bytes from `off` are all zero (all AIR, AIR == 0).
+/// Word loads once aligned; the first non-zero word ends it, so a layer with
+/// terrain in it costs a load or two.
+#[inline(always)]
+fn packed_zero(src: &[u8; PACKED_SIZE], off: usize, len: usize) -> bool {
+    let end = off + len;
+    let mut i = off;
+    while i < end && (src.as_ptr() as usize + i) & 3 != 0 {
+        if src[i] != 0 {
+            return false;
+        }
+        i += 1;
+    }
+    while i + 4 <= end {
+        // SAFETY: in bounds (i + 4 <= end <= PACKED_SIZE) and 4-byte aligned.
+        if unsafe { *(src.as_ptr().add(i) as *const u32) } != 0 {
+            return false;
+        }
+        i += 4;
+    }
+    while i < end {
+        if src[i] != 0 {
+            return false;
+        }
+        i += 1;
+    }
+    true
 }
 
 /// Rewrite the bits of scratch index `i` after an edit stored block `b`.
