@@ -3,7 +3,9 @@
 //! chest or furnace at the crosshair, so a `frontend launch --press` script
 //! can reach every menu without mining and crafting its way there first.
 //! SELECT while sneaking sets the enchant levels and the food pouch, or, at a
-//! chest, crosses dimensions in place and builds a chest at the same spot.
+//! chest, crosses dimensions in place and builds a chest at the same spot;
+//! at a crafting table, opens a void portal underfoot; in the Void, slays
+//! the dragon.
 //!
 //! SELECT on a non-station block places a crafting table in front of it;
 //! SELECT on a station turns it into the next one (table, chest, furnace).
@@ -91,6 +93,23 @@ pub fn select(pick: &Pick, player: &mut Player) {
     if player.sneaking {
         if pick.hit && get_block_i32(pick.bx, pick.by, pick.bz) == CHEST {
             same_spot_elsewhere(pick, player);
+            return;
+        }
+        // At a crafting table: void portal sheet at your feet, so the next
+        // second takes you to the Void through the real portal path.
+        if pick.hit && get_block_i32(pick.bx, pick.by, pick.bz) == CRAFT_TABLE {
+            let (bx, by, bz) = (
+                world_to_block_x(player.x),
+                world_to_block_y(player.y + 8),
+                world_to_block_z(player.z),
+            );
+            set_block_i32(bx, by, bz, VOID_PORTAL);
+            set_block_i32(bx, by + 1, bz, VOID_PORTAL);
+            return;
+        }
+        // In the Void: the dragon dies as if to a last hit.
+        if world::dimension() == world::DIM_VOID {
+            mob::slay_dragon();
             return;
         }
         player.sharpness = 2;

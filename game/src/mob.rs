@@ -156,9 +156,15 @@ static mut DEATH_Y: [i32; DEATH_CAP] = [0; DEATH_CAP];
 static mut DEATH_Z: [i32; DEATH_CAP] = [0; DEATH_CAP];
 static mut DEATH_KIND: [u8; DEATH_CAP] = [0; DEATH_CAP];
 static mut DEATH_N: usize = 0;
+/// Set when the void dragon dies, for good: it is a one-time boss, and the
+/// save carries this so a defeated dragon stays gone.
+static mut DRAGON_SLAIN: bool = false;
 
 fn record_death(m: &Mob) {
     unsafe {
+        if m.kind == DRAGON {
+            DRAGON_SLAIN = true;
+        }
         if DEATH_N >= DEATH_CAP {
             return; // eight kills in one frame is already a sapper blast
         }
@@ -410,6 +416,50 @@ pub fn spawn_dragon(px: i32, pz: i32) {
             walk: 0,
             facing: 0,
         };
+    }
+}
+
+/// True once the dragon has been killed in this world.
+pub fn dragon_slain() -> bool {
+    unsafe { DRAGON_SLAIN }
+}
+
+pub fn set_dragon_slain(slain: bool) {
+    unsafe { DRAGON_SLAIN = slain };
+}
+
+/// Put the Void's boss in the state arriving there calls for: one dragon in
+/// the air unless it has been slain. Anywhere else, no dragon: it never
+/// despawns by distance, so without this it followed you home through the
+/// portal, and every return to the Void added another.
+pub fn settle_dragon(in_void: bool, px: i32, pz: i32) {
+    let alive = dragon_status().is_some();
+    if in_void && !alive && !dragon_slain() {
+        spawn_dragon(px, pz);
+    } else if !in_void && alive {
+        let mut i = 0;
+        while i < CAP {
+            unsafe {
+                if MOBS[i].alive && MOBS[i].kind == DRAGON {
+                    MOBS[i] = DEAD;
+                }
+            }
+            i += 1;
+        }
+    }
+}
+
+/// Fixture builds: kill the dragon the way a last hit does.
+#[cfg(feature = "ui-fixture")]
+pub fn slay_dragon() {
+    let mut i = 0;
+    while i < CAP {
+        let m = unsafe { MOBS[i] };
+        if m.alive && m.kind == DRAGON {
+            record_death(&m);
+            unsafe { MOBS[i] = DEAD };
+        }
+        i += 1;
     }
 }
 
@@ -1305,11 +1355,13 @@ fn spawn_at(kind: u8, sx: i32, sz: i32) {
 }
 
 /// Seed a few passive mobs in front of the player (+Z at spawn) at world start.
-/// Despawn everything (mobs + arrows) -- the "NEW WORLD" reset.
+/// Despawn everything (mobs + arrows) -- the "NEW WORLD" reset. A new world
+/// has its dragon back.
 pub fn clear() {
     unsafe {
         MOBS = [DEAD; CAP];
         ARROWS = [NO_ARROW; ARROW_CAP];
+        DRAGON_SLAIN = false;
     }
 }
 

@@ -25,7 +25,7 @@ const MAGIC_V1: [u8; 4] = *b"MCPX";
 /// VERSION and teaches `layout` where its sections moved; every older version
 /// still loads.
 const MAGIC: [u8; 4] = *b"VOXS";
-const VERSION: u16 = 5;
+const VERSION: u16 = 6;
 /// BIOS file name: region+product code + label, 20 ASCII chars max.
 const FILE_NAME: &str = "BESLES-00000VOXIDE01";
 /// Human-readable label shown by the console's memory-card manager.
@@ -52,6 +52,8 @@ const V1_HDR: usize = V1_PROGRESS + 9; // armor u8, efficiency u8, xp i32, 3 too
 // (and a pad byte) after x y z; earlier saves' containers are overworld ones.
 // Version 5 puts the player's dimension in byte 6 (was reserved, written 0),
 // so a game saved in the Inferno loads there; earlier saves load overworld.
+// Version 6 uses byte 7 (pad, written 0) for world flags: bit 0 = the void
+// dragon is slain. No earlier version recorded the kill, so their dragon lives.
 const OFF_HOTBAR_SEL: usize = 41;
 const OFF_HOTBAR: usize = 42;
 const OFF_INV: usize = 52;
@@ -63,6 +65,8 @@ struct Layout {
     extras: bool,
     /// Byte 6 holds the player's dimension.
     dim: bool,
+    /// Byte 7 holds the world flags.
+    flags: bool,
     counts: usize,
     hdr: usize,
     /// Where x,y,z end in a container record: 8 with the dimension, else 6.
@@ -75,6 +79,7 @@ const fn layout(version: u16) -> Layout {
     Layout {
         extras,
         dim: version >= 5,
+        flags: version >= 6,
         counts,
         hdr: counts + 4,
         pos: if version >= 4 { 8 } else { 6 },
@@ -153,7 +158,7 @@ pub fn save(p: &Player) -> bool {
     buf[..4].copy_from_slice(&MAGIC);
     put_u16(buf, 4, VERSION);
     buf[6] = crate::world::dimension();
-    buf[7] = 0;
+    buf[7] = crate::mob::dragon_slain() as u8;
     put_i32(buf, 8, p.x);
     put_i32(buf, 12, p.y);
     put_i32(buf, 16, p.z);
@@ -280,12 +285,14 @@ pub fn load(p: &mut Player) -> Option<u8> {
     };
     if len >= V1_HDR && buf[..4] == MAGIC_V1 {
         load_v1(p, &buf[..len]);
+        crate::mob::set_dragon_slain(false);
         Some(crate::world::DIM_OVERWORLD)
     } else if len >= 6 && buf[..4] == MAGIC && (2..=VERSION).contains(&get_u16(buf, 4)) {
         let l = layout(get_u16(buf, 4));
         if len < l.hdr || !load_versioned(p, &buf[..len], l) {
             return None;
         }
+        crate::mob::set_dragon_slain(l.flags && buf[7] & 1 != 0);
         let d = buf[6];
         Some(if l.dim && d <= crate::world::DIM_VOID {
             d
