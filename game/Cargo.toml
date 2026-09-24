@@ -24,6 +24,10 @@ ram-stress = []
 # Block store stress: a block arena just above the routes' use, so regions
 # fragment and compaction runs. Never ship.
 ram-stress-blk = []
+# Headless mob-behaviour measurements only (mob.rs LAB): a fixed cast of mobs
+# around the player at the first update, forced night, and mob damage counted
+# instead of dealt. Never ship.
+mob-lab = []
 
 [dependencies]
 psx-telemetry = { path = "../.psoxide/sdk/crates/psx-telemetry" }
