@@ -1478,7 +1478,10 @@ const REGEN_DELAY: i32 = secs(3); // ponytail: ~3s post-hit regen pause; Java ha
                                           // but our slow regen makes it near-moot. Kept for feel.
 const REGEN_PERIOD: i32 = secs(4); // slow regen: +1 hp / 4s (Java food>=18 tier)
 const REGEN_FAST: i32 = ms(500); // fast regen: +1 hp / 0.5s when well fed (food==20)
-const FIRE_DURATION: i32 = secs(8); // 8s of burning after lava contact (Cuberite BURN_TICKS)
+/// Burning after lava: 15 s, reset every tick in lava (minecraft.wiki/w/Lava).
+const FIRE_DURATION: i32 = secs(15);
+/// Burning after a fire block: 160 game ticks, 8 s (minecraft.wiki/w/Fire#Burning).
+const FIRE_BLOCK_BURN: i32 = units::java_ticks(160);
 const MAX_FOOD: i32 = 20;
 const FOOD_DRAIN: i32 = secs(20); // ~20s per hunger point lost (time-based; ponytail:
                                           // Java uses per-action exhaustion, but heal-burns-food
@@ -1488,9 +1491,9 @@ const STARVE_PERIOD: i32 = secs(4); // lose 1 hp per 4s while starving (Java rat
 /// and burning every second, as in Java.
 const HAZARD_FAST_CD: i32 = ms(500);
 const HAZARD_SLOW_CD: i32 = secs(1);
-/// Regeneration potion: +1 hp every half second (Java's Regeneration I heals
-/// every 2.5 s).
-const REGEN_POTION_PERIOD: u16 = ms(500) as u16;
+/// Regeneration potion: +1 hp every 50 game ticks, 2.5 s (Java's
+/// Regeneration I, minecraft.wiki/w/Regeneration).
+const REGEN_POTION_PERIOD: u16 = units::java_ticks(50) as u16;
 const REGEN_FOOD_MIN: i32 = 18; // need food >= 18 to regen (Java threshold)
 
 #[derive(Copy, Clone)]
@@ -4468,10 +4471,17 @@ fn update_survival(player: &mut Player) {
     // Per-hazard damage + cadence in sim ticks, matching Java rates.
     let mut hurt = 0;
     let mut cd = HAZARD_FAST_CD;
-    if is_lava(feet) || is_lava(mid) || feet == FIRE || mid == FIRE {
+    let mut fiery = false;
+    if is_lava(feet) || is_lava(mid) {
         hurt = 4; // Java: 4 hp per 0.5s in lava
         cd = HAZARD_FAST_CD;
         player.burn = FIRE_DURATION; // and catch fire
+        fiery = true;
+    } else if feet == FIRE || mid == FIRE {
+        hurt = 1; // Java: 1 hp per 0.5s in a fire block (Damage#Fire)
+        cd = HAZARD_FAST_CD;
+        player.burn = player.burn.max(FIRE_BLOCK_BURN);
+        fiery = true;
     }
     // Cactus pricks: standing against one (any cardinal neighbour at feet or
     // mid height) costs 1 hp per half second, like Java contact damage.
@@ -4516,7 +4526,7 @@ fn update_survival(player: &mut Player) {
         player.eff_fire -= 1;
         // Fire resistance: no lava/fire damage, and nothing keeps burning.
         player.burn = 0;
-        if hurt == 4 {
+        if fiery {
             hurt = 0;
         }
     }
@@ -4542,12 +4552,13 @@ fn update_survival(player: &mut Player) {
             player.food -= 1;
         }
     }
-    // Auto-eat, best food first: steak +6, bread +5, fish +4, raw meat +3.
-    if player.food <= MAX_FOOD - 6 && unsafe { INV[COOKED_MEAT as usize] } > 0 {
+    // Auto-eat, best food first, at Java's hunger values: steak +8, bread +5,
+    // raw beef +3, raw cod +2 (minecraft.wiki/w/Steak, Bread, Raw Beef, Raw Cod).
+    if player.food <= MAX_FOOD - 8 && unsafe { INV[COOKED_MEAT as usize] } > 0 {
         unsafe {
             INV[COOKED_MEAT as usize] -= 1;
         }
-        player.food = (player.food + 6).min(MAX_FOOD);
+        player.food = (player.food + 8).min(MAX_FOOD);
         sfx::eat();
     } else if player.food <= MAX_FOOD - 5 && unsafe { INV[BREAD as usize] } > 0 {
         unsafe {
@@ -4555,16 +4566,17 @@ fn update_survival(player: &mut Player) {
         }
         player.food = (player.food + 5).min(MAX_FOOD);
         sfx::eat();
-    } else if player.food <= MAX_FOOD - 4 && player.food_items > 0 {
-        player.food = (player.food + 4).min(MAX_FOOD);
-        player.food_items -= 1;
-        sfx::eat();
     } else if player.food <= MAX_FOOD - 3 && unsafe { INV[RAW_MEAT as usize] } > 0 {
         // Raw meat is the last resort; cook it for double the value.
         unsafe {
             INV[RAW_MEAT as usize] -= 1;
         }
         player.food = (player.food + 3).min(MAX_FOOD);
+        sfx::eat();
+    } else if player.food <= MAX_FOOD - 2 && player.food_items > 0 {
+        // Fish from the rod, eaten raw: Java's raw cod.
+        player.food = (player.food + 2).min(MAX_FOOD);
+        player.food_items -= 1;
         sfx::eat();
     }
 
