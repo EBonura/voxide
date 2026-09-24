@@ -3025,7 +3025,9 @@ fn main() {
         gte_load_camera(&cam);
         telemetry::stage_begin(ST_R_WORLD);
         let (_world_quads, _face_work) = render_world(&cam);
-        render_plants(&cam); // cross-sprite plants, depth-sorted into the same OT
+        // Cross-sprite plants, depth-sorted into the same OT; on the face
+        // pass's scratchpad stack for the same reason (see world::FaceStack).
+        unsafe { world::FaceStack::run(|| render_plants(&cam)) };
         telemetry::stage_end(ST_R_WORLD);
         telemetry::stage_begin(ST_R_MOBS);
         render_mobs(&cam, frame);
@@ -6446,20 +6448,29 @@ const EMPTY_CLIP_VERT: ClipVert = ClipVert {
     b: 0,
 };
 const CLIP_VERT_CAP: usize = 12;
-/// The R3000's 1 KiB data scratchpad. Nothing else in VoXide uses it; the
-/// near-cell clipper's two polygon buffers (384 bytes each) and its projected
-/// polygon (144 bytes) live here, so the clipper's loads and stores are one
-/// cycle instead of main-RAM wait states (every access to those buffers was a
-/// RAM round trip: they measured about 3,000 cycles per emitted triangle).
-const SCRATCHPAD: usize = 0x1F80_0000;
-const CLIP_SCRATCH_A: usize = SCRATCHPAD;
-const CLIP_SCRATCH_B: usize = SCRATCHPAD + CLIP_VERT_CAP * core::mem::size_of::<ClipVert>();
-const CLIP_SCRATCH_P: usize = CLIP_SCRATCH_B + CLIP_VERT_CAP * core::mem::size_of::<ClipVert>();
-// world::for_visible_faces keeps its survivor batch just above these.
-const _: () = assert!(
-    CLIP_SCRATCH_P + CLIP_VERT_CAP * core::mem::size_of::<Proj>() <= world::FACE_BATCH_ADDR
-);
-const _: () = assert!(world::FACE_BATCH_END <= SCRATCHPAD + 1024);
+/// The near-cell clipper's two polygon buffers (384 bytes each) and its
+/// projected polygon (144 bytes). They lived in the scratchpad, which made the
+/// clipper's loads single-cycle; the face pass's STACK is worth more there
+/// (its spill reloads were about 110K cycles of main-RAM stalls a frame
+/// against roughly 24K for these buffers), so they are ordinary RAM now and
+/// the scratchpad holds the face batch and the face pass's stack (see
+/// world::FaceStack).
+const CLIP_BYTES: usize = 2 * CLIP_VERT_CAP * core::mem::size_of::<ClipVert>()
+    + CLIP_VERT_CAP * core::mem::size_of::<Proj>();
+const _: () = assert!(CLIP_BYTES % 4 == 0 && core::mem::align_of::<ClipVert>() <= 4);
+static mut CLIP_BUF: [u32; CLIP_BYTES / 4] = [0; CLIP_BYTES / 4];
+#[inline(always)]
+fn clip_a() -> usize {
+    unsafe { core::ptr::addr_of_mut!(CLIP_BUF) as usize }
+}
+#[inline(always)]
+fn clip_b() -> usize {
+    clip_a() + CLIP_VERT_CAP * core::mem::size_of::<ClipVert>()
+}
+#[inline(always)]
+fn clip_p() -> usize {
+    clip_b() + CLIP_VERT_CAP * core::mem::size_of::<ClipVert>()
+}
 /// `clip_distance` with the plane known at compile time. The runtime-`plane`
 /// form below compiled to a jump table inside the clipper's per-vertex loop
 /// (an indirect branch plus the plane arithmetic per vertex per plane, about
@@ -6690,7 +6701,7 @@ fn near_vertex(g: &NearGrid, u: usize, v: usize, tu: i32, tv: i32, slot: usize) 
     };
     // SAFETY: slot < 4 <= CLIP_VERT_CAP; see set_clip_cell.
     unsafe {
-        (CLIP_SCRATCH_A as *mut ClipVert).add(slot).write(ClipVert {
+        (clip_a() as *mut ClipVert).add(slot).write(ClipVert {
             x,
             y,
             z,
@@ -6710,7 +6721,7 @@ fn near_vertex(g: &NearGrid, u: usize, v: usize, tu: i32, tv: i32, slot: usize) 
 /// those copies into memcpy calls.
 #[inline(always)]
 fn set_clip_cell(tl: ClipVert, tr: ClipVert, bl: ClipVert, br: ClipVert) {
-    let a = CLIP_SCRATCH_A as *mut ClipVert;
+    let a = clip_a() as *mut ClipVert;
     // SAFETY: scratchpad buffer A holds CLIP_VERT_CAP >= 4 vertices and no
     // reference to it is alive outside emit_clipped_cell.
     unsafe {
@@ -6725,7 +6736,7 @@ fn set_clip_cell(tl: ClipVert, tr: ClipVert, bl: ClipVert, br: ClipVert) {
 #[inline(always)]
 fn clip_cell() -> &'static [ClipVert; 4] {
     // SAFETY: see set_clip_cell; the four entries were written just before.
-    unsafe { &*(CLIP_SCRATCH_A as *const [ClipVert; 4]) }
+    unsafe { &*(clip_a() as *const [ClipVert; 4]) }
 }
 
 /// Clip one block-sized terrain cell against the near/far and display planes,
@@ -6747,8 +6758,8 @@ fn emit_clipped_cell(win: u32, cl_hi: u32, tp_hi: u32, blended: bool, depth_bias
         &mut [ClipVert; CLIP_VERT_CAP],
     ) = unsafe {
         (
-            &mut *(CLIP_SCRATCH_A as *mut [ClipVert; CLIP_VERT_CAP]),
-            &mut *(CLIP_SCRATCH_B as *mut [ClipVert; CLIP_VERT_CAP]),
+            &mut *(clip_a() as *mut [ClipVert; CLIP_VERT_CAP]),
+            &mut *(clip_b() as *mut [ClipVert; CLIP_VERT_CAP]),
         )
     };
     let mut n = 4usize;
@@ -6803,7 +6814,7 @@ fn emit_clipped_cell(win: u32, cl_hi: u32, tp_hi: u32, blended: bool, depth_bias
     // edges because overlapping two Average-blended quads double-blends.
     // Scratchpad too; only the first `n` entries are ever read.
     let pp: &mut [Proj; CLIP_VERT_CAP] =
-        unsafe { &mut *(CLIP_SCRATCH_P as *mut [Proj; CLIP_VERT_CAP]) };
+        unsafe { &mut *(clip_p() as *mut [Proj; CLIP_VERT_CAP]) };
     let mut sx = 0i32;
     let mut sy = 0i32;
     let mut i = 0usize;
