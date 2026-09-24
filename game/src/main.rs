@@ -1444,6 +1444,7 @@ struct Player {
     /// toward the damage source and decays it over ~10 ticks.
     hurt_tilt: u8,
     sprint_tap: u8,     // frames left in the double-tap-forward window (sprint start)
+    attack_t: u16,      // sim ticks since the last swing or item switch (attack cooldown)
     sprint_latch: bool, // sprint engaged (L3 or double-tap); drops when forward stops
     was_fwd: bool,      // forward-input edge detector for the sprint double-tap
 }
@@ -1499,6 +1500,40 @@ pub(crate) fn furnace_took(i: usize, out: u8, n: u16) {
     }
 }
 const MAX_EFFICIENCY: u8 = 3;
+
+/// Attack charge, Q8 (256 = full): Java's attack cooldown (minecraft.wiki/w/
+/// Damage#Attack cooldown) runs T = 20 / attack_speed game ticks, 1.6 for a
+/// sword and the default 4 bare-handed (minecraft.wiki/w/Attribute), and
+/// this is (t + 0.5) / T with t the game ticks since the last swing or item
+/// switch, capped at 1.
+fn attack_charge(p: &Player) -> i32 {
+    // 6T in sim ticks: T = 12.5 game ticks (sword) or 5 (fist); t + 0.5 game
+    // ticks is (2 x attack_t + 3) / 6 of them.
+    let six_t = if p.sword > 0 { 75 } else { 30 };
+    ((2 * p.attack_t as i32 + 3) * 256 / six_t).min(256)
+}
+
+/// Melee damage now, Java's formula (minecraft.wiki/w/Damage): base (fist 1,
+/// swords 4/5/6/7, Sword) plus Strength (+3, Strength) times the cooldown
+/// multiplier 0.2 + 0.8 x charge^2; x 1.5 rounded down for a critical hit
+/// (falling, charge 0.9 or more); plus Sharpness (0.5 x level + 0.5,
+/// Sharpness) times the unsquared 0.2 + 0.8 x charge. Health is whole
+/// points, so the total rounds to the nearest; a weak hit can round to 0.
+fn melee_damage(p: &Player) -> i16 {
+    let base = if p.sword == 0 { 1 } else { 3 + p.sword as i32 }
+        + if p.eff_strength > 0 { 3 } else { 0 };
+    let r = attack_charge(p);
+    let mut d100 = base * (5120 + 20480 * r * r / 65536) / 256; // hundredths
+    let falling = !p.on_ground && p.vy < 0 && !p.fly;
+    if falling && r >= 230 {
+        d100 = d100 * 3 / 2 / 100 * 100; // critical, rounded down to whole hp
+    }
+    if p.sharpness > 0 {
+        let sharp = 50 * p.sharpness as i32 + 50;
+        d100 += sharp * (51 + 205 * r / 256) / 256;
+    }
+    ((d100 + 50) / 100) as i16
+}
 
 /// Reduce damage by the worn armour and the protection enchant. Armour is
 /// Java's formula (minecraft.wiki/w/Armor#Damage formulas): full iron is 15
@@ -2595,6 +2630,9 @@ fn main() {
             // straight to an item. Tools are not cycled: crafting a tier
             // equips it and better never hurts (no durability here).
             hotbar_sync(&mut player);
+            if pad.pressed_since(previous, button::R1) || pad.pressed_since(previous, button::L1) {
+                player.attack_t = 0; // switching items restarts the attack cooldown
+            }
             if pad.pressed_since(previous, button::R1) {
                 unsafe { HOTBAR_SEL = (HOTBAR_SEL + 1) % HOTBAR_VIS };
                 player.selected = unsafe { HOTBAR[HOTBAR_SEL] };
@@ -2780,17 +2818,9 @@ fn main() {
             if pad.pressed_since(previous, button::R2) {
                 let fx = (cam.sy * cam.cp) >> 12;
                 let fz = (cam.cy * cam.cp) >> 12;
-                // Java sword damage: fist 1, then wood 4 / stone 5 / iron 6 / diamond 7.
-                let mut dmg = if player.sword == 0 {
-                    1
-                } else {
-                    3 + player.sword as i16
-                };
-                if player.eff_strength > 0 {
-                    dmg += dmg / 2; // Java strength I: +3 hearts-ish, here +50%
-                }
-                dmg += player.sharpness as i16; // Java: +1.25 per level, rounded here
-                if mob::melee(cam.x, cam.y, cam.z, fx, fz, ENTITY_REACH, dmg) {
+                let dmg = melee_damage(&player);
+                player.attack_t = 0; // every swing restarts the cooldown
+                if dmg > 0 && mob::melee(cam.x, cam.y, cam.z, fx, fz, ENTITY_REACH, dmg) {
                     sfx::hit_mob();
                     player.exhaustion += EXH_ATTACK;
                 }
@@ -4184,6 +4214,7 @@ fn spawn_player() -> Player {
         sharpness: 0,
         protection: 0,
         sprint_tap: 0,
+        attack_t: 0,
         sprint_latch: false,
         was_fwd: false,
     }
@@ -4854,6 +4885,7 @@ fn update_player(
         ..PadState::NONE
     };
     let actions = action_map.input(current, prior);
+    player.attack_t = player.attack_t.saturating_add(1);
 
     // --- look: RIGHT stick = camera (yaw + pitch), proportional analog ---
     //
@@ -9952,6 +9984,12 @@ fn draw_all_hud(font: &FontAtlas, player: Player, menu: u8, tool: (u8, u8)) {
         // Vanilla drops the crosshair whenever a GUI is up; ours used to sit in
         // the middle of every menu.
         draw_crosshair();
+        // Java's attack indicator: a bar under the crosshair while charging.
+        let r = attack_charge(&player);
+        if r < 256 {
+            rect(CX - 8, CY + 8, 16, 2, 40, 40, 40);
+            rect(CX - 8, CY + 8, (16 * r / 256) as i16, 2, 235, 235, 220);
+        }
         draw_tutorial(font);
         draw_sleep_prompt(font);
     }
