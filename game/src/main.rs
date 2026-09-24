@@ -269,10 +269,11 @@ fn is_potion(b: u8) -> bool {
     b >= POTION_AWKWARD && b <= POTION_FIRE
 }
 
-/// Frames an effect lasts. Java's are 3 to 8 minutes; at 30fps that is a very
-/// long time to carry a buff on a machine with no status HUD, so these are
-/// closer to a minute.
-const POTION_TIME: u16 = 1800;
+/// Sim ticks an effect lasts (60 a second, see SURVIVAL_HZ). Java's are 3 to
+/// 8 minutes; that is a very long time to carry a buff on a machine with no
+/// status HUD, so these are closer to a minute: 60 s, the 1800 frames it was
+/// written as at 30 Hz.
+const POTION_TIME: u16 = 3600;
 
 /// Fill a 2x3 obsidian frame with portal sheet. `(bx, by, bz)` is the block the
 /// player struck; we look for the frame around and above it. Returns true if a
@@ -1422,19 +1423,31 @@ fn armored(raw: i32, armor: u8, protection: u8) -> i32 {
     (after_armor * (100 - p * 12) / 100).max(1)
 }
 
+// Survival clocks count sim ticks: update_survival runs once per sim step,
+// and main steps the sim once per elapsed vblank, so SURVIVAL_HZ a second.
+// They were written as 30 Hz frames, which made every one of them run twice
+// as fast as its comment says; each is now written as seconds * SURVIVAL_HZ.
+const SURVIVAL_HZ: i32 = 60;
 const MAX_HEALTH: i32 = 20;
 const SAFE_FALL_BLOCKS: i32 = 3; // first 3 blocks of a fall do no damage (Java)
-const MAX_AIR: i32 = 450; // 15s underwater before drowning (Java: 300 ticks)
-const REGEN_DELAY: i32 = 90; // ponytail: ~3s post-hit regen pause; Java has none,
-                             // but our slow regen makes it near-moot. Kept for feel.
-const REGEN_PERIOD: i32 = 120; // slow regen: +1 hp / 4s (Java food>=18 tier)
-const REGEN_FAST: i32 = 15; // fast regen: +1 hp / 0.5s when well fed (food==20)
-const FIRE_DURATION: i32 = 240; // 8s of burning after lava contact (Cuberite BURN_TICKS)
+const MAX_AIR: i32 = 15 * SURVIVAL_HZ; // 15s underwater before drowning (Java: 300 ticks)
+const REGEN_DELAY: i32 = 3 * SURVIVAL_HZ; // ponytail: ~3s post-hit regen pause; Java has none,
+                                          // but our slow regen makes it near-moot. Kept for feel.
+const REGEN_PERIOD: i32 = 4 * SURVIVAL_HZ; // slow regen: +1 hp / 4s (Java food>=18 tier)
+const REGEN_FAST: i32 = SURVIVAL_HZ / 2; // fast regen: +1 hp / 0.5s when well fed (food==20)
+const FIRE_DURATION: i32 = 8 * SURVIVAL_HZ; // 8s of burning after lava contact (Cuberite BURN_TICKS)
 const MAX_FOOD: i32 = 20;
-const FOOD_DRAIN: i32 = 600; // ~20s per hunger point lost (time-based; ponytail:
-                             // Java uses per-action exhaustion, but heal-burns-food
-                             // below carries the core "activity drains food" loop)
-const STARVE_PERIOD: i32 = 120; // lose 1 hp per 4s while starving (Java rate)
+const FOOD_DRAIN: i32 = 20 * SURVIVAL_HZ; // ~20s per hunger point lost (time-based; ponytail:
+                                          // Java uses per-action exhaustion, but heal-burns-food
+                                          // below carries the core "activity drains food" loop)
+const STARVE_PERIOD: i32 = 4 * SURVIVAL_HZ; // lose 1 hp per 4s while starving (Java rate)
+/// Hazard cadences: lava, fire and cactus hurt every half second, drowning
+/// and burning every second, as in Java.
+const HAZARD_FAST_CD: i32 = SURVIVAL_HZ / 2;
+const HAZARD_SLOW_CD: i32 = SURVIVAL_HZ;
+/// Regeneration potion: +1 hp every half second (the 15 frames it was written
+/// as at 30 Hz; Java's Regeneration I heals every 2.5 s).
+const REGEN_POTION_PERIOD: u16 = (SURVIVAL_HZ / 2) as u16;
 const REGEN_FOOD_MIN: i32 = 18; // need food >= 18 to regen (Java threshold)
 
 #[derive(Copy, Clone)]
@@ -4363,12 +4376,12 @@ fn update_survival(player: &mut Player) {
         player.hurt_cd -= 1;
     }
 
-    // Per-hazard damage + cadence at 30fps, matching Java rates.
+    // Per-hazard damage + cadence in sim ticks, matching Java rates.
     let mut hurt = 0;
-    let mut cd = 15;
+    let mut cd = HAZARD_FAST_CD;
     if is_lava(feet) || is_lava(mid) || feet == FIRE || mid == FIRE {
         hurt = 4; // Java: 4 hp per 0.5s in lava
-        cd = 15;
+        cd = HAZARD_FAST_CD;
         player.burn = FIRE_DURATION; // and catch fire
     }
     // Cactus pricks: standing against one (any cardinal neighbour at feet or
@@ -4386,7 +4399,7 @@ fn update_survival(player: &mut Player) {
             || world::get(bx, my, bz - 1) == CACTUS
         {
             hurt = 1;
-            cd = 15;
+            cd = HAZARD_FAST_CD;
         }
     }
     if is_water(head) {
@@ -4394,13 +4407,13 @@ fn update_survival(player: &mut Player) {
             player.air -= 1;
         } else if hurt < 2 {
             hurt = 2; // out of air -> drown 2 hp per 1s
-            cd = 30;
+            cd = HAZARD_SLOW_CD;
         }
         player.burn = 0; // water douses fire
     } else {
         player.air = MAX_AIR;
     }
-    // Potion timers run down here, once a frame like every other survival clock.
+    // Potion timers run down here, once a sim tick like every other survival clock.
     if player.eff_speed > 0 {
         player.eff_speed -= 1;
     }
@@ -4422,7 +4435,7 @@ fn update_survival(player: &mut Player) {
         player.burn -= 1;
         if hurt == 0 {
             hurt = 1; // burning: 1 hp per 1s even after leaving lava
-            cd = 30;
+            cd = HAZARD_SLOW_CD;
         }
     }
 
@@ -4468,7 +4481,7 @@ fn update_survival(player: &mut Player) {
 
     // Regeneration potion heals regardless of food or recent damage, which is
     // the whole point of carrying one into a fight.
-    if player.eff_regen > 0 && player.health < MAX_HEALTH && player.eff_regen % 15 == 0 {
+    if player.eff_regen > 0 && player.health < MAX_HEALTH && player.eff_regen % REGEN_POTION_PERIOD == 0 {
         player.health += 1;
     }
     // Regen only when fed and unhurt; starve (to 1 hp) when out of food.
