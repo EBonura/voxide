@@ -4684,8 +4684,14 @@ fn plane_in_frustum(
 /// scratchpad (single-cycle, no RAM stall), below the face pass's stack.
 /// Batching keeps the emission order, so the ordering table is built exactly
 /// as before.
+///
+/// Eight faces, not sixteen: the batch shares the 1 KB scratchpad with the
+/// face pass's stack, which had 4 bytes to spare at sixteen, and a
+/// re-collected PGO profile grew emit_clipped_cell's frame past it (928 of
+/// 908 bytes). At eight the stack has 956 bytes, and the extra flushes cost
+/// nothing measurable (see the commit).
 pub const FACE_BATCH_ADDR: usize = 0x1F80_0000;
-pub const FACE_BATCH: usize = 16;
+pub const FACE_BATCH: usize = 8;
 pub const FACE_BATCH_END: usize = FACE_BATCH_ADDR + FACE_BATCH * 6;
 const BATCH_F: *mut u32 = FACE_BATCH_ADDR as *mut u32;
 const BATCH_S: *mut u16 = (FACE_BATCH_ADDR + FACE_BATCH * 4) as *mut u16;
