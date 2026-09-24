@@ -473,7 +473,9 @@ const CRAFT_ARMOR: u8 = 254; // recipe output sentinel: upgrade the armour tier
 const BLOCK_KINDS: usize = 128;
 
 // Worn-armour tier (0 none, 1 iron, 2 diamond) scales incoming combat damage.
-const ARMOR_PCT: [i32; 3] = [100, 60, 35]; // % of damage taken at each tier
+/// (defense points, toughness) for no armour, full iron, full diamond
+/// (minecraft.wiki/w/Armor#Full sets).
+const ARMOR_SETS: [(i32, i32); 3] = [(0, 0), (15, 0), (20, 8)];
 
 // Blocks the hotbar lets you select and place (building set; ores/fluids excluded).
 // SEEDS is selectable but plants a crop instead of placing a block (see place path).
@@ -758,6 +760,9 @@ const DIRS: [(i32, i32, i32); 6] = [
     (0, 0, -1),
 ];
 const PICK_RANGE: i32 = BLOCK * 9 / 2; // 4.5-block block reach (Java survival)
+/// Melee and feeding reach: 3 blocks, Java's entity_interaction_range
+/// (minecraft.wiki/w/Attribute).
+const ENTITY_REACH: i32 = 3 * BLOCK;
 const MOVE_DEADZONE: i16 = 18;
 const LOOK_DEADZONE: i16 = 12;
 // Live settings, tweakable from either SETTINGS card and persisted in their
@@ -1443,15 +1448,23 @@ const XP_PER_LEVEL: i32 = 20;
 const ENCHANT_COST: i32 = 3 * XP_PER_LEVEL; // 3 levels per efficiency upgrade
 const MAX_EFFICIENCY: u8 = 3;
 
-/// Reduce combat damage by the worn armour tier and the protection enchant
-/// (never below 1 if any was dealt). Java caps total reduction at 80%; the
-/// tier table already stops at 35%, and protection takes 12% a level off what
-/// is left, so three levels land near that cap rather than at immunity.
+/// Reduce damage by the worn armour and the protection enchant. Armour is
+/// Java's formula (minecraft.wiki/w/Armor#Damage formulas): full iron is 15
+/// defense points, full diamond 20 with 8 toughness, and the damage taken is
+/// raw x (1 - min(20, max(points/5, points - 4 x raw / (toughness + 8))) / 25),
+/// so iron takes 60% off and diamond up to 80%. Protection then takes 12% a
+/// level off what is left. Health is whole points here, so a hit that armour
+/// brings under one still costs one.
 fn armored(raw: i32, armor: u8, protection: u8) -> i32 {
     if raw <= 0 {
         return 0;
     }
-    let after_armor = raw * ARMOR_PCT[(armor as usize).min(ARMOR_PCT.len() - 1)] / 100;
+    let (points, tough) = ARMOR_SETS[(armor as usize).min(ARMOR_SETS.len() - 1)];
+    // Reduction in hundredths of a point.
+    let r = (points * 20)
+        .max(points * 100 - 400 * raw / (tough + 8))
+        .min(2000);
+    let after_armor = (raw * (2500 - r) + 1250) / 2500;
     let p = (protection.min(MAX_EFFICIENCY)) as i32;
     (after_armor * (100 - p * 12) / 100).max(1)
 }
@@ -2705,7 +2718,7 @@ fn main() {
                     dmg += dmg / 2; // Java strength I: +3 hearts-ish, here +50%
                 }
                 dmg += player.sharpness as i16; // Java: +1.25 per level, rounded here
-                if mob::melee(cam.x, cam.y, cam.z, fx, fz, 2 * BLOCK + BLOCK / 2, dmg) {
+                if mob::melee(cam.x, cam.y, cam.z, fx, fz, ENTITY_REACH, dmg) {
                     sfx::hit_mob();
                 }
             }
@@ -2811,7 +2824,7 @@ fn main() {
                 let fx = (cam.sy * cam.cp) >> 12;
                 let fz = (cam.cy * cam.cp) >> 12;
                 if unsafe { INV[WHEAT_ITEM as usize] } > 0
-                    && mob::feed(cam.x, cam.y, cam.z, fx, fz, 2 * BLOCK + BLOCK / 2)
+                    && mob::feed(cam.x, cam.y, cam.z, fx, fz, ENTITY_REACH)
                 {
                     inv_take(WHEAT_ITEM);
                     sfx::eat();
@@ -4628,13 +4641,14 @@ const SWING_TICKS: u32 = ms(267) as u32;
 /// A dig sound and arm swing every 0.23 s while mining.
 const DIG_PERIOD: u32 = ms(233) as u32;
 
-/// How long a hurt tilt takes to decay: 0.4 s (Java's is 10 game ticks, 0.5 s).
-const HURT_TILT_FRAMES: u8 = ms(400) as u8;
+/// How long a hurt tilt takes to decay: 10 game ticks, 0.5 s, as long as Java
+/// shows the hurt effect (minecraft.wiki/w/Damage#Effects).
+const HURT_TILT_FRAMES: u8 = units::java_ticks(10) as u8;
 /// The red flash over the first 0.13 s of it.
 const HURT_FLASH_TICKS: u8 = ms(133) as u8;
-/// Invulnerability after a mob, arrow or blast hit: 0.53 s (Java: 10 game
-/// ticks, 0.5 s).
-const PLAYER_HURT_CD: i32 = ms(533);
+/// Invulnerability after a mob, arrow or blast hit: 10 game ticks, 0.5 s
+/// (minecraft.wiki/w/Damage#Invulnerability timer).
+const PLAYER_HURT_CD: i32 = units::java_ticks(10);
 
 /// inline(never) across the gameplay loop's big callees is load-bearing, not
 /// taste: the loop is one enormous function and MIPS conditional branches only
@@ -10083,22 +10097,66 @@ fn redstone_tick() {
     }
 }
 
-// ---- TNT: a short fuse, then world::blast + debris + a hit on nearby entities.
-// ponytail: blast just destroys neighbouring TNT (no chain reaction); fixed pool.
+// ---- TNT: a short fuse, then world::explode + debris + a hit on nearby entities.
+// A blast primes TNT it reaches (Java's chain reaction), within the fixed pool.
 const MAX_TNT: usize = 8;
-const TNT_FUSE_FRAMES: u8 = ms(1500) as u8; // 1.5s (Java: 80 ticks)
-const TNT_BLAST_R: i32 = 3;
-static mut TNT_X: [i32; MAX_TNT] = [0; MAX_TNT];
-static mut TNT_Y: [i32; MAX_TNT] = [0; MAX_TNT];
-static mut TNT_Z: [i32; MAX_TNT] = [0; MAX_TNT];
-static mut TNT_FUSE: [u8; MAX_TNT] = [0; MAX_TNT]; // 0 = inactive
+/// TNT's explosion power, 4 (minecraft.wiki/w/TNT).
+const TNT_POWER: i32 = 4;
 
-fn ignite_tnt(x: i32, y: i32, z: i32) {
+/// Java's explosion damage to an entity at (dx, dy, dz) world units from the
+/// centre (minecraft.wiki/w/Explosion#Damage): impact = 1 - distance / (2 x
+/// power), damage = 7 x power x (impact^2 + impact) + 1 on Normal, so a TNT
+/// blast deals 57 point-blank and a creeper's 43. Exposure (how much of the
+/// entity the blast can see) is taken as full: Java casts rays for it.
+pub(crate) fn explosion_damage(power: i32, dx: i32, dy: i32, dz: i32) -> i32 {
+    let reach = 2 * power * BLOCK;
+    if dx.abs() >= reach || dy.abs() >= reach || dz.abs() >= reach {
+        return 0;
+    }
+    let dist = psx_math::int32::isqrt_i32(dx * dx + dy * dy + dz * dz);
+    if dist >= reach {
+        return 0;
+    }
+    let impact = 256 - dist * 256 / reach; // Q8
+    ((7 * power * (impact * impact + impact * 256)) >> 16) + 1
+}
+
+/// Java's blast resistance in hundredths (minecraft.wiki/w/Explosion#Blast
+/// resistance). Fluids, obsidian, the enchanting table and portals' frames
+/// hold against anything a TNT block or sapper can do.
+pub(crate) fn blast_resistance100(b: u8) -> i32 {
+    match b {
+        GRASS | CLAY => 60,
+        DIRT | SAND | SINK_SAND => 50,
+        STONE | COBBLE | BRICK | SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W => 600,
+        WOOD => 200,
+        LEAVES | SNOW | BED => 20,
+        COAL_ORE | IRON_ORE | GOLD_ORE | DIAMOND_ORE => 300,
+        GLASS | LUMISTONE => 30,
+        CHEST | CRAFT_TABLE => 250,
+        PLANK | FENCE | DOOR_C | DOOR_O => 300,
+        FURNACE => 350,
+        PISTON => 150,
+        WOOL => 80,
+        LADDER | CACTUS | CINDERSTONE => 40,
+        VOID_STONE => 900,
+        ENCHANT | OBSIDIAN => 120_000,
+        WIRE | TORCH | TNT | WHEAT | WHEAT_RIPE | SAPLING | FLOWER_R | FLOWER_Y | TALL_GRASS
+        | SUGAR_CANE | FIRE | PORTAL | EMBER_CAP => 0,
+        VOID_PORTAL => 360_000_000,
+        _ if is_water(b) || is_lava(b) => 10_000,
+        _ => 300,
+    }
+}
+
+/// Prime the TNT block at (x, y, z) with a fuse of `fuse` sim ticks, unless it
+/// is already burning (a blast reaching a TNT block, as in Java).
+pub(crate) fn prime_tnt(x: i32, y: i32, z: i32, fuse: u8) {
     unsafe {
         let mut i = 0;
         while i < MAX_TNT {
             if TNT_FUSE[i] > 0 && TNT_X[i] == x && TNT_Y[i] == y && TNT_Z[i] == z {
-                return; // already fusing here
+                return;
             }
             i += 1;
         }
@@ -10108,12 +10166,21 @@ fn ignite_tnt(x: i32, y: i32, z: i32) {
                 TNT_X[i] = x;
                 TNT_Y[i] = y;
                 TNT_Z[i] = z;
-                TNT_FUSE[i] = TNT_FUSE_FRAMES;
+                TNT_FUSE[i] = fuse.max(1);
                 return;
             }
             i += 1;
         }
     }
+}
+const TNT_FUSE_FRAMES: u8 = ms(1500) as u8; // 1.5s (Java: 80 ticks)
+static mut TNT_X: [i32; MAX_TNT] = [0; MAX_TNT];
+static mut TNT_Y: [i32; MAX_TNT] = [0; MAX_TNT];
+static mut TNT_Z: [i32; MAX_TNT] = [0; MAX_TNT];
+static mut TNT_FUSE: [u8; MAX_TNT] = [0; MAX_TNT]; // 0 = inactive
+
+fn ignite_tnt(x: i32, y: i32, z: i32) {
+    prime_tnt(x, y, z, TNT_FUSE_FRAMES);
 }
 
 #[inline(never)]
@@ -10128,17 +10195,20 @@ fn tnt_tick(player: &mut Player) {
                     if get_block_i32(x, y, z) == TNT {
                         set_block_i32(x, y, z, AIR);
                         record_edit(x, y, z, AIR);
-                        world::blast(x, y, z, TNT_BLAST_R);
+                        world::explode(x, y, z, TNT_POWER, (x ^ z) as u32);
                         let wx = block_to_world_x(x) + BLOCK / 2;
                         let wy = y * BLOCK + BLOCK / 2;
                         let wz = block_to_world_z(z) + BLOCK / 2;
                         spawn_particles(wx, wy, wz, (96, 84, 72), 30, (x ^ z) as u32, 46);
                         sfx::explode();
-                        // Java-style falloff: lethal point-blank, 0 at 2*power blocks.
-                        let pd =
-                            (player.x - wx).abs() + (player.y - wy).abs() + (player.z - wz).abs();
-                        let dmg =
-                            armored(22 - 22 * pd / (6 * BLOCK), player.armor, player.protection);
+                        mob::blast_mobs(wx, wy, wz, TNT_POWER);
+                        let raw = explosion_damage(
+                            TNT_POWER,
+                            player.x - wx,
+                            player.y - wy,
+                            player.z - wz,
+                        );
+                        let dmg = armored(raw, player.armor, player.protection);
                         if dmg > 0 && player.hurt_cd == 0 {
                             player.health -= dmg;
                             player.hurt_cd = PLAYER_HURT_CD;

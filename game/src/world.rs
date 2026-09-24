@@ -1919,22 +1919,43 @@ fn remesh(cx: i32, cz: i32) {
     }
 }
 
-/// Destroy breakable blocks in a sphere (sapper blast). Raw-sets every block
-/// then remeshes the overlapping chunks once -- per-block `set` would remesh
-/// the chunk ~100 times and hitch hard.
-pub fn blast(wx: i32, wy: i32, wz: i32, r: i32) {
-    let r2 = r * r;
+/// Java's explosion (minecraft.wiki/w/Explosion): rays from the centre start
+/// at power x (0.7 to 1.3), lose 0.225 per 0.3-block step and
+/// (blast resistance + 0.3) x 0.3 per step inside a block, and break what
+/// they reach; in open air that is a sphere of about 4/3 x power.
+///
+/// Casting Java's 1,352 rays is out of reach here, so each block is judged on
+/// its own ray: it breaks if it lies within power x f / (resistance + 1.05)
+/// blocks, plus the half block of air in the exploding cell, and never past
+/// the open-air 4/3 x power x f. f is the ray's 0.7 to 1.3 roll, hashed from
+/// the cell. TNT in reach is primed with Java's 10 to 30 game-tick fuse
+/// instead of vanishing. Raw-sets every block, then remeshes the overlapping
+/// chunks once -- per-block `set` would remesh a chunk ~100 times and hitch.
+pub fn explode(wx: i32, wy: i32, wz: i32, power: i32, seed: u32) {
+    let r = (4 * power * 13 + 29) / 30; // 4/3 x power x 1.3, rounded up
     let mut dy = -r;
     while dy <= r {
         let mut dz = -r;
         while dz <= r {
             let mut dx = -r;
             while dx <= r {
-                if dx * dx + dy * dy + dz * dz <= r2 {
-                    let (x, y, z) = (wx + dx, wy + dy, wz + dz);
-                    if y > 0 {
-                        let b = get(x, y, z);
-                        if b != AIR && b != LAVA && !is_water(b) {
+                let (x, y, z) = (wx + dx, wy + dy, wz + dz);
+                let b = if y > 0 { get(x, y, z) } else { AIR };
+                if b != AIR {
+                    let h = (x.wrapping_mul(73856093) ^ y.wrapping_mul(19349663)
+                        ^ z.wrapping_mul(83492791)) as u32
+                        ^ seed;
+                    let f100 = 70 + (h.wrapping_mul(2654435761) >> 16) as i32 % 61;
+                    let res100 = crate::blast_resistance100(b);
+                    // Hundredths of a block.
+                    let reach = (power * f100 * 100 / (res100 + 105) + 50)
+                        .min(4 * power * f100 / 3);
+                    let d2 = (dx * dx + dy * dy + dz * dz) * 10_000;
+                    if d2 <= reach * reach {
+                        if b == crate::TNT {
+                            let fuse = crate::units::java_ticks(10 + (h % 21) as i32);
+                            crate::prime_tnt(x, y, z, fuse as u8);
+                        } else {
                             raw_set(x, y, z, AIR);
                         }
                     }

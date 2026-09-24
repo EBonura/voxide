@@ -96,13 +96,14 @@ const MOB_TERMINAL_VY: i32 = -28;
 /// Spiders climb walls toward you at about 2.8 blocks/s (3 units a tick net
 /// of gravity).
 const SPIDER_CLIMB_VY: i32 = MOB_GRAVITY + 3;
-/// Damage flash 0.13 s; the hurt counter runs 0.27 s.
-const HURT_TICKS: u8 = ms(267) as u8;
-const FLASH_TICKS: u8 = ms(133) as u8;
-/// Skeleton bow: draw for a second after spotting you, then a shot every
-/// 1.67 s (the old 50 frames at 30 Hz).
+/// After a hit a mob is invulnerable, and flashes red, for 10 game ticks
+/// (minecraft.wiki/w/Damage#Invulnerability timer, #Effects).
+const HURT_TICKS: u8 = java_ticks(10) as u8;
+const FLASH_TICKS: u8 = HURT_TICKS;
+/// Skeleton bow: draw for a second after spotting you, then a shot every 3 s
+/// (Easy/Normal, minecraft.wiki/w/Skeleton).
 const SHOT_DRAW: u16 = secs(1) as u16;
-const SHOT_TICKS: u16 = ms(1667) as u16;
+const SHOT_TICKS: u16 = secs(3) as u16;
 /// Hit animals run for 3 s.
 const FLEE_TICKS: u16 = secs(3) as u16;
 /// The dragon's per-axis speed, 5 units per 30 Hz frame per axis as written
@@ -165,19 +166,26 @@ const DEAD: Mob = Mob {
 
 // Arrows fired by skeletons.
 const ARROW_CAP: usize = 8;
+/// Skeleton arrows: 26 units a tick along the Manhattan-normalised aim with 2
+/// units a tick of drop (Java's skeleton launch speed is not documented).
 const ARROW_SPEED: i32 = 26;
-/// Units per tick lost each tick. It was the player's GRAVITY / 2 when that
-/// was whole units; the player's vy is in quarter units now.
-const ARROW_GRAVITY: i32 = 2;
+const ARROW_GRAVITY: i32 = 2 * 256;
+/// Player arrows, Java's bow at full draw: 3 blocks a game tick (60 blocks/s,
+/// a block a sim tick), gravity 0.05 blocks/tick^2 and 0.99 drag a game tick
+/// (minecraft.wiki/w/Arrow), spread over three sim ticks: 91/256 of a unit a
+/// tick per tick, and 1 - 55/16384 of the velocity kept each tick.
+const BOW_Q8: i32 = crate::units::cbps_q8(6000);
+const BOW_GRAVITY: i32 = 91;
+const BOW_DRAG_16384: i32 = 55;
 /// Arrows vanish after 1.5 s in flight.
 const ARROW_LIFE: u16 = ms(1500) as u16;
 /// Idle voices: each mob mutters every ~7 s.
 const VOICE_PERIOD: usize = ms(7133) as usize;
-/// Undead in daylight lose 1 hp every 0.67 s.
-const SUN_BURN_PERIOD: u16 = ms(667) as u16;
+/// Undead in daylight lose 1 hp every second.
+const SUN_BURN_PERIOD: u16 = secs(1) as u16; // burning: 1 hp a second (Damage#Burning)
 const FUSE_MAX: u16 = java_ticks(30) as u16; // Java's 30-game-tick (1.5 s) sapper fuse
-const BLAST_R: i32 = 3; // block-destruction radius = explosion power 3 (blocks)
-const BLAST_DMG_R: i32 = 6; // damage reaches 2*power = 6 blocks (Java falloff)
+/// The sapper's blast: explosion power 3, the creeper's (minecraft.wiki/w/Creeper).
+const SAPPER_POWER: i32 = 3;
 /// Height the dragon cruises at, above the Void island's deck.
 const DRAGON_CRUISE: i32 = 42 * BLOCK;
 /// The dragon never stops hunting, so it needs its own reach rather than the
@@ -189,6 +197,7 @@ const DRAGON_ORBIT: i32 = 9 * BLOCK;
 #[derive(Copy, Clone)]
 struct Arrow {
     alive: bool,
+    // Position and velocity in Q8 world units (a tick).
     x: i32,
     y: i32,
     z: i32,
@@ -872,7 +881,7 @@ fn blink(m: &mut Mob, px: i32, pz: i32) {
 fn sun_burn(i: usize) {
     let tick = unsafe { BURN_TICK };
     if tick % SUN_BURN_PERIOD != 0 {
-        return; // every 0.67 s
+        return;
     }
     let mut m = unsafe { MOBS[i] };
     if m.kind != ZOMBIE && m.kind != SKELETON {
@@ -938,12 +947,12 @@ fn shoot_arrow(sx: i32, sy: i32, sz: i32, px: i32, py: i32, pz: i32) {
     unsafe {
         ARROWS[a] = Arrow {
             alive: true,
-            x: ex,
-            y: ey,
-            z: ez,
-            vx: dx * ARROW_SPEED / dist,
-            vy: dy * ARROW_SPEED / dist + 6, // slight arc
-            vz: dz * ARROW_SPEED / dist,
+            x: ex << 8,
+            y: ey << 8,
+            z: ez << 8,
+            vx: (dx * ARROW_SPEED / dist) << 8,
+            vy: (dy * ARROW_SPEED / dist + 6) << 8, // slight arc
+            vz: (dz * ARROW_SPEED / dist) << 8,
             life: ARROW_LIFE,
             from_player: false,
         };
@@ -951,22 +960,21 @@ fn shoot_arrow(sx: i32, sy: i32, sz: i32, px: i32, py: i32, pz: i32) {
 }
 
 /// Fire an arrow from the player's eye along a Q12 look direction (the camera
-/// forward vector). Player arrows damage mobs, not the player.
+/// forward vector, unit length). Player arrows damage mobs, not the player.
 pub fn player_shoot(ex: i32, ey: i32, ez: i32, dx: i32, dy: i32, dz: i32) {
     let a = match free_arrow() {
         Some(a) => a,
         None => return,
     };
-    let mag = (dx.abs() + dy.abs() + dz.abs()).max(1);
     unsafe {
         ARROWS[a] = Arrow {
             alive: true,
-            x: ex,
-            y: ey,
-            z: ez,
-            vx: dx * ARROW_SPEED / mag,
-            vy: dy * ARROW_SPEED / mag + 4, // gentle arc
-            vz: dz * ARROW_SPEED / mag,
+            x: ex << 8,
+            y: ey << 8,
+            z: ez << 8,
+            vx: dx * BOW_Q8 >> 12,
+            vy: dy * BOW_Q8 >> 12,
+            vz: dz * BOW_Q8 >> 12,
             life: ARROW_LIFE,
             from_player: true,
         };
@@ -980,7 +988,11 @@ fn arrow_hit_mob(ax: i32, ay: i32, az: i32) -> bool {
         let mut m = unsafe { MOBS[i] };
         if m.alive {
             let (w, h) = dims(m.kind);
-            if (ax - m.x).abs() < w + 6 && (az - m.z).abs() < w + 6 && ay > m.y - 8 && ay < m.y + h
+            if m.hurt_cd == 0
+                && (ax - m.x).abs() < w + 6
+                && (az - m.z).abs() < w + 6
+                && ay > m.y - 8
+                && ay < m.y + h
             {
                 m.health -= 4; // arrow damage (Java: 6 at full draw; 4 here)
                 m.hurt_cd = HURT_TICKS;
@@ -1010,20 +1022,41 @@ fn arrow_hit_mob(ax: i32, ay: i32, az: i32) -> bool {
 fn explode(cx: i32, cy: i32, cz: i32, px: i32, py: i32, pz: i32) {
     crate::sfx::explode();
     crate::spawn_particles(cx, cy + BLOCK, cz, (96, 84, 72), 30, (cx ^ cz) as u32, 44);
-    world::blast(
+    let cy = cy + BLOCK / 2; // the blast centre, half a block up the sapper
+    world::explode(
         world_to_block_x(cx),
-        world_to_block_y(cy + BLOCK),
+        world_to_block_y(cy),
         world_to_block_z(cz),
-        BLAST_R,
+        SAPPER_POWER,
+        (cx ^ cz) as u32,
     );
-    // Java falloff: damage peaks point-blank (lethal from full HP) and reaches
-    // 0 at 2*power = 6 blocks. Linear approximation over Manhattan distance.
-    let d = (px - cx).abs() + (py - cy).abs() + (pz - cz).abs();
-    let dmg = 22 - 22 * d / (BLAST_DMG_R * BLOCK);
+    let dmg = crate::explosion_damage(SAPPER_POWER, px - cx, py - cy, pz - cz);
     if dmg > 0 {
         unsafe {
             HAZARD_DMG += dmg;
         }
+    }
+    blast_mobs(cx, cy, cz, SAPPER_POWER);
+}
+
+/// An explosion's damage to every mob in reach (Java hurts all entities).
+pub fn blast_mobs(cx: i32, cy: i32, cz: i32, power: i32) {
+    let mut i = 0;
+    while i < CAP {
+        let mut m = unsafe { MOBS[i] };
+        if m.alive {
+            let dmg = crate::explosion_damage(power, m.x - cx, m.y - cy, m.z - cz);
+            if dmg > 0 {
+                m.health -= dmg as i16;
+                m.hurt_cd = HURT_TICKS;
+                if m.health <= 0 {
+                    record_death(&m);
+                    m = DEAD;
+                }
+                unsafe { MOBS[i] = m };
+            }
+        }
+        i += 1;
     }
 }
 
@@ -1032,30 +1065,48 @@ fn update_arrows(px: i32, py: i32, pz: i32) {
     while i < ARROW_CAP {
         let mut a = unsafe { ARROWS[i] };
         if a.alive {
-            a.x += a.vx;
-            a.y += a.vy;
-            a.z += a.vz;
-            a.vy -= ARROW_GRAVITY;
-            let mut dead = a.life == 0 || solid(a.x, a.y, a.z);
-            if a.life > 0 {
-                a.life -= 1;
+            if a.from_player {
+                a.vy -= BOW_GRAVITY;
+                a.vx -= (a.vx * BOW_DRAG_16384) >> 14;
+                a.vy -= (a.vy * BOW_DRAG_16384) >> 14;
+                a.vz -= (a.vz * BOW_DRAG_16384) >> 14;
             }
-            if !dead && a.from_player {
-                // Player arrow: damage the first mob it overlaps.
-                if arrow_hit_mob(a.x, a.y, a.z) {
+            // A bow arrow covers a block a tick: test it in steps of at most
+            // 16 units so it cannot pass through a mob or a thin wall.
+            let far = a.vx.abs().max(a.vy.abs()).max(a.vz.abs());
+            let n = far / (16 << 8) + 1;
+            let mut dead = a.life == 0;
+            let mut k = 0;
+            while k < n && !dead {
+                a.x += a.vx / n;
+                a.y += a.vy / n;
+                a.z += a.vz / n;
+                let (ax, ay, az) = (a.x >> 8, a.y >> 8, a.z >> 8);
+                if solid(ax, ay, az) {
+                    dead = true;
+                } else if a.from_player {
+                    // Player arrow: damage the first mob it overlaps.
+                    if arrow_hit_mob(ax, ay, az) {
+                        dead = true;
+                    }
+                } else if (ax - px).abs() < PLAYER_HALF_W + 8
+                    && (az - pz).abs() < PLAYER_HALF_W + 8
+                    && ay > py
+                    && ay < py + PLAYER_HEIGHT
+                {
+                    // Skeleton arrow: damage the player.
+                    unsafe {
+                        HAZARD_DMG += 4;
+                    }
                     dead = true;
                 }
-            } else if !dead
-                && (a.x - px).abs() < PLAYER_HALF_W + 8
-                && (a.z - pz).abs() < PLAYER_HALF_W + 8
-                && a.y > py
-                && a.y < py + PLAYER_HEIGHT
-            {
-                // Skeleton arrow: damage the player.
-                unsafe {
-                    HAZARD_DMG += 4;
-                }
-                dead = true;
+                k += 1;
+            }
+            if !a.from_player {
+                a.vy -= ARROW_GRAVITY;
+            }
+            if a.life > 0 {
+                a.life -= 1;
             }
             if dead {
                 a.alive = false;
@@ -1089,7 +1140,7 @@ pub const fn arrow_cap() -> usize {
 
 pub fn arrow_view(i: usize) -> (bool, i32, i32, i32) {
     let a = unsafe { ARROWS[i] };
-    (a.alive, a.x, a.y, a.z)
+    (a.alive, a.x >> 8, a.y >> 8, a.z >> 8)
 }
 
 /// Q8 velocity of length `speed` along (dx, dz). The length is the
@@ -1430,6 +1481,24 @@ fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
     }
 }
 
+/// A hostile's melee hit on Normal difficulty (minecraft.wiki per-mob pages):
+/// zombie 3, spider 2, enderman 7, blaze contact 6, wither skeleton 8, ender
+/// dragon 10. Skeletons shoot and creepers explode instead of hitting. The
+/// wailer (ghast) has no melee in Java; with no fireball to throw here it
+/// keeps its fireball's 6 as a contact hit.
+fn melee_damage(kind: u8) -> i32 {
+    match kind {
+        ZOMBIE => 3,
+        SPIDER => 2,
+        WRAITH => 7,
+        EMBER => 6,
+        WAILER => 6,
+        CHARRED_SK => 8,
+        DRAGON => 10,
+        _ => 0, // skeleton, sapper
+    }
+}
+
 /// Hostile contact damage to the player this frame (max over touching mobs).
 pub fn contact_damage(px: i32, py: i32, pz: i32) -> i32 {
     let mut dmg = 0;
@@ -1441,7 +1510,12 @@ pub fn contact_damage(px: i32, py: i32, pz: i32) -> i32 {
             let dz = (pz - m.z).abs();
             let dy = (py - m.y).abs();
             if dx < BLOCK && dz < BLOCK && dy < 2 * BLOCK {
-                let d = if m.kind == SAPPER { 6 } else { 3 };
+                // A wraith (Java's enderman) is neutral until provoked.
+                let d = if m.kind == WRAITH && m.state != ST_CHASE {
+                    0
+                } else {
+                    melee_damage(m.kind)
+                };
                 if d > dmg {
                     dmg = d;
                 }
@@ -1485,6 +1559,9 @@ pub fn melee(px: i32, py: i32, pz: i32, fx: i32, fz: i32, reach: i32, damage: i1
         return false;
     }
     let mut m = unsafe { MOBS[best] };
+    if m.hurt_cd > 0 {
+        return false; // still invulnerable from the last hit
+    }
     m.health -= damage;
     m.hurt_cd = HURT_TICKS;
     if m.kind == WRAITH {
