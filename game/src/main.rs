@@ -2503,7 +2503,7 @@ fn main() {
                 let mob_hit = armored(raw_hit, player.armor, player.protection);
                 if mob_hit > 0 && player.hurt_cd == 0 {
                     player.health -= mob_hit;
-                    player.hurt_cd = 16;
+                    player.hurt_cd = PLAYER_HURT_CD;
                     player.hurt_tilt = HURT_TILT_FRAMES;
                     player.regen_delay = REGEN_DELAY;
                 }
@@ -4547,8 +4547,15 @@ fn camera_from_player(p: Player) -> Camera {
     }
 }
 
-/// Frames a hurt tilt takes to decay. Java's is 10 ticks.
-const HURT_TILT_FRAMES: u8 = 12;
+/// Sim ticks a hurt tilt takes to decay: 0.4 s, the 12 frames it was written
+/// as at 30 Hz (a tick is 1/60 s). Java's is 10 game ticks, 0.5 s.
+const HURT_TILT_FRAMES: u8 = 24;
+/// The red flash over the first 0.13 s of it (4 frames at 30 Hz as written).
+const HURT_FLASH_TICKS: u8 = 8;
+/// Invulnerability after a mob, arrow or blast hit, in sim ticks: ~0.53 s,
+/// the 16 frames it was written as at 30 Hz, beside the survival hazards'
+/// 30 Hz cadences (Java: 10 game ticks, 0.5 s).
+const PLAYER_HURT_CD: i32 = 32;
 
 /// inline(never) across the gameplay loop's big callees is load-bearing, not
 /// taste: the loop is one enormous function and MIPS conditional branches only
@@ -9555,7 +9562,7 @@ fn screen_tint(player: &Player) {
         Some((220, 90, 20))
     } else if is_water(head) {
         Some((30, 80, 190))
-    } else if player.hurt_tilt > HURT_TILT_FRAMES - 4 {
+    } else if player.hurt_tilt > HURT_TILT_FRAMES - HURT_FLASH_TICKS {
         Some((190, 30, 30))
     } else {
         None
@@ -9972,7 +9979,7 @@ fn tnt_tick(player: &mut Player) {
                             armored(22 - 22 * pd / (6 * BLOCK), player.armor, player.protection);
                         if dmg > 0 && player.hurt_cd == 0 {
                             player.health -= dmg;
-                            player.hurt_cd = 16;
+                            player.hurt_cd = PLAYER_HURT_CD;
                             player.regen_delay = REGEN_DELAY;
                         }
                     }
