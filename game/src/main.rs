@@ -272,10 +272,10 @@ fn is_potion(b: u8) -> bool {
     b >= POTION_AWKWARD && b <= POTION_FIRE
 }
 
-/// How long an effect lasts. Java's are 3 to 8 minutes; that is a very long
-/// time to carry a buff on a machine with no status HUD, so these last a
-/// minute.
-const POTION_TIME: u16 = secs(60) as u16;
+/// Brewed (not extended) potion durations, Java's (minecraft.wiki/w/Potion):
+/// Swiftness, Strength and Fire Resistance 3:00, Regeneration 0:45.
+const POTION_TIME: u16 = secs(180) as u16;
+const POTION_REGEN_TIME: u16 = secs(45) as u16;
 
 /// Fill a 2x3 obsidian frame with portal sheet. `(bx, by, bz)` is the block the
 /// player struck; we look for the frame around and above it. Returns true if a
@@ -4299,7 +4299,7 @@ fn drink_potion(player: &mut Player, kind: u8) {
     match kind {
         POTION_SPEED => player.eff_speed = POTION_TIME,
         POTION_STRENGTH => player.eff_strength = POTION_TIME,
-        POTION_REGEN => player.eff_regen = POTION_TIME,
+        POTION_REGEN => player.eff_regen = POTION_REGEN_TIME,
         POTION_FIRE => player.eff_fire = POTION_TIME,
         _ => {} // awkward: no effect, exactly as in Java
     }
@@ -4940,7 +4940,7 @@ fn update_player(
         WALK_Q8
     };
     if player.eff_speed > 0 {
-        speed += speed * 3 / 10; // Java speed I: +20%; a touch more here
+        speed += speed / 5; // Speed I: +20% (minecraft.wiki/w/Speed)
     }
     player.sprinting = sprinting;
     // Q8 units a tick along each axis.
