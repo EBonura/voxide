@@ -474,9 +474,159 @@ const CRAFT_ARMOR: u8 = 254; // recipe output sentinel: upgrade the armour tier
 const BLOCK_KINDS: usize = 128;
 
 // Worn-armour tier (0 none, 1 iron, 2 diamond) scales incoming combat damage.
-/// (defense points, toughness) for no armour, full iron, full diamond
-/// (minecraft.wiki/w/Armor#Full sets).
-const ARMOR_SETS: [(i32, i32); 3] = [(0, 0), (15, 0), (20, 8)];
+/// Per piece (helmet, chestplate, leggings, boots) for iron and diamond, from
+/// minecraft.wiki/w/Armor: defense points, toughness, durability.
+const ARMOR_POINTS: [[i32; 4]; 2] = [[2, 6, 5, 2], [3, 8, 6, 3]];
+const ARMOR_TOUGH: [i32; 2] = [0, 2];
+const ARMOR_DUR: [[u16; 4]; 2] = [[165, 240, 225, 195], [363, 528, 495, 429]];
+/// Tool durability by tier, wood / stone / iron / diamond
+/// (minecraft.wiki/w/Sword#Statistics, Pickaxe).
+const TOOL_DUR: [u16; 5] = [0, 59, 131, 250, 1561];
+/// Bow 384, fishing rod 64, flint and steel 64 (minecraft.wiki/w/Bow,
+/// Fishing_Rod, Flint_and_Steel).
+const ITEM_DUR: [(u8, u16); 3] = [(BOW, 384), (FISHING_ROD, 64), (FLINT_STEEL, 64)];
+
+/// Defense points and toughness of the pieces still worn.
+fn armor_points(p: &Player) -> (i32, i32) {
+    if p.armor == 0 {
+        return (0, 0);
+    }
+    let t = (p.armor as usize - 1).min(1);
+    let (mut pts, mut tough) = (0, 0);
+    let mut k = 0;
+    while k < 4 {
+        if p.armor_dur[k] > 0 {
+            pts += ARMOR_POINTS[t][k];
+            tough += ARMOR_TOUGH[t];
+        }
+        k += 1;
+    }
+    (pts, tough)
+}
+
+/// Armour takes a hit of `raw` damage: each worn piece loses max(1, raw / 4)
+/// uses (minecraft.wiki/w/Durability#Armor durability). A piece at 0 breaks;
+/// with all four gone the set is gone.
+fn wear_armor(p: &mut Player, raw: i32) {
+    if p.armor == 0 || raw <= 0 {
+        return;
+    }
+    let loss = (raw / 4).max(1) as u16;
+    let mut left = 0;
+    let mut k = 0;
+    while k < 4 {
+        if p.armor_dur[k] > 0 {
+            p.armor_dur[k] = p.armor_dur[k].saturating_sub(loss);
+            if p.armor_dur[k] == 0 {
+                sfx::break_block();
+            }
+        }
+        if p.armor_dur[k] > 0 {
+            left += 1;
+        }
+        k += 1;
+    }
+    if left == 0 {
+        p.armor = 0;
+    }
+}
+
+/// The durability slot for a tool class.
+fn tool_slot(class: u8) -> usize {
+    match class {
+        TOOL_PICK => 0,
+        TOOL_AXE => 1,
+        TOOL_SHOVEL => 2,
+        _ => 3,
+    }
+}
+
+/// A tool of `class` is used `uses` times (minecraft.wiki/w/Durability: 1 for
+/// a block that does not break instantly, 1 for a sword hit). At 0 it breaks
+/// and its tier is gone.
+fn wear_tool(p: &mut Player, class: u8, uses: u16) {
+    let tier = tool_tier(p, class);
+    if tier == 0 || class == TOOL_NONE {
+        return;
+    }
+    let d = &mut p.tool_dur[tool_slot(class)];
+    if *d == 0 || *d > TOOL_DUR[tier as usize] {
+        *d = TOOL_DUR[tier as usize];
+    }
+    *d = d.saturating_sub(uses);
+    if *d == 0 {
+        match class {
+            TOOL_PICK => p.pick = 0,
+            TOOL_AXE => p.axe = 0,
+            TOOL_SHOVEL => p.shovel = 0,
+            _ => p.sword = 0,
+        }
+        sfx::break_block();
+        unsafe {
+            EQUIP_MSG = "TOOL BROKE";
+            EQUIP_T = 100;
+        }
+    }
+}
+
+/// One use of the current bow, rod or flint and steel; when it runs out the
+/// item breaks (one is taken) and the next one starts fresh.
+fn wear_item(p: &mut Player, item: u8) {
+    let mut k = 0;
+    while k < 3 {
+        let (it, max) = ITEM_DUR[k];
+        if it == item {
+            let d = &mut p.item_dur[k];
+            if *d == 0 || *d > max {
+                *d = max;
+            }
+            *d -= 1;
+            if *d == 0 {
+                inv_take(item);
+                *d = max;
+                sfx::break_block();
+            }
+            return;
+        }
+        k += 1;
+    }
+}
+
+/// Every owned tool and armour piece at full durability (loading a save made
+/// before durability existed).
+pub(crate) fn full_durability(p: &mut Player) {
+    let tiers = [p.pick, p.axe, p.shovel, p.sword];
+    let mut k = 0;
+    while k < 4 {
+        p.tool_dur[k] = TOOL_DUR[(tiers[k] as usize).min(4)];
+        k += 1;
+    }
+    p.armor_dur = if p.armor == 0 { [0; 4] } else { ARMOR_DUR[(p.armor as usize - 1).min(1)] };
+    p.item_dur = [0; 3];
+}
+
+/// Whether a tiered recipe's output is already owned at that tier and
+/// undamaged (so crafting it again would waste the ingredients).
+pub(crate) fn tier_full(p: &Player, out: u8, tier: u8) -> bool {
+    if out == CRAFT_ARMOR {
+        let t = (tier as usize).max(1).min(2) - 1;
+        let mut k = 0;
+        while k < 4 {
+            if p.armor_dur[k] < ARMOR_DUR[t][k] {
+                return false;
+            }
+            k += 1;
+        }
+        return true;
+    }
+    let class = match out {
+        CRAFT_AXE => TOOL_AXE,
+        CRAFT_SHOVEL => TOOL_SHOVEL,
+        CRAFT_SWORD => TOOL_SWORD,
+        _ => TOOL_PICK,
+    };
+    p.tool_dur[tool_slot(class)] >= TOOL_DUR[tier as usize]
+}
 
 // Blocks the hotbar lets you select and place (building set; ores/fluids excluded).
 // SEEDS is selectable but plants a crop instead of placing a block (see place path).
@@ -1425,6 +1575,12 @@ struct Player {
     shovel: u8,
     sword: u8,
     armor: u8, // 0 none, 1 iron, 2 diamond (scales combat damage taken)
+    // Uses left, Java's durability: the tool tiers (pick, axe, shovel, sword),
+    // the four armour pieces (helmet, chest, legs, boots; 0 = broken), and the
+    // current bow, fishing rod and flint and steel (0 = a fresh one).
+    tool_dur: [u16; 4],
+    armor_dur: [u16; 4],
+    item_dur: [u16; 3],
     selected: u8,
     xp: i32,         // total experience points (xp_level for the level)
     efficiency: u8,  // mining-speed enchant level (0..3), bought with XP at a table
@@ -1542,11 +1698,12 @@ fn melee_damage(p: &Player) -> i16 {
 /// so iron takes 60% off and diamond up to 80%. Protection then takes 12% a
 /// level off what is left. Health is whole points here, so a hit that armour
 /// brings under one still costs one.
-fn armored(raw: i32, armor: u8, protection: u8) -> i32 {
+fn armored(raw: i32, p: &Player) -> i32 {
     if raw <= 0 {
         return 0;
     }
-    let (points, tough) = ARMOR_SETS[(armor as usize).min(ARMOR_SETS.len() - 1)];
+    let protection = p.protection;
+    let (points, tough) = armor_points(p);
     // Reduction in hundredths of a point.
     let r = (points * 20)
         .max(points * 100 - 400 * raw / (tough + 8))
@@ -2284,8 +2441,14 @@ fn craft(i: usize, player: &mut Player) {
             CRAFT_SWORD => &mut player.sword,
             _ => &mut player.pick,
         };
-        if tier > *slot {
+        if tier >= *slot {
             *slot = tier;
+            player.tool_dur[match r.out {
+                CRAFT_AXE => 1,
+                CRAFT_SHOVEL => 2,
+                CRAFT_SWORD => 3,
+                _ => 0,
+            }] = TOOL_DUR[tier as usize];
             unsafe {
                 EQUIP_MSG = match r.out {
                     CRAFT_AXE => "AXE EQUIPPED",
@@ -2297,8 +2460,9 @@ fn craft(i: usize, player: &mut Player) {
             }
         }
     } else if r.out == CRAFT_ARMOR {
-        if r.out_qty as u8 > player.armor {
+        if r.out_qty as u8 >= player.armor {
             player.armor = r.out_qty as u8;
+            player.armor_dur = ARMOR_DUR[(player.armor as usize - 1).min(1)];
             unsafe {
                 EQUIP_MSG = if player.armor == 1 {
                     "IRON ARMOR EQUIPPED"
@@ -2657,9 +2821,10 @@ fn main() {
                 mob::update(player.x, player.y, player.z, sky_level(day % DAY_LEN));
                 let raw_hit =
                     mob::contact_damage(player.x, player.y, player.z) + mob::hazard_damage();
-                let mob_hit = armored(raw_hit, player.armor, player.protection);
+                let mob_hit = armored(raw_hit, &player);
                 if mob_hit > 0 && player.hurt_cd == 0 {
                     player.health -= mob_hit;
+                    wear_armor(&mut player, raw_hit);
                     player.hurt_cd = PLAYER_HURT_CD;
                     player.hurt_tilt = HURT_TILT_FRAMES;
                     player.exhaustion += EXH_DAMAGE;
@@ -2823,6 +2988,7 @@ fn main() {
                 if dmg > 0 && mob::melee(cam.x, cam.y, cam.z, fx, fz, ENTITY_REACH, dmg) {
                     sfx::hit_mob();
                     player.exhaustion += EXH_ATTACK;
+                    wear_tool(&mut player, TOOL_SWORD, 1);
                 }
             }
 
@@ -2864,6 +3030,9 @@ fn main() {
                     if mine_progress >= mine_den && (mine_den == 0 || step > 0) {
                         sfx::break_block();
                         player.exhaustion += EXH_BREAK;
+                        if hard > 0 {
+                            wear_tool(&mut player, tool_for(tb), 1);
+                        }
                         if mine_den > 0 {
                             mine_cool = units::java_ticks(6) as u32;
                         }
@@ -2943,6 +3112,7 @@ fn main() {
                     let fy = cam.sp;
                     let fz = (cam.cy * cam.cp) >> 12;
                     mob::player_shoot(cam.x, cam.y, cam.z, fx, fy, fz);
+                    wear_item(&mut player, BOW);
                     sfx::place(); // bow twang stand-in
                 }
             }
@@ -3019,6 +3189,7 @@ fn main() {
                         world::light_fire_at(pick.px, pick.py, pick.pz);
                         sfx::place();
                     }
+                    wear_item(&mut player, FLINT_STEEL);
                 } else if player.selected == BONEMEAL {
                     // Bone meal grows a crop 2 to 5 stages (minecraft.wiki/w/Bone_Meal).
                     if get_block_i32(pick.bx, pick.by, pick.bz) == WHEAT && inv_take(BONEMEAL) {
@@ -3098,6 +3269,7 @@ fn main() {
                     cast_t = cast_t.saturating_sub(sim_n as u16);
                     if cast_t == 0 {
                         player.food_items += 1;
+                        wear_item(&mut player, FISHING_ROD);
                         sfx::splash();
                     }
                 }
@@ -4208,6 +4380,9 @@ fn spawn_player() -> Player {
         shovel: 0,
         sword: 0,
         armor: 0,
+        tool_dur: [0; 4],
+        armor_dur: [0; 4],
+        item_dur: [0; 3],
         selected: DIRT,
         xp: 0,
         efficiency: 0,
@@ -4729,11 +4904,16 @@ fn update_survival(player: &mut Player) {
     }
 
     if hurt > 0 && player.hurt_cd == 0 {
-        player.health -= hurt;
-        player.hurt_cd = cd;
         if armoured {
+            // Lava, fire and cactus are armour-protected damage in Java
+            // (minecraft.wiki/w/Durability#Armor durability).
+            player.health -= armored(hurt, player);
+            wear_armor(player, hurt);
             player.exhaustion += EXH_DAMAGE;
+        } else {
+            player.health -= hurt;
         }
+        player.hurt_cd = cd;
     }
 
     // Exhaustion spends saturation, then hunger.
@@ -9260,8 +9440,20 @@ fn draw_hotbar(tool: (u8, u8)) {
         let uv = tex::tile_uv(tile);
         let mat = TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, tool_tint(tool.1));
         ui_sprite(tx + 1, y0 + 1, 16, 16, uv, mat);
+        // Java's durability bar, once the tool is worn: green to red.
+        let max = TOOL_DUR[(tool.1 as usize).min(4)] as i32;
+        let left = (unsafe { TOOL_DUR_SHOWN } as i32).min(max);
+        if left > 0 && left < max {
+            let w = (14 * left / max).max(1) as i16;
+            let g = (255 * left / max) as u8;
+            rect(tx + 2, y0 + 13, 14, 2, 0, 0, 0);
+            rect(tx + 2, y0 + 13, w, 1, 255 - g, g, 0);
+        }
     }
 }
+
+/// The shown tool's uses left, set by draw_all_hud for draw_hotbar.
+static mut TOOL_DUR_SHOWN: u16 = 0;
 
 /// Ten heart pips, left of the hotbar (2 hp each, rounded up).
 /// Experience bar (green) just above the hotbar, filling toward the next level.
@@ -9281,15 +9473,15 @@ fn draw_xp(xp: i32) {
 
 /// Armour pips one row above the hearts: more pips + a brighter colour at higher
 /// tiers (iron grey, diamond cyan). Hidden when unarmoured.
-fn draw_armor(armor: u8) {
-    if armor == 0 {
+fn draw_armor(p: &Player) {
+    // Java's armour bar: one pip per 2 defense points of the pieces still
+    // worn (minecraft.wiki/w/Armor), so it shrinks as pieces break.
+    let (points, _) = armor_points(p);
+    if points == 0 {
         return;
     }
-    let (pips, col) = if armor >= 2 {
-        (5i16, (120, 200, 220))
-    } else {
-        (3i16, (184, 184, 196))
-    };
+    let col = if p.armor >= 2 { (120, 200, 220) } else { (184, 184, 196) };
+    let pips = ((points + 1) / 2) as i16;
     let x0 = 8i16;
     let y = HUD_ROW2_Y;
     let mut i = 0i16;
@@ -9994,10 +10186,11 @@ fn draw_all_hud(font: &FontAtlas, player: Player, menu: u8, tool: (u8, u8)) {
         draw_sleep_prompt(font);
     }
     if menu != MENU_INV && !(1..=3).contains(&menu) {
+        unsafe { TOOL_DUR_SHOWN = player.tool_dur[tool_slot(tool.0)] };
         draw_hotbar(tool); // these menus draw it over their dimming
     }
     draw_xp(player.xp);
-    draw_armor(player.armor);
+    draw_armor(&player);
     draw_hearts(player.health);
     draw_food(player.food);
     draw_hud(font, player);
@@ -10438,9 +10631,10 @@ fn tnt_tick(player: &mut Player) {
                             player.y - wy,
                             player.z - wz,
                         );
-                        let dmg = armored(raw, player.armor, player.protection);
+                        let dmg = armored(raw, player);
                         if dmg > 0 && player.hurt_cd == 0 {
                             player.health -= dmg;
+                            wear_armor(player, raw);
                             player.hurt_cd = PLAYER_HURT_CD;
                             player.exhaustion += EXH_DAMAGE;
                         }
