@@ -55,6 +55,18 @@ pub const fn cbps2_q2(cbps2: i32) -> i32 {
     (cbps2 * BLOCK * 4 + 50 * SIM_HZ * SIM_HZ) / (100 * SIM_HZ * SIM_HZ)
 }
 
+/// An acceleration in hundredths of a block per second squared, as Q8 world
+/// units per sim tick per sim tick, rounded.
+pub const fn cbps2_q8(cbps2: i32) -> i32 {
+    (cbps2 * BLOCK * 256 + 50 * SIM_HZ * SIM_HZ) / (100 * SIM_HZ * SIM_HZ)
+}
+
+/// A turn rate in degrees per second, as Q8 angle units per sim tick
+/// (4096 angle units to the turn), rounded.
+pub const fn dps_q8(dps: i32) -> i32 {
+    (dps * 4096 * 256 + 180 * SIM_HZ) / (360 * SIM_HZ)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -80,5 +92,8 @@ mod tests {
         assert_eq!(cbps_q2(2625), 112);
         // 56.25 blocks/s^2 is one unit a tick per tick.
         assert_eq!(cbps2_q2(5625), 4);
+        assert_eq!(cbps2_q8(5625), 256);
+        // 90 degrees a second is 17.07 angle units a tick.
+        assert_eq!(dps_q8(90), 4369);
     }
 }

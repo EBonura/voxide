@@ -793,28 +793,52 @@ const DOUBLE_TAP_FRAMES: u8 = ms(400) as u8;
 const EYE_HEIGHT: i32 = 104; // 1.62 blocks (Java standing eye)
 const PLAYER_HALF_W: i32 = 19; // 0.6-block-wide collision box (Java 0.6)
 const PLAYER_HEIGHT: i32 = 115; // 1.8 blocks tall (Java)
-// Vertical motion runs on the sim tick, 1/60 s (main steps the sim once per
-// elapsed vblank). These numbers were written for a 30 Hz frame, so the jump
-// arc, falls, swimming and ladders all ran at twice the speed they were tuned
-// for. The player's vy is now kept in quarter units per tick (VY_SHIFT): the
-// 30 Hz accelerations keep their numbers exactly and the velocities double,
-// which is the same motion in real time with no rounding.
-const VY_SHIFT: u32 = 2;
-const GRAVITY: i32 = units::cbps2_q2(5625); // 56.25 blocks/s^2 (4 quarter units a tick per tick)
-const TERMINAL_VY: i32 = -units::cbps_q2(2625); // 26.25 blocks/s, 28 units a tick: under a block a tick (no tunnel)
-/// Fastest upward stroke while swimming (quarter units/tick, ~6.6 blocks/s);
-/// a jump out of water starts above this and stays ballistic until gravity
-/// brings it back down.
-const SWIM_UP: i32 = units::cbps_q2(656);
-// Impulse tuned so the peak is ~1.3 blocks (84.5 units; Java jumps 1.25 ->
-// clears one block, not two) with the 0.43 s arc it was written with.
-const JUMP_VY: i32 = units::cbps_q2(1266); // 12.66 blocks/s
-/// Swimming: stroke acceleration, the sink's deceleration and its top speed.
-const SWIM_ACCEL: i32 = units::cbps2_q2(5625); // 56 blocks/s^2
-const SWIM_DRAG: i32 = units::cbps2_q2(1406); // 14 blocks/s^2
-const SWIM_SINK: i32 = units::cbps_q2(281); // 2.8 blocks/s
-const WALK_SPEED: i32 = 9; // units per sim tick. NOTE: 8.4 blocks/s at 60 Hz, not the ~4.2 written for 30 Hz (Java walk 4.317)
-const FLY_SPEED: i32 = units::cbps_q8(750) >> 8; // creative fly, vertical: 7.5 blocks/s (Java 7.49), 8 units a tick
+// Movement follows Java Edition's measured speeds, converted to sim ticks by
+// units.rs. Horizontal speeds are Q8 world units a tick with the remainder
+// carried in x_frac/z_frac; vertical velocity is Q8 too (VY_SHIFT), so every
+// value below is exact to 1/256 of a unit a tick.
+const VY_SHIFT: u32 = 8;
+/// Walking: 4.317 blocks/s (minecraft.wiki/w/Walking#Speed).
+const WALK_Q8: i32 = units::cbps_q8(432);
+/// Sprinting is 1.3x, 5.612 blocks/s (minecraft.wiki/w/Sprinting#Usage).
+const SPRINT_PCT: i32 = 130;
+/// Sneaking is 0.3x (minecraft.wiki/w/Attribute, sneaking_speed 0.3).
+const SNEAK_PCT: i32 = 30;
+/// In water: 1.97 blocks/s partly submerged, 3.918 sprint-swimming
+/// (minecraft.wiki/w/Swimming).
+const SWIM_Q8: i32 = units::cbps_q8(197);
+const SPRINT_SWIM_Q8: i32 = units::cbps_q8(392);
+/// Creative flight: 10.92 blocks/s, 21.6 sprinting (minecraft.wiki/w/Flying).
+const FLY_Q8: i32 = units::cbps_q8(1092);
+const SPRINT_FLY_Q8: i32 = units::cbps_q8(2160);
+/// Creative fly, vertical: 7.49 blocks/s (minecraft.wiki/w/Transportation,
+/// vertical transportation table), 8 units a tick.
+const FLY_SPEED: i32 = units::cbps_q8(749) >> 8;
+/// Gravity and air drag, Java's 0.08 blocks/tick^2 and 0.98 a tick
+/// (minecraft.wiki/w/Entity#Motion) spread over three sim ticks: 0.98^(1/3)
+/// = 1 - 55/8192 of the velocity kept each tick, and the pull that gives the
+/// same terminal velocity, 78 blocks/s (Java 78.4).
+const GRAVITY: i32 = 145;
+const DRAG_8192: i32 = 55;
+/// Jump impulse: 9.5 blocks/s, which peaks at 1.25 blocks under the gravity
+/// above (Java 1.2522, minecraft.wiki/w/Jumping) and lands 0.57 s later
+/// (Java's discrete 20 Hz arc lands after 12 ticks, 0.6 s).
+const JUMP_VY: i32 = 2606;
+/// Ladders: 2.35 blocks/s up, at most 3.0 down (minecraft.wiki/w/Ladder#Climbing).
+const LADDER_UP: i32 = units::cbps_q8(235);
+const LADDER_DOWN: i32 = units::cbps_q8(300);
+/// Swimming up while holding jump: 2.23 blocks/s (minecraft.wiki/w/Transportation,
+/// "ascending by holding jump" in a water column, Java). The stroke reaches it
+/// in 0.04 s; the sink when not stroking is uncited and kept at 2.8 blocks/s.
+const SWIM_UP: i32 = units::cbps_q8(223);
+const SWIM_ACCEL: i32 = units::cbps2_q8(5625);
+const SWIM_DRAG: i32 = units::cbps2_q8(1406);
+const SWIM_SINK: i32 = units::cbps_q8(281);
+/// Stick look: full push turns 90 deg/s yaw and 75 deg/s pitch, the rates the
+/// code was written for (Java has no controller, and no Bedrock or Legacy
+/// Console default turn rate is documented). LOOK SPEED scales both.
+const LOOK_YAW_Q8: i32 = units::dps_q8(90);
+const LOOK_PITCH_Q8: i32 = units::dps_q8(75);
 
 const FONT_TPAGE: Tpage = Tpage::new(320, 0, TexDepth::Bit4);
 const FONT_CLUT: Clut = Clut::new(320, 256);
@@ -1365,7 +1389,11 @@ struct Player {
     y: i32, // feet bottom (world units)
     z: i32,
     vy: i32,      // vertical velocity, quarter units per sim tick (VY_SHIFT)
-    vy_frac: i32, // sub-unit remainder of the vertical move, 0..3
+    vy_frac: i32, // sub-unit remainder of the vertical move (Q8)
+    x_frac: i32,  // sub-unit remainders of the horizontal moves (Q8)
+    z_frac: i32,
+    yaw_frac: i32, // sub-unit remainders of the look (Q8 angle units)
+    pitch_frac: i32,
     yaw: u16,
     pitch: i16,
     on_ground: bool,
@@ -4000,6 +4028,10 @@ fn spawn_player() -> Player {
         z: block_to_world_z(sz) + BLOCK / 2,
         vy: 0,
         vy_frac: 0,
+        x_frac: 0,
+        z_frac: 0,
+        yaw_frac: 0,
+        pitch_frac: 0,
         yaw: 0,
         pitch: 0,
         on_ground: true,
@@ -4639,23 +4671,27 @@ fn update_player(
     let (rx, ry) = Deadzone::new(unsafe { SET_LOOK_DZ })
         .scaled(right.0, right.1)
         .map_or((0, 0), |(x, y)| (x as i32, y as i32));
-    // Response CURVE, not a flat divisor: a gentle linear base keeps aim precise
-    // near centre (placing blocks with a stick), plus a quadratic term so a full
-    // push turns quickly. Tops out ~90°/s yaw / ~75°/s pitch (was a flat ~60/50,
-    // sluggish). Feel knob -- tune the divisors on hardware.
+    // Response CURVE, not a flat divisor: half linear, half quadratic, so aim
+    // stays precise near centre (placing blocks with a stick) and a full push
+    // turns at LOOK_YAW_Q8 / LOOK_PITCH_Q8 (90 / 75 deg/s at LOOK SPEED 100%).
     // Turning is EXCLUSIVELY on the right stick -- the left stick and d-pad only
     // ever move/strafe, never yaw.
     let lp = unsafe { SET_LOOK_PCT };
-    let yaw_delta = (rx / 6 + rx * rx.abs() / 850) * lp / 100;
-    let mut pitch_delta = -(ry / 7 + ry * ry.abs() / 1000) * lp / 100;
+    let curve = |v: i32| v * (127 + v.abs()) / 254; // -127..127, same sign
+    let yaw_q8 = LOOK_YAW_Q8 * curve(rx) / 127 * lp / 100;
+    let mut pitch_q8 = -(LOOK_PITCH_Q8 * curve(ry) / 127 * lp / 100);
     if unsafe { SET_INVERT_Y } {
-        pitch_delta = -pitch_delta;
+        pitch_q8 = -pitch_q8;
     }
-    player.yaw = ((player.yaw as i32 + yaw_delta) & 0x0FFF) as u16;
+    let yq = yaw_q8 + player.yaw_frac;
+    player.yaw_frac = yq & 255;
+    player.yaw = ((player.yaw as i32 + (yq >> 8)) & 0x0FFF) as u16;
+    let pq = pitch_q8 + player.pitch_frac;
+    player.pitch_frac = pq & 255;
     // Clamp to +-90 degrees (1024 = 90 deg in the 4096 = 360 deg system) so you
     // can look straight up/down like Java -- was +-760 (~67 deg), which stopped
     // short of your own feet.
-    player.pitch = (player.pitch as i32 + pitch_delta).clamp(-1024, 1024) as i16;
+    player.pitch = (player.pitch as i32 + (pq >> 8)).clamp(-1024, 1024) as i16;
 
     // Creative fly toggle: SELECT, or double-tap CROSS (jump) like Minecraft
     // creative -- one button, since we're in creative anyway. First CROSS arms a
@@ -4676,22 +4712,29 @@ fn update_player(
     let (lx, ly) = Deadzone::new(unsafe { SET_MOVE_DZ })
         .scaled(left.0, left.1)
         .map_or((0, 0), |(x, y)| (x as i32, y as i32));
-    let mut strafe = lx / 11;
-    let mut forward = -ly / 11;
+    // Input as a fraction of full speed, -127..127 an axis. The stick's radial
+    // deadzone already caps its length at 127; the D-pad's diagonal is scaled
+    // by 1/sqrt(2) the same way, as Java normalises WASD.
+    let mut strafe = lx;
+    let mut forward = -ly;
     if lx == 0 && ly == 0 {
         // D-pad as a movement fallback when the stick is idle: UP/DOWN walk,
         // LEFT/RIGHT strafe (turning stays on the right stick only).
         if actions.held(ACT_FORWARD) {
-            forward += WALK_SPEED;
+            forward += 127;
         }
         if actions.held(ACT_BACK) {
-            forward -= WALK_SPEED;
+            forward -= 127;
         }
         if actions.held(ACT_LEFT) {
-            strafe -= WALK_SPEED;
+            strafe -= 127;
         }
         if actions.held(ACT_RIGHT) {
-            strafe += WALK_SPEED;
+            strafe += 127;
+        }
+        if forward != 0 && strafe != 0 {
+            forward = forward * 181 / 256;
+            strafe = strafe * 181 / 256;
         }
     }
 
@@ -4722,22 +4765,44 @@ fn update_player(
         player.sprint_latch = false;
     }
     let sprinting = !sneaking && player.sprint_latch && fwd_now;
-    if player.eff_speed > 0 {
-        forward += forward * 3 / 10; // Java speed I: +20%; a touch more here
-        strafe += strafe * 3 / 10;
-    }
-    if sprinting {
-        forward += forward * 3 / 10;
+    // Full speed for the medium, Q8 units a tick.
+    let wet_now = in_water_body(player.x, player.y, player.z);
+    let mut speed = if player.fly {
+        if sprinting {
+            SPRINT_FLY_Q8
+        } else {
+            FLY_Q8
+        }
+    } else if wet_now {
+        if sprinting {
+            SPRINT_SWIM_Q8
+        } else {
+            SWIM_Q8
+        }
+    } else if sprinting {
+        WALK_Q8 * SPRINT_PCT / 100
     } else if sneaking {
-        forward = forward * 3 / 10;
-        strafe = strafe * 3 / 10;
+        WALK_Q8 * SNEAK_PCT / 100
+    } else {
+        WALK_Q8
+    };
+    if player.eff_speed > 0 {
+        speed += speed * 3 / 10; // Java speed I: +20%; a touch more here
     }
     player.sprinting = sprinting;
+    // Q8 units a tick along each axis.
+    let forward = forward * speed / 127;
+    let strafe = strafe * speed / 127;
 
     let sy = sincos::sin_q12(player.yaw);
     let cy = sincos::cos_q12(player.yaw);
-    let dx = ((sy * forward) + (cy * strafe)) >> 12;
-    let dz = ((cy * forward) - (sy * strafe)) >> 12;
+    // Whole units this tick, the Q8 remainder carried to the next.
+    let qx = (((sy * forward) + (cy * strafe)) >> 12) + player.x_frac;
+    let qz = (((cy * forward) - (sy * strafe)) >> 12) + player.z_frac;
+    player.x_frac = qx & 255;
+    player.z_frac = qz & 255;
+    let dx = qx >> 8;
+    let dz = qz >> 8;
 
     if player.fly {
         // Fly along the FULL look vector, pitch included. dx/dz above are built
@@ -4751,9 +4816,13 @@ fn update_player(
         let fx = (sy * cp) >> 12;
         let fz = (cy * cp) >> 12;
         // Forward takes the pitched vector; strafe stays horizontal, as it should.
-        player.x += ((fx * forward) >> 12) + ((cy * strafe) >> 12);
-        player.z += ((fz * forward) >> 12) - ((sy * strafe) >> 12);
-        player.y += (sp * forward) >> 12;
+        let qx = ((fx * forward) >> 12) + ((cy * strafe) >> 12) + player.x_frac;
+        let qz = ((fz * forward) >> 12) - ((sy * strafe) >> 12) + player.z_frac;
+        player.x_frac = qx & 255;
+        player.z_frac = qz & 255;
+        player.x += qx >> 8;
+        player.z += qz >> 8;
+        player.y += ((sp * forward) >> 12) >> 8;
         if pad.is_held(button::CROSS) {
             player.y += FLY_SPEED;
         }
@@ -4792,12 +4861,15 @@ fn update_player(
         // lookup missed for every real position, and both axes rolled back every
         // step -- the player could not walk at all (fly skips this branch, which
         // is why flying still worked).
+        let mut blocked = false;
         player.x += dx;
         if !world::column_loaded(world_to_block_x(player.x), world_to_block_z(player.z))
             || aabb_collides(player.x, player.y, player.z)
             || (sneaking && was_ground && !supported(player.x, player.y, player.z))
         {
             player.x -= dx;
+            player.x_frac = 0;
+            blocked = dx != 0;
         }
         player.z += dz;
         if !world::column_loaded(world_to_block_x(player.x), world_to_block_z(player.z))
@@ -4805,18 +4877,20 @@ fn update_player(
             || (sneaking && was_ground && !supported(player.x, player.y, player.z))
         {
             player.z -= dz;
+            player.z_frac = 0;
+            blocked |= dz != 0;
         }
 
-        // Ladders override gravity: press toward your look (forward) to climb up,
-        // back to descend, otherwise slide down slowly.
+        // Ladders, as in Java: any movement input (or jump) climbs at 2.35
+        // blocks/s, sneaking holds on, and otherwise you slide down no faster
+        // than 3 blocks/s.
         if at_ladder(player.x, player.y, player.z) {
-            // ~4.7 blocks/s up or down, ~1.4 sliding.
-            player.vy = if forward > 0 {
-                units::cbps_q2(469)
-            } else if forward < 0 {
-                -units::cbps_q2(469)
+            player.vy = if sneaking {
+                0
+            } else if forward != 0 || strafe != 0 || pad.is_held(button::CROSS) {
+                LADDER_UP
             } else {
-                -units::cbps_q2(141)
+                (player.vy - GRAVITY).max(-LADDER_DOWN)
             };
         } else if in_water_body(player.x, player.y, player.z) && player.vy <= SWIM_UP {
             // Swimming: buoyancy fights gravity. Hold CROSS to stroke upward,
@@ -4831,7 +4905,9 @@ fn update_player(
             };
             player.fall_peak = player.y; // water breaks the fall, as in Java
         } else {
-            player.vy = (player.vy - GRAVITY).max(TERMINAL_VY);
+            // Java's per-tick order: gravity, then drag.
+            let v = player.vy - GRAVITY;
+            player.vy = v - ((v * DRAG_8192) >> 13);
         }
         // The horizontal guard above stops you WALKING off the generated ring,
         // but nothing stopped you falling through it. A teleport puts you
@@ -4844,9 +4920,23 @@ fn update_player(
             player.fall_peak = player.y;
         }
         let dy = player.vy + player.vy_frac;
-        let ny = player.y + (dy >> VY_SHIFT);
         player.vy_frac = dy & ((1 << VY_SHIFT) - 1);
-        if aabb_collides(player.x, ny, player.z) {
+        let dyu = dy >> VY_SHIFT;
+        // Falls reach 1.3 blocks a tick, so the move is tested in steps of
+        // at most 48 units: a whole-tick jump could pass through a floor.
+        let steps = (dyu.abs() + 47) / 48;
+        let mut ny = player.y;
+        let mut k = 1;
+        while k <= steps {
+            let cand = player.y + dyu * k / steps;
+            if aabb_collides(player.x, cand, player.z) {
+                ny = cand;
+                break;
+            }
+            ny = cand;
+            k += 1;
+        }
+        if dyu != 0 && aabb_collides(player.x, ny, player.z) {
             player.vy_frac = 0;
             if player.vy < 0 {
                 // Landed: snap feet to the top surface of the block below. A
@@ -4876,6 +4966,14 @@ fn update_player(
                 player.y = by * BLOCK - PLAYER_HEIGHT;
             }
             player.vy = 0;
+        } else if dyu == 0 {
+            // Under a unit this tick: stay put, standing if something is
+            // underfoot.
+            player.on_ground = player.vy <= 0 && aabb_collides(player.x, player.y - 1, player.z);
+            if player.on_ground {
+                player.vy = 0;
+                player.vy_frac = 0;
+            }
         } else {
             player.y = ny;
             player.on_ground = false;
@@ -4895,11 +4993,12 @@ fn update_player(
             player.fall_peak = player.y;
         }
 
-        // Jumping works from the ground OR from the water, so you can hop a
-        // shore instead of bobbing against it.
-        if (player.on_ground || in_water_body(player.x, player.y, player.z))
-            && pad.pressed_since(previous, button::CROSS)
-        {
+        // Jumping works from the ground, or from the water while swimming into
+        // a wall, so you can hop a shore instead of bobbing against it (Java
+        // lifts a swimmer who pushes against a block). In open water CROSS
+        // only strokes up.
+        let shore = blocked && in_water_body(player.x, player.y, player.z);
+        if (player.on_ground || shore) && pad.pressed_since(previous, button::CROSS) {
             player.vy = JUMP_VY;
             player.on_ground = false;
             unsafe { TUT_JUMPED = true };
@@ -4910,7 +5009,7 @@ fn update_player(
     // (attempted deltas lie when a wall eats the move).
     unsafe {
         let wet = in_water_body(player.x, player.y, player.z);
-        if wet && !WAS_WET && player.vy <= -units::cbps_q2(188) {
+        if wet && !WAS_WET && player.vy <= -units::cbps_q8(188) {
             sfx::splash();
         }
         WAS_WET = wet;
