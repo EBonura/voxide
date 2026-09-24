@@ -814,7 +814,8 @@ const FLY_SPEED: i32 = 8; // vertical units per sim tick in creative fly (7.5 bl
 const FONT_TPAGE: Tpage = Tpage::new(320, 0, TexDepth::Bit4);
 const FONT_CLUT: Clut = Clut::new(320, 256);
 
-// Day/night: a full cycle is DAY_LEN frames (~600s / 10 min at 30fps -- about 2x
+// Day/night: a full cycle is DAY_LEN world-clock ticks (30 a second, see
+// world_clock; ~600s / 10 min -- about 2x
 // the pace of Java's 20-min day, no longer the old 20x-compressed 60s). LIGHT
 // (0..128) scales the global sky light; NIGHT_LIGHT keeps night dim but not pitch
 // black (no block-light yet). Sky colour lerps between night and day by brightness.
@@ -2524,19 +2525,19 @@ fn main() {
             }
             telemetry::stage_end(ST_SIM);
         }
-        furn_tick(); // furnaces smelt whether or not a menu is open
+        let world_n = world_clock(); // 30 Hz world-clock ticks due this frame
         if frame % 8 == 0 {
             redstone_tick(); // budgeted: amortized, only over player-edited blocks
         }
         if frame % world::FLUID_INTERVAL == 0 {
             world::fluid_tick(); // budgeted: only cells woken by a player edit
         }
-        if portal_tick(&player, &mut portal_dwell) {
+        if world_tick(&mut player, &mut portal_dwell, world_n) {
             portal_travel(&mut player, &mut fb, &font);
         }
-        tnt_tick(&mut player); // burn lit fuses; explode on zero
-        crop_tick(); // age planted crops; ripen the mature ones
-        sap_tick(); // grow planted saplings into trees
+        // Furnaces (whether or not a menu is open), the portal dwell, TNT
+        // fuses, crops and saplings advance in world_tick; mining, fishing
+        // and the day below take world_n as well.
 
         if VISTA_VIEW {
             player.yaw = VISTA_YAW; // FIXED yaw: A/B captures must not drift with fps
@@ -2687,13 +2688,13 @@ fn main() {
                 if hard > 0 && pick.by != 0 {
                     let speed = mine_speed(&player, tb) + player.efficiency as u32 * 3;
                     if mine_active && mine_x == pick.bx && mine_y == pick.by && mine_z == pick.bz {
-                        mine_progress += speed;
+                        mine_progress += speed * world_n;
                     } else {
                         mine_active = true;
                         mine_x = pick.bx;
                         mine_y = pick.by;
                         mine_z = pick.bz;
-                        mine_progress = speed;
+                        mine_progress = speed * world_n;
                     }
                     mine_den = hard;
                     if frame % 7 == 0 {
@@ -2919,7 +2920,7 @@ fn main() {
             // Switching off the rod reels in (cancels the cast).
             if player.selected == FISHING_ROD {
                 if cast_t > 0 {
-                    cast_t -= 1;
+                    cast_t = cast_t.saturating_sub(world_n as u16);
                     if cast_t == 0 {
                         player.food_items += 1;
                         sfx::splash();
@@ -3119,7 +3120,7 @@ fn main() {
         frame_present(&mut fb, &mut render_in_flight);
         previous = pad;
         frame = frame.wrapping_add(1);
-        day = day.wrapping_add(1);
+        day = day.wrapping_add(world_n);
     }
 }
 
@@ -4197,6 +4198,47 @@ fn enter_dimension(dim: u8, bx: i32, bz: i32, fb: &mut FrameBuffer, font: &FontA
         draw_loading(fb, font, done, total)
     });
     finish_loading(fb, font);
+}
+
+/// The world clock: whole 30 Hz periods since the last call, from the vblank
+/// counter, capped at 2 like the sim's catch-up.
+///
+/// The timers written as "frames at 30fps" (the day, furnaces, TNT fuses,
+/// crops, saplings, the portal dwell, mining, the fishing bite) used to count
+/// rendered frames, so they ran at whatever the frame rate was: a cheap view
+/// at 60 fps doubled them and a heavy one at 20 fps slowed them by a third.
+/// Advancing them by this instead is one tick a frame at 30 fps, exactly as
+/// before, and the same pace at any other rate. Lockstep builds take one a
+/// poll, so A/B runs still reach identical state.
+#[inline(never)]
+fn world_clock() -> u32 {
+    static mut HALF: u32 = u32::MAX;
+    let half = interrupts::vblank_count() / 2;
+    let prev = unsafe { HALF };
+    unsafe { HALF = half };
+    if cfg!(feature = "lockstep") || prev == u32::MAX {
+        1
+    } else {
+        half.wrapping_sub(prev).min(2)
+    }
+}
+
+/// Advance the world-clock timers `n` ticks. True when the player has stood
+/// in portal sheet long enough to travel. A call rather than a loop in main:
+/// the gameplay loop is one enormous function (see update_player).
+#[inline(never)]
+fn world_tick(player: &mut Player, dwell: &mut u16, n: u32) -> bool {
+    let mut travel = false;
+    let mut w = 0;
+    while w < n {
+        furn_tick(); // furnaces smelt whether or not a menu is open
+        travel |= portal_tick(player, dwell);
+        tnt_tick(player); // burn lit fuses; explode on zero
+        crop_tick(); // age planted crops; ripen the mature ones
+        sap_tick(); // grow planted saplings into trees
+        w += 1;
+    }
+    travel
 }
 
 /// Standing in portal sheet for long enough swaps dimensions. The world side is
@@ -10729,7 +10771,7 @@ fn furn_tick() {
     }
 }
 
-/// Bare-hand break time in frames (~30 fps). 0 means not mineable (water,
+/// Bare-hand break time in world-clock ticks (30 a second). 0 means not mineable (water,
 /// air) or unbreakable. Tool tiers will divide these once tools exist.
 /// Relative break difficulty, scaled ~15x Java hardness to keep MC's ordering.
 /// (Java: leaves/bed 0.2, glass 0.3, dirt/sand 0.5, grass 0.6, stone 1.5,
@@ -10860,7 +10902,7 @@ fn tool_tier(p: &Player, class: u8) -> u8 {
     }
 }
 
-/// Mining speed (progress per frame). The RIGHT tool speeds a block up; the
+/// Mining speed (progress per 30 Hz world-clock tick). The RIGHT tool speeds a block up; the
 /// wrong one works at bare-hand pace, which is what makes carrying a set of
 /// tools worth the crafting.
 ///
