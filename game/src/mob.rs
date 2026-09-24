@@ -53,19 +53,11 @@ const ST_FLEE: u8 = 2;
 /// Walking a stroll: `heading` for `timer` more ticks.
 const ST_WANDER: u8 = 3;
 
-// Every per-tick number in this file is per SIM tick. main steps the sim once
-// per elapsed vblank (sim_n), so a tick is 1/60 s whatever the frame rate. The
-// constants here used to be written as if a tick were a 30 fps frame (SPEED 5
-// against the player's 9, "~4.2 blocks/s"; a 45-tick "1.5 s" fuse; a 214-tick
-// "~7 s" voice cycle), so mobs walked, hopped, burned, flashed and fused at
-// twice the pace their comments give. Speeds below are in blocks per second
-// and durations in seconds, converted at TICK_HZ.
-const TICK_HZ: i32 = 60;
-
-/// Speed in hundredths of a block per second -> Q8 world units per tick.
-const fn q8(cbps: i32) -> i32 {
-    cbps * BLOCK * 256 / (100 * TICK_HZ)
-}
+// Every per-tick number in this file is per SIM tick, the one game clock
+// (units.rs): main steps the sim once per elapsed vblank, so a tick is 1/60 s
+// whatever the frame rate. Speeds are written in blocks per second and
+// durations in seconds, converted through units.rs at compile time.
+use crate::units::{cbps_q8 as q8, java_ticks, ms, secs};
 
 /// Ground speed, Q8 units/tick: Java's movement_speed attribute per mob. A
 /// Java mob steers with that speed as both its input and its gain, so on
@@ -91,7 +83,7 @@ fn flee_q8(kind: u8) -> i32 {
 
 /// A standing mob sets off on a stroll with this 1-in-N chance per tick: a
 /// mean pause of 6 s, Java's 1-in-120 per 20 Hz tick.
-const IDLE_ROLL: u32 = 6 * TICK_HZ as u32;
+const IDLE_ROLL: u32 = secs(6) as u32;
 /// Stroll length in blocks, like Java's random target within ten.
 const STROLL_MIN: i32 = 2;
 const STROLL_MAX: i32 = 10;
@@ -104,15 +96,15 @@ const MOB_TERMINAL_VY: i32 = -28;
 /// Spiders climb walls toward you at about 2.8 blocks/s (3 units a tick net
 /// of gravity).
 const SPIDER_CLIMB_VY: i32 = MOB_GRAVITY + 3;
-/// Damage flash: the old 4 frames at 30 Hz. The hurt counter runs twice that.
-const HURT_TICKS: u8 = 16;
-const FLASH_TICKS: u8 = 8;
+/// Damage flash 0.13 s; the hurt counter runs 0.27 s.
+const HURT_TICKS: u8 = ms(267) as u8;
+const FLASH_TICKS: u8 = ms(133) as u8;
 /// Skeleton bow: draw for a second after spotting you, then a shot every
 /// 1.67 s (the old 50 frames at 30 Hz).
-const SHOT_DRAW: u16 = TICK_HZ as u16;
-const SHOT_TICKS: u16 = 100;
+const SHOT_DRAW: u16 = secs(1) as u16;
+const SHOT_TICKS: u16 = ms(1667) as u16;
 /// Hit animals run for 3 s.
-const FLEE_TICKS: u16 = 3 * TICK_HZ as u16;
+const FLEE_TICKS: u16 = secs(3) as u16;
 /// The dragon's per-axis speed, 5 units per 30 Hz frame per axis as written
 /// (4.7 blocks/s on an axis), Q8 units/tick.
 const DRAGON_Q8: i32 = q8(469);
@@ -177,7 +169,13 @@ const ARROW_SPEED: i32 = 26;
 /// Units per tick lost each tick. It was the player's GRAVITY / 2 when that
 /// was whole units; the player's vy is in quarter units now.
 const ARROW_GRAVITY: i32 = 2;
-const FUSE_MAX: u16 = 90; // Java's 30-game-tick (1.5 s) sapper fuse
+/// Arrows vanish after 1.5 s in flight.
+const ARROW_LIFE: u16 = ms(1500) as u16;
+/// Idle voices: each mob mutters every ~7 s.
+const VOICE_PERIOD: usize = ms(7133) as usize;
+/// Undead in daylight lose 1 hp every 0.67 s.
+const SUN_BURN_PERIOD: u16 = ms(667) as u16;
+const FUSE_MAX: u16 = java_ticks(30) as u16; // Java's 30-game-tick (1.5 s) sapper fuse
 const BLAST_R: i32 = 3; // block-destruction radius = explosion power 3 (blocks)
 const BLAST_DMG_R: i32 = 6; // damage reaches 2*power = 6 blocks (Java falloff)
 /// Height the dragon cruises at, above the Void island's deck.
@@ -216,7 +214,7 @@ const NO_ARROW: Arrow = Arrow {
 static mut MOBS: [Mob; CAP] = [DEAD; CAP];
 static mut ARROWS: [Arrow; ARROW_CAP] = [NO_ARROW; ARROW_CAP];
 static mut HAZARD_DMG: i32 = 0; // arrow hits + blast damage to the player this frame
-static mut SPAWN_TIMER: u16 = 2 * TICK_HZ as u16;
+static mut SPAWN_TIMER: u16 = secs(2) as u16;
 static mut RNG: LcgRng = LcgRng::new(0x1234_5678);
 static mut XP_DROPS: u16 = 0; // experience from kills, drained by main
 
@@ -361,7 +359,7 @@ pub fn get(i: usize) -> MobView {
         y: m.y,
         z: m.z,
         // Flash on/off every 0.1 s while the fuse burns.
-        priming: m.kind == SAPPER && m.fuse > 0 && (unsafe { BURN_TICK } / 6) % 2 == 0,
+        priming: m.kind == SAPPER && m.fuse > 0 && (unsafe { BURN_TICK } / ms(100) as u16) % 2 == 0,
         walk: m.walk,
         facing: m.facing,
         // hurt_cd was set on every hit and decremented every frame and then read
@@ -689,7 +687,7 @@ pub fn update(px: i32, py: i32, pz: i32, night: bool) {
             if count_alive() < CAP {
                 try_spawn(px, pz, night);
             }
-            SPAWN_TIMER = 3 * TICK_HZ as u16;
+            SPAWN_TIMER = secs(3) as u16;
         }
     }
 
@@ -703,7 +701,7 @@ pub fn update(px: i32, py: i32, pz: i32, night: bool) {
             // Idle voices: each slot mutters on its own ~7s cycle (offset per
             // slot so the field never speaks in chorus), volume falling with
             // distance, silent out of earshot.
-            if (unsafe { BURN_TICK } as usize).wrapping_add(i * 134) % 428 == 0 {
+            if (unsafe { BURN_TICK } as usize).wrapping_add(i * 134) % VOICE_PERIOD == 0 {
                 let (mx, mz, kind) = unsafe { (MOBS[i].x, MOBS[i].z, MOBS[i].kind) };
                 let d = ((mx - px).abs() + (mz - pz).abs()) / 64;
                 if d < 14 {
@@ -828,7 +826,7 @@ pub fn feed(px: i32, py: i32, pz: i32, fx: i32, fz: i32, reach: i32) -> bool {
         return false;
     }
     unsafe {
-        MOBS[best].love = 20 * TICK_HZ as u16; // 20 s window to find a mate
+        MOBS[best].love = secs(20) as u16; // 20 s window to find a mate
         crate::spawn_particles(
             MOBS[best].x,
             MOBS[best].y + BLOCK,
@@ -873,8 +871,8 @@ fn blink(m: &mut Mob, px: i32, pz: i32) {
 
 fn sun_burn(i: usize) {
     let tick = unsafe { BURN_TICK };
-    if tick % 40 != 0 {
-        return; // every 0.67 s, the old 20 frames at 30 Hz
+    if tick % SUN_BURN_PERIOD != 0 {
+        return; // every 0.67 s
     }
     let mut m = unsafe { MOBS[i] };
     if m.kind != ZOMBIE && m.kind != SKELETON {
@@ -946,7 +944,7 @@ fn shoot_arrow(sx: i32, sy: i32, sz: i32, px: i32, py: i32, pz: i32) {
             vx: dx * ARROW_SPEED / dist,
             vy: dy * ARROW_SPEED / dist + 6, // slight arc
             vz: dz * ARROW_SPEED / dist,
-            life: 90,
+            life: ARROW_LIFE,
             from_player: false,
         };
     }
@@ -969,7 +967,7 @@ pub fn player_shoot(ex: i32, ey: i32, ez: i32, dx: i32, dy: i32, dz: i32) {
             vx: dx * ARROW_SPEED / mag,
             vy: dy * ARROW_SPEED / mag + 4, // gentle arc
             vz: dz * ARROW_SPEED / mag,
-            life: 90,
+            life: ARROW_LIFE,
             from_player: true,
         };
     }
@@ -1286,7 +1284,7 @@ fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
             ST_WANDER if flyer => {
                 // Flyers drift on a heading and bank onto a new one now and
                 // then; `timer` is their flight phase, not a stroll count.
-                if rng() % (3 * TICK_HZ as u32) == 0 {
+                if rng() % secs(3) as u32 == 0 {
                     m.heading = rng() as u8;
                 }
                 (vx, vz) = heading_vec(m.heading, walk);

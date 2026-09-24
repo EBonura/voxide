@@ -25,6 +25,7 @@ mod sfxdata;
 mod telemetry;
 mod tex;
 mod texdata;
+mod units;
 #[cfg(feature = "tune-lab")]
 mod tunelab;
 mod world;
@@ -73,6 +74,7 @@ use psx_settings::Profile;
 use psx_vram::{Clut, TexDepth, Tpage};
 
 use tex::BlockTex;
+use units::{ms, secs};
 
 const SCREEN_W: u16 = 320;
 const SCREEN_H: u16 = 240;
@@ -221,8 +223,8 @@ const INFERNO_LIGHT: u8 = 88;
 /// day to it.
 const VOID_FOG: (u8, u8, u8) = (16, 10, 26);
 const VOID_LIGHT: u8 = 76;
-/// Frames of standing in portal sheet before it takes you.
-const PORTAL_DWELL: u16 = 45;
+/// Sim ticks of standing in portal sheet before it takes you: 1.5 s.
+const PORTAL_DWELL: u16 = ms(1500) as u16;
 /// Sentinel: standing in the portal you just arrived in, so it will not fire.
 const PORTAL_IMMUNE: u16 = u16::MAX;
 const FIRE: u8 = 70;
@@ -269,11 +271,10 @@ fn is_potion(b: u8) -> bool {
     b >= POTION_AWKWARD && b <= POTION_FIRE
 }
 
-/// Sim ticks an effect lasts (60 a second, see SURVIVAL_HZ). Java's are 3 to
-/// 8 minutes; that is a very long time to carry a buff on a machine with no
-/// status HUD, so these are closer to a minute: 60 s, the 1800 frames it was
-/// written as at 30 Hz.
-const POTION_TIME: u16 = 3600;
+/// How long an effect lasts. Java's are 3 to 8 minutes; that is a very long
+/// time to carry a buff on a machine with no status HUD, so these last a
+/// minute.
+const POTION_TIME: u16 = secs(60) as u16;
 
 /// Fill a 2x3 obsidian frame with portal sheet. `(bx, by, bz)` is the block the
 /// player struck; we look for the frame around and above it. Returns true if a
@@ -784,7 +785,7 @@ static mut SETTINGS_DIRTY: bool = false;
 // Sim ticks the first forward push stays "armed"; a second push inside it
 // latches sprint. 0.4 s: the 12 frames it was written as at 30 Hz, now that a
 // tick is 1/60 s (Java's double-tap window is 7 game ticks, 0.35 s).
-const DOUBLE_TAP_FRAMES: u8 = 24;
+const DOUBLE_TAP_FRAMES: u8 = ms(400) as u8;
 
 // Player physics, in world units (BLOCK = 64). Dimensions match Java Edition
 // (1 block = 64 units): eye 1.62, height 1.8, width 0.6. Gravity/jump/speed are
@@ -799,27 +800,30 @@ const PLAYER_HEIGHT: i32 = 115; // 1.8 blocks tall (Java)
 // 30 Hz accelerations keep their numbers exactly and the velocities double,
 // which is the same motion in real time with no rounding.
 const VY_SHIFT: u32 = 2;
-const GRAVITY: i32 = 4; // quarter units lost per tick: 56 blocks/s^2, as written
-const TERMINAL_VY: i32 = -112; // 28 units a tick, ~26 blocks/s; well under a block a tick (no tunnel)
+const GRAVITY: i32 = units::cbps2_q2(5625); // 56.25 blocks/s^2 (4 quarter units a tick per tick)
+const TERMINAL_VY: i32 = -units::cbps_q2(2625); // 26.25 blocks/s, 28 units a tick: under a block a tick (no tunnel)
 /// Fastest upward stroke while swimming (quarter units/tick, ~6.6 blocks/s);
 /// a jump out of water starts above this and stays ballistic until gravity
 /// brings it back down.
-const SWIM_UP: i32 = 28;
+const SWIM_UP: i32 = units::cbps_q2(656);
 // Impulse tuned so the peak is ~1.3 blocks (84.5 units; Java jumps 1.25 ->
 // clears one block, not two) with the 0.43 s arc it was written with.
-const JUMP_VY: i32 = 54;
+const JUMP_VY: i32 = units::cbps_q2(1266); // 12.66 blocks/s
+/// Swimming: stroke acceleration, the sink's deceleration and its top speed.
+const SWIM_ACCEL: i32 = units::cbps2_q2(5625); // 56 blocks/s^2
+const SWIM_DRAG: i32 = units::cbps2_q2(1406); // 14 blocks/s^2
+const SWIM_SINK: i32 = units::cbps_q2(281); // 2.8 blocks/s
 const WALK_SPEED: i32 = 9; // units per sim tick. NOTE: 8.4 blocks/s at 60 Hz, not the ~4.2 written for 30 Hz (Java walk 4.317)
-const FLY_SPEED: i32 = 8; // vertical units per sim tick in creative fly (7.5 blocks/s; Java 7.49)
+const FLY_SPEED: i32 = units::cbps_q8(750) >> 8; // creative fly, vertical: 7.5 blocks/s (Java 7.49), 8 units a tick
 
 const FONT_TPAGE: Tpage = Tpage::new(320, 0, TexDepth::Bit4);
 const FONT_CLUT: Clut = Clut::new(320, 256);
 
-// Day/night: a full cycle is DAY_LEN world-clock ticks (30 a second, see
-// world_clock; ~600s / 10 min -- about 2x
+// Day/night: a full cycle is DAY_LEN sim ticks (~600s / 10 min -- about 2x
 // the pace of Java's 20-min day, no longer the old 20x-compressed 60s). LIGHT
 // (0..128) scales the global sky light; NIGHT_LIGHT keeps night dim but not pitch
 // black (no block-light yet). Sky colour lerps between night and day by brightness.
-const DAY_LEN: u32 = 18000;
+const DAY_LEN: u32 = secs(600) as u32;
 const NIGHT_LIGHT: i32 = 38;
 // Java's plains biome sky_color is 0x78A7FF. The old (82,130,190) was a dull,
 // slightly green-leaning blue that read as late afternoon at altitude.
@@ -1313,7 +1317,7 @@ static mut CHEST_D: [u8; MAX_CHESTS] = [0; MAX_CHESTS];
 
 // Per-furnace state, keyed by the furnace block's world position.
 const MAX_FURNACES: usize = 8;
-const SMELT_TIME: u16 = 150; // ~5s to smelt one item (ponytail: half Java's 10s, a nod
+const SMELT_TIME: u16 = secs(5) as u16; // 5s to smelt one item (ponytail: half Java's 10s, a nod
                              // to our compressed clock; FURN_FUEL counts item-smelts)
 const COAL_SMELTS: u16 = 8; // one coal smelts 8 items (Java)
 static mut FURN_X: [i32; MAX_FURNACES] = [0; MAX_FURNACES];
@@ -1424,31 +1428,28 @@ fn armored(raw: i32, armor: u8, protection: u8) -> i32 {
     (after_armor * (100 - p * 12) / 100).max(1)
 }
 
-// Survival clocks count sim ticks: update_survival runs once per sim step,
-// and main steps the sim once per elapsed vblank, so SURVIVAL_HZ a second.
-// They were written as 30 Hz frames, which made every one of them run twice
-// as fast as its comment says; each is now written as seconds * SURVIVAL_HZ.
-const SURVIVAL_HZ: i32 = 60;
+// Survival clocks count sim ticks (update_survival runs once per tick);
+// each is written in seconds through units.rs.
 const MAX_HEALTH: i32 = 20;
 const SAFE_FALL_BLOCKS: i32 = 3; // first 3 blocks of a fall do no damage (Java)
-const MAX_AIR: i32 = 15 * SURVIVAL_HZ; // 15s underwater before drowning (Java: 300 ticks)
-const REGEN_DELAY: i32 = 3 * SURVIVAL_HZ; // ponytail: ~3s post-hit regen pause; Java has none,
+const MAX_AIR: i32 = secs(15); // 15s underwater before drowning (Java: 300 ticks)
+const REGEN_DELAY: i32 = secs(3); // ponytail: ~3s post-hit regen pause; Java has none,
                                           // but our slow regen makes it near-moot. Kept for feel.
-const REGEN_PERIOD: i32 = 4 * SURVIVAL_HZ; // slow regen: +1 hp / 4s (Java food>=18 tier)
-const REGEN_FAST: i32 = SURVIVAL_HZ / 2; // fast regen: +1 hp / 0.5s when well fed (food==20)
-const FIRE_DURATION: i32 = 8 * SURVIVAL_HZ; // 8s of burning after lava contact (Cuberite BURN_TICKS)
+const REGEN_PERIOD: i32 = secs(4); // slow regen: +1 hp / 4s (Java food>=18 tier)
+const REGEN_FAST: i32 = ms(500); // fast regen: +1 hp / 0.5s when well fed (food==20)
+const FIRE_DURATION: i32 = secs(8); // 8s of burning after lava contact (Cuberite BURN_TICKS)
 const MAX_FOOD: i32 = 20;
-const FOOD_DRAIN: i32 = 20 * SURVIVAL_HZ; // ~20s per hunger point lost (time-based; ponytail:
+const FOOD_DRAIN: i32 = secs(20); // ~20s per hunger point lost (time-based; ponytail:
                                           // Java uses per-action exhaustion, but heal-burns-food
                                           // below carries the core "activity drains food" loop)
-const STARVE_PERIOD: i32 = 4 * SURVIVAL_HZ; // lose 1 hp per 4s while starving (Java rate)
+const STARVE_PERIOD: i32 = secs(4); // lose 1 hp per 4s while starving (Java rate)
 /// Hazard cadences: lava, fire and cactus hurt every half second, drowning
 /// and burning every second, as in Java.
-const HAZARD_FAST_CD: i32 = SURVIVAL_HZ / 2;
-const HAZARD_SLOW_CD: i32 = SURVIVAL_HZ;
-/// Regeneration potion: +1 hp every half second (the 15 frames it was written
-/// as at 30 Hz; Java's Regeneration I heals every 2.5 s).
-const REGEN_POTION_PERIOD: u16 = (SURVIVAL_HZ / 2) as u16;
+const HAZARD_FAST_CD: i32 = ms(500);
+const HAZARD_SLOW_CD: i32 = secs(1);
+/// Regeneration potion: +1 hp every half second (Java's Regeneration I heals
+/// every 2.5 s).
+const REGEN_POTION_PERIOD: u16 = ms(500) as u16;
 const REGEN_FOOD_MIN: i32 = 18; // need food >= 18 to regen (Java threshold)
 
 #[derive(Copy, Clone)]
@@ -2251,7 +2252,8 @@ fn main() {
     let mut day: u32 = 0;
     let mut prev_vbl = interrupts::vblank_count();
     let mut cast_t: u16 = 0; // fishing: frames until a bite while the rod is cast
-    let mut swing: i32 = 0; // held-item swing animation countdown (mine/place/attack)
+    let mut swing: u32 = 0; // held-item swing countdown in sim ticks (mine/place/attack)
+    let mut dig_t: u32 = 0; // sim ticks since the last dig sound
     let mut mine_active = false;
     // Frames spent standing in portal sheet. Java makes you wait ~4s in
     // survival; a shorter dwell here, but a dwell all the same, so brushing
@@ -2279,11 +2281,17 @@ fn main() {
         let dt = now_vbl.wrapping_sub(prev_vbl).max(1);
         prev_vbl = now_vbl;
         let fps = (60 / dt).min(99);
-        // Fixed-timestep count: run the sim this many times per rendered frame so the
-        // game runs at ~60Hz regardless of fps (capped so a hitch can't spiral).
-        // `lockstep` (A/B validation builds only) runs one sim step per poll,
-        // so two builds of different speed reach identical state at every poll.
-        let sim_n = if cfg!(feature = "lockstep") { 1 } else { dt.min(4) };
+        // Fixed-timestep count: every game-time system (player, mobs,
+        // survival, world timers, fluids, particles, drops) advances this many
+        // sim ticks this frame, one per elapsed vblank, so game time runs at
+        // units::SIM_HZ whatever the frame rate. `lockstep` (A/B validation
+        // builds only) runs one sim tick per poll, so two builds of different
+        // speed reach identical state at every poll.
+        let sim_n = if cfg!(feature = "lockstep") {
+            1
+        } else {
+            dt.min(MAX_CATCHUP)
+        };
 
         telemetry::stage_begin(49); // TEMP: pad poll (SIO exchange)
         let state = poll_port1();
@@ -2525,19 +2533,12 @@ fn main() {
             }
             telemetry::stage_end(ST_SIM);
         }
-        let world_n = world_clock(); // 30 Hz world-clock ticks due this frame
-        if frame % 8 == 0 {
-            redstone_tick(); // budgeted: amortized, only over player-edited blocks
-        }
-        if frame % world::FLUID_INTERVAL == 0 {
-            world::fluid_tick(); // budgeted: only cells woken by a player edit
-        }
-        if world_tick(&mut player, &mut portal_dwell, world_n) {
+        // The world's own timers run on the same sim ticks, menus open or not
+        // (furnaces smelt while you browse); mining, fishing and the day
+        // below take sim_n as well.
+        if world_tick(&mut player, &mut portal_dwell, sim_n) {
             portal_travel(&mut player, &mut fb, &font);
         }
-        // Furnaces (whether or not a menu is open), the portal dwell, TNT
-        // fuses, crops and saplings advance in world_tick; mining, fishing
-        // and the day below take world_n as well.
 
         if VISTA_VIEW {
             player.yaw = VISTA_YAW; // FIXED yaw: A/B captures must not drift with fps
@@ -2659,7 +2660,7 @@ fn main() {
 
             // Any R2/L2 action swings the arm.
             if pad.pressed_since(previous, button::R2) || use_pressed {
-                swing = 8;
+                swing = SWING_TICKS;
             }
 
             // Melee: tap R2 to strike a mob in front (before block mining).
@@ -2688,20 +2689,22 @@ fn main() {
                 if hard > 0 && pick.by != 0 {
                     let speed = mine_speed(&player, tb) + player.efficiency as u32 * 3;
                     if mine_active && mine_x == pick.bx && mine_y == pick.by && mine_z == pick.bz {
-                        mine_progress += speed * world_n;
+                        mine_progress += speed * sim_n;
                     } else {
                         mine_active = true;
                         mine_x = pick.bx;
                         mine_y = pick.by;
                         mine_z = pick.bz;
-                        mine_progress = speed * world_n;
+                        mine_progress = speed * sim_n;
                     }
-                    mine_den = hard;
-                    if frame % 7 == 0 {
+                    mine_den = 2 * hard; // block_hardness is in 30ths of a second
+                    dig_t += sim_n;
+                    if dig_t >= DIG_PERIOD {
+                        dig_t = 0;
                         sfx::dig(step_mat(tb), frame); // hit voiced by the block
-                        swing = 8; // arm-swing each hit
+                        swing = SWING_TICKS; // arm-swing each hit
                     }
-                    if mine_progress >= hard {
+                    if mine_progress >= mine_den {
                         sfx::break_block();
                         player.xp += match tb {
                             COAL_ORE => 1,
@@ -2821,7 +2824,8 @@ fn main() {
                 } else if player.selected == FISHING_ROD {
                     // Cast onto water; a bite arrives after cast_t frames (below).
                     if cast_t == 0 && is_water(get_block_i32(pick.bx, pick.by, pick.bz)) {
-                        cast_t = 50 + (frame as u16 & 0x7F);
+                        // A bite in 1.7 to 5.9 s.
+                        cast_t = (ms(1667) + (frame & 0xFF) as i32) as u16;
                         sfx::splash();
                     }
                 } else if is_potion(player.selected) {
@@ -2920,7 +2924,7 @@ fn main() {
             // Switching off the rod reels in (cancels the cast).
             if player.selected == FISHING_ROD {
                 if cast_t > 0 {
-                    cast_t = cast_t.saturating_sub(world_n as u16);
+                    cast_t = cast_t.saturating_sub(sim_n as u16);
                     if cast_t == 0 {
                         player.food_items += 1;
                         sfx::splash();
@@ -3040,8 +3044,6 @@ fn main() {
             player.yaw = 0; // face +Z toward the field
             player.pitch = -240; // slight look-down: see the sprites standing up
         }
-        tick_particles();
-        tick_drops(&player);
         // No fb.clear: draw_sky's two gouraud triangles cover every pixel of
         // the frame, so the clear was 76.8K pixels of pure GPU overdraw --
         // roughly 0.15 vblank of fill, the difference between 30 and 60fps at
@@ -3064,7 +3066,7 @@ fn main() {
         unsafe { PlantStack::run(|| render_plants(&cam)) };
         telemetry::stage_end(ST_R_WORLD);
         telemetry::stage_begin(ST_R_MOBS);
-        render_mobs(&cam, frame);
+        render_mobs(&cam, unsafe { SIM_TICK });
         telemetry::stage_end(ST_R_MOBS);
         // Spend streaming work only from the headroom left by the current world
         // pass. Heavy terrain gets no extra work this frame; moderate terrain
@@ -3081,21 +3083,19 @@ fn main() {
         // only had an 18px bar under the crosshair, which is nearly subliminal at
         // 320x240 and keeps your eye off the block.
         draw_break_overlay(&cam, pick, mine_progress, mine_den);
-        if swing > 0 {
-            swing -= 1;
-        }
+        swing = swing.saturating_sub(sim_n);
         if menu == 0 {
             draw_held_item(
                 player.selected,
                 hud_tool(&player, aimed_block),
-                frame,
-                swing,
+                unsafe { SIM_TICK },
+                (swing * 8 / SWING_TICKS) as i32,
             );
         }
         if raining && under_open_sky(&player) {
             // Over the world, UNDER the HUD (it used to fall in front of the
             // hotbar, hearts and every open menu), and only where sky reaches.
-            draw_rain(frame, &cam, rain);
+            draw_rain(unsafe { SIM_TICK }, &cam, rain);
         }
         // Full-screen tints. The GPU is measured at 17% busy with ZERO fill
         // cost, so a 320x240 blend is about 77K GPU cycles against ~940K of
@@ -3120,7 +3120,7 @@ fn main() {
         frame_present(&mut fb, &mut render_in_flight);
         previous = pad;
         frame = frame.wrapping_add(1);
-        day = day.wrapping_add(world_n);
+        day = day.wrapping_add(sim_n);
     }
 }
 
@@ -4050,8 +4050,8 @@ fn rain_amount(frame: u32) -> i32 {
     if FORCE_TIME >= 0 {
         return 0; // deterministic captures stay dry
     }
-    const WINDOW: u32 = 1200;
-    const RAIN_RAMP: u32 = 240; // ~8s in and out at 30fps
+    const WINDOW: u32 = secs(40) as u32;
+    const RAIN_RAMP: u32 = secs(8) as u32; // ~8s in and out
     let phase = frame % (WINDOW * 3);
     if phase < WINDOW * 2 {
         return 0;
@@ -4200,42 +4200,44 @@ fn enter_dimension(dim: u8, bx: i32, bz: i32, fb: &mut FrameBuffer, font: &FontA
     finish_loading(fb, font);
 }
 
-/// The world clock: whole 30 Hz periods since the last call, from the vblank
-/// counter, capped at 2 like the sim's catch-up.
-///
-/// The timers written as "frames at 30fps" (the day, furnaces, TNT fuses,
-/// crops, saplings, the portal dwell, mining, the fishing bite) used to count
-/// rendered frames, so they ran at whatever the frame rate was: a cheap view
-/// at 60 fps doubled them and a heavy one at 20 fps slowed them by a third.
-/// Advancing them by this instead is one tick a frame at 30 fps, exactly as
-/// before, and the same pace at any other rate. Lockstep builds take one a
-/// poll, so A/B runs still reach identical state.
-#[inline(never)]
-fn world_clock() -> u32 {
-    static mut HALF: u32 = u32::MAX;
-    let half = interrupts::vblank_count() / 2;
-    let prev = unsafe { HALF };
-    unsafe { HALF = half };
-    if cfg!(feature = "lockstep") || prev == u32::MAX {
-        1
-    } else {
-        half.wrapping_sub(prev).min(2)
-    }
-}
+/// Sim ticks since the world opened: the one game clock (see units.rs).
+/// Advanced only by world_tick; animations read it instead of a frame count.
+static mut SIM_TICK: u32 = 0;
+/// Frames that took longer than this are not caught up in full: a portal's
+/// loading screen should not fast-forward the world. Half a second covers the
+/// longest in-game hitch measured (a TNT blast's remesh, 21 vblanks), which the
+/// old cap of 4 turned into 17 lost ticks of game time.
+const MAX_CATCHUP: u32 = ms(500) as u32;
+/// Redstone scans the player-edited blocks every 0.27 s (budgeted work).
+const REDSTONE_PERIOD: u32 = ms(267) as u32;
+/// Fluids step every 0.17 s (budgeted: only cells a player edit woke).
+const FLUID_PERIOD: u32 = ms(167) as u32;
 
-/// Advance the world-clock timers `n` ticks. True when the player has stood
-/// in portal sheet long enough to travel. A call rather than a loop in main:
-/// the gameplay loop is one enormous function (see update_player).
+/// Advance the world's own timers `n` sim ticks: furnaces, the portal dwell,
+/// TNT fuses, crops, saplings, redstone, fluids, particles and item drops.
+/// True when the player has stood in portal sheet long enough to travel. A
+/// call rather than a loop in main: the gameplay loop is one enormous function
+/// (see update_player).
 #[inline(never)]
 fn world_tick(player: &mut Player, dwell: &mut u16, n: u32) -> bool {
     let mut travel = false;
     let mut w = 0;
     while w < n {
+        let t = unsafe { SIM_TICK };
         furn_tick(); // furnaces smelt whether or not a menu is open
         travel |= portal_tick(player, dwell);
         tnt_tick(player); // burn lit fuses; explode on zero
         crop_tick(); // age planted crops; ripen the mature ones
         sap_tick(); // grow planted saplings into trees
+        if t % REDSTONE_PERIOD == 0 {
+            redstone_tick(); // budgeted: amortized, only over player-edited blocks
+        }
+        if t % FLUID_PERIOD == 0 {
+            world::fluid_tick(); // budgeted: only cells woken by a player edit
+        }
+        tick_particles();
+        tick_drops(player);
+        unsafe { SIM_TICK = t.wrapping_add(1) };
         w += 1;
     }
     travel
@@ -4589,15 +4591,18 @@ fn camera_from_player(p: Player) -> Camera {
     }
 }
 
-/// Sim ticks a hurt tilt takes to decay: 0.4 s, the 12 frames it was written
-/// as at 30 Hz (a tick is 1/60 s). Java's is 10 game ticks, 0.5 s.
-const HURT_TILT_FRAMES: u8 = 24;
-/// The red flash over the first 0.13 s of it (4 frames at 30 Hz as written).
-const HURT_FLASH_TICKS: u8 = 8;
-/// Invulnerability after a mob, arrow or blast hit, in sim ticks: ~0.53 s,
-/// the 16 frames it was written as at 30 Hz, beside the survival hazards'
-/// 30 Hz cadences (Java: 10 game ticks, 0.5 s).
-const PLAYER_HURT_CD: i32 = 32;
+/// The held item's swing animation, in sim ticks (0.27 s).
+const SWING_TICKS: u32 = ms(267) as u32;
+/// A dig sound and arm swing every 0.23 s while mining.
+const DIG_PERIOD: u32 = ms(233) as u32;
+
+/// How long a hurt tilt takes to decay: 0.4 s (Java's is 10 game ticks, 0.5 s).
+const HURT_TILT_FRAMES: u8 = ms(400) as u8;
+/// The red flash over the first 0.13 s of it.
+const HURT_FLASH_TICKS: u8 = ms(133) as u8;
+/// Invulnerability after a mob, arrow or blast hit: 0.53 s (Java: 10 game
+/// ticks, 0.5 s).
+const PLAYER_HURT_CD: i32 = ms(533);
 
 /// inline(never) across the gameplay loop's big callees is load-bearing, not
 /// taste: the loop is one enormous function and MIPS conditional branches only
@@ -4805,13 +4810,13 @@ fn update_player(
         // Ladders override gravity: press toward your look (forward) to climb up,
         // back to descend, otherwise slide down slowly.
         if at_ladder(player.x, player.y, player.z) {
-            // Quarter units a tick: ~4.7 blocks/s up or down, ~1.4 sliding.
+            // ~4.7 blocks/s up or down, ~1.4 sliding.
             player.vy = if forward > 0 {
-                20
+                units::cbps_q2(469)
             } else if forward < 0 {
-                -20
+                -units::cbps_q2(469)
             } else {
-                -6
+                -units::cbps_q2(141)
             };
         } else if in_water_body(player.x, player.y, player.z) && player.vy <= SWIM_UP {
             // Swimming: buoyancy fights gravity. Hold CROSS to stroke upward,
@@ -4820,9 +4825,9 @@ fn update_player(
             // above lets a jump OUT of the water stay ballistic instead of
             // being clamped back to stroke speed on its first frame.
             player.vy = if pad.is_held(button::CROSS) {
-                (player.vy + 4).clamp(-12, SWIM_UP)
+                (player.vy + SWIM_ACCEL).clamp(-SWIM_SINK, SWIM_UP)
             } else {
-                (player.vy - 1).clamp(-12, SWIM_UP)
+                (player.vy - SWIM_DRAG).clamp(-SWIM_SINK, SWIM_UP)
             };
             player.fall_peak = player.y; // water breaks the fall, as in Java
         } else {
@@ -4905,7 +4910,7 @@ fn update_player(
     // (attempted deltas lie when a wall eats the move).
     unsafe {
         let wet = in_water_body(player.x, player.y, player.z);
-        if wet && !WAS_WET && player.vy <= -8 {
+        if wet && !WAS_WET && player.vy <= -units::cbps_q2(188) {
             sfx::splash();
         }
         WAS_WET = wet;
@@ -5247,8 +5252,8 @@ fn held_face(verts: [(i16, i16); 4], tile: u8, bt: BlockTex, shade: u8) {
 /// selected block's real tiles, with an idle bob and a downward dip while
 /// swinging (mining/placing).
 #[inline(never)]
-fn draw_held_item(selected: u8, tool: (u8, u8), frame: u32, swing: i32) {
-    let bob = (sincos::sin_q12(((frame * 36) & 0x0FFF) as u16) >> 9) as i16; // ~-8..8
+fn draw_held_item(selected: u8, tool: (u8, u8), tick: u32, swing: i32) {
+    let bob = (sincos::sin_q12(((tick * 18) & 0x0FFF) as u16) >> 9) as i16; // ~-8..8, 1.9 s cycle
     let dip = (swing * 3) as i16; // dips down + nudges right on a swing
     let cx = 272i16 + (swing / 2) as i16;
     let cyt = 176i16 + bob + dip; // centre of the top face
@@ -5910,7 +5915,7 @@ fn emit_face_box(
 
 /// Render all live mobs as cuboid models into the OT./// Render all live mobs as cuboid models into the OT.
 #[inline(never)]
-fn render_mobs(cam: &Camera, frame: u32) {
+fn render_mobs(cam: &Camera, tick: u32) {
     let mut count = 0usize;
     // The world pass leaves the GTE translation on its last CHUNK's origin;
     // mob/particle/pick projection is camera-relative and needs TR = 0.
@@ -5954,7 +5959,7 @@ fn render_mobs(cam: &Camera, frame: u32) {
         }
         j += 1;
     }
-    render_drops(cam, frame, &mut count);
+    render_drops(cam, tick, &mut count);
 }
 
 // ---- Cross-sprite plants: wheat + saplings as X-billboards ----
@@ -6226,7 +6231,13 @@ fn small_box_shape(blk: u8, wx: i32, wy: i32, wz: i32) -> (i32, i32, i32, i32, i
 // ---- Particles: short-lived debris on block break and explosions ----
 // ponytail: a fixed pool, no block collision (they just fall and fade), drawn
 // immediate over the world (tiny + brief, so depth errors are unnoticeable).
+// Positions and velocities are in quarter units, stepped once per sim tick.
+// `spread` is still given in whole units per 30th of a second, the scale the
+// call sites were written in.
 const MAX_PARTICLES: usize = 40;
+/// Particle gravity and air drag per sim tick: 42 blocks/s^2, and 15/16 of the
+/// horizontal speed kept each tick.
+const PART_GRAVITY: i32 = units::cbps2_q2(4219);
 static mut PART_X: [i32; MAX_PARTICLES] = [0; MAX_PARTICLES];
 static mut PART_Y: [i32; MAX_PARTICLES] = [0; MAX_PARTICLES];
 static mut PART_Z: [i32; MAX_PARTICLES] = [0; MAX_PARTICLES];
@@ -6244,13 +6255,16 @@ fn spawn_particles(wx: i32, wy: i32, wz: i32, col: (u8, u8, u8), n: u32, seed: u
         if unsafe { PART_LIFE[i] } == 0 {
             let h = seed.wrapping_add(spawned).wrapping_mul(2_654_435_761);
             unsafe {
-                PART_X[i] = wx + ((h & 0x1F) as i32 - 16);
-                PART_Y[i] = wy + (((h >> 5) & 0x1F) as i32 - 16);
-                PART_Z[i] = wz + (((h >> 10) & 0x1F) as i32 - 16);
-                PART_VX[i] = (((h >> 15) & 0x1F) as i32 - 16) * spread / 16;
-                PART_VY[i] = (((h >> 20) & 0x1F) as i32) * spread / 16 + 6;
-                PART_VZ[i] = (((h >> 25) & 0x1F) as i32 - 16) * spread / 16;
-                PART_LIFE[i] = 16 + ((h >> 3) & 0xF) as u8;
+                PART_X[i] = (wx + ((h & 0x1F) as i32 - 16)) << 2;
+                PART_Y[i] = (wy + (((h >> 5) & 0x1F) as i32 - 16)) << 2;
+                PART_Z[i] = (wz + (((h >> 10) & 0x1F) as i32 - 16)) << 2;
+                // Units per 30th of a second are twice as many quarter units
+                // per sim tick.
+                PART_VX[i] = (((h >> 15) & 0x1F) as i32 - 16) * spread / 8;
+                PART_VY[i] = ((((h >> 20) & 0x1F) as i32) * spread / 16 + 6) * 2;
+                PART_VZ[i] = (((h >> 25) & 0x1F) as i32 - 16) * spread / 8;
+                // 0.53 to 1.03 s.
+                PART_LIFE[i] = (ms(533) + 2 * ((h >> 3) & 0xF) as i32) as u8;
                 PART_COL[i] = col;
             }
             spawned += 1;
@@ -6264,12 +6278,12 @@ fn tick_particles() {
     while i < MAX_PARTICLES {
         unsafe {
             if PART_LIFE[i] > 0 {
-                PART_VY[i] -= 3; // gravity
+                PART_VY[i] -= PART_GRAVITY;
                 PART_X[i] += PART_VX[i];
                 PART_Y[i] += PART_VY[i];
                 PART_Z[i] += PART_VZ[i];
-                PART_VX[i] = PART_VX[i] * 7 / 8; // air drag
-                PART_VZ[i] = PART_VZ[i] * 7 / 8;
+                PART_VX[i] = PART_VX[i] * 15 / 16; // air drag
+                PART_VZ[i] = PART_VZ[i] * 15 / 16;
                 PART_LIFE[i] -= 1;
             }
         }
@@ -6301,15 +6315,17 @@ const DROP_PICKUP_R: i32 = PLAYER_HALF_W + BLOCK + DROP_HALF_W;
 /// Magnet bubble: inside this range a drop stops settling and steers at the
 /// player. Well past pickup range, so items visibly swim to you.
 const DROP_ATTRACT_R: i32 = 5 * BLOCK / 2;
-/// Frames of the cosmetic zoom-to-player after collection (Java animates
+/// The cosmetic zoom-to-player after collection, 0.27 s (Java animates
 /// roughly this long; the item entity there never actually moves).
-const DROP_FLY_FRAMES: u8 = 8;
-/// ~40s at 30fps. Vanilla is 5 minutes, but the pool is 24 and a player who
+const DROP_FLY_FRAMES: u8 = ms(267) as u8;
+/// 40 s. Vanilla is 5 minutes, but the pool is 24 and a player who
 /// strip-mines would otherwise fill it and silently lose later drops.
-const DROP_TTL: u16 = 1200;
-/// Vanilla's 10-tick delay before an item can be collected, so a drop is
-/// visible rather than vanishing on the frame it spawns.
-const DROP_PICKUP_DELAY: u8 = 10;
+const DROP_TTL: u16 = secs(40) as u16;
+/// A third of a second before an item can be collected, so a drop is visible
+/// rather than vanishing the moment it spawns.
+const DROP_PICKUP_DELAY: u8 = ms(333) as u8;
+/// Drop gravity: the particles' pull, in quarter units a tick per tick.
+const DROP_GRAVITY: i32 = PART_GRAVITY;
 
 static mut DROP_ITEM: [u8; MAX_DROPS] = [AIR; MAX_DROPS]; // AIR = free slot
 static mut DROP_FLY: [u8; MAX_DROPS] = [0; MAX_DROPS]; // >0: cosmetic zoom, frames left
@@ -6344,14 +6360,15 @@ fn give_drop(wx: i32, wy: i32, wz: i32, item: u8, seed: u32) {
             let h = seed.wrapping_mul(2_654_435_761);
             unsafe {
                 DROP_ITEM[i] = item;
-                DROP_X[i] = wx;
-                DROP_Y[i] = wy;
-                DROP_Z[i] = wz;
+                DROP_X[i] = wx << 2;
+                DROP_Y[i] = wy << 2;
+                DROP_Z[i] = wz << 2;
                 // A small sideways pop, so a vein of ore does not stack every
-                // drop in one column.
-                DROP_VX[i] = ((h & 0x7) as i32) - 3;
-                DROP_VY[i] = 6;
-                DROP_VZ[i] = (((h >> 3) & 0x7) as i32) - 3;
+                // drop in one column (quarter units a tick: up to 2.8 blocks/s
+                // sideways, 5.6 up).
+                DROP_VX[i] = (((h & 0x7) as i32) - 3) * 2;
+                DROP_VY[i] = 12;
+                DROP_VZ[i] = ((((h >> 3) & 0x7) as i32) - 3) * 2;
                 DROP_AGE[i] = 0;
                 DROP_DELAY[i] = DROP_PICKUP_DELAY;
                 DROP_REST[i] = false;
@@ -6378,9 +6395,9 @@ fn tick_drops(player: &Player) {
             // closes 1/n of the remaining gap, converging exactly.
             if DROP_FLY[i] > 0 {
                 let n = DROP_FLY[i] as i32;
-                DROP_X[i] += (player.x - DROP_X[i]) / n;
-                DROP_Y[i] += (player.y + 60 - DROP_Y[i]) / n;
-                DROP_Z[i] += (player.z - DROP_Z[i]) / n;
+                DROP_X[i] += ((player.x << 2) - DROP_X[i]) / n;
+                DROP_Y[i] += (((player.y + 60) << 2) - DROP_Y[i]) / n;
+                DROP_Z[i] += ((player.z << 2) - DROP_Z[i]) / n;
                 DROP_FLY[i] -= 1;
                 if DROP_FLY[i] == 0 {
                     DROP_ITEM[i] = AIR;
@@ -6402,38 +6419,41 @@ fn tick_drops(player: &Player) {
             // around corners rather than through walls. Speed is proportional
             // to distance, so it decelerates into the pickup radius.
             if DROP_DELAY[i] == 0 {
-                let adx = player.x - DROP_X[i];
-                let ady = player.y + 40 - DROP_Y[i];
-                let adz = player.z - DROP_Z[i];
+                let adx = player.x - (DROP_X[i] >> 2);
+                let ady = player.y + 40 - (DROP_Y[i] >> 2);
+                let adz = player.z - (DROP_Z[i] >> 2);
                 if adx.abs() < DROP_ATTRACT_R
                     && adz.abs() < DROP_ATTRACT_R
                     && ady.abs() < DROP_ATTRACT_R
                 {
                     DROP_REST[i] = false;
-                    DROP_VX[i] = (adx / 6).clamp(-18, 18);
-                    DROP_VZ[i] = (adz / 6).clamp(-18, 18);
-                    DROP_VY[i] = (ady / 6).clamp(-14, 14) + 3; // +3 pre-cancels gravity
+                    // A sixth of the gap per 30th of a second, in quarter
+                    // units a tick; + DROP_GRAVITY pre-cancels gravity.
+                    DROP_VX[i] = (adx / 3).clamp(-36, 36);
+                    DROP_VZ[i] = (adz / 3).clamp(-36, 36);
+                    DROP_VY[i] = (ady / 3).clamp(-28, 28) + DROP_GRAVITY;
                 }
             }
             if !DROP_REST[i] {
                 // Axis at a time, reverting the axis that hits, so an item
                 // sliding into a wall keeps the rest of its motion.
+                // Quarter units; collision tests the whole-unit position.
                 let (x, y, z) = (DROP_X[i], DROP_Y[i], DROP_Z[i]);
-                DROP_VY[i] -= 3; // gravity, same pull the particles use
+                DROP_VY[i] -= DROP_GRAVITY;
                 let nx = x + DROP_VX[i];
-                if aabb_collides_dims(nx, y, z, DROP_HALF_W, DROP_H) {
+                if aabb_collides_dims(nx >> 2, y >> 2, z >> 2, DROP_HALF_W, DROP_H) {
                     DROP_VX[i] = 0;
                 } else {
                     DROP_X[i] = nx;
                 }
                 let nz = DROP_Z[i] + DROP_VZ[i];
-                if aabb_collides_dims(DROP_X[i], y, nz, DROP_HALF_W, DROP_H) {
+                if aabb_collides_dims(DROP_X[i] >> 2, y >> 2, nz >> 2, DROP_HALF_W, DROP_H) {
                     DROP_VZ[i] = 0;
                 } else {
                     DROP_Z[i] = nz;
                 }
                 let ny = y + DROP_VY[i];
-                if aabb_collides_dims(DROP_X[i], ny, DROP_Z[i], DROP_HALF_W, DROP_H) {
+                if aabb_collides_dims(DROP_X[i] >> 2, ny >> 2, DROP_Z[i] >> 2, DROP_HALF_W, DROP_H) {
                     // Landed (or bumped a ceiling). Only a downward stop counts
                     // as settled.
                     if DROP_VY[i] < 0 {
@@ -6443,13 +6463,13 @@ fn tick_drops(player: &Player) {
                 } else {
                     DROP_Y[i] = ny;
                 }
-                DROP_VX[i] = DROP_VX[i] * 7 / 8; // ground/air drag
-                DROP_VZ[i] = DROP_VZ[i] * 7 / 8;
+                DROP_VX[i] = DROP_VX[i] * 15 / 16; // ground/air drag
+                DROP_VZ[i] = DROP_VZ[i] * 15 / 16;
             }
             if DROP_DELAY[i] == 0 {
-                let dx = (DROP_X[i] - player.x).abs();
-                let dz = (DROP_Z[i] - player.z).abs();
-                let dy = DROP_Y[i] - player.y;
+                let dx = ((DROP_X[i] >> 2) - player.x).abs();
+                let dz = ((DROP_Z[i] >> 2) - player.z).abs();
+                let dy = (DROP_Y[i] >> 2) - player.y;
                 // Generous vertically on purpose: mining straight down drops the
                 // item into the hole you are about to stand in, and a tight
                 // window there would lose drops the old teleport never lost.
@@ -6471,14 +6491,14 @@ fn tick_drops(player: &Player) {
 /// Drops as small boxes in the world pass, the same way arrows are drawn, so
 /// they sort against terrain instead of floating over it. Vanilla bobs them;
 /// a 4-step triangle wave off the frame counter is enough to read as alive.
-fn render_drops(cam: &Camera, frame: u32, count: &mut usize) {
+fn render_drops(cam: &Camera, tick: u32, count: &mut usize) {
     let mut i = 0usize;
     while i < MAX_DROPS {
         let item = unsafe { DROP_ITEM[i] };
         if item != AIR {
-            let (x, y, z) = unsafe { (DROP_X[i], DROP_Y[i], DROP_Z[i]) };
+            let (x, y, z) = unsafe { (DROP_X[i] >> 2, DROP_Y[i] >> 2, DROP_Z[i] >> 2) };
             if (x - cam.x).abs() + (z - cam.z).abs() <= FAR_Z + 4 * BLOCK {
-                let phase = ((frame >> 2).wrapping_add(i as u32 * 3) & 7) as i32;
+                let phase = ((tick >> 3).wrapping_add(i as u32 * 3) & 7) as i32;
                 let bob = if phase < 4 { phase } else { 7 - phase };
                 let yb = y + bob;
                 let c = block_particle_color(item);
@@ -6513,7 +6533,7 @@ fn render_particles(cam: &Camera) {
     while i < MAX_PARTICLES {
         unsafe {
             if PART_LIFE[i] > 0 {
-                let p = project_point_gte(cam, (PART_X[i], PART_Y[i], PART_Z[i]));
+                let p = project_point_gte(cam, (PART_X[i] >> 2, PART_Y[i] >> 2, PART_Z[i] >> 2));
                 if p.z >= GTE_NEAR as i32 && p.z <= FAR_Z {
                     let r = if p.z < 3 * BLOCK { 2 } else { 1 };
                     billboard(p.x, p.y, r, r, PART_COL[i]);
@@ -9553,7 +9573,7 @@ fn draw_options(font: &FontAtlas, sel: usize, player: Player) {
 /// because 48 dead-vertical hairlines of identical length and brightness read
 /// as static rather than weather.
 #[inline(never)]
-fn draw_rain(frame: u32, cam: &Camera, rain: i32) {
+fn draw_rain(tick: u32, cam: &Camera, rain: i32) {
     // Shear the streaks with the view direction so turning sells the wind.
     let lean = (cam.sy * 5) >> 12;
     // Streak count follows the ramp: a shower thickens as it arrives and
@@ -9569,7 +9589,8 @@ fn draw_rain(frame: u32, cam: &Camera, rain: i32) {
             (7i16, 17u32, (120, 140, 180))
         };
         let x = (h % 320) as i16;
-        let y = ((h >> 8).wrapping_add(frame.wrapping_mul(speed)) % 248) as i16 - 8;
+        // Streaks fall `speed` pixels per 30th of a second (two sim ticks).
+        let y = ((h >> 8).wrapping_add(tick.wrapping_mul(speed) >> 1) % 248) as i16 - 8;
         ui_line(x, y, x + lean as i16, y + len, c.0, c.1, c.2);
         i += 1;
     }
@@ -9966,7 +9987,7 @@ fn redstone_tick() {
 // ---- TNT: a short fuse, then world::blast + debris + a hit on nearby entities.
 // ponytail: blast just destroys neighbouring TNT (no chain reaction); fixed pool.
 const MAX_TNT: usize = 8;
-const TNT_FUSE_FRAMES: u8 = 45; // ~1.5s at 30fps (Java: 80 ticks)
+const TNT_FUSE_FRAMES: u8 = ms(1500) as u8; // 1.5s (Java: 80 ticks)
 const TNT_BLAST_R: i32 = 3;
 static mut TNT_X: [i32; MAX_TNT] = [0; MAX_TNT];
 static mut TNT_Y: [i32; MAX_TNT] = [0; MAX_TNT];
@@ -10034,7 +10055,7 @@ fn tnt_tick(player: &mut Player) {
 
 // ---- Crops: plant seeds on dirt/grass, grow over time, harvest wheat + seeds.
 const MAX_CROPS: usize = 24;
-const CROP_GROW: u16 = 900; // ~30s to mature at 30fps (a compressed crop cycle)
+const CROP_GROW: u16 = secs(30) as u16; // 30s to mature (a compressed crop cycle)
 static mut CROP_X: [i32; MAX_CROPS] = [0; MAX_CROPS];
 static mut CROP_Y: [i32; MAX_CROPS] = [0; MAX_CROPS];
 static mut CROP_Z: [i32; MAX_CROPS] = [0; MAX_CROPS];
@@ -10098,7 +10119,7 @@ fn crop_tick() {
 
 // ---- Saplings: plant on soil, grow into a tree (renewable wood).
 const MAX_SAPS: usize = 8;
-const SAP_GROW: u16 = 1350; // ~45s at 30fps
+const SAP_GROW: u16 = secs(45) as u16; // 45s
 static mut SAP_X: [i32; MAX_SAPS] = [0; MAX_SAPS];
 static mut SAP_Y: [i32; MAX_SAPS] = [0; MAX_SAPS];
 static mut SAP_Z: [i32; MAX_SAPS] = [0; MAX_SAPS];
