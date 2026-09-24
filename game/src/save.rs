@@ -25,7 +25,7 @@ const MAGIC_V1: [u8; 4] = *b"MCPX";
 /// VERSION and teaches `layout` where its sections moved; every older version
 /// still loads.
 const MAGIC: [u8; 4] = *b"VOXS";
-const VERSION: u16 = 8;
+const VERSION: u16 = 9;
 /// BIOS file name: region+product code + label, 20 ASCII chars max.
 const FILE_NAME: &str = "BESLES-00000VOXIDE01";
 /// Human-readable label shown by the console's memory-card manager.
@@ -59,6 +59,10 @@ const V1_HDR: usize = V1_PROGRESS + 9; // armor u8, efficiency u8, xp i32, 3 too
 // Version 8 appends the hunger state after the extras: saturation i32
 // (hundredths) and exhaustion i32 (1/64,000ths). Older saves load with
 // saturation 5.0 and no exhaustion, as a respawn does.
+// Version 9 appends durability after that: tool uses left [u16; 4] (pick,
+// axe, shovel, sword), armour pieces [u16; 4], bow / rod / flint and steel
+// [u16; 3], pad u16. Older saves load with every owned tool and armour piece
+// at full durability.
 const OFF_HOTBAR_SEL: usize = 41;
 const OFF_HOTBAR: usize = 42;
 const OFF_INV: usize = 52;
@@ -80,12 +84,18 @@ struct Layout {
     half_fuel: bool,
     /// Saturation and exhaustion follow the extras.
     hunger: bool,
+    /// Durability follows the hunger state.
+    durability: bool,
 }
 
 const fn layout(version: u16) -> Layout {
     let extras = version >= 3;
     let hunger = version >= 8;
-    let counts = OFF_EXTRA + if extras { 8 } else { 0 } + if hunger { 8 } else { 0 };
+    let durability = version >= 9;
+    let counts = OFF_EXTRA
+        + if extras { 8 } else { 0 }
+        + if hunger { 8 } else { 0 }
+        + if durability { 24 } else { 0 };
     Layout {
         extras,
         dim: version >= 5,
@@ -95,6 +105,7 @@ const fn layout(version: u16) -> Layout {
         pos: if version >= 4 { 8 } else { 6 },
         half_fuel: version >= 7,
         hunger,
+        durability,
     }
 }
 
@@ -205,6 +216,18 @@ pub fn save(p: &Player) -> bool {
     put_i32(buf, OFF_EXTRA + 4, p.food_items);
     put_i32(buf, OFF_EXTRA + 8, p.saturation);
     put_i32(buf, OFF_EXTRA + 12, p.exhaustion);
+    let mut k = 0;
+    while k < 4 {
+        put_u16(buf, OFF_EXTRA + 16 + k * 2, p.tool_dur[k]);
+        put_u16(buf, OFF_EXTRA + 24 + k * 2, p.armor_dur[k]);
+        k += 1;
+    }
+    k = 0;
+    while k < 3 {
+        put_u16(buf, OFF_EXTRA + 32 + k * 2, p.item_dur[k]);
+        k += 1;
+    }
+    put_u16(buf, OFF_EXTRA + 38, 0);
 
     let mut off = CUR.hdr;
     let mut chests = 0u8;
@@ -424,6 +447,21 @@ fn load_versioned(p: &mut Player, buf: &[u8], l: Layout) -> bool {
     } else {
         p.saturation = 500.min(p.food * 100);
         p.exhaustion = 0;
+    }
+    if l.durability {
+        let mut k = 0;
+        while k < 4 {
+            p.tool_dur[k] = get_u16(buf, OFF_EXTRA + 16 + k * 2);
+            p.armor_dur[k] = get_u16(buf, OFF_EXTRA + 24 + k * 2);
+            k += 1;
+        }
+        k = 0;
+        while k < 3 {
+            p.item_dur[k] = get_u16(buf, OFF_EXTRA + 32 + k * 2);
+            k += 1;
+        }
+    } else {
+        crate::full_durability(p);
     }
     unsafe {
         HOTBAR_SEL = (buf[OFF_HOTBAR_SEL] as usize).min(HOTBAR_VIS - 1);
