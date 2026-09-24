@@ -397,6 +397,26 @@ fn count_alive() -> usize {
     c
 }
 
+/// Alive mobs that are hostile (true) or not (false).
+fn count_kind(hostile: bool) -> usize {
+    let mut c = 0;
+    let mut i = 0;
+    while i < CAP {
+        let m = unsafe { MOBS[i] };
+        if m.alive && is_hostile(m.kind) == hostile {
+            c += 1;
+        }
+        i += 1;
+    }
+    c
+}
+
+/// The 8 slots split evenly between the categories. Java caps them apart
+/// (70 monsters, 10 animals, minecraft.wiki/w/Mob spawning); sharing one pool
+/// let daytime animals fill every slot, so no cave could ever spawn.
+const MONSTER_CAP: usize = CAP / 2;
+const ANIMAL_CAP: usize = CAP / 2;
+
 fn free_slot() -> Option<usize> {
     let mut i = 0;
     while i < CAP {
@@ -441,6 +461,9 @@ fn try_spawn(px: i32, pz: i32, sky: i32) {
         SPAWN_MONSTER = !SPAWN_MONSTER;
         SPAWN_MONSTER
     };
+    if count_kind(monster) >= if monster { MONSTER_CAP } else { ANIMAL_CAP } {
+        return;
+    }
     let dim = world::dimension();
     let mut sy = top;
     let kind = if dim == world::DIM_VOID {
