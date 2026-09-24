@@ -655,6 +655,24 @@ fn lab_setup(px: i32, pz: i32) {
     }
 }
 
+/// Tuning lab: hold slot 0 as a `kind` standing on (x, y, z).
+#[cfg(feature = "tune-lab")]
+pub fn lab_pin(kind: u8, x: i32, y: i32, z: i32) {
+    unsafe {
+        let m = &mut MOBS[0];
+        if !m.alive || m.kind != kind {
+            *m = DEAD;
+            m.kind = kind;
+            m.alive = true;
+            m.health = max_health(kind);
+        }
+        m.x = x;
+        m.y = y;
+        m.z = z;
+        m.vy = 0;
+    }
+}
+
 /// Advance all mobs: spawn budget, AI, physics, despawn.
 pub fn update(px: i32, py: i32, pz: i32, night: bool) {
     #[cfg(feature = "mob-lab")]

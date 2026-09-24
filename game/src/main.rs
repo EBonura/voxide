@@ -25,6 +25,8 @@ mod sfxdata;
 mod telemetry;
 mod tex;
 mod texdata;
+#[cfg(feature = "tune-lab")]
+mod tunelab;
 mod world;
 
 // Profiler stage IDs (PSoXide --profile-log). Arbitrary distinct numbers; the
@@ -59,9 +61,13 @@ use psx_gte::scene;
 use psx_math::attributed_clip::{clip_convex_plane, AttributedClipPlane, ClipTraversal};
 use psx_math::sincos;
 use psx_pad::{
-    button, enable_analog_port1, poll_port1, ActionBinding, ActionMap, ButtonState, Deadzone,
-    PadState,
+    button, enable_analog_port1, ActionBinding, ActionMap, ButtonState, Deadzone, PadState,
 };
+// The tuning lab (never shipped) scripts the pad through its own poll.
+#[cfg(not(feature = "tune-lab"))]
+use psx_pad::poll_port1;
+#[cfg(feature = "tune-lab")]
+use tunelab::poll_port1;
 use psx_rt::{interrupts, tty};
 use psx_settings::Profile;
 use psx_vram::{Clut, TexDepth, Tpage};
@@ -4476,6 +4482,9 @@ fn update_survival(player: &mut Player) {
             player.regen_tick = 0;
         }
     }
+    // Tuning lab (never shipped): script the next step, mirror the player.
+    #[cfg(feature = "tune-lab")]
+    tunelab::step(player);
 }
 
 #[inline(never)]

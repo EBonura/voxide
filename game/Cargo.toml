@@ -28,6 +28,9 @@ ram-stress-blk = []
 # around the player at the first update, forced night, and mob damage counted
 # instead of dealt. Never ship.
 mob-lab = []
+# Headless tuning measurements only (src/tunelab.rs): a scripted arena and
+# timeline of movement and survival scenarios. Never ship.
+tune-lab = []
 
 [dependencies]
 psx-telemetry = { path = "../.psoxide/sdk/crates/psx-telemetry" }
