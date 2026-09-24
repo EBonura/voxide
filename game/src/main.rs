@@ -3025,9 +3025,10 @@ fn main() {
         gte_load_camera(&cam);
         telemetry::stage_begin(ST_R_WORLD);
         let (_world_quads, _face_work) = render_world(&cam);
-        // Cross-sprite plants, depth-sorted into the same OT; on the face
-        // pass's scratchpad stack for the same reason (see world::FaceStack).
-        unsafe { world::FaceStack::run(|| render_plants(&cam)) };
+        // Cross-sprite plants, depth-sorted into the same OT; on a scratchpad
+        // stack for the same reason as the face pass (see world::FaceStack).
+        // The face batch is dead by now, so this one takes the whole 1 KB.
+        unsafe { PlantStack::run(|| render_plants(&cam)) };
         telemetry::stage_end(ST_R_WORLD);
         telemetry::stage_begin(ST_R_MOBS);
         render_mobs(&cam, frame);
@@ -6459,6 +6460,9 @@ const CLIP_BYTES: usize = 2 * CLIP_VERT_CAP * core::mem::size_of::<ClipVert>()
     + CLIP_VERT_CAP * core::mem::size_of::<Proj>();
 const _: () = assert!(CLIP_BYTES % 4 == 0 && core::mem::align_of::<ClipVert>() <= 4);
 static mut CLIP_BUF: [u32; CLIP_BYTES / 4] = [0; CLIP_BYTES / 4];
+/// The plant pass's stack: the whole scratchpad (it runs after the face pass,
+/// whose batch and stack are dead by then).
+type PlantStack = psx_rt::scratchpad::ScratchpadStack<0, 1024>;
 #[inline(always)]
 fn clip_a() -> usize {
     unsafe { core::ptr::addr_of_mut!(CLIP_BUF) as usize }
