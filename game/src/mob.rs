@@ -400,8 +400,19 @@ fn free_slot() -> Option<usize> {
     None
 }
 
-/// Spawn a mob on the ground near the player. Passive by day, hostile by night.
-fn try_spawn(px: i32, pz: i32, night: bool) {
+/// Spawn attempts alternate between a monster and an animal, Java's two
+/// spawn categories.
+static mut SPAWN_MONSTER: bool = false;
+
+/// One spawn attempt at a random column 8 to 14 blocks out, by Java's light
+/// rules (minecraft.wiki/w/Mob spawning, light levels): an Overworld monster
+/// needs block light 0 and internal sky light 7 or less, and then a light
+/// level no higher than a roll of 0 to 7 -- so the surface at night and any
+/// dark cave by day or night, never beside a torch. An animal needs a grass
+/// block with light 9 or more (#Passive mobs). In the Inferno a monster needs
+/// block light 11 or less, in the Void block light 0. `sky` is the internal
+/// sky light where the sky is open, 4 at midnight to 15 at noon.
+fn try_spawn(px: i32, pz: i32, sky: i32) {
     let s = match free_slot() {
         Some(s) => s,
         None => return,
@@ -414,32 +425,67 @@ fn try_spawn(px: i32, pz: i32, night: bool) {
     let sz = if ang & 2 == 0 { pz + dz } else { pz - dz };
     let bx = world_to_block_x(sx);
     let bz = world_to_block_z(sz);
-    let sy = world::surface_y(bx, bz);
-    if sy < 2 || sy > 100 {
+    let top = world::surface_y(bx, bz);
+    if top < 2 || top > 100 {
         return;
     }
-    // Light/biome gate: hostiles spawn in the dark (night); passive animals
-    // only on grass.
-    let kind = if world::dimension() == world::DIM_VOID {
+    let monster = unsafe {
+        SPAWN_MONSTER = !SPAWN_MONSTER;
+        SPAWN_MONSTER
+    };
+    let dim = world::dimension();
+    let mut sy = top;
+    let kind = if dim == world::DIM_VOID {
+        if !monster || crate::block_light(bx, sy, bz) > 0 {
+            return;
+        }
         WRAITH // the End's own mob, and the only one that spawns there
-    } else if world::dimension() == world::DIM_INFERNO {
+    } else if dim == world::DIM_INFERNO {
+        if !monster || crate::block_light(bx, sy, bz) > 11 {
+            return;
+        }
         match rng() % 3 {
             0 => EMBER,
             1 => WAILER,
             _ => CHARRED_SK,
         }
-    } else if night {
-        // One in eight night spawns is an wraith, as in Java's overworld.
+    } else if monster {
+        // Half the attempts try a cave cell under the column: pick a height
+        // and walk down to a floor with two clear cells above it.
+        if rng() & 1 == 0 {
+            let mut y = 1 + (rng() % (top - 1) as u32) as i32;
+            let mut k = 0;
+            loop {
+                if k >= 16 || y < 1 {
+                    return;
+                }
+                if world::get(bx, y, bz) == crate::AIR
+                    && world::get(bx, y + 1, bz) == crate::AIR
+                    && solid(bx * BLOCK, (y - 1) * BLOCK, bz * BLOCK)
+                {
+                    break;
+                }
+                y -= 1;
+                k += 1;
+            }
+            sy = y;
+        }
+        let open = if sy >= top { sky } else { 0 };
+        let block = crate::block_light(bx, sy, bz);
+        if open > 7 || block > 0 || open.max(block) > (rng() % 8) as i32 {
+            return;
+        }
+        // One in eight is a wraith, as endermen are in Java's overworld.
         if rng() % 8 == 0 {
             WRAITH
         } else {
             ZOMBIE + (rng() % 4) as u8
         }
     } else {
-        if world::get(bx, sy - 1, bz) != GRASS {
+        if world::get(bx, sy - 1, bz) != GRASS || sky.max(crate::block_light(bx, sy, bz)) < 9 {
             return;
         }
-        // Wolves and villagers share the daytime roll with the farm animals.
+        // Wolves and villagers share the roll with the farm animals.
         match rng() % 6 {
             4 => WOLF,
             5 => VILLAGER,
@@ -684,17 +730,19 @@ pub fn lab_pin(kind: u8, x: i32, y: i32, z: i32) {
 }
 
 /// Advance all mobs: spawn budget, AI, physics, despawn.
-pub fn update(px: i32, py: i32, pz: i32, night: bool) {
+pub fn update(px: i32, py: i32, pz: i32, sky: i32) {
     #[cfg(feature = "mob-lab")]
     lab_setup(px, pz);
     #[cfg(feature = "mob-lab")]
-    let night = night || true;
+    let sky = if true { 4 } else { sky };
+    // Night: the open sky dark enough for monsters to spawn on it.
+    let night = sky <= 7;
     unsafe {
         if SPAWN_TIMER > 0 {
             SPAWN_TIMER -= 1;
         } else {
             if count_alive() < CAP {
-                try_spawn(px, pz, night);
+                try_spawn(px, pz, sky);
             }
             SPAWN_TIMER = secs(3) as u16;
         }
@@ -1245,7 +1293,9 @@ fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
         if m.state == ST_CHASE && dist2 > LOSE_R * LOSE_R {
             m.state = ST_IDLE;
         }
-    } else if is_hostile(m.kind) && night && dist2 < CHASE_R * CHASE_R {
+    } else if is_hostile(m.kind) && (night || m.kind != SPIDER) && dist2 < CHASE_R * CHASE_R {
+        // Monsters hunt by day too (a cave spawn does); spiders only in the
+        // dark, as Java's are neutral in bright light.
         m.state = ST_CHASE;
     } else if m.state == ST_CHASE && dist2 > LOSE_R * LOSE_R {
         m.state = ST_IDLE;

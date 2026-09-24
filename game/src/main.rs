@@ -2549,9 +2549,8 @@ fn main() {
                 update_player(&mut player, pad, prev_i, lstick, rstick);
                 let hp_before = player.health;
                 update_survival(&mut player);
-                let night = (day_brightness(day % DAY_LEN) as i32) <= NIGHT_LIGHT;
                 mob::set_lure(player.selected == WHEAT_ITEM); // animals follow held wheat
-                mob::update(player.x, player.y, player.z, night);
+                mob::update(player.x, player.y, player.z, sky_level(day % DAY_LEN));
                 let raw_hit =
                     mob::contact_damage(player.x, player.y, player.z) + mob::hazard_damage();
                 let mob_hit = armored(raw_hit, player.armor, player.protection);
@@ -10565,6 +10564,55 @@ fn draw_frame_sky(cam: &Camera, day: u32, tod: u32, light: u8, sky: (u8, u8, u8)
     } else {
         draw_sky(cam, day, tod, light, sky, raining);
     }
+}
+
+/// Java's internal sky light under open sky at this point in the day: 15 at
+/// noon down to 4 at midnight (minecraft.wiki/w/Light#Internal sky light),
+/// scaled from the renderer's brightness.
+fn sky_level(t: u32) -> i32 {
+    4 + (day_brightness(t) as i32 - NIGHT_LIGHT) * 11 / (128 - NIGHT_LIGHT)
+}
+
+/// Block light at a cell for mob spawning, Java's rule: an emitter's level
+/// less its taxicab distance (minecraft.wiki/w/Light#Block light), torches 14
+/// and lava, fire and lumistone (glowstone) 15. Player-placed torches are
+/// found in the edit log wherever they are; the other emitters only within
+/// 3 blocks, because scanning Java's full 15-block reach is 29^3 block reads
+/// per attempt. Walls do not stop the light here.
+pub(crate) fn block_light(x: i32, y: i32, z: i32) -> i32 {
+    let d = world::dimension();
+    let mut best = 0;
+    unsafe {
+        let mut i = 0;
+        while i < EDIT_N {
+            if EDIT_B[i] == TORCH && EDIT_D[i] == d {
+                let t = (EDIT_X[i] as i32 - x).abs()
+                    + (EDIT_Y[i] as i32 - y).abs()
+                    + (EDIT_Z[i] as i32 - z).abs();
+                best = best.max(14 - t);
+            }
+            i += 1;
+        }
+    }
+    let mut dy = -3;
+    while dy <= 3 {
+        let mut dz = -3;
+        while dz <= 3 {
+            let mut dx = -3;
+            while dx <= 3 {
+                let b = get_block_i32(x + dx, y + dy, z + dz);
+                if is_lava(b) || b == FIRE || b == LUMISTONE {
+                    best = best.max(15 - dx.abs() - dy.abs() - dz.abs());
+                } else if b == TORCH {
+                    best = best.max(14 - dx.abs() - dy.abs() - dz.abs());
+                }
+                dx += 1;
+            }
+            dz += 1;
+        }
+        dy += 1;
+    }
+    best.max(0)
 }
 
 /// Sky light (0..128) for a point in the day. Trapezoid: ~40% full day, short
