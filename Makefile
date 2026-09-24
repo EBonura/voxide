@@ -25,7 +25,7 @@ PSOXIDE_START_PULSE ?= 0x0008@700+60
 
 .DEFAULT_GOAL := build
 .PHONY: help psoxide build compile pack disc install release run smoke profile \
-	pgo-collect pgo-choose clean
+	pgo-collect pgo-order pgo-choose clean
 
 help:
 	@echo "VoXide targets:"
@@ -73,11 +73,13 @@ FEATURES    ?=
 GAME_CARGO   = build --release$(if $(strip $(FEATURES)), --features "$(FEATURES)")
 PGO          = cargo run -q --release --locked --manifest-path "$(PSOXIDE)/tools/psoxide-pgo/Cargo.toml" --
 PGO_PROFILE  = $(ROOT)/pgo/voxide.prof
-PGO_VARIANT ?= hot=500+profi
+PGO_VARIANT ?= hot=500
+# Layout profile for `+order` variants (make pgo-order); only they read it.
+PGO_LAYOUT   = $(ROOT)/pgo/voxide.layout
 
 compile: psoxide
 	PSOXIDE="$(PSOXIDE)" $(PGO) apply --crate "$(GAME)" --profile "$(PGO_PROFILE)" \
-		--variant "$(PGO_VARIANT)" -- $(GAME_CARGO)
+		--variant "$(PGO_VARIANT)" $(if $(findstring +order,$(PGO_VARIANT)),--layout "$(PGO_LAYOUT)") -- $(GAME_CARGO)
 	@echo "EXE -> $(EXE)"
 
 # `make pack PACK_EXE=x PACK_OUT=y.bin` wraps any exe in the game's disc image.
@@ -148,6 +150,21 @@ pgo-collect: psoxide
 		--pack $(PGO_PACK) --launch-arg --embedded-playtest $(PGO_LAUNCH_ARGS) \
 		--out "$(PGO_PROFILE)" -- $(GAME_CARGO)
 	@$(MAKE) --no-print-directory compile
+
+# The layout profile an `+order` variant places functions from, collected on
+# PGO_BASE_VARIANT with the training tape. Rerun after code, SDK, profile or
+# variant changes: apply refuses a stale layout rather than guess. Not in
+# PGO_VARIANTS: choose builds with --features lockstep, which a layout taken
+# on the shipping build does not bind to, and on the shipping build
+# hot=500+order measured the same as hot=500 (2026-09-24, 16/8 trajectory
+# samples of unseen/train), while any code change would fail the build until
+# the layout was retaken. pgo/voxide.layout is not committed for that reason.
+PGO_BASE_VARIANT ?= hot=500
+pgo-order: psoxide
+	PSOXIDE="$(PSOXIDE)" $(PGO) order --crate "$(GAME)" --frontend "$(FRONTEND)" \
+		--tape "$(TRAIN_TAPE)" --polls $(TRAIN_POLLS) \
+		--pack $(PGO_PACK) --launch-arg --embedded-playtest $(PGO_LAUNCH_ARGS) \
+		--profile "$(PGO_PROFILE)" --variant "$(PGO_BASE_VARIANT)" --out "$(PGO_LAYOUT)" -- $(GAME_CARGO)
 
 # Every variant is built with --features lockstep (one sim step per pad poll),
 # so all of them reach the same state at every poll: a display hash that

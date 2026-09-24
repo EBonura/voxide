@@ -35,11 +35,22 @@ fn main() {
     // contiguous, so it shares the R3000's direct-mapped 4 KB I-cache with
     // nothing else it calls. The functions carry stable export names because
     // mangled names change with the checkout path.
+    //
+    // An `+order` PGO variant (psoxide-pgo) replaces it with the ordering file
+    // it placed from the layout profile, named in PSOXIDE_LINK_ORDER for that
+    // link only; ld.lld keeps just one ordering file, so it is one or the other.
     let order = manifest.join("hot-text.order");
-    println!(
-        "cargo:rustc-link-arg=--symbol-ordering-file={}",
-        order.display()
-    );
+    println!("cargo:rerun-if-env-changed=PSOXIDE_LINK_ORDER");
+    match std::env::var_os("PSOXIDE_LINK_ORDER") {
+        Some(pgo_order) => println!(
+            "cargo:rustc-link-arg=--symbol-ordering-file={}",
+            pgo_order.to_string_lossy()
+        ),
+        None => println!(
+            "cargo:rustc-link-arg=--symbol-ordering-file={}",
+            order.display()
+        ),
+    }
     println!("cargo:rerun-if-changed={}", order.display());
     println!("cargo:rerun-if-changed={}", ld.display());
 }
