@@ -6,9 +6,10 @@
 
 use crate::{
     aabb_collides_dims, world, world_to_block_x, world_to_block_y, world_to_block_z, BLOCK, GRASS,
-    GRAVITY, JUMP_VY, PLAYER_HALF_W, PLAYER_HEIGHT, TERMINAL_VY,
+    GRAVITY, PLAYER_HALF_W, PLAYER_HEIGHT, TERMINAL_VY,
 };
 use psx_fx::rng::LcgRng;
+use psx_math::sincos;
 
 pub const CAP: usize = 8;
 
@@ -44,11 +45,79 @@ pub fn is_hostile(kind: u8) -> bool {
     (kind >= ZOMBIE && kind <= DRAGON) || kind == WRAITH || kind >= EMBER
 }
 
-const ST_WANDER: u8 = 0;
+/// Standing between strolls. Zero, so a dead slot stays all-zero and MOBS
+/// stays in .bss.
+const ST_IDLE: u8 = 0;
 const ST_CHASE: u8 = 1;
 const ST_FLEE: u8 = 2;
+/// Walking a stroll: `heading` for `timer` more ticks.
+const ST_WANDER: u8 = 3;
 
-const SPEED: i32 = 5; // mob walk speed, world units/frame (player walks 9)
+// Every per-tick number in this file is per SIM tick. main steps the sim once
+// per elapsed vblank (sim_n), so a tick is 1/60 s whatever the frame rate. The
+// constants here used to be written as if a tick were a 30 fps frame (SPEED 5
+// against the player's 9, "~4.2 blocks/s"; a 45-tick "1.5 s" fuse; a 214-tick
+// "~7 s" voice cycle), so mobs walked, hopped, burned, flashed and fused at
+// twice the pace their comments give. Speeds below are in blocks per second
+// and durations in seconds, converted at TICK_HZ.
+const TICK_HZ: i32 = 60;
+
+/// Speed in hundredths of a block per second -> Q8 world units per tick.
+const fn q8(cbps: i32) -> i32 {
+    cbps * BLOCK * 256 / (100 * TICK_HZ)
+}
+
+/// Ground speed, Q8 units/tick: Java's movement_speed attribute per mob. A
+/// Java mob steers with that speed as both its input and its gain, so on
+/// ground friction (0.546) it settles at s*s/0.454 blocks per game tick, about
+/// 44*s^2 blocks per second; the same model with the player's 0.98 input and
+/// 0.1 speed gives the wiki's 4.317 walk. Kinds with no ground-walking Java
+/// counterpart keep the old intended speed, 5 units per 30 Hz frame (2.34).
+fn walk_q8(kind: u8) -> i32 {
+    match kind {
+        COW => q8(176),                                            // 0.20
+        SHEEP | ZOMBIE => q8(233),                                 // 0.23
+        SPIDER | WOLF | WRAITH => q8(396),                         // 0.30 (wraith: the enderman)
+        PIG | CHICKEN | SKELETON | SAPPER | CHARRED_SK => q8(275), // 0.25
+        _ => q8(234),                                              // villager, ember, wailer
+    }
+}
+
+/// Fleeing: Java's panic goal runs at 1.25x the attribute, and the settled
+/// speed goes with its square.
+fn flee_q8(kind: u8) -> i32 {
+    walk_q8(kind) * 25 / 16
+}
+
+/// A standing mob sets off on a stroll with this 1-in-N chance per tick: a
+/// mean pause of 6 s, Java's 1-in-120 per 20 Hz tick.
+const IDLE_ROLL: u32 = 6 * TICK_HZ as u32;
+/// Stroll length in blocks, like Java's random target within ten.
+const STROLL_MIN: i32 = 2;
+const STROLL_MAX: i32 = 10;
+/// Mob gravity and jump: the old 30 Hz values (GRAVITY 4, JUMP_VY 28)
+/// converted to 60 Hz, a quarter the acceleration and half the impulse, so a
+/// hop reaches the same 1.5 blocks in the same 0.23 s it was written for.
+const MOB_GRAVITY: i32 = 1;
+const MOB_JUMP_VY: i32 = 14;
+const MOB_TERMINAL_VY: i32 = TERMINAL_VY / 2;
+/// Spiders climb walls toward you at about 2.8 blocks/s (3 units a tick net
+/// of gravity).
+const SPIDER_CLIMB_VY: i32 = MOB_GRAVITY + 3;
+/// Damage flash: the old 4 frames at 30 Hz. The hurt counter runs twice that.
+const HURT_TICKS: u8 = 16;
+const FLASH_TICKS: u8 = 8;
+/// Skeleton bow: draw for a second after spotting you, then a shot every
+/// 1.67 s (the old 50 frames at 30 Hz).
+const SHOT_DRAW: u16 = TICK_HZ as u16;
+const SHOT_TICKS: u16 = 100;
+/// Hit animals run for 3 s.
+const FLEE_TICKS: u16 = 3 * TICK_HZ as u16;
+/// The dragon's per-axis speed, 5 units per 30 Hz frame per axis as written
+/// (4.7 blocks/s on an axis), Q8 units/tick.
+const DRAGON_Q8: i32 = q8(469);
+/// Melee knockback, units (one shove per hit, not per tick).
+const KNOCKBACK: i32 = 15;
 const CHASE_R: i32 = 12 * BLOCK; // hostile aggro radius
 const LOSE_R: i32 = 18 * BLOCK; // give-up radius
 const LURE_R: i32 = 8 * BLOCK; // passive-animal follow radius when luring with wheat
@@ -75,10 +144,12 @@ struct Mob {
     /// mob stops. Java drives limb swing off distance travelled for the same
     /// reason -- a timer-driven swing marches on the spot.
     walk: u8,
-    /// Which way the body points: 0 +Z, 1 +X, 2 -Z, 3 -X. The AI already
-    /// produces one of eight compass steps; this keeps the nearest quarter turn
-    /// so the renderer can put the face on the correct side.
+    /// Which way the body points: 0 +Z, 1 +X, 2 -Z, 3 -X, the nearest quarter
+    /// turn to the way it moves, so the renderer can put the face on the
+    /// correct side.
     facing: u8,
+    /// Stroll direction, 256 to the turn, 0 = +Z, 64 = +X.
+    heading: u8,
 }
 
 const DEAD: Mob = Mob {
@@ -90,19 +161,20 @@ const DEAD: Mob = Mob {
     z: 0,
     vy: 0,
     health: 0,
-    state: ST_WANDER,
+    state: ST_IDLE,
     timer: 0,
     fuse: 0,
     hurt_cd: 0,
     love: 0,
     walk: 0,
     facing: 0,
+    heading: 0,
 };
 
 // Arrows fired by skeletons.
 const ARROW_CAP: usize = 8;
 const ARROW_SPEED: i32 = 26;
-const FUSE_MAX: u16 = 45; // 30-tick (1.5s) Java sapper fuse, at 30fps
+const FUSE_MAX: u16 = 90; // Java's 30-game-tick (1.5 s) sapper fuse
 const BLAST_R: i32 = 3; // block-destruction radius = explosion power 3 (blocks)
 const BLAST_DMG_R: i32 = 6; // damage reaches 2*power = 6 blocks (Java falloff)
 /// Height the dragon cruises at, above the Void island's deck.
@@ -141,7 +213,7 @@ const NO_ARROW: Arrow = Arrow {
 static mut MOBS: [Mob; CAP] = [DEAD; CAP];
 static mut ARROWS: [Arrow; ARROW_CAP] = [NO_ARROW; ARROW_CAP];
 static mut HAZARD_DMG: i32 = 0; // arrow hits + blast damage to the player this frame
-static mut SPAWN_TIMER: u16 = 60;
+static mut SPAWN_TIMER: u16 = 2 * TICK_HZ as u16;
 static mut RNG: LcgRng = LcgRng::new(0x1234_5678);
 static mut XP_DROPS: u16 = 0; // experience from kills, drained by main
 
@@ -285,13 +357,13 @@ pub fn get(i: usize) -> MobView {
         x: m.x,
         y: m.y,
         z: m.z,
-        // Flash on/off every 3 frames while the fuse burns.
-        priming: m.kind == SAPPER && m.fuse > 0 && (unsafe { BURN_TICK } / 3) % 2 == 0,
+        // Flash on/off every 0.1 s while the fuse burns.
+        priming: m.kind == SAPPER && m.fuse > 0 && (unsafe { BURN_TICK } / 6) % 2 == 0,
         walk: m.walk,
         facing: m.facing,
         // hurt_cd was set on every hit and decremented every frame and then read
         // by nothing at all -- a dead field. It is the damage flash now.
-        hurt: m.hurt_cd > 4,
+        hurt: m.hurt_cd > HURT_TICKS - FLASH_TICKS,
     }
 }
 
@@ -379,13 +451,14 @@ fn try_spawn(px: i32, pz: i32, night: bool) {
             z: sz,
             vy: 0,
             health: max_health(kind),
-            state: ST_WANDER,
-            timer: (rng() % 120) as u16,
+            state: ST_IDLE,
+            timer: 0,
             fuse: 0,
             hurt_cd: 0,
             love: 0,
             walk: 0,
             facing: 0,
+            heading: 0,
         };
     }
 }
@@ -415,6 +488,7 @@ pub fn spawn_dragon(px: i32, pz: i32) {
             love: 0,
             walk: 0,
             facing: 0,
+            heading: 0,
         };
     }
 }
@@ -530,13 +604,14 @@ pub fn debug_lineup(px: i32, py: i32, pz: i32) {
                 z: pz - 210,
                 vy: 0,
                 health: max_health(k + LINEUP_FIRST),
-                state: ST_WANDER,
-                timer: 30000,
+                state: ST_IDLE,
+                timer: 0,
                 fuse: 0,
                 hurt_cd: 0,
                 love: 0,
                 walk: 0,
                 facing: 0,
+                heading: 0,
             };
         }
         k += 1;
@@ -585,7 +660,7 @@ pub fn update(px: i32, py: i32, pz: i32, night: bool) {
     #[cfg(feature = "mob-lab")]
     lab_setup(px, pz);
     #[cfg(feature = "mob-lab")]
-    let night = true;
+    let night = night || true;
     unsafe {
         if SPAWN_TIMER > 0 {
             SPAWN_TIMER -= 1;
@@ -593,7 +668,7 @@ pub fn update(px: i32, py: i32, pz: i32, night: bool) {
             if count_alive() < CAP {
                 try_spawn(px, pz, night);
             }
-            SPAWN_TIMER = 90;
+            SPAWN_TIMER = 3 * TICK_HZ as u16;
         }
     }
 
@@ -607,7 +682,7 @@ pub fn update(px: i32, py: i32, pz: i32, night: bool) {
             // Idle voices: each slot mutters on its own ~7s cycle (offset per
             // slot so the field never speaks in chorus), volume falling with
             // distance, silent out of earshot.
-            if (unsafe { BURN_TICK } as usize).wrapping_add(i * 67) % 214 == 0 {
+            if (unsafe { BURN_TICK } as usize).wrapping_add(i * 134) % 428 == 0 {
                 let (mx, mz, kind) = unsafe { (MOBS[i].x, MOBS[i].z, MOBS[i].kind) };
                 let d = ((mx - px).abs() + (mz - pz).abs()) / 64;
                 if d < 14 {
@@ -694,13 +769,14 @@ fn spawn_offspring(kind: u8, x: i32, z: i32) {
             z,
             vy: 0,
             health: max_health(kind),
-            state: ST_WANDER,
-            timer: 30,
+            state: ST_IDLE,
+            timer: 0,
             fuse: 0,
             hurt_cd: 0,
             love: 0,
             walk: 0,
             facing: 0,
+            heading: 0,
         };
     }
 }
@@ -731,7 +807,7 @@ pub fn feed(px: i32, py: i32, pz: i32, fx: i32, fz: i32, reach: i32) -> bool {
         return false;
     }
     unsafe {
-        MOBS[best].love = 600; // ~20s window to find a mate
+        MOBS[best].love = 20 * TICK_HZ as u16; // 20 s window to find a mate
         crate::spawn_particles(
             MOBS[best].x,
             MOBS[best].y + BLOCK,
@@ -776,8 +852,8 @@ fn blink(m: &mut Mob, px: i32, pz: i32) {
 
 fn sun_burn(i: usize) {
     let tick = unsafe { BURN_TICK };
-    if tick % 20 != 0 {
-        return;
+    if tick % 40 != 0 {
+        return; // every 0.67 s, the old 20 frames at 30 Hz
     }
     let mut m = unsafe { MOBS[i] };
     if m.kind != ZOMBIE && m.kind != SKELETON {
@@ -888,7 +964,7 @@ fn arrow_hit_mob(ax: i32, ay: i32, az: i32) -> bool {
             if (ax - m.x).abs() < w + 6 && (az - m.z).abs() < w + 6 && ay > m.y - 8 && ay < m.y + h
             {
                 m.health -= 4; // arrow damage (Java: 6 at full draw; 4 here)
-                m.hurt_cd = 8;
+                m.hurt_cd = HURT_TICKS;
                 if m.health <= 0 {
                     record_death(&m);
                     unsafe {
@@ -898,7 +974,7 @@ fn arrow_hit_mob(ax: i32, ay: i32, az: i32) -> bool {
                 } else {
                     if !is_hostile(m.kind) {
                         m.state = ST_FLEE;
-                        m.timer = 90;
+                        m.timer = FLEE_TICKS;
                     }
                     unsafe {
                         MOBS[i] = m;
@@ -997,7 +1073,59 @@ pub fn arrow_view(i: usize) -> (bool, i32, i32, i32) {
     (a.alive, a.x, a.y, a.z)
 }
 
-fn step_mob(i: usize, px: i32, _py: i32, pz: i32, night: bool) {
+/// Q8 velocity of length `speed` along (dx, dz). The length is the
+/// alpha-max-plus-beta-min estimate (within 4%), which spares a square root.
+/// The old greedy axis-step moved both axes at full speed, so a diagonal
+/// chase ran 1.41x the straight one.
+fn toward(dx: i32, dz: i32, speed: i32) -> (i32, i32) {
+    let (a, b) = (dx.abs(), dz.abs());
+    let len = (a.max(b) * 123 + a.min(b) * 51) >> 7;
+    if len == 0 {
+        return (0, 0);
+    }
+    (speed * dx / len, speed * dz / len)
+}
+
+/// Q8 velocity of length `speed` along a 256-step heading (0 = +Z, 64 = +X).
+#[inline(never)]
+fn heading_vec(h: u8, speed: i32) -> (i32, i32) {
+    let a = (h as u16) << 4;
+    (
+        (speed * sincos::sin_q12(a)) >> 12,
+        (speed * sincos::cos_q12(a)) >> 12,
+    )
+}
+
+/// Whole units to move this tick for a Q8 velocity. `t` is a running tick
+/// count, so over any 256 ticks the steps add up to exactly the velocity:
+/// fractional speeds come out right with nothing stored per mob.
+#[inline]
+fn dstep(v: i32, t: i32) -> i32 {
+    ((v * (t + 1)) >> 8) - ((v * t) >> 8)
+}
+
+/// Quarter turn for a movement direction. It only changes when the new side
+/// clearly wins, so a mob walking near a diagonal does not flicker between two
+/// faces.
+#[inline(never)]
+fn face_of(vx: i32, vz: i32, cur: u8) -> u8 {
+    let score = [vz, vx, -vz, -vx];
+    let mut best = 0;
+    let mut k = 1;
+    while k < 4 {
+        if score[k] > score[best] {
+            best = k;
+        }
+        k += 1;
+    }
+    if score[best] > score[cur as usize & 3] + (vx.abs() + vz.abs()) / 4 {
+        best as u8
+    } else {
+        cur
+    }
+}
+
+fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
     let mut m = unsafe { MOBS[i] };
     if m.hurt_cd > 0 {
         m.hurt_cd -= 1;
@@ -1016,11 +1144,13 @@ fn step_mob(i: usize, px: i32, _py: i32, pz: i32, night: bool) {
     }
 
     // State transitions.
+    let was = m.state;
+    let flyer = is_flyer(m.kind);
     if m.state == ST_FLEE {
         if m.timer > 0 {
             m.timer -= 1;
         } else {
-            m.state = ST_WANDER;
+            m.state = ST_IDLE;
         }
     } else if m.kind == DRAGON {
         // Never loses interest, and daylight means nothing to it.
@@ -1043,21 +1173,22 @@ fn step_mob(i: usize, px: i32, _py: i32, pz: i32, night: bool) {
         // Neutral: it only hunts once you have hit it, and hitting it sets
         // ST_CHASE directly. Daylight is irrelevant to it.
         if m.state == ST_CHASE && dist2 > LOSE_R * LOSE_R {
-            m.state = ST_WANDER;
+            m.state = ST_IDLE;
         }
     } else if is_hostile(m.kind) && night && dist2 < CHASE_R * CHASE_R {
         m.state = ST_CHASE;
     } else if m.state == ST_CHASE && dist2 > LOSE_R * LOSE_R {
-        m.state = ST_WANDER;
+        m.state = ST_IDLE;
     }
 
-    // A tamed wolf follows its owner without needing wheat.
+    // A tamed wolf follows its owner without needing wheat, and strolls about
+    // once it has caught up.
     if m.kind == WOLF && m.love == u16::MAX {
-        m.state = if dist2 > (3 * BLOCK) * (3 * BLOCK) {
-            ST_CHASE
-        } else {
-            ST_WANDER
-        };
+        if dist2 > (3 * BLOCK) * (3 * BLOCK) {
+            m.state = ST_CHASE;
+        } else if m.state == ST_CHASE {
+            m.state = ST_IDLE;
+        }
     }
     // Passive animals follow a player holding wheat (reuses the chase walk).
     if !is_hostile(m.kind) && m.kind != WOLF && m.state != ST_FLEE {
@@ -1065,8 +1196,14 @@ fn step_mob(i: usize, px: i32, _py: i32, pz: i32, night: bool) {
         if lure && dist2 < LURE_R * LURE_R {
             m.state = ST_CHASE;
         } else if m.state == ST_CHASE && (!lure || dist2 > LURE_R * LURE_R) {
-            m.state = ST_WANDER;
+            m.state = ST_IDLE;
         }
+    }
+    // While hunting, `timer` is the skeleton's bow cooldown (flyers keep it as
+    // their flight phase). It used to carry over whatever the wander count
+    // was; a skeleton now draws for a second after spotting you.
+    if m.state == ST_CHASE && was != ST_CHASE && !flyer {
+        m.timer = if m.kind == SKELETON { SHOT_DRAW } else { 0 };
     }
 
     // Ranged + explosive hostiles while chasing.
@@ -1075,8 +1212,8 @@ fn step_mob(i: usize, px: i32, _py: i32, pz: i32, night: bool) {
             if m.timer > 0 {
                 m.timer -= 1;
             } else {
-                shoot_arrow(m.x, m.y, m.z, px, _py, pz);
-                m.timer = 50;
+                shoot_arrow(m.x, m.y, m.z, px, py, pz);
+                m.timer = SHOT_TICKS;
             }
         } else if m.kind == SAPPER {
             if dist2 < (2 * BLOCK) * (2 * BLOCK) {
@@ -1085,7 +1222,7 @@ fn step_mob(i: usize, px: i32, _py: i32, pz: i32, night: bool) {
                     crate::sfx::sapper_hiss(); // the dreaded tsss
                 }
                 if m.fuse >= FUSE_MAX {
-                    explode(m.x, m.y, m.z, px, _py, pz);
+                    explode(m.x, m.y, m.z, px, py, pz);
                     unsafe {
                         MOBS[i] = DEAD;
                     }
@@ -1097,78 +1234,73 @@ fn step_mob(i: usize, px: i32, _py: i32, pz: i32, night: bool) {
         }
     }
 
-    // Movement intent (greedy axis-step).
-    let (mut sx, mut sz) = (0i32, 0i32);
+    // Movement intent, a Q8 units/tick velocity.
+    let (mut vx, mut vz) = (0i32, 0i32);
     if m.kind == DRAGON && m.state == ST_CHASE {
         // Java's dragon keeps its distance and circles. Ours used to fly
         // straight at the player and STOP there -- a ground mob is held off by
         // its own AABB, but a phasing flyer just parks inside you, where all its
         // boxes are backface-culled and it is invisible.
         let far = dist2 > DRAGON_ORBIT * DRAGON_ORBIT;
-        let v = SPEED * 2;
+        let v = DRAGON_Q8;
         if far {
-            sx = if dx > 0 { v } else { -v };
-            sz = if dz > 0 { v } else { -v };
+            vx = if dx > 0 { v } else { -v };
+            vz = if dz > 0 { v } else { -v };
         } else {
             // Tangent to the player: (dz, -dx), reduced to signs.
-            sx = if dz > 0 { v } else { -v };
-            sz = if dx > 0 { -v } else { v };
+            vx = if dz > 0 { v } else { -v };
+            vz = if dx > 0 { -v } else { v };
         }
     } else {
+        let walk = walk_q8(m.kind);
         match m.state {
             ST_CHASE => {
-                if dx > 4 {
-                    sx = SPEED;
-                } else if dx < -4 {
-                    sx = -SPEED;
-                }
-                if dz > 4 {
-                    sz = SPEED;
-                } else if dz < -4 {
-                    sz = -SPEED;
+                if dx.abs() > 4 || dz.abs() > 4 {
+                    (vx, vz) = toward(dx, dz, walk);
                 }
             }
             ST_FLEE => {
-                sx = if dx > 0 { -SPEED } else { SPEED };
-                sz = if dz > 0 { -SPEED } else { SPEED };
+                (vx, vz) = toward(-dx, -dz, flee_q8(m.kind));
             }
-            _ => {
-                // Wander: occasionally pick a new heading; idle otherwise.
+            ST_WANDER if flyer => {
+                // Flyers drift on a heading and bank onto a new one now and
+                // then; `timer` is their flight phase, not a stroll count.
+                if rng() % (3 * TICK_HZ as u32) == 0 {
+                    m.heading = rng() as u8;
+                }
+                (vx, vz) = heading_vec(m.heading, walk);
+            }
+            ST_WANDER => {
                 if m.timer > 0 {
                     m.timer -= 1;
+                    (vx, vz) = heading_vec(m.heading, walk);
                 } else {
-                    m.timer = 60 + (rng() % 120) as u16;
+                    m.state = ST_IDLE;
                 }
+            }
+            _ => {
+                // Standing. Now and then set off on a stroll a few blocks in a
+                // random direction. This used to pick a fresh random step EVERY
+                // tick, so a wandering animal jittered on the spot, turning 17
+                // times a second (measured), which read as a mob on fast
+                // forward.
                 let r = rng();
-                if r & 3 != 0 {
-                    sx = ((r >> 2) % 3) as i32 - 1;
-                    sz = ((r >> 4) % 3) as i32 - 1;
-                    sx *= SPEED - 2;
-                    sz *= SPEED - 2;
+                if r % IDLE_ROLL == 0 {
+                    m.heading = (r >> 12) as u8;
+                    let span = (STROLL_MAX - STROLL_MIN + 1) as u32;
+                    let blocks = STROLL_MIN + ((r >> 20) % span) as i32;
+                    m.timer = (blocks * BLOCK * 256 / walk) as u16;
+                    m.state = ST_WANDER;
                 }
             }
         }
     }
 
-    // Gait + facing, from the movement intent the AI just produced. Advancing
-    // the phase only while moving is what makes the legs stop when the mob does;
-    // a free-running timer marches on the spot.
-    if sx != 0 || sz != 0 {
-        let speed = (sx.abs() + sz.abs()) as u8;
-        m.walk = m.walk.wrapping_add(6 + speed);
-        // Nearest quarter turn to the step direction. The renderer needs only
-        // which side the face is on, so two bits is the whole story.
-        m.facing = if sz.abs() >= sx.abs() {
-            if sz > 0 {
-                0
-            } else {
-                2
-            }
-        } else if sx > 0 {
-            1
-        } else {
-            3
-        };
+    let t = (unsafe { BURN_TICK } as i32).wrapping_add(i as i32 * 37) & 255;
+    let sx = dstep(vx, t);
+    let sz = dstep(vz, t);
+    if vx != 0 || vz != 0 {
+        m.facing = face_of(vx, vz, m.facing);
     }
 
     // Physics: move-and-slide, gravity, jump when blocked.
@@ -1178,22 +1310,23 @@ fn step_mob(i: usize, px: i32, _py: i32, pz: i32, night: bool) {
     // The End's obsidian pillars reach above the dragon's cruise height, so
     // with collision on it pins itself against the first one it meets and never
     // reaches the player.
-    let phases = is_flyer(m.kind);
+    let phases = flyer;
     // Self-heal: a mob standing INSIDE terrain used to stay there forever.
     // Every move it can make is collision-checked against the position it is
     // trying to reach, and from inside a block they all fail, so it froze half
     // sunk in the world and could not be walked into or escaped from -- the
     // itch report of mobs clipped into blocks that cannot be killed. Getting
     // there is easy: build a block on top of one, or generate terrain around
-    // it. Lift it out an eighth of a block a frame instead.
+    // it. Lift it out a sixteenth of a block a tick instead.
     if !phases && aabb_collides_dims(m.x, m.y, m.z, hw, h) {
-        m.y += 8;
+        m.y += 4;
         m.vy = 0;
         unsafe {
             MOBS[i] = m;
         }
         return;
     }
+    let (x0, z0) = (m.x, m.z);
     if sx != 0 {
         let nx = m.x + sx;
         if !phases && aabb_collides_dims(nx, m.y, m.z, hw, h) {
@@ -1210,9 +1343,28 @@ fn step_mob(i: usize, px: i32, _py: i32, pz: i32, night: bool) {
             m.z = nz;
         }
     }
-    if is_flyer(m.kind) {
+    // Gait: the leg phase advances with the distance actually covered, one
+    // stride cycle per ~2.4 blocks as in Java's limb swing, so the legs match
+    // the ground speed. Advancing only while moving is what makes the legs
+    // stop when the mob does; standing, they finish the swing and come to rest
+    // instead of freezing mid-stride.
+    let moved = (m.x - x0).abs() + (m.z - z0).abs();
+    if moved > 0 {
+        m.walk = m.walk.wrapping_add(((moved * 27) >> 4).min(9) as u8);
+    } else {
+        let ph = m.walk & 127;
+        if ph != 0 {
+            m.walk = if ph < 64 {
+                m.walk - ph.min(2)
+            } else {
+                m.walk.wrapping_add((128 - ph).min(2))
+            };
+        }
+    }
+    if flyer {
         // No gravity and no block collision: it phases through the pillars,
-        // like Java's dragon. `timer` doubles as the flight phase.
+        // like Java's dragon. `timer` doubles as the flight phase, one weave
+        // every 128 ticks (2.1 s).
         // Embers and wailers hover just off the ground rather than at the
         // dragon's cruise, which is above the Inferno roof.
         let cruise = if m.kind == DRAGON {
@@ -1220,16 +1372,16 @@ fn step_mob(i: usize, px: i32, _py: i32, pz: i32, night: bool) {
         } else {
             m.y / BLOCK * BLOCK + 2 * BLOCK
         };
-        let want = cruise + ((m.timer as i32 % 64) - 32) * 2;
+        let want = cruise + ((m.timer as i32 / 2 % 64) - 32) * 2;
         if m.y < want {
-            m.y += 4;
+            m.y += 2;
         } else if m.y > want {
-            m.y -= 4;
+            m.y -= 2;
         }
         m.vy = 0;
         m.on_ground = false;
     } else {
-        m.vy = (m.vy - GRAVITY).max(TERMINAL_VY);
+        m.vy = (m.vy - MOB_GRAVITY).max(MOB_TERMINAL_VY);
         let ny = m.y + m.vy;
         if aabb_collides_dims(m.x, ny, m.z, hw, h) {
             if m.vy < 0 {
@@ -1244,9 +1396,13 @@ fn step_mob(i: usize, px: i32, _py: i32, pz: i32, night: bool) {
     }
     if blocked {
         if m.kind == SPIDER && m.state == ST_CHASE {
-            m.vy = GRAVITY + 5; // spiders climb walls toward the player
+            m.vy = SPIDER_CLIMB_VY; // spiders climb walls toward the player
         } else if m.on_ground {
-            m.vy = JUMP_VY;
+            m.vy = MOB_JUMP_VY;
+        } else if m.state == ST_WANDER && m.vy <= 0 {
+            // Hopped and still blocked: a wall, not a step. Stand, and pick
+            // another stroll later.
+            m.state = ST_IDLE;
         }
     }
 
@@ -1311,7 +1467,7 @@ pub fn melee(px: i32, py: i32, pz: i32, fx: i32, fz: i32, reach: i32, damage: i1
     }
     let mut m = unsafe { MOBS[best] };
     m.health -= damage;
-    m.hurt_cd = 8;
+    m.hurt_cd = HURT_TICKS;
     if m.kind == WRAITH {
         m.state = ST_CHASE; // neutral no longer: you started it
         blink(&mut m, px, pz);
@@ -1324,8 +1480,8 @@ pub fn melee(px: i32, py: i32, pz: i32, fx: i32, fz: i32, reach: i32, damage: i1
     // which is the itch report of mobs that "clip through blocks when you try
     // to attack them so it's unable to kill them".
     let (hw, h) = dims(m.kind);
-    let kx = if m.x >= px { SPEED * 3 } else { -SPEED * 3 };
-    let kz = if m.z >= pz { SPEED * 3 } else { -SPEED * 3 };
+    let kx = if m.x >= px { KNOCKBACK } else { -KNOCKBACK };
+    let kz = if m.z >= pz { KNOCKBACK } else { -KNOCKBACK };
     if !aabb_collides_dims(m.x + kx, m.y, m.z, hw, h) {
         m.x += kx;
     }
@@ -1343,7 +1499,7 @@ pub fn melee(px: i32, py: i32, pz: i32, fx: i32, fz: i32, reach: i32, damage: i1
     } else {
         if !is_hostile(m.kind) {
             m.state = ST_FLEE;
-            m.timer = 90;
+            m.timer = FLEE_TICKS;
         }
         unsafe {
             MOBS[best] = m;
@@ -1396,13 +1552,14 @@ fn spawn_at(kind: u8, sx: i32, sz: i32) {
             z: sz,
             vy: 0,
             health: max_health(kind),
-            state: ST_WANDER,
-            timer: (rng() % 120) as u16,
+            state: ST_IDLE,
+            timer: 0,
             fuse: 0,
             hurt_cd: 0,
             love: 0,
             walk: 0,
             facing: 0,
+            heading: 0,
         };
     }
 }
