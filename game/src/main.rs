@@ -223,8 +223,9 @@ const INFERNO_LIGHT: u8 = 88;
 /// day to it.
 const VOID_FOG: (u8, u8, u8) = (16, 10, 26);
 const VOID_LIGHT: u8 = 76;
-/// Sim ticks of standing in portal sheet before it takes you: 1.5 s.
-const PORTAL_DWELL: u16 = ms(1500) as u16;
+/// Standing in portal sheet 80 game ticks (4 s) takes you through, as in
+/// Survival (minecraft.wiki/w/Nether Portal).
+const PORTAL_DWELL: u16 = units::java_ticks(80) as u16;
 /// Sentinel: standing in the portal you just arrived in, so it will not fire.
 const PORTAL_IMMUNE: u16 = u16::MAX;
 const FIRE: u8 = 70;
@@ -848,11 +849,11 @@ const LOOK_PITCH_Q8: i32 = units::dps_q8(75);
 const FONT_TPAGE: Tpage = Tpage::new(320, 0, TexDepth::Bit4);
 const FONT_CLUT: Clut = Clut::new(320, 256);
 
-// Day/night: a full cycle is DAY_LEN sim ticks (~600s / 10 min -- about 2x
-// the pace of Java's 20-min day, no longer the old 20x-compressed 60s). LIGHT
-// (0..128) scales the global sky light; NIGHT_LIGHT keeps night dim but not pitch
-// black (no block-light yet). Sky colour lerps between night and day by brightness.
-const DAY_LEN: u32 = secs(600) as u32;
+// Day/night: a full cycle is DAY_LEN sim ticks, Java's 20 minutes (24,000
+// game ticks, minecraft.wiki/w/Daylight cycle). LIGHT (0..128) scales the
+// global sky light; NIGHT_LIGHT keeps night dim but not pitch black. Sky colour
+// lerps between night and day by brightness.
+const DAY_LEN: u32 = units::java_ticks(24_000) as u32;
 const NIGHT_LIGHT: i32 = 38;
 // Java's plains biome sky_color is 0x78A7FF. The old (82,130,190) was a dull,
 // slightly green-leaning blue that read as late afternoon at altitude.
@@ -1346,8 +1347,7 @@ static mut CHEST_D: [u8; MAX_CHESTS] = [0; MAX_CHESTS];
 
 // Per-furnace state, keyed by the furnace block's world position.
 const MAX_FURNACES: usize = 8;
-const SMELT_TIME: u16 = secs(5) as u16; // 5s to smelt one item (ponytail: half Java's 10s, a nod
-                             // to our compressed clock; FURN_FUEL counts item-smelts)
+const SMELT_TIME: u16 = units::java_ticks(200) as u16; // 10 s an item (minecraft.wiki/w/Smelting)
 /// FURN_FUEL counts half item-smelts: one coal smelts 8 items, a log or a
 /// plank 1.5 (minecraft.wiki/w/Smelting#Fuel).
 const COAL_SMELTS: u16 = 8;
@@ -2712,6 +2712,8 @@ fn main() {
                     }
                     let dt = day % DAY_LEN;
                     if bed_time(dt) {
+                        weather_clear(); // sleeping ends the rain
+
                         // Only the world clock skips. `frame` keeps counting
                         // the frames that actually happened.
                         day += DAY_LEN - dt;
@@ -2971,10 +2973,9 @@ fn main() {
                         sfx::place();
                     }
                 } else if player.selected == BONEMEAL {
-                    // Bonemeal a young crop straight to ripe.
+                    // Bone meal grows a crop 2 to 5 stages (minecraft.wiki/w/Bone_Meal).
                     if get_block_i32(pick.bx, pick.by, pick.bz) == WHEAT && inv_take(BONEMEAL) {
-                        set_block_i32(pick.bx, pick.by, pick.bz, WHEAT_RIPE);
-                        record_edit(pick.bx, pick.by, pick.bz, WHEAT_RIPE);
+                        crop_grow(pick.bx, pick.by, pick.bz, 2 + (world_rand() % 4) as u16);
                         spawn_particles(
                             block_to_world_x(pick.bx) + BLOCK / 2,
                             pick.by * BLOCK + BLOCK,
@@ -3803,6 +3804,7 @@ fn menu_button_now(font: &FontAtlas, y: i16, label: &str, sel: bool) {
 #[inline(never)] // once, at boot: kept out of main() so the size attribute holds
 fn reset_game_state() {
     tut_reset();
+    weather_clear();
     unsafe {
         let mut i = 0;
         while i < BLOCK_KINDS {
@@ -4173,28 +4175,64 @@ fn spawn_player() -> Player {
 ///
 /// Pulled out of the gameplay loop rather than left inline: the loop is one
 /// enormous function and MIPS branches only reach +/-128KB, so every block that
-/// Rain strength, 0 (clear) to 255 (full shower), as a trapezoid over the
-/// weather cycle: one window in three rains, and each one fades in and back
-/// out over RAIN_RAMP frames. A hard boolean made showers snap on and off
-/// mid-stride, which read as a glitch rather than as weather.
-fn rain_amount(frame: u32) -> i32 {
+/// Weather, Java's cycle (minecraft.wiki/w/Weather): rain stays on for 12,000
+/// to 24,000 game ticks and off for 12,000 to 180,000, a new random length
+/// each time; a new world starts clear. Rain fades in and out over
+/// RAIN_RAMP so a shower does not snap on mid-stride. Sleeping through rain
+/// clears it (minecraft.wiki/w/Bed). Not saved: a loaded world rolls anew.
+static mut WEATHER_RAIN: bool = false;
+static mut WEATHER_T: u32 = 0; // sim ticks left in this spell (0 = not rolled)
+static mut RAIN_Q: u32 = 0; // 0..RAIN_RAMP, the fade
+const RAIN_RAMP: u32 = secs(8) as u32;
+
+/// A random number for world timers (weather, crops, saplings).
+fn world_rand() -> u32 {
+    static mut SEED: u32 = 0x2545_F491;
+    unsafe {
+        SEED = SEED.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+        SEED >> 8
+    }
+}
+
+fn weather_roll(rain: bool) -> u32 {
+    let (lo, span) = if rain { (12_000, 12_001) } else { (12_000, 168_001) };
+    units::java_ticks(lo + (world_rand() % span) as i32) as u32
+}
+
+/// One sim tick of weather.
+fn weather_tick() {
+    unsafe {
+        if WEATHER_T == 0 {
+            WEATHER_T = weather_roll(WEATHER_RAIN);
+        }
+        WEATHER_T -= 1;
+        if WEATHER_T == 0 {
+            WEATHER_RAIN = !WEATHER_RAIN;
+            WEATHER_T = weather_roll(WEATHER_RAIN);
+        }
+        if WEATHER_RAIN {
+            RAIN_Q = (RAIN_Q + 1).min(RAIN_RAMP);
+        } else {
+            RAIN_Q = RAIN_Q.saturating_sub(1);
+        }
+    }
+}
+
+/// Clear the sky (sleeping through rain, a new world).
+fn weather_clear() {
+    unsafe {
+        WEATHER_RAIN = false;
+        WEATHER_T = 0;
+        RAIN_Q = 0;
+    }
+}
+
+/// Rain strength, 0 (clear) to 255 (full shower).
+fn rain_amount() -> i32 {
     if FORCE_TIME >= 0 {
         return 0; // deterministic captures stay dry
     }
-    const WINDOW: u32 = secs(40) as u32;
-    const RAIN_RAMP: u32 = secs(8) as u32; // ~8s in and out
-    let phase = frame % (WINDOW * 3);
-    if phase < WINDOW * 2 {
-        return 0;
-    }
-    let p = phase - WINDOW * 2;
-    if p < RAIN_RAMP {
-        (p * 255 / RAIN_RAMP) as i32
-    } else if p >= WINDOW - RAIN_RAMP {
-        ((WINDOW - p) * 255 / RAIN_RAMP) as i32
-    } else {
-        255
-    }
+    (unsafe { RAIN_Q } * 255 / RAIN_RAMP) as i32
 }
 
 /// can live behind a call has to.
@@ -4209,7 +4247,7 @@ fn world_lighting(day: u32) -> (u32, i32, u8, (u8, u8, u8)) {
     } else {
         day % DAY_LEN
     };
-    let rain = rain_amount(day);
+    let rain = rain_amount();
     let mut light = day_brightness(tod);
     if rain > 0 {
         // Scaled by the ramp, so the terrain darkens as the shower arrives
@@ -4364,6 +4402,7 @@ fn world_tick(player: &mut Player, dwell: &mut u16, n: u32) -> bool {
         tnt_tick(player); // burn lit fuses; explode on zero
         crop_tick(); // age planted crops; ripen the mature ones
         sap_tick(); // grow planted saplings into trees
+        weather_tick();
         if t % REDSTONE_PERIOD == 0 {
             redstone_tick(); // budgeted: amortized, only over player-edited blocks
         }
@@ -10275,7 +10314,7 @@ pub(crate) fn prime_tnt(x: i32, y: i32, z: i32, fuse: u8) {
         }
     }
 }
-const TNT_FUSE_FRAMES: u8 = ms(1500) as u8; // 1.5s (Java: 80 ticks)
+const TNT_FUSE_FRAMES: u8 = units::java_ticks(80) as u8; // 4 s (minecraft.wiki/w/TNT)
 static mut TNT_X: [i32; MAX_TNT] = [0; MAX_TNT];
 static mut TNT_Y: [i32; MAX_TNT] = [0; MAX_TNT];
 static mut TNT_Z: [i32; MAX_TNT] = [0; MAX_TNT];
@@ -10326,11 +10365,16 @@ fn tnt_tick(player: &mut Player) {
 
 // ---- Crops: plant seeds on dirt/grass, grow over time, harvest wheat + seeds.
 const MAX_CROPS: usize = 24;
-const CROP_GROW: u16 = secs(30) as u16; // 30s to mature (a compressed crop cycle)
+// Growth by Java's random ticks (minecraft.wiki/w/Tick#Random tick: 3 blocks
+// in each 4,096-block subchunk a game tick, so a block gets one every 68.27 s
+// on average, here 1 in 4,096 each sim tick). Wheat has 8 stages, 7 steps to
+// ripe (minecraft.wiki/w/Tutorial:Crop farming).
+const RANDOM_TICK_ODDS: u32 = 4096;
+const CROP_RIPE_STAGE: u16 = 8; // CROP_T runs 1 (planted) .. 8 (ripe)
 static mut CROP_X: [i32; MAX_CROPS] = [0; MAX_CROPS];
 static mut CROP_Y: [i32; MAX_CROPS] = [0; MAX_CROPS];
 static mut CROP_Z: [i32; MAX_CROPS] = [0; MAX_CROPS];
-static mut CROP_T: [u16; MAX_CROPS] = [0; MAX_CROPS]; // 0 = free slot, else age 1..CROP_GROW
+static mut CROP_T: [u16; MAX_CROPS] = [0; MAX_CROPS]; // 0 = free slot, else stage 1..CROP_RIPE_STAGE
 
 fn plant_crop(x: i32, y: i32, z: i32) {
     unsafe {
@@ -10350,20 +10394,94 @@ fn plant_crop(x: i32, y: i32, z: i32) {
     }
 }
 
-/// Water within ~2 blocks of the soil under a crop (the 4 near + 4 far cardinal
-/// cells at soil level). Cheap: 8 lookups, not a full area scan.
+/// Farmland hydration, Java's rule (minecraft.wiki/w/Farmland#Hydration):
+/// water up to 4 blocks away horizontally, diagonals included, at the soil's
+/// level or one above. Rain on an open crop counts too. Dirt and grass stand
+/// in for farmland here. 162 block reads, only on a random tick.
 fn hydrated(x: i32, y: i32, z: i32) -> bool {
     let sy = y - 1; // soil block under the crop
-    is_water(get_block_i32(x + 1, sy, z))
-        || is_water(get_block_i32(x - 1, sy, z))
-        || is_water(get_block_i32(x, sy, z + 1))
-        || is_water(get_block_i32(x, sy, z - 1))
-        || is_water(get_block_i32(x + 2, sy, z))
-        || is_water(get_block_i32(x - 2, sy, z))
-        || is_water(get_block_i32(x, sy, z + 2))
-        || is_water(get_block_i32(x, sy, z - 2))
+    if rain_amount() > 0 && y >= world::surface_y(x, z) {
+        return true;
+    }
+    let mut dz = -4;
+    while dz <= 4 {
+        let mut dx = -4;
+        while dx <= 4 {
+            if is_water(get_block_i32(x + dx, sy, z + dz))
+                || is_water(get_block_i32(x + dx, sy + 1, z + dz))
+            {
+                return true;
+            }
+            dx += 1;
+        }
+        dz += 1;
+    }
+    false
 }
 
+fn is_crop(b: u8) -> bool {
+    b == WHEAT || b == WHEAT_RIPE
+}
+
+/// Light at a plant for growth: 15 under open sky (Java checks raw light, so
+/// crops grow on clear nights too), else the block light.
+fn plant_light(x: i32, y: i32, z: i32) -> i32 {
+    if y >= world::surface_y(x, z) {
+        15
+    } else {
+        block_light(x, y, z)
+    }
+}
+
+/// A crop's chance to grow on a random tick, Java's rule (minecraft.wiki/w/
+/// Tutorial:Crop farming#Growth rate): 1 / (floor(25 / speed) + 1), speed 4 on
+/// hydrated farmland or 2 on dry, plus 0.75 (hydrated) or 0.25 (dry) for each
+/// of the 8 neighbours that is farmland, halved when the same crop grows on a
+/// diagonal or along both axes. Neighbouring crops stand in for neighbouring
+/// farmland. Returns the 1-in-N N.
+fn crop_odds(x: i32, y: i32, z: i32) -> u32 {
+    let wet = hydrated(x, y, z);
+    let mut speed4 = if wet { 16 } else { 8 }; // speed x 4
+    let c = |dx: i32, dz: i32| is_crop(get_block_i32(x + dx, y, z + dz));
+    let (n, s_, e, w) = (c(0, -1), c(0, 1), c(1, 0), c(-1, 0));
+    let diag = c(1, 1) || c(1, -1) || c(-1, 1) || c(-1, -1);
+    let around = [n, s_, e, w, c(1, 1), c(1, -1), c(-1, 1), c(-1, -1)];
+    let mut k = 0;
+    while k < 8 {
+        if around[k] {
+            speed4 += if wet { 3 } else { 1 };
+        }
+        k += 1;
+    }
+    if diag || ((n || s_) && (e || w)) {
+        speed4 /= 2;
+    }
+    (100 / speed4.max(1)) as u32 + 1
+}
+
+/// Advance a crop (x, y, z) `stages` steps; true once it is ripe.
+fn crop_grow(x: i32, y: i32, z: i32, stages: u16) -> bool {
+    unsafe {
+        let mut i = 0;
+        while i < MAX_CROPS {
+            if CROP_T[i] > 0 && CROP_X[i] == x && CROP_Y[i] == y && CROP_Z[i] == z {
+                CROP_T[i] = (CROP_T[i] + stages).min(CROP_RIPE_STAGE);
+                if CROP_T[i] >= CROP_RIPE_STAGE {
+                    set_block_i32(x, y, z, WHEAT_RIPE);
+                    record_edit(x, y, z, WHEAT_RIPE);
+                    CROP_T[i] = 0;
+                    return true;
+                }
+                return false;
+            }
+            i += 1;
+        }
+    }
+    false
+}
+
+/// One sim tick of crop growth: each crop gets Java's random tick, and on one
+/// it grows a stage with crop_odds' chance if the light is 9 or more.
 #[inline(never)]
 fn crop_tick() {
     let mut i = 0usize;
@@ -10373,14 +10491,11 @@ fn crop_tick() {
                 let (x, y, z) = (CROP_X[i], CROP_Y[i], CROP_Z[i]);
                 if get_block_i32(x, y, z) != WHEAT {
                     CROP_T[i] = 0; // harvested or blown up: free the slot
-                } else {
-                    // Hydrated soil (water within ~2 blocks) grows 3x faster.
-                    CROP_T[i] += if hydrated(x, y, z) { 3 } else { 1 };
-                    if CROP_T[i] >= CROP_GROW {
-                        set_block_i32(x, y, z, WHEAT_RIPE);
-                        record_edit(x, y, z, WHEAT_RIPE);
-                        CROP_T[i] = 0;
-                    }
+                } else if world_rand() % RANDOM_TICK_ODDS == 0
+                    && plant_light(x, y, z) >= 9
+                    && world_rand() % crop_odds(x, y, z) == 0
+                {
+                    crop_grow(x, y, z, 1);
                 }
             }
         }
@@ -10390,7 +10505,11 @@ fn crop_tick() {
 
 // ---- Saplings: plant on soil, grow into a tree (renewable wood).
 const MAX_SAPS: usize = 8;
-const SAP_GROW: u16 = secs(45) as u16; // 45s
+/// Saplings grow two stages, then into a tree, on random ticks with light 9
+/// or more above them (minecraft.wiki/w/Sapling). The wiki gives no chance a
+/// random tick advances a stage, so every one does here: a tree comes after
+/// two random ticks, about 2.3 minutes on average. SAP_T runs 1..3.
+const SAP_TREE_STAGE: u16 = 3;
 static mut SAP_X: [i32; MAX_SAPS] = [0; MAX_SAPS];
 static mut SAP_Y: [i32; MAX_SAPS] = [0; MAX_SAPS];
 static mut SAP_Z: [i32; MAX_SAPS] = [0; MAX_SAPS];
@@ -10422,9 +10541,9 @@ fn sap_tick() {
                 let (x, y, z) = (SAP_X[i], SAP_Y[i], SAP_Z[i]);
                 if get_block_i32(x, y, z) != SAPLING {
                     SAP_T[i] = 0; // broken or blown up
-                } else {
+                } else if world_rand() % RANDOM_TICK_ODDS == 0 && plant_light(x, y + 1, z) >= 9 {
                     SAP_T[i] += 1;
-                    if SAP_T[i] >= SAP_GROW {
+                    if SAP_T[i] >= SAP_TREE_STAGE {
                         world::grow_tree(x, y, z);
                         record_edit(x, y, z, WOOD); // trunk base persists in the edit log
                         SAP_T[i] = 0;
@@ -10696,10 +10815,7 @@ fn day_brightness(t: u32) -> u8 {
 }
 
 /// A point in the day on Java's 24,000-tick clock: 0 sunrise, 6,000 noon,
-/// 12,000 sunset, 18,000 midnight (minecraft.wiki/w/Daylight cycle). The day
-/// here is DAY_LEN long, half Java's 20 minutes, with the same shape: 10 of 20
-/// parts day, a 1-part sunset, 10 parts night and a 1-part sunrise (it was a
-/// 40/10/40/10 trapezoid).
+/// 12,000 sunset, 18,000 midnight (minecraft.wiki/w/Daylight cycle).
 fn java_time(t: u32) -> i32 {
     (t as i32 % DAY_LEN as i32) * 24_000 / DAY_LEN as i32
 }
