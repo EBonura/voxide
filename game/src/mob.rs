@@ -723,6 +723,30 @@ fn lab_setup(px: i32, pz: i32) {
     }
 }
 
+/// Tuning lab: (hostiles, animals) alive, and how many of the hostiles stand
+/// below the surface of their column.
+#[cfg(feature = "tune-lab")]
+pub fn lab_census() -> (i32, i32, i32) {
+    let (mut h, mut a, mut cave) = (0, 0, 0);
+    let mut i = 0;
+    while i < CAP {
+        let m = unsafe { MOBS[i] };
+        if m.alive {
+            if is_hostile(m.kind) {
+                h += 1;
+                let (bx, bz) = (world_to_block_x(m.x), world_to_block_z(m.z));
+                if world_to_block_y(m.y) < world::surface_y(bx, bz) {
+                    cave += 1;
+                }
+            } else {
+                a += 1;
+            }
+        }
+        i += 1;
+    }
+    (h, a, cave)
+}
+
 /// Tuning lab: hold slot 0 as a `kind` standing on (x, y, z).
 #[cfg(feature = "tune-lab")]
 pub fn lab_pin(kind: u8, x: i32, y: i32, z: i32) {
