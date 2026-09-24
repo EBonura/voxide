@@ -8,16 +8,22 @@
 //! step; `frontend launch --route-watch-u32` reads it. Layout (i32 words):
 //!  0 step  1 frame  2 phase  3 x  4 y  5 z  6 vy  7 health  8 air  9 food
 //! 10 burn 11 hurt_cd 12 exhaustion 13 target block (mining/TNT) 14 top-ups
-//! 15 on_ground | sprinting<<1 | sneaking<<2
+//! 15 on_ground | sprinting<<1 | sneaking<<2  16 furnace outputs  17 furnace
+//! progress  18 speed-potion ticks left  19 SIM_TICK
+//!
+//! The pacing phases hold every frame to 1, 2 and then 3 vblanks (60, 30 and
+//! 20 fps) while a furnace smelts and a potion runs down, so a timer's
+//! real-time duration can be compared across frame rates.
 
 use crate::*;
 
 #[no_mangle]
-pub static mut VOXIDE_LAB_P: [i32; 16] = [0; 16];
+pub static mut VOXIDE_LAB_P: [i32; 20] = [0; 20];
 static mut T: i32 = 0; // sim steps since gameplay began
 static mut F: i32 = 0; // rendered frames since gameplay began
 static mut ORG: (i32, i32) = (0, 0); // arena origin, block coords
 static mut TOPUPS: i32 = 0;
+static mut LAST_VBL: u32 = 0; // vblank count when the last frame's poll ran
 
 const BY: i32 = 50; // platform block y; you stand at (BY + 1) * BLOCK
 
@@ -40,12 +46,16 @@ const P_CONTACT: i32 = 6400;
 const P_POTION: i32 = 6600;
 const P_MINE: i32 = 6900;
 const P_TNT: i32 = 7300;
-const P_END: i32 = 7600;
+const P_PACE1: i32 = 7600;
+const P_PACE2: i32 = 8320;
+const P_PACE3: i32 = 9040;
+const P_END: i32 = 9760;
 
 fn phase(t: i32) -> i32 {
     let starts = [
         P_WALK, P_SPRINT, P_SNEAK, P_JUMP, P_FALL, P_LADDER, P_SLIDE, P_SWIM, P_DROWN, P_LAVA,
-        P_LAVA_OUT, P_REGEN, P_STARVE, P_HUNGER, P_CONTACT, P_POTION, P_MINE, P_TNT, P_END,
+        P_LAVA_OUT, P_REGEN, P_STARVE, P_HUNGER, P_CONTACT, P_POTION, P_MINE, P_TNT, P_PACE1,
+        P_PACE2, P_PACE3, P_END,
     ];
     let mut p = 0;
     while p < starts.len() && t >= starts[p] {
@@ -69,6 +79,23 @@ fn pad(real: ButtonState) -> ButtonState {
         return real; // still in the menu hand-off
     }
     unsafe { F += 1 };
+    // Pacing: hold each frame's poll until `n` vblanks have passed since the
+    // last one, so frames come every `n` vblanks (the scene is cheap enough
+    // to finish inside one).
+    let n = if t >= P_PACE3 && t < P_END {
+        3
+    } else if t >= P_PACE2 && t < P_END {
+        2
+    } else if t >= P_PACE1 && t < P_END {
+        1
+    } else {
+        0
+    };
+    if n > 1 {
+        let v0 = unsafe { LAST_VBL };
+        while psx_rt::interrupts::vblank_count().wrapping_sub(v0) < n {}
+    }
+    unsafe { LAST_VBL = psx_rt::interrupts::vblank_count() };
     let mut b = 0u16;
     let within = |a: i32, n: i32| t >= a && t < a + n;
     if within(P_WALK + 10, 120) {
@@ -251,6 +278,25 @@ pub fn step(p: &mut Player) {
             put(ox, BY + 2, oz + 1, DIRT);
             world::remesh_loaded();
         }
+        P_PACE1 | P_PACE2 | P_PACE3 => {
+            // Look at the empty sky (cheap enough for 60 fps), start a
+            // furnace on 50 sand and a speed potion.
+            place(p, ox, stand, oz);
+            p.pitch = 900;
+            put(ox + 2, BY + 1, oz - 1, FURNACE);
+            furn_register(ox + 2, BY + 1, oz - 1);
+            if let Some(i) = furn_find(ox + 2, BY + 1, oz - 1) {
+                unsafe {
+                    FURN_IN[i] = SAND;
+                    FURN_IN_N[i] = 50;
+                    FURN_FUEL[i] = 50;
+                    FURN_OUT[i] = AIR;
+                    FURN_OUT_N[i] = 0;
+                    FURN_PROG[i] = 0;
+                }
+            }
+            drink_potion(p, POTION_SPEED);
+        }
         P_TNT => {
             put(ox + 20, BY + 1, oz + 20, TNT);
             ignite_tnt(ox + 20, BY + 1, oz + 20);
@@ -269,6 +315,11 @@ pub fn step(p: &mut Player) {
         world::get(ox + 20, BY + 1, oz + 20)
     } else {
         world::get(ox, BY + 2, oz + 1)
+    };
+    let (ox, oz) = unsafe { ORG };
+    let furn = match furn_find(ox + 2, BY + 1, oz - 1) {
+        Some(i) => unsafe { (FURN_OUT_N[i] as i32, FURN_PROG[i] as i32) },
+        None => (0, 0),
     };
     unsafe {
         T = t + 1;
@@ -291,6 +342,10 @@ pub fn step(p: &mut Player) {
             target as i32,
             TOPUPS,
             p.on_ground as i32 | (p.sprinting as i32) << 1 | (p.sneaking as i32) << 2,
+            furn.0,
+            furn.1,
+            p.eff_speed as i32,
+            SIM_TICK as i32,
             ],
         );
     }

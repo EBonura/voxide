@@ -1987,8 +1987,6 @@ static mut FLUID_PHASE: u32 = 0;
 /// Cells evaluated per fluid tick. Each one can set up to 4 blocks, so this is
 /// also the frame's remesh footprint.
 const FLUID_BUDGET: usize = 6;
-/// Java spreads water every 5 game ticks; at 30fps this is the same cadence.
-pub const FLUID_INTERVAL: u32 = 5;
 
 fn fq_push(x: i32, y: i32, z: i32) {
     unsafe {
@@ -2238,7 +2236,7 @@ fn lowest_lava_level(x: i32, y: i32, z: i32) -> u8 {
 /// inline(never) is load-bearing: the gameplay loop is one enormous function
 /// and inlining this into it pushes a conditional branch past MIPS's +/-128KB
 /// PC16 range, which fails at link time ("out of range PC16 fixup"). It runs
-/// once every five frames, so the call ABI is free.
+/// a few times a second (main's FLUID_PERIOD), so the call ABI is free.
 #[inline(never)]
 pub fn fluid_tick() {
     // Java runs lava six times slower than water in the overworld. Rather than a
