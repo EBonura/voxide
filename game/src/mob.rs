@@ -1096,8 +1096,8 @@ pub fn player_shoot(ex: i32, ey: i32, ez: i32, dx: i32, dy: i32, dz: i32) {
     }
 }
 
-/// An in-flight player arrow at (ax,ay,az): damage the first mob it overlaps.
-fn arrow_hit_mob(ax: i32, ay: i32, az: i32) -> bool {
+/// An in-flight player arrow at (ax,ay,az) doing `dmg`: damage the first mob it overlaps.
+fn arrow_hit_mob(ax: i32, ay: i32, az: i32, dmg: i16) -> bool {
     let mut i = 0;
     while i < CAP {
         let mut m = unsafe { MOBS[i] };
@@ -1109,7 +1109,9 @@ fn arrow_hit_mob(ax: i32, ay: i32, az: i32) -> bool {
                 && ay > m.y - 8
                 && ay < m.y + h
             {
-                m.health -= 4; // arrow damage (Java: 6 at full draw; 4 here)
+                // Java: ceil(2 x speed in blocks a game tick) (minecraft.wiki/w/
+                // Arrow), 6 leaving the bow, less as drag slows it.
+                m.health -= dmg;
                 m.hurt_cd = HURT_TICKS;
                 if m.health <= 0 {
                     record_death(&m);
@@ -1175,6 +1177,14 @@ pub fn blast_mobs(cx: i32, cy: i32, cz: i32, power: i32) {
     }
 }
 
+/// A player arrow's damage from its speed: ceil(2 x blocks a game tick).
+fn arrow_damage(a: &Arrow) -> i16 {
+    let v2 = (a.vx >> 4) * (a.vx >> 4) + (a.vy >> 4) * (a.vy >> 4) + (a.vz >> 4) * (a.vz >> 4);
+    let v = psx_math::int32::isqrt_i32(v2) << 4; // Q8 units a sim tick
+    // blocks a game tick = v * 3 / (64 * 256); x 2, rounded up.
+    ((v * 6 + 16383) / 16384) as i16
+}
+
 fn update_arrows(px: i32, py: i32, pz: i32) {
     let mut i = 0;
     while i < ARROW_CAP {
@@ -1201,7 +1211,7 @@ fn update_arrows(px: i32, py: i32, pz: i32) {
                     dead = true;
                 } else if a.from_player {
                     // Player arrow: damage the first mob it overlaps.
-                    if arrow_hit_mob(ax, ay, az) {
+                    if arrow_hit_mob(ax, ay, az, arrow_damage(&a)) {
                         dead = true;
                     }
                 } else if (ax - px).abs() < PLAYER_HALF_W + 8
@@ -1210,8 +1220,9 @@ fn update_arrows(px: i32, py: i32, pz: i32) {
                     && ay < py + PLAYER_HEIGHT
                 {
                     // Skeleton arrow: damage the player.
+                    // Skeleton arrows: 3 to 5 on Normal (minecraft.wiki/w/Skeleton).
                     unsafe {
-                        HAZARD_DMG += 4;
+                        HAZARD_DMG += 3 + (rng() % 3) as i32;
                     }
                     dead = true;
                 }
