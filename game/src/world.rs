@@ -4382,15 +4382,26 @@ fn plane_in_frustum(
 /// `crate::emit_faces` a batch at a time, so the cull loop and the packet
 /// builder each run as their own tight loop. With the builder inlined into the cull loop, its
 /// state spilled around every culled face and the pair spanned twice the
-/// R3000's 4 KB instruction cache. The batch lives in the scratchpad
-/// (single-cycle, no RAM stall) above the near clipper's buffers; main.rs
-/// asserts the two do not overlap. Batching keeps the emission order, so the
-/// ordering table is built exactly as before.
-pub const FACE_BATCH_ADDR: usize = 0x1F80_0360;
+/// R3000's 4 KB instruction cache. The batch lives at the bottom of the
+/// scratchpad (single-cycle, no RAM stall), below the face pass's stack.
+/// Batching keeps the emission order, so the ordering table is built exactly
+/// as before.
+pub const FACE_BATCH_ADDR: usize = 0x1F80_0000;
 pub const FACE_BATCH: usize = 16;
 pub const FACE_BATCH_END: usize = FACE_BATCH_ADDR + FACE_BATCH * 6;
 const BATCH_F: *mut u32 = FACE_BATCH_ADDR as *mut u32;
 const BATCH_S: *mut u16 = (FACE_BATCH_ADDR + FACE_BATCH * 4) as *mut u16;
+
+/// The stack the per-chunk face pass (chunk_faces, emit_faces and the
+/// near-cell clipper under it) and the plant pass run on: the scratchpad above
+/// the face batch. Those loops are register-starved; their spill reloads were
+/// the largest main-RAM stall in the frame (about 110K cycles on the train
+/// route). tools/stack_guard.py proves each tree fits after every link.
+pub type FaceStack = psx_rt::scratchpad::ScratchpadStack<{ FACE_BATCH_END - 0x1F80_0000 }, 1024>;
+const _: () = psx_rt::scratchpad::assert_disjoint(&[
+    psx_rt::scratchpad::Region::new(0, FACE_BATCH_END - 0x1F80_0000),
+    FaceStack::REGION,
+]);
 
 /// Emit every cached face of every loaded chunk that passes a cheap distance
 /// + frustum cull, in mesh order, through `crate::emit_faces` (see
@@ -4427,7 +4438,9 @@ pub fn for_visible_faces(cam: &Camera, count: &mut usize) -> usize {
             if visible && !occluded {
                 let oxw = cx * CW * BLOCK;
                 let ozw = cz * CW * BLOCK;
-                face_work += chunk_faces(cam, p, oxw, ozw, tops_only, count);
+                face_work += unsafe {
+                    FaceStack::run(|| chunk_faces(cam, p, oxw, ozw, tops_only, count))
+                };
             }
         }
         s += 1;
