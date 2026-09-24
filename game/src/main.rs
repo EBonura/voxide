@@ -1411,11 +1411,12 @@ struct Player {
     air: i32,         // breath remaining underwater
     burn: i32,        // burning timer (set by lava/fire), damages over time
     hurt_cd: i32,     // i-frames between environmental damage ticks
-    regen_delay: i32, // frames to wait after damage before regen resumes
-    regen_tick: i32,  // frames accumulated toward the next regen/starve point
+    regen_tick: i32,  // sim ticks toward the next regen/starve point (Java's foodTickTimer)
+    heal_frac: i32,   // saturation-boost healing not yet a whole hp, hundredths
     food: i32,        // hunger, 0..MAX_FOOD
     food_items: i32,  // raw food carried (mob drops); auto-eaten when hungry
-    exhaustion: i32,  // counts toward the next hunger point lost
+    exhaustion: i32,  // Java's exhaustion, EXH_POINT to a point; 4 points cost a hunger point
+    saturation: i32,  // Java's saturation, hundredths, never above food
     // A tier per tool TYPE (0 none, 1 wood .. 4 diamond). They are player
     // stats rather than inventory items: there is no durability, the best of
     // each auto-equips, and the right one is chosen for whatever you swing at.
@@ -1429,7 +1430,7 @@ struct Player {
     efficiency: u8,  // mining-speed enchant level (0..3), bought with XP at a table
     sharpness: u8,   // melee-damage enchant level (0..3)
     protection: u8,  // damage-reduction enchant level (0..3)
-    sprinting: bool, // latched by L3 or double-tap-forward: 1.3x speed, 3x exhaustion
+    sprinting: bool, // latched by L3 or double-tap-forward: 1.3x speed
     sneaking: bool,  // CIRCLE held: slow, and will not walk off a ledge
     eff_speed: u16,  // potion effect timers, in frames
     eff_strength: u16,
@@ -1525,19 +1526,33 @@ fn armored(raw: i32, armor: u8, protection: u8) -> i32 {
 const MAX_HEALTH: i32 = 20;
 const SAFE_FALL_BLOCKS: i32 = 3; // first 3 blocks of a fall do no damage (Java)
 const MAX_AIR: i32 = secs(15); // 15s underwater before drowning (Java: 300 ticks)
-const REGEN_DELAY: i32 = secs(3); // ponytail: ~3s post-hit regen pause; Java has none,
-                                          // but our slow regen makes it near-moot. Kept for feel.
-const REGEN_PERIOD: i32 = secs(4); // slow regen: +1 hp / 4s (Java food>=18 tier)
-const REGEN_FAST: i32 = ms(500); // fast regen: +1 hp / 0.5s when well fed (food==20)
+// Hunger, Java's (minecraft.wiki/w/Food): actions add exhaustion; every 4.0
+// points of it cost a point of saturation, or of hunger once saturation is
+// gone. At hunger 18+ the player heals 1 hp every 80 game ticks for 6.0
+// exhaustion; at a full 20 with saturation left, every 10 ticks, healing
+// min(saturation, 6) / 6 hp for that much exhaustion (the saturation boost).
+// At 0 the player starves 1 hp every 80 ticks, down to 1 on Normal.
+// Exhaustion is kept in 1/64,000ths of a point so that a sprint's 0.1 a block
+// is a whole number per world unit.
+const EXH_POINT: i32 = 64_000;
+const EXH_SPRINT_PER_UNIT: i32 = EXH_POINT / 10 / BLOCK; // 0.1 a block sprinted
+const EXH_SWIM_PER_UNIT: i32 = EXH_POINT / 100 / BLOCK; // 0.01 a block swum
+const EXH_JUMP: i32 = EXH_POINT / 20; // 0.05
+const EXH_SPRINT_JUMP: i32 = EXH_POINT / 5; // 0.2
+const EXH_BREAK: i32 = EXH_POINT / 200; // 0.005 a block broken
+const EXH_ATTACK: i32 = EXH_POINT / 10; // 0.1 an attack landed
+const EXH_DAMAGE: i32 = EXH_POINT / 10; // 0.1 a hit of armour-protected damage
+const EXH_REGEN: i32 = 6 * EXH_POINT; // per hp healed
+/// Saturation on a new world or a respawn: 5.0 (Food, foodSaturationLevel).
+const SPAWN_SATURATION: i32 = 500;
+const REGEN_PERIOD: i32 = units::java_ticks(80); // hunger 18+: 1 hp / 4 s
+const REGEN_FAST: i32 = units::java_ticks(10); // full, saturated: every 0.5 s
 /// Burning after lava: 15 s, reset every tick in lava (minecraft.wiki/w/Lava).
 const FIRE_DURATION: i32 = secs(15);
 /// Burning after a fire block: 160 game ticks, 8 s (minecraft.wiki/w/Fire#Burning).
 const FIRE_BLOCK_BURN: i32 = units::java_ticks(160);
 const MAX_FOOD: i32 = 20;
-const FOOD_DRAIN: i32 = secs(20); // ~20s per hunger point lost (time-based; ponytail:
-                                          // Java uses per-action exhaustion, but heal-burns-food
-                                          // below carries the core "activity drains food" loop)
-const STARVE_PERIOD: i32 = secs(4); // lose 1 hp per 4s while starving (Java rate)
+const STARVE_PERIOD: i32 = units::java_ticks(80); // lose 1 hp per 4 s while starving
 /// Hazard cadences: lava, fire and cactus hurt every half second, drowning
 /// and burning every second, as in Java.
 const HAZARD_FAST_CD: i32 = ms(500);
@@ -2609,7 +2624,7 @@ fn main() {
                     player.health -= mob_hit;
                     player.hurt_cd = PLAYER_HURT_CD;
                     player.hurt_tilt = HURT_TILT_FRAMES;
-                    player.regen_delay = REGEN_DELAY;
+                    player.exhaustion += EXH_DAMAGE;
                 }
                 if player.health < hp_before {
                     sfx::hurt();
@@ -2777,6 +2792,7 @@ fn main() {
                 dmg += player.sharpness as i16; // Java: +1.25 per level, rounded here
                 if mob::melee(cam.x, cam.y, cam.z, fx, fz, ENTITY_REACH, dmg) {
                     sfx::hit_mob();
+                    player.exhaustion += EXH_ATTACK;
                 }
             }
 
@@ -2817,6 +2833,7 @@ fn main() {
                     }
                     if mine_progress >= mine_den && (mine_den == 0 || step > 0) {
                         sfx::break_block();
+                        player.exhaustion += EXH_BREAK;
                         if mine_den > 0 {
                             mine_cool = units::java_ticks(6) as u32;
                         }
@@ -4142,11 +4159,12 @@ fn spawn_player() -> Player {
         air: MAX_AIR,
         burn: 0,
         hurt_cd: 0,
-        regen_delay: 0,
         regen_tick: 0,
+        heal_frac: 0,
         food: MAX_FOOD,
         food_items: 0,
         exhaustion: 0,
+        saturation: SPAWN_SATURATION,
         sprinting: false,
         sneaking: false,
         eff_speed: 0,
@@ -4582,7 +4600,15 @@ fn portal_near(bx: i32, by: i32, bz: i32) -> bool {
 }
 
 /// Environmental survival: lava + drowning damage (with i-frames via
-/// regen_delay), and passive health regen when unhurt for a while.
+/// Java's food timer), and health regen by hunger and saturation.
+/// Eat: `food` hunger points and `sat` hundredths of saturation, which never
+/// exceeds the hunger level (minecraft.wiki/w/Food#Saturation).
+fn eat(player: &mut Player, food: i32, sat: i32) {
+    player.food = (player.food + food).min(MAX_FOOD);
+    player.saturation = (player.saturation + sat).min(player.food * 100);
+    sfx::eat();
+}
+
 #[inline(never)]
 fn update_survival(player: &mut Player) {
     let bx = world_to_block_x(player.x);
@@ -4599,16 +4625,19 @@ fn update_survival(player: &mut Player) {
     let mut hurt = 0;
     let mut cd = HAZARD_FAST_CD;
     let mut fiery = false;
+    let mut armoured = false; // lava, fire and cactus are armour-protected damage
     if is_lava(feet) || is_lava(mid) {
         hurt = 4; // Java: 4 hp per 0.5s in lava
         cd = HAZARD_FAST_CD;
         player.burn = FIRE_DURATION; // and catch fire
         fiery = true;
+        armoured = true;
     } else if feet == FIRE || mid == FIRE {
         hurt = 1; // Java: 1 hp per 0.5s in a fire block (Damage#Fire)
         cd = HAZARD_FAST_CD;
         player.burn = player.burn.max(FIRE_BLOCK_BURN);
         fiery = true;
+        armoured = true;
     }
     // Cactus pricks: standing against one (any cardinal neighbour at feet or
     // mid height) costs 1 hp per half second, like Java contact damage.
@@ -4626,6 +4655,7 @@ fn update_survival(player: &mut Player) {
         {
             hurt = 1;
             cd = HAZARD_FAST_CD;
+            armoured = true;
         }
     }
     if is_water(head) {
@@ -4634,6 +4664,7 @@ fn update_survival(player: &mut Player) {
         } else if hurt < 2 {
             hurt = 2; // out of air -> drown 2 hp per 1s
             cd = HAZARD_SLOW_CD;
+            armoured = false;
         }
         player.burn = 0; // water douses fire
     } else {
@@ -4662,49 +4693,51 @@ fn update_survival(player: &mut Player) {
         if hurt == 0 {
             hurt = 1; // burning: 1 hp per 1s even after leaving lava
             cd = HAZARD_SLOW_CD;
+            armoured = false;
         }
     }
 
     if hurt > 0 && player.hurt_cd == 0 {
         player.health -= hurt;
         player.hurt_cd = cd;
-        player.regen_delay = REGEN_DELAY;
+        if armoured {
+            player.exhaustion += EXH_DAMAGE;
+        }
     }
 
-    // Hunger drains over time; auto-eat carried food (mob drops) when hungry.
-    player.exhaustion += if player.sprinting { 3 } else { 1 };
-    if player.exhaustion >= FOOD_DRAIN {
-        player.exhaustion = 0;
-        if player.food > 0 {
+    // Exhaustion spends saturation, then hunger.
+    if player.exhaustion >= 4 * EXH_POINT {
+        player.exhaustion -= 4 * EXH_POINT;
+        if player.saturation > 0 {
+            player.saturation = (player.saturation - 100).max(0);
+        } else if player.food > 0 {
             player.food -= 1;
         }
     }
-    // Auto-eat, best food first, at Java's hunger values: steak +8, bread +5,
-    // raw beef +3, raw cod +2 (minecraft.wiki/w/Steak, Bread, Raw Beef, Raw Cod).
+    // Auto-eat carried food when hungry.
+    // Auto-eat, best food first, at Java's hunger and saturation values: steak
+    // 8 and 12.8, bread 5 and 6, raw beef 3 and 1.8, raw cod 2 and 0.4
+    // (minecraft.wiki/w/Steak, Bread, Raw Beef, Raw Cod).
     if player.food <= MAX_FOOD - 8 && unsafe { INV[COOKED_MEAT as usize] } > 0 {
         unsafe {
             INV[COOKED_MEAT as usize] -= 1;
         }
-        player.food = (player.food + 8).min(MAX_FOOD);
-        sfx::eat();
+        eat(player, 8, 1280);
     } else if player.food <= MAX_FOOD - 5 && unsafe { INV[BREAD as usize] } > 0 {
         unsafe {
             INV[BREAD as usize] -= 1;
         }
-        player.food = (player.food + 5).min(MAX_FOOD);
-        sfx::eat();
+        eat(player, 5, 600);
     } else if player.food <= MAX_FOOD - 3 && unsafe { INV[RAW_MEAT as usize] } > 0 {
         // Raw meat is the last resort; cook it for double the value.
         unsafe {
             INV[RAW_MEAT as usize] -= 1;
         }
-        player.food = (player.food + 3).min(MAX_FOOD);
-        sfx::eat();
+        eat(player, 3, 180);
     } else if player.food <= MAX_FOOD - 2 && player.food_items > 0 {
         // Fish from the rod, eaten raw: Java's raw cod.
-        player.food = (player.food + 2).min(MAX_FOOD);
+        eat(player, 2, 40);
         player.food_items -= 1;
-        sfx::eat();
     }
 
     // Regeneration potion heals regardless of food or recent damage, which is
@@ -4712,9 +4745,28 @@ fn update_survival(player: &mut Player) {
     if player.eff_regen > 0 && player.health < MAX_HEALTH && player.eff_regen % REGEN_POTION_PERIOD == 0 {
         player.health += 1;
     }
-    // Regen only when fed and unhurt; starve (to 1 hp) when out of food.
-    if player.regen_delay > 0 {
-        player.regen_delay -= 1;
+    // Java's food timer: the saturation boost at a full bar, natural regen at
+    // 18+, starving at 0 (down to 1 hp, Normal difficulty).
+    let hurt_now = player.health < MAX_HEALTH;
+    if player.food >= MAX_FOOD && player.saturation > 0 && hurt_now {
+        player.regen_tick += 1;
+        if player.regen_tick >= REGEN_FAST {
+            let f = player.saturation.min(600); // hundredths of a point
+            player.heal_frac += f / 6; // hundredths of an hp
+            if player.heal_frac >= 100 {
+                player.heal_frac -= 100;
+                player.health += 1;
+            }
+            player.exhaustion += f * EXH_POINT / 100;
+            player.regen_tick = 0;
+        }
+    } else if player.food >= REGEN_FOOD_MIN && hurt_now {
+        player.regen_tick += 1;
+        if player.regen_tick >= REGEN_PERIOD {
+            player.health += 1;
+            player.exhaustion += EXH_REGEN;
+            player.regen_tick = 0;
+        }
     } else if player.food == 0 {
         player.regen_tick += 1;
         if player.regen_tick >= STARVE_PERIOD {
@@ -4723,19 +4775,8 @@ fn update_survival(player: &mut Player) {
             }
             player.regen_tick = 0;
         }
-    } else if player.health < MAX_HEALTH && player.food >= REGEN_FOOD_MIN {
-        player.regen_tick += 1;
-        // Fast regen when well fed (Java: food==20 & saturation>0), else slow.
-        let period = if player.food == MAX_FOOD {
-            REGEN_FAST
-        } else {
-            REGEN_PERIOD
-        };
-        if player.regen_tick >= period {
-            player.health += 1;
-            player.food -= 1; // healing burns food (Java: ~1.5 food/hp via exhaustion)
-            player.regen_tick = 0;
-        }
+    } else {
+        player.regen_tick = 0;
     }
     // Tuning lab (never shipped): script the next step, mirror the player.
     #[cfg(feature = "tune-lab")]
@@ -4900,7 +4941,7 @@ fn update_player(
     // double-tap window. The latch drops the moment forward input stops, so a
     // sprint is one gesture and then just steering -- no held button fighting
     // the look stick. 1.3x speed (Java 5.612 vs 4.317 b/s), extra hunger
-    // (exhaustion accrues 3x, see update_survival).
+    // (0.1 exhaustion a block, see EXH_SPRINT_PER_UNIT).
     let fwd_now = forward > 0;
     if fwd_now && !player.was_fwd {
         if player.sprint_tap > 0 {
@@ -5015,6 +5056,7 @@ fn update_player(
         // step -- the player could not walk at all (fly skips this branch, which
         // is why flying still worked).
         let mut blocked = false;
+        let (x0, z0) = (player.x, player.z);
         player.x += dx;
         if !world::column_loaded(world_to_block_x(player.x), world_to_block_z(player.z))
             || aabb_collides(player.x, player.y, player.z)
@@ -5032,6 +5074,15 @@ fn update_player(
             player.z -= dz;
             player.z_frac = 0;
             blocked |= dz != 0;
+        }
+        // Exhaustion from distance actually covered: 0.01 a block in water,
+        // 0.1 a block sprinting on land; walking costs nothing (Food#Exhaustion).
+        let (mx, mz) = ((player.x - x0).abs(), (player.z - z0).abs());
+        let moved = (mx.max(mz) * 123 + mx.min(mz) * 51) >> 7; // ~Euclidean
+        if in_water_body(player.x, player.y, player.z) {
+            player.exhaustion += moved * EXH_SWIM_PER_UNIT;
+        } else if sprinting {
+            player.exhaustion += moved * EXH_SPRINT_PER_UNIT;
         }
 
         // Ladders, as in Java: any movement input (or jump) climbs at 2.35
@@ -5138,7 +5189,6 @@ fn update_player(
                 let blocks = (player.fall_peak - player.y) / BLOCK;
                 if blocks > SAFE_FALL_BLOCKS {
                     player.health -= blocks - SAFE_FALL_BLOCKS;
-                    player.regen_delay = REGEN_DELAY;
                 }
             }
             player.fall_peak = player.y;
@@ -5152,6 +5202,7 @@ fn update_player(
         // only strokes up.
         let shore = blocked && in_water_body(player.x, player.y, player.z);
         if (player.on_ground || shore) && pad.pressed_since(previous, button::CROSS) {
+            player.exhaustion += if sprinting { EXH_SPRINT_JUMP } else { EXH_JUMP };
             player.vy = JUMP_VY;
             player.on_ground = false;
             unsafe { TUT_JUMPED = true };
@@ -10353,7 +10404,7 @@ fn tnt_tick(player: &mut Player) {
                         if dmg > 0 && player.hurt_cd == 0 {
                             player.health -= dmg;
                             player.hurt_cd = PLAYER_HURT_CD;
-                            player.regen_delay = REGEN_DELAY;
+                            player.exhaustion += EXH_DAMAGE;
                         }
                     }
                 }

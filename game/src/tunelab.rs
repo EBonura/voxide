@@ -242,22 +242,22 @@ pub fn step(p: &mut Player) {
         P_REGEN => {
             p.health = 10;
             p.food = MAX_FOOD;
-            p.regen_delay = 0;
             p.regen_tick = 0;
             p.exhaustion = 0;
+            p.saturation = 500;
             p.burn = 0;
         }
         P_STARVE => {
             p.health = MAX_HEALTH;
             p.food = 0;
-            p.regen_delay = 0;
+            p.saturation = 0;
             p.regen_tick = 0;
         }
         P_HUNGER => {
             p.health = MAX_HEALTH;
             p.food = 10;
             p.exhaustion = 0;
-            p.regen_delay = 0;
+            p.saturation = 0;
             p.regen_tick = 0;
         }
         P_CONTACT => {
