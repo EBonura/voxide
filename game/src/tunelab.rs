@@ -45,11 +45,11 @@ const P_HUNGER: i32 = 5100;
 const P_CONTACT: i32 = 6400;
 const P_POTION: i32 = 6600;
 const P_MINE: i32 = 6900;
-const P_TNT: i32 = 7300;
-const P_PACE1: i32 = 7600;
-const P_PACE2: i32 = 8320;
-const P_PACE3: i32 = 9040;
-const P_END: i32 = 9760;
+const P_TNT: i32 = 7740;
+const P_PACE1: i32 = 8040;
+const P_PACE2: i32 = 8760;
+const P_PACE3: i32 = 9480;
+const P_END: i32 = 10200;
 
 fn phase(t: i32) -> i32 {
     let starts = [
@@ -119,7 +119,7 @@ fn pad(real: ButtonState) -> ButtonState {
     if within(P_SWIM + 20, 100) {
         b |= button::CROSS;
     }
-    if within(P_MINE + 20, 150) || within(P_MINE + 220, 150) {
+    if within(P_MINE + 20, 480) || within(P_MINE + 540, 100) || within(P_MINE + 680, 100) {
         b |= button::R2;
     }
     ButtonState::from_bits(b)
@@ -274,8 +274,13 @@ pub fn step(p: &mut Player) {
             put(ox, BY + 2, oz + 1, STONE);
             world::remesh_loaded();
         }
-        x if x == P_MINE + 200 => {
+        x if x == P_MINE + 520 => {
             put(ox, BY + 2, oz + 1, DIRT);
+            world::remesh_loaded();
+        }
+        x if x == P_MINE + 660 => {
+            p.pick = 1; // a wooden pickaxe
+            put(ox, BY + 2, oz + 1, STONE);
             world::remesh_loaded();
         }
         P_PACE1 | P_PACE2 | P_PACE3 => {

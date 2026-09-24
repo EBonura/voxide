@@ -2305,6 +2305,7 @@ fn main() {
     let mut portal_dwell: u16 = 0;
     let (mut mine_x, mut mine_y, mut mine_z) = (0i32, 0i32, 0i32);
     let mut mine_progress: u32 = 0;
+    let mut mine_cool: u32 = 0; // sim ticks before the next block starts to break
     let mut menu: u8 = 0; // 0 none, 1 crafting, 2 chest, 3 furnace
     let mut menu_sel = 0usize;
     let mut chest_idx = 0usize;
@@ -2729,33 +2730,55 @@ fn main() {
             // Mine: hold R2 to break the targeted block over time (by hardness).
             if pick.hit && pad.is_held(button::R2) {
                 let tb = get_block_i32(pick.bx, pick.by, pick.bz);
-                let hard = block_hardness(tb);
-                if hard > 0 && pick.by != 0 {
-                    let speed = mine_speed(&player, tb) + player.efficiency as u32 * 3;
+                let hard = block_hardness100(tb);
+                if hard >= 0 && pick.by != 0 {
+                    let head = get_block_i32(
+                        world_to_block_x(player.x),
+                        world_to_block_y(player.y + EYE_HEIGHT),
+                        world_to_block_z(player.z),
+                    );
+                    let ticks = break_ticks(&player, tb, hard, is_water(head), player.on_ground);
+                    let step = if mine_cool > 0 {
+                        // Java's 6 game ticks between one block and the next.
+                        let used = mine_cool.min(sim_n);
+                        mine_cool -= used;
+                        sim_n - used
+                    } else {
+                        sim_n
+                    };
                     if mine_active && mine_x == pick.bx && mine_y == pick.by && mine_z == pick.bz {
-                        mine_progress += speed * sim_n;
+                        mine_progress += step;
                     } else {
                         mine_active = true;
                         mine_x = pick.bx;
                         mine_y = pick.by;
                         mine_z = pick.bz;
-                        mine_progress = speed * sim_n;
+                        mine_progress = step;
                     }
-                    mine_den = 2 * hard; // block_hardness is in 30ths of a second
+                    mine_den = ticks;
                     dig_t += sim_n;
                     if dig_t >= DIG_PERIOD {
                         dig_t = 0;
                         sfx::dig(step_mat(tb), frame); // hit voiced by the block
                         swing = SWING_TICKS; // arm-swing each hit
                     }
-                    if mine_progress >= mine_den {
+                    if mine_progress >= mine_den && (mine_den == 0 || step > 0) {
                         sfx::break_block();
-                        player.xp += match tb {
-                            COAL_ORE => 1,
-                            IRON_ORE | GOLD_ORE => 3,
-                            DIAMOND_ORE => 7,
-                            _ => 0,
-                        };
+                        if mine_den > 0 {
+                            mine_cool = units::java_ticks(6) as u32;
+                        }
+                        let harvest = can_harvest(&player, tb);
+                        // Ore XP, Java's ranges (minecraft.wiki/w/Experience):
+                        // coal 0 to 2, diamond 3 to 7, and none for iron and
+                        // gold ore, which pay on smelting instead.
+                        let roll = frame.wrapping_mul(2_654_435_761) >> 16;
+                        if harvest {
+                            player.xp += match tb {
+                                COAL_ORE => (roll % 3) as i32,
+                                DIAMOND_ORE => 3 + (roll % 5) as i32,
+                                _ => 0,
+                            };
+                        }
                         spawn_particles(
                             block_to_world_x(pick.bx) + BLOCK / 2,
                             pick.by * BLOCK + BLOCK / 2,
@@ -2779,17 +2802,20 @@ fn main() {
                         } else if tb == WHEAT {
                             give_drop(dx, dy, dz, SEEDS, frame); // immature: just the seed
                         } else if tb == LEAVES {
-                            // ~30% sapling drop keeps wood renewable (Java-ish rate).
-                            if (pick.bx.wrapping_mul(73)
-                                ^ pick.by.wrapping_mul(151)
-                                ^ pick.bz.wrapping_mul(37)) as u32
-                                % 10
-                                < 3
-                            {
+                            // A sapling 1 time in 20 (minecraft.wiki/w/Leaves).
+                            if roll % 20 == 0 {
                                 give_drop(dx, dy, dz, SAPLING, frame);
                             }
-                        } else if player.pick >= mine_min_tier(tb) {
-                            spawn_drop(dx, dy, dz, tb, frame); // under-tier: block breaks but drops nothing
+                        } else if tb == TALL_GRASS {
+                            // Wheat seeds 12.5% of the time (minecraft.wiki/w/Short_Grass).
+                            if roll % 8 == 0 {
+                                give_drop(dx, dy, dz, SEEDS, frame);
+                            }
+                        } else if tb == GLASS {
+                            // Glass drops nothing without Silk Touch
+                            // (minecraft.wiki/w/Glass).
+                        } else if harvest {
+                            spawn_drop(dx, dy, dz, tb, frame); // wrong tool: breaks, drops nothing
                         }
                         if tb == CHEST {
                             chest_remove(pick.bx, pick.by, pick.bz);
@@ -10973,34 +10999,79 @@ fn furn_tick() {
     }
 }
 
-/// Bare-hand break time in world-clock ticks (30 a second). 0 means not mineable (water,
-/// air) or unbreakable. Tool tiers will divide these once tools exist.
-/// Relative break difficulty, scaled ~15x Java hardness to keep MC's ordering.
-/// (Java: leaves/bed 0.2, glass 0.3, dirt/sand 0.5, grass 0.6, stone 1.5,
-/// log 2.0, chest 2.5, all ores 3.0, furnace 3.5.)
-fn block_hardness(block: u8) -> u32 {
+/// Java hardness x 100 (minecraft.wiki/w/Breaking; Module:Hardness values):
+/// 0 breaks at once, -1 cannot be mined here (fluids, air, portals; bedrock
+/// is refused by layer). Flowers, crops, torches, fire and redstone are 0.
+fn block_hardness100(block: u8) -> i32 {
     match block {
         WIRE | TORCH | WHEAT | WHEAT_RIPE | SAPLING | FLOWER_R | FLOWER_Y | TALL_GRASS | FIRE
-        | SUGAR_CANE => 1, // ~instant (Java 0)
-        LADDER | CACTUS => 6,                                   // 0.4
-        LEAVES | SNOW | BED => 3,                               // 0.2
-        WOOL => 12,                                             // 0.8
-        GLASS => 5,                                             // 0.3
-        GRASS | DIRT | SAND | TNT | CLAY => 9,                  // 0.5-0.6
-        STONE | PISTON => 22,                                   // 1.5
-        WOOD | PLANK | COBBLE | DOOR_C | DOOR_O => 30,          // 2.0
-        SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W => 30, // as cobble
-        FENCE => 30,                                            // as planks
-        BRICK => 30,                                            // 2.0
-        CHEST | CRAFT_TABLE => 38,                              // 2.5
-        COAL_ORE | IRON_ORE | GOLD_ORE | DIAMOND_ORE => 45,     // all 3.0 in Java
-        ENCHANT => 45,                                          // sturdy
-        FURNACE => 53,                                          // 3.5
-        OBSIDIAN => 200,                                        // Java 50: the long one
-        CINDERSTONE => 6,                                       // 0.4, crumbles
-        VOID_STONE => 45,                                       // 3.0, like Java
-        SINK_SAND | LUMISTONE => 9,                             // 0.5 / 0.3
-        _ => 0,
+        | SUGAR_CANE | TNT | EMBER_CAP => 0,
+        LEAVES | SNOW | BED => 20,
+        GLASS | LUMISTONE => 30,
+        LADDER | CACTUS | CINDERSTONE => 40,
+        DIRT | SAND | SINK_SAND => 50,
+        GRASS | CLAY => 60,
+        WOOL => 80,
+        STONE | PISTON => 150,
+        WOOD | PLANK | COBBLE | BRICK | FENCE => 200,
+        SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W => 200, // cobblestone slab and stairs
+        CHEST | CRAFT_TABLE => 250,
+        COAL_ORE | IRON_ORE | GOLD_ORE | DIAMOND_ORE | VOID_STONE | DOOR_C | DOOR_O => 300,
+        FURNACE => 350,
+        ENCHANT => 500,
+        OBSIDIAN => 5000,
+        _ => -1,
+    }
+}
+
+/// Java's tool speed by tier: none 1, wood 2, stone 4, iron 6, diamond 8
+/// (minecraft.wiki/w/Breaking, speed multipliers).
+const TOOL_SPEED: [i32; 5] = [1, 2, 4, 6, 8];
+
+/// Whether the player's tools harvest `block` (it drops, and breaks at the
+/// faster rate). Stone-type blocks need a pickaxe of the tier on their page
+/// (minecraft.wiki: stone, cobblestone, bricks, furnace, netherrack, end stone
+/// and the enchanting table wood; iron ore stone; gold and diamond ore iron;
+/// obsidian diamond); a snow block needs a shovel. Everything else harvests
+/// by hand.
+fn can_harvest(p: &Player, block: u8) -> bool {
+    match block {
+        STONE | COBBLE | BRICK | SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W | FURNACE
+        | ENCHANT | CINDERSTONE | VOID_STONE | COAL_ORE | IRON_ORE | GOLD_ORE | DIAMOND_ORE
+        | OBSIDIAN => p.pick >= mine_min_tier(block).max(1),
+        SNOW => p.shovel >= 1,
+        _ => true,
+    }
+}
+
+/// Sim ticks to break `block` (hardness x 100 `h100`), Java's rule
+/// (minecraft.wiki/w/Breaking): the tool does its speed in damage a game
+/// tick, and the block breaks at hardness x 30 when the tool can harvest it,
+/// x 100 when it cannot. The right tool class multiplies speed by its tier;
+/// Efficiency adds level^2 + 1. A head underwater and feet off the ground
+/// each make it 5x slower. 0 means it breaks at once (inside one game tick).
+fn break_ticks(p: &Player, block: u8, h100: i32, wet_head: bool, grounded: bool) -> u32 {
+    if h100 == 0 {
+        return 0;
+    }
+    let tier = tool_tier(p, tool_for(block)).min(4) as usize;
+    let mut speed = TOOL_SPEED[tier];
+    if tier > 0 && p.efficiency > 0 {
+        let e = p.efficiency as i32;
+        speed += e * e + 1;
+    }
+    let f = if can_harvest(p, block) { 30 } else { 100 };
+    let mut game = (h100 * f + speed * 100 - 1) / (speed * 100); // ceil
+    if wet_head {
+        game *= 5;
+    }
+    if !grounded {
+        game *= 5;
+    }
+    if game <= 1 {
+        0
+    } else {
+        units::java_ticks(game) as u32
     }
 }
 
@@ -11104,19 +11175,6 @@ fn tool_tier(p: &Player, class: u8) -> u8 {
     }
 }
 
-/// Mining speed (progress per 30 Hz world-clock tick). The RIGHT tool speeds a block up; the
-/// wrong one works at bare-hand pace, which is what makes carrying a set of
-/// tools worth the crafting.
-///
-/// A block with NO tool family works at bare hands too -- `tool_tier` answers 0
-/// for TOOL_NONE, so the one line below covers it. It used to get a separate
-/// `1 + max(shovel, pick) / 2`, which made a shovel matter to breaking glass,
-/// matched neither Java nor any decision recorded here, and quietly concealed
-/// the stairs gap above. Removing it costs a third of a second on wool at
-/// worst (12 frames rather than 4); leaves go from 1 frame to 3.
-fn mine_speed(p: &Player, block: u8) -> u32 {
-    1 + tool_tier(p, tool_for(block)) as u32
-}
 
 fn get_block_i32(x: i32, y: i32, z: i32) -> u8 {
     world::get(x, y, z)
