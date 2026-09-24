@@ -5275,6 +5275,32 @@ fn draw_held_item(selected: u8, tool: (u8, u8), frame: u32, swing: i32) {
         }
         return; // otherwise: just the arm, like the original
     }
+    let icon = icon_tile(selected);
+    if icon != face_tile(selected, 0) {
+        // An item with its own icon (materials, food, buckets, potions, the
+        // torch, and the blocks whose world faces borrow another tile) is held
+        // the way the hotbar shows it: its icon as a flat sprite in the fist,
+        // on the same slant as a held tool, lit like the arm. As a cube it
+        // wore some other block's faces.
+        let l = unsafe { LIGHT } as u32;
+        let f = (48 + l * 80 / 128).clamp(16, 255) as u8;
+        let (u, v) = tex::tile_uv(icon);
+        let win = TextureWindow::power_of_two_tile(u, v, 16, 16);
+        let btx = unsafe { BLOCK_TEX };
+        let mat = TextureMaterial::opaque(btx.clut[icon as usize], btx.tpage, (f, f, f))
+            .with_texture_window(win);
+        ui_quad_textured(
+            [
+                (wx - 58, wy - 66),
+                (wx + 8, wy - 52),
+                (wx - 44, wy - 4),
+                (wx + 22, wy + 10),
+            ],
+            [(0, 0), (16, 0), (0, 16), (16, 16)],
+            mat,
+        );
+        return;
+    }
     let t = (cx, cyt - r / 2);
     let rt = (cx + r, cyt);
     let lf = (cx - r, cyt);
