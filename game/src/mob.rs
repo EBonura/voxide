@@ -543,8 +543,49 @@ pub fn debug_lineup(px: i32, py: i32, pz: i32) {
     }
 }
 
+/// Measurement harness (feature `mob-lab`): one fixed cast placed around the
+/// player on the first update, night forced so hostiles hunt, and mob damage
+/// counted into LAB_HITS / LAB_ARROWS instead of dealt, so a standing player
+/// survives the whole run. Headless route logs watch MOBS and these counters.
+#[cfg(feature = "mob-lab")]
+pub static mut LAB_HITS: u32 = 0;
+#[cfg(feature = "mob-lab")]
+pub static mut LAB_ARROWS: u32 = 0;
+#[cfg(feature = "mob-lab")]
+static mut LAB_INIT: bool = false;
+#[cfg(feature = "mob-lab")]
+fn lab_setup(px: i32, pz: i32) {
+    unsafe {
+        if LAB_INIT {
+            return;
+        }
+        LAB_INIT = true;
+        MOBS = [DEAD; CAP];
+    }
+    let cast: [(u8, i32, i32); 8] = [
+        (ZOMBIE, -3, 10),
+        (SPIDER, 3, 10),
+        (SKELETON, 0, 13),
+        (PIG, -6, 5),
+        (COW, 6, 5),
+        (SHEEP, -8, -4),
+        (CHICKEN, 8, -4),
+        (WOLF, 0, -8),
+    ];
+    let mut k = 0;
+    while k < 8 {
+        let (kind, ox, oz) = cast[k];
+        spawn_at(kind, px + ox * BLOCK, pz + oz * BLOCK);
+        k += 1;
+    }
+}
+
 /// Advance all mobs: spawn budget, AI, physics, despawn.
 pub fn update(px: i32, py: i32, pz: i32, night: bool) {
+    #[cfg(feature = "mob-lab")]
+    lab_setup(px, pz);
+    #[cfg(feature = "mob-lab")]
+    let night = true;
     unsafe {
         if SPAWN_TIMER > 0 {
             SPAWN_TIMER -= 1;
@@ -937,6 +978,12 @@ pub fn hazard_damage() -> i32 {
     unsafe {
         let d = HAZARD_DMG;
         HAZARD_DMG = 0;
+        #[cfg(feature = "mob-lab")]
+        {
+            LAB_ARROWS += (d > 0) as u32;
+            return 0;
+        }
+        #[allow(unreachable_code)]
         d
     }
 }
@@ -1227,6 +1274,12 @@ pub fn contact_damage(px: i32, py: i32, pz: i32) -> i32 {
         }
         i += 1;
     }
+    #[cfg(feature = "mob-lab")]
+    unsafe {
+        LAB_HITS += (dmg > 0) as u32;
+        return 0;
+    }
+    #[allow(unreachable_code)]
     dmg
 }
 
