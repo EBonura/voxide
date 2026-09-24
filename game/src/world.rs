@@ -1814,6 +1814,20 @@ pub fn get(wx: i32, wy: i32, wz: i32) -> u8 {
     }
 }
 
+/// `get` for the cells `wy0..wy0 + out.len()` of one column, walking the
+/// column's runs once instead of once per cell.
+pub fn get_span(wx: i32, wy0: i32, wz: i32, out: &mut [u8]) {
+    let cx = floor_div(wx, CW);
+    let cz = floor_div(wz, CW);
+    let s = slot(cx, cz);
+    if !unsafe { CHUNKS[s].loaded && CHUNKS[s].cx == cx && CHUNKS[s].cz == cz } {
+        out.fill(AIR);
+        return;
+    }
+    let col = (wz - cz * CW) as usize * CWU + (wx - cx * CW) as usize;
+    rle::col_span(s, col, wy0, out);
+}
+
 #[inline(never)]
 pub fn set(wx: i32, wy: i32, wz: i32, b: u8) {
     if wy < 0 || wy >= CH {

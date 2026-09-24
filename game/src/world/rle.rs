@@ -261,39 +261,59 @@ fn reverse(mut a: usize, mut b: usize) {
     }
 }
 
-/// Number of runs in column `col` of the generator scratch.
-#[inline(always)]
-fn gen_runs(col: usize) -> usize {
+/// Run starts of each generator column, bit y (word y / 32) set when cell y
+/// differs from the cell above it; y = 63 always starts a run. Built once per
+/// chunk by gen_bounds, then read by every pack batch of that chunk.
+static mut GEN_BOUND: [[u32; 2]; CWU * CWU] = [[0; 2]; CWU * CWU];
+
+/// Fill GEN_BOUND from GEN_SCRATCH and return the chunk's total run count.
+/// Compares whole layers a word (four columns) at a time: run boundaries are
+/// a few per column, so almost every word compares equal and the per-column
+/// work happens only where a boundary is.
+fn gen_bounds() -> usize {
     unsafe {
-        let mut n = 1;
-        let mut i = col + (CHU - 1) * CWU * CWU;
-        let mut prev = GEN_SCRATCH[i];
-        let mut y = CHU - 1;
-        while y > 0 {
-            i -= CWU * CWU;
-            let b = GEN_SCRATCH[i];
-            if b != prev {
-                n += 1;
-                prev = b;
-            }
-            y -= 1;
+        let mut col = 0;
+        while col < CWU * CWU {
+            GEN_BOUND[col] = [0, 1 << 31];
+            col += 1;
         }
-        n
+        let mut runs = CWU * CWU;
+        let base = core::ptr::addr_of!(GEN_SCRATCH) as *const u8;
+        let mut y = 0;
+        while y < CHU - 1 {
+            let lo = base.add(y * CWU * CWU);
+            let hi = lo.add(CWU * CWU);
+            let bit = 1u32 << (y & 31);
+            let half = y >> 5;
+            let mut w = 0;
+            while w < CWU * CWU {
+                let x = core::ptr::read_unaligned(lo.add(w) as *const u32)
+                    ^ core::ptr::read_unaligned(hi.add(w) as *const u32);
+                if x != 0 {
+                    let mut k = 0;
+                    while k < 4 {
+                        if x & (0xFF << (8 * k)) != 0 {
+                            GEN_BOUND[w + k][half] |= bit;
+                            runs += 1;
+                        }
+                        k += 1;
+                    }
+                }
+                w += 4;
+            }
+            y += 1;
+        }
+        runs
     }
 }
 
 /// Pack generator columns `c0..c1` of GEN_SCRATCH into slot `s`. The first
-/// call (c0 == 0) sizes the whole chunk and allocates its region; returns
-/// false if that failed.
+/// call (c0 == 0) finds the run boundaries, sizes the whole chunk and
+/// allocates its region; returns false if that failed.
 pub(super) fn pack_cols(s: usize, c0: usize, c1: usize) -> bool {
     unsafe {
         if c0 == 0 {
-            let mut runs = 0;
-            let mut col = 0;
-            while col < CWU * CWU {
-                runs += gen_runs(col);
-                col += 1;
-            }
+            let runs = gen_bounds();
             if !blk_alloc(s, 2 * runs + SLACK, false) {
                 BLK_SHORT += 1;
                 return false;
@@ -303,23 +323,54 @@ pub(super) fn pack_cols(s: usize, c0: usize, c1: usize) -> bool {
         let base = RBASE[s] as usize;
         let mut col = c0;
         while col < c1 {
-            let mut o = COL_OFF[s][col] as usize;
-            let mut y = CHU;
-            while y > 0 {
-                let b = GEN_SCRATCH[(y - 1) * CWU * CWU + col];
-                let mut k = 1;
-                while k < y && GEN_SCRATCH[(y - 1 - k) * CWU * CWU + col] == b {
-                    k += 1;
+            // Run starts in ascending y, then written top-down.
+            let mut starts = [0u8; CHU];
+            let mut n = 0;
+            let mut half = 0;
+            while half < 2 {
+                let mut m = GEN_BOUND[col][half];
+                while m != 0 {
+                    starts[n] = (32 * half + m.trailing_zeros() as usize) as u8;
+                    n += 1;
+                    m &= m - 1;
                 }
-                BLK[base + o] = b;
-                BLK[base + o + 1] = k as u8;
-                o += 2;
-                y -= k;
+                half += 1;
             }
-            COL_OFF[s][col + 1] = o as u16;
+            let mut o = base + COL_OFF[s][col] as usize;
+            while n > 0 {
+                n -= 1;
+                let y = starts[n] as usize;
+                let below = if n > 0 { starts[n - 1] as usize + 1 } else { 0 };
+                BLK[o] = GEN_SCRATCH[y * CWU * CWU + col];
+                BLK[o + 1] = (y + 1 - below) as u8;
+                o += 2;
+            }
+            COL_OFF[s][col + 1] = (o - base) as u16;
             col += 1;
         }
         true
+    }
+}
+
+/// Blocks `y0..y0 + out.len()` of column `col` of resident slot `s`, one run
+/// walk for the whole span; cells outside 0..64 read AIR, as `get` answers.
+pub(super) fn col_span(s: usize, col: usize, y0: i32, out: &mut [u8]) {
+    unsafe {
+        out.fill(AIR);
+        let y1 = y0 + out.len() as i32;
+        let mut o = RBASE[s] as usize + COL_OFF[s][col] as usize;
+        let mut top = CHU as i32;
+        while top > y0 && top > 0 {
+            let b = BLK[o];
+            let lo = top - BLK[o + 1] as i32;
+            let mut y = lo.max(y0);
+            while y < top.min(y1) {
+                out[(y - y0) as usize] = b;
+                y += 1;
+            }
+            top = lo;
+            o += 2;
+        }
     }
 }
 
