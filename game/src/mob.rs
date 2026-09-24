@@ -133,6 +133,7 @@ struct Mob {
     fuse: u16,  // sapper detonation charge
     hurt_cd: u8,
     love: u16, // breeding "in love" countdown (passive mobs, set by feeding wheat)
+    cool: u16, // sim ticks before this animal can fall in love again after breeding
     /// Gait phase, advanced only while actually moving, so legs stop when the
     /// mob stops. Java drives limb swing off distance travelled for the same
     /// reason -- a timer-driven swing marches on the spot.
@@ -159,6 +160,7 @@ const DEAD: Mob = Mob {
     fuse: 0,
     hurt_cd: 0,
     love: 0,
+            cool: 0,
     walk: 0,
     facing: 0,
     heading: 0,
@@ -177,6 +179,12 @@ const ARROW_GRAVITY: i32 = 2 * 256;
 const BOW_Q8: i32 = crate::units::cbps_q8(6000);
 const BOW_GRAVITY: i32 = 91;
 const BOW_DRAG_16384: i32 = 55;
+/// Breeding (minecraft.wiki/w/Breeding#Love mode): love mode lasts 30 s and a
+/// parent cannot breed again for 5 minutes.
+const LOVE_TICKS: u16 = secs(30) as u16;
+const BREED_COOLDOWN: u16 = secs(300) as u16;
+/// A tamed wolf's health, 40 (minecraft.wiki/w/Wolf); a wild one has 8.
+const TAMED_WOLF_HEALTH: i16 = 40;
 /// Arrows vanish after 1.5 s in flight.
 const ARROW_LIFE: u16 = ms(1500) as u16;
 /// Idle voices: each mob mutters every ~7 s.
@@ -337,7 +345,7 @@ fn max_health(kind: u8) -> i16 {
         EMBER => 20,
         WAILER => 10, // Java: papery, dies in one good hit
         CHARRED_SK => 20,
-        WOLF => 16,
+        WOLF => 8, // wild; 40 once tamed (TAMED_WOLF_HEALTH)
         VILLAGER => 20,
         _ => 16,
     }
@@ -512,6 +520,7 @@ fn try_spawn(px: i32, pz: i32, sky: i32) {
             fuse: 0,
             hurt_cd: 0,
             love: 0,
+            cool: 0,
             walk: 0,
             facing: 0,
             heading: 0,
@@ -542,6 +551,7 @@ pub fn spawn_dragon(px: i32, pz: i32) {
             fuse: 0,
             hurt_cd: 0,
             love: 0,
+            cool: 0,
             walk: 0,
             facing: 0,
             heading: 0,
@@ -612,6 +622,7 @@ pub fn interact(px: i32, py: i32, pz: i32, has_bone: bool, wheat: u16) -> Intera
         {
             if m.kind == WOLF && m.love != u16::MAX && has_bone {
                 m.love = u16::MAX;
+                m.health = TAMED_WOLF_HEALTH;
                 unsafe { MOBS[i] = m };
                 return Interact::Tamed;
             }
@@ -665,6 +676,7 @@ pub fn debug_lineup(px: i32, py: i32, pz: i32) {
                 fuse: 0,
                 hurt_cd: 0,
                 love: 0,
+            cool: 0,
                 walk: 0,
                 facing: 0,
                 heading: 0,
@@ -779,8 +791,13 @@ pub fn update(px: i32, py: i32, pz: i32, sky: i32) {
                 sun_burn(i);
             }
             unsafe {
-                if MOBS[i].love > 0 {
+                // u16::MAX marks a tamed wolf and must not count down: it
+                // used to, so a wolf stayed tamed for a single tick.
+                if MOBS[i].love > 0 && MOBS[i].love != u16::MAX {
                     MOBS[i].love -= 1;
+                }
+                if MOBS[i].cool > 0 {
+                    MOBS[i].cool -= 1;
                 }
             }
         }
@@ -795,11 +812,11 @@ fn breed_tick() {
     let mut i = 0;
     while i < CAP {
         let mi = unsafe { MOBS[i] };
-        if mi.alive && mi.love > 0 && !is_hostile(mi.kind) {
+        if mi.alive && mi.love > 0 && mi.love != u16::MAX && !is_hostile(mi.kind) {
             let mut j = i + 1;
             while j < CAP {
                 let mj = unsafe { MOBS[j] };
-                if mj.alive && mj.love > 0 && mj.kind == mi.kind {
+                if mj.alive && mj.love > 0 && mj.love != u16::MAX && mj.kind == mi.kind {
                     let d = (mi.x - mj.x).abs() + (mi.z - mj.z).abs();
                     if d < 2 * BLOCK {
                         let (cx, cz) = ((mi.x + mj.x) / 2, (mi.z + mj.z) / 2);
@@ -807,6 +824,8 @@ fn breed_tick() {
                         unsafe {
                             MOBS[i].love = 0;
                             MOBS[j].love = 0;
+                            MOBS[i].cool = BREED_COOLDOWN;
+                            MOBS[j].cool = BREED_COOLDOWN;
                         }
                         crate::spawn_particles(
                             cx,
@@ -850,6 +869,7 @@ fn spawn_offspring(kind: u8, x: i32, z: i32) {
             fuse: 0,
             hurt_cd: 0,
             love: 0,
+            cool: 0,
             walk: 0,
             facing: 0,
             heading: 0,
@@ -865,7 +885,7 @@ pub fn feed(px: i32, py: i32, pz: i32, fx: i32, fz: i32, reach: i32) -> bool {
     let mut i = 0;
     while i < CAP {
         let m = unsafe { MOBS[i] };
-        if m.alive && !is_hostile(m.kind) && m.love == 0 {
+        if m.alive && !is_hostile(m.kind) && m.love == 0 && m.cool == 0 {
             let dx = m.x - px;
             let dz = m.z - pz;
             let dy = (m.y - py).abs();
@@ -883,7 +903,7 @@ pub fn feed(px: i32, py: i32, pz: i32, fx: i32, fz: i32, reach: i32) -> bool {
         return false;
     }
     unsafe {
-        MOBS[best].love = secs(20) as u16; // 20 s window to find a mate
+        MOBS[best].love = LOVE_TICKS;
         crate::spawn_particles(
             MOBS[best].x,
             MOBS[best].y + BLOCK,
@@ -1703,6 +1723,7 @@ fn spawn_at(kind: u8, sx: i32, sz: i32) {
             fuse: 0,
             hurt_cd: 0,
             love: 0,
+            cool: 0,
             walk: 0,
             facing: 0,
             heading: 0,
