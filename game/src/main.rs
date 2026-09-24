@@ -6942,22 +6942,22 @@ fn render_near_block_shell(cam: &Camera) {
     // Looking up six neighbours independently made this bounded pass 3x more
     // expensive than its triangle work on the R3000.
     let mut cells = [[[AIR; 5]; 5]; 6];
-    let mut iy = 0usize;
-    while iy < 6 {
-        let mut iz = 0usize;
-        while iz < 5 {
-            let mut ix = 0usize;
-            while ix < 5 {
-                cells[iy][iz][ix] = get_block_i32(
-                    shell_x0 + ix as i32 - 1,
-                    cby + iy as i32 - 3,
-                    shell_z0 + iz as i32 - 1,
-                );
-                ix += 1;
+    let mut iz = 0usize;
+    while iz < 5 {
+        let mut ix = 0usize;
+        while ix < 5 {
+            // One run walk per column. (Same line count as the per-cell
+            // loop it replaced: the PGO profile is keyed by line offsets.)
+            let mut col = [AIR; 6];
+            world::get_span(shell_x0 + ix as i32 - 1, cby - 3, shell_z0 + iz as i32 - 1, &mut col);
+            let mut iy = 0usize;
+            while iy < 6 {
+                cells[iy][iz][ix] = col[iy];
+                iy += 1;
             }
-            iz += 1;
+            ix += 1;
         }
-        iy += 1;
+        iz += 1;
     }
 
     let mut iy = 1usize;
