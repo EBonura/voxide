@@ -9,7 +9,8 @@
 //!  0 step  1 frame  2 phase  3 x  4 y  5 z  6 vy  7 health  8 air  9 food
 //! 10 burn 11 hurt_cd 12 exhaustion 13 target block (mining/TNT) 14 top-ups
 //! 15 on_ground | sprinting<<1 | sneaking<<2  16 furnace outputs  17 furnace
-//! progress  18 speed-potion ticks left  19 SIM_TICK
+//! progress  18 speed-potion ticks left  19 SIM_TICK  20 hostiles alive
+//! 21 animals alive  22 hostiles below their column's surface
 //!
 //! The pacing phases hold every frame to 1, 2 and then 3 vblanks (60, 30 and
 //! 20 fps) while a furnace smelts and a potion runs down, so a timer's
@@ -18,12 +19,13 @@
 use crate::*;
 
 #[no_mangle]
-pub static mut VOXIDE_LAB_P: [i32; 20] = [0; 20];
+pub static mut VOXIDE_LAB_P: [i32; 23] = [0; 23];
 static mut T: i32 = 0; // sim steps since gameplay began
 static mut F: i32 = 0; // rendered frames since gameplay began
 static mut ORG: (i32, i32) = (0, 0); // arena origin, block coords
 static mut TOPUPS: i32 = 0;
-static mut LAST_VBL: u32 = 0; // vblank count when the last frame's poll ran
+static mut LAST_VBL: u32 = 0;
+static mut CENSUS: (i32, i32, i32) = (0, 0, 0); // vblank count when the last frame's poll ran
 
 const BY: i32 = 50; // platform block y; you stand at (BY + 1) * BLOCK
 
@@ -326,6 +328,8 @@ pub fn step(p: &mut Player) {
         Some(i) => unsafe { (FURN_OUT_N[i] as i32, FURN_PROG[i] as i32) },
         None => (0, 0),
     };
+    let census = if t % 60 == 0 { mob::lab_census() } else { unsafe { CENSUS } };
+    unsafe { CENSUS = census };
     unsafe {
         T = t + 1;
         core::ptr::write_volatile(
@@ -351,6 +355,9 @@ pub fn step(p: &mut Player) {
             furn.1,
             p.eff_speed as i32,
             SIM_TICK as i32,
+            census.0,
+            census.1,
+            census.2,
             ],
         );
     }
