@@ -780,8 +780,10 @@ const VOXIDE_ACTIONS: ActionMap<5> = ActionMap::new([
 ]);
 static mut SETTINGS_PROFILE: Profile<5, 0> = Profile::new(VOXIDE_ACTIONS);
 static mut SETTINGS_DIRTY: bool = false;
-// Frames a first jump-tap stays "armed"; a second CROSS within it toggles fly.
-const DOUBLE_TAP_FRAMES: u8 = 12;
+// Sim ticks the first forward push stays "armed"; a second push inside it
+// latches sprint. 0.4 s: the 12 frames it was written as at 30 Hz, now that a
+// tick is 1/60 s (Java's double-tap window is 7 game ticks, 0.35 s).
+const DOUBLE_TAP_FRAMES: u8 = 24;
 
 // Player physics, in world units (BLOCK = 64). Dimensions match Java Edition
 // (1 block = 64 units): eye 1.62, height 1.8, width 0.6. Gravity/jump/speed are
@@ -789,14 +791,24 @@ const DOUBLE_TAP_FRAMES: u8 = 12;
 const EYE_HEIGHT: i32 = 104; // 1.62 blocks (Java standing eye)
 const PLAYER_HALF_W: i32 = 19; // 0.6-block-wide collision box (Java 0.6)
 const PLAYER_HEIGHT: i32 = 115; // 1.8 blocks tall (Java)
-const GRAVITY: i32 = 4; // vy lost per frame
-const TERMINAL_VY: i32 = -56; // clamp fall speed below ~1 block/frame (no tunnel)
-/// Fastest upward stroke while swimming; a jump out of water starts
-/// above this and stays ballistic until gravity brings it back down.
-const SWIM_UP: i32 = 14;
-const JUMP_VY: i32 = 28; // impulse tuned so the peak is ~1.3 blocks (Java jumps 1.25 -> clears one block, not two)
-const WALK_SPEED: i32 = 9; // ~4.2 blocks/s (Java walk 4.317)
-const FLY_SPEED: i32 = 8; // vertical units/frame in creative fly
+// Vertical motion runs on the sim tick, 1/60 s (main steps the sim once per
+// elapsed vblank). These numbers were written for a 30 Hz frame, so the jump
+// arc, falls, swimming and ladders all ran at twice the speed they were tuned
+// for. The player's vy is now kept in quarter units per tick (VY_SHIFT): the
+// 30 Hz accelerations keep their numbers exactly and the velocities double,
+// which is the same motion in real time with no rounding.
+const VY_SHIFT: u32 = 2;
+const GRAVITY: i32 = 4; // quarter units lost per tick: 56 blocks/s^2, as written
+const TERMINAL_VY: i32 = -112; // 28 units a tick, ~26 blocks/s; well under a block a tick (no tunnel)
+/// Fastest upward stroke while swimming (quarter units/tick, ~6.6 blocks/s);
+/// a jump out of water starts above this and stays ballistic until gravity
+/// brings it back down.
+const SWIM_UP: i32 = 28;
+// Impulse tuned so the peak is ~1.3 blocks (84.5 units; Java jumps 1.25 ->
+// clears one block, not two) with the 0.43 s arc it was written with.
+const JUMP_VY: i32 = 54;
+const WALK_SPEED: i32 = 9; // units per sim tick. NOTE: 8.4 blocks/s at 60 Hz, not the ~4.2 written for 30 Hz (Java walk 4.317)
+const FLY_SPEED: i32 = 8; // vertical units per sim tick in creative fly (7.5 blocks/s; Java 7.49)
 
 const FONT_TPAGE: Tpage = Tpage::new(320, 0, TexDepth::Bit4);
 const FONT_CLUT: Clut = Clut::new(320, 256);
@@ -1346,7 +1358,8 @@ struct Player {
     x: i32, // feet centre (world units)
     y: i32, // feet bottom (world units)
     z: i32,
-    vy: i32, // vertical velocity
+    vy: i32,      // vertical velocity, quarter units per sim tick (VY_SHIFT)
+    vy_frac: i32, // sub-unit remainder of the vertical move, 0..3
     yaw: u16,
     pitch: i16,
     on_ground: bool,
@@ -3972,6 +3985,7 @@ fn spawn_player() -> Player {
         y: h * BLOCK, // feet on the ground surface
         z: block_to_world_z(sz) + BLOCK / 2,
         vy: 0,
+        vy_frac: 0,
         yaw: 0,
         pitch: 0,
         on_ground: true,
@@ -4729,12 +4743,13 @@ fn update_player(
         // Ladders override gravity: press toward your look (forward) to climb up,
         // back to descend, otherwise slide down slowly.
         if at_ladder(player.x, player.y, player.z) {
+            // Quarter units a tick: ~4.7 blocks/s up or down, ~1.4 sliding.
             player.vy = if forward > 0 {
-                10
+                20
             } else if forward < 0 {
-                -10
+                -20
             } else {
-                -3
+                -6
             };
         } else if in_water_body(player.x, player.y, player.z) && player.vy <= SWIM_UP {
             // Swimming: buoyancy fights gravity. Hold CROSS to stroke upward,
@@ -4743,9 +4758,9 @@ fn update_player(
             // above lets a jump OUT of the water stay ballistic instead of
             // being clamped back to stroke speed on its first frame.
             player.vy = if pad.is_held(button::CROSS) {
-                (player.vy + 4).clamp(-6, SWIM_UP)
+                (player.vy + 4).clamp(-12, SWIM_UP)
             } else {
-                (player.vy - 1).clamp(-6, SWIM_UP)
+                (player.vy - 1).clamp(-12, SWIM_UP)
             };
             player.fall_peak = player.y; // water breaks the fall, as in Java
         } else {
@@ -4761,8 +4776,11 @@ fn update_player(
             player.vy = 0;
             player.fall_peak = player.y;
         }
-        let ny = player.y + player.vy;
+        let dy = player.vy + player.vy_frac;
+        let ny = player.y + (dy >> VY_SHIFT);
+        player.vy_frac = dy & ((1 << VY_SHIFT) - 1);
         if aabb_collides(player.x, ny, player.z) {
+            player.vy_frac = 0;
             if player.vy < 0 {
                 // Landed: snap feet to the top surface of the block below. A
                 // slab's surface is half a block up, not at the block boundary
@@ -4825,7 +4843,7 @@ fn update_player(
     // (attempted deltas lie when a wall eats the move).
     unsafe {
         let wet = in_water_body(player.x, player.y, player.z);
-        if wet && !WAS_WET && player.vy <= -4 {
+        if wet && !WAS_WET && player.vy <= -8 {
             sfx::splash();
         }
         WAS_WET = wet;
