@@ -6,7 +6,7 @@
 
 use crate::{
     aabb_collides_dims, world, world_to_block_x, world_to_block_y, world_to_block_z, BLOCK, GRASS,
-    GRAVITY, PLAYER_HALF_W, PLAYER_HEIGHT, TERMINAL_VY,
+    PLAYER_HALF_W, PLAYER_HEIGHT,
 };
 use psx_fx::rng::LcgRng;
 use psx_math::sincos;
@@ -100,7 +100,7 @@ const STROLL_MAX: i32 = 10;
 /// hop reaches the same 1.5 blocks in the same 0.23 s it was written for.
 const MOB_GRAVITY: i32 = 1;
 const MOB_JUMP_VY: i32 = 14;
-const MOB_TERMINAL_VY: i32 = TERMINAL_VY / 2;
+const MOB_TERMINAL_VY: i32 = -28;
 /// Spiders climb walls toward you at about 2.8 blocks/s (3 units a tick net
 /// of gravity).
 const SPIDER_CLIMB_VY: i32 = MOB_GRAVITY + 3;
@@ -174,6 +174,9 @@ const DEAD: Mob = Mob {
 // Arrows fired by skeletons.
 const ARROW_CAP: usize = 8;
 const ARROW_SPEED: i32 = 26;
+/// Units per tick lost each tick. It was the player's GRAVITY / 2 when that
+/// was whole units; the player's vy is in quarter units now.
+const ARROW_GRAVITY: i32 = 2;
 const FUSE_MAX: u16 = 90; // Java's 30-game-tick (1.5 s) sapper fuse
 const BLAST_R: i32 = 3; // block-destruction radius = explosion power 3 (blocks)
 const BLAST_DMG_R: i32 = 6; // damage reaches 2*power = 6 blocks (Java falloff)
@@ -1034,7 +1037,7 @@ fn update_arrows(px: i32, py: i32, pz: i32) {
             a.x += a.vx;
             a.y += a.vy;
             a.z += a.vz;
-            a.vy -= GRAVITY / 2;
+            a.vy -= ARROW_GRAVITY;
             let mut dead = a.life == 0 || solid(a.x, a.y, a.z);
             if a.life > 0 {
                 a.life -= 1;
