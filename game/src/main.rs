@@ -4354,6 +4354,7 @@ const FLUID_PERIOD: u32 = units::java_ticks(5) as u32;
 /// (see update_player).
 #[inline(never)]
 fn world_tick(player: &mut Player, dwell: &mut u16, n: u32) -> bool {
+    telemetry::stage_begin(telemetry::stage::GAME_LOGIC);
     let mut travel = false;
     let mut w = 0;
     while w < n {
@@ -4374,6 +4375,7 @@ fn world_tick(player: &mut Player, dwell: &mut u16, n: u32) -> bool {
         unsafe { SIM_TICK = t.wrapping_add(1) };
         w += 1;
     }
+    telemetry::stage_end(telemetry::stage::GAME_LOGIC);
     travel
 }
 
