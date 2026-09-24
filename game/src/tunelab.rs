@@ -51,13 +51,15 @@ const P_TNT: i32 = 7740;
 const P_PACE1: i32 = 8040;
 const P_PACE2: i32 = 8760;
 const P_PACE3: i32 = 9480;
-const P_END: i32 = 10200;
+const P_CAVE: i32 = 10200;
+const P_TORCH: i32 = 13800;
+const P_END: i32 = 17400;
 
 fn phase(t: i32) -> i32 {
     let starts = [
         P_WALK, P_SPRINT, P_SNEAK, P_JUMP, P_FALL, P_LADDER, P_SLIDE, P_SWIM, P_DROWN, P_LAVA,
         P_LAVA_OUT, P_REGEN, P_STARVE, P_HUNGER, P_CONTACT, P_POTION, P_MINE, P_TNT, P_PACE1,
-        P_PACE2, P_PACE3, P_END,
+        P_PACE2, P_PACE3, P_CAVE, P_TORCH, P_END,
     ];
     let mut p = 0;
     while p < starts.len() && t >= starts[p] {
@@ -84,11 +86,11 @@ fn pad(real: ButtonState) -> ButtonState {
     // Pacing: hold each frame's poll until `n` vblanks have passed since the
     // last one, so frames come every `n` vblanks (the scene is cheap enough
     // to finish inside one).
-    let n = if t >= P_PACE3 && t < P_END {
+    let n = if t >= P_PACE3 && t < P_CAVE {
         3
-    } else if t >= P_PACE2 && t < P_END {
+    } else if t >= P_PACE2 && t < P_CAVE {
         2
-    } else if t >= P_PACE1 && t < P_END {
+    } else if t >= P_PACE1 && t < P_CAVE {
         1
     } else {
         0
@@ -304,6 +306,43 @@ pub fn step(p: &mut Player) {
             }
             drink_potion(p, POTION_SPEED);
         }
+        P_CAVE => {
+            // A dark room 31 x 31 x 4 dug at y 20..23 around the player's
+            // column, daytime: monsters should spawn in it.
+            p.eff_speed = 0;
+            mob::reset();
+            let mut z = oz - 15;
+            while z <= oz + 15 {
+                let mut x = ox - 15;
+                while x <= ox + 15 {
+                    put(x, 19, z, STONE);
+                    let mut y = 20;
+                    while y <= 23 {
+                        put(x, y, z, AIR);
+                        y += 1;
+                    }
+                    put(x, 24, z, STONE);
+                    x += 1;
+                }
+                z += 1;
+            }
+            world::remesh_loaded();
+            place(p, ox, 20 * BLOCK, oz);
+            p.health = MAX_HEALTH;
+        }
+        P_TORCH => {
+            // Torches on a 3 x 3 grid 12 blocks apart light the whole room
+            // (14 less taxicab distance > 0 everywhere): nothing should spawn.
+            mob::reset();
+            let mut k = 0;
+            while k < 9 {
+                let (tx, tz) = (ox - 12 + (k % 3) * 12, oz - 12 + (k / 3) * 12);
+                put(tx, 20, tz, TORCH);
+                record_edit(tx, 20, tz, TORCH);
+                k += 1;
+            }
+            world::remesh_loaded();
+        }
         P_TNT => {
             put(ox + 20, BY + 1, oz + 20, TNT);
             ignite_tnt(ox + 20, BY + 1, oz + 20);
@@ -314,7 +353,7 @@ pub fn step(p: &mut Player) {
         mob::lab_pin(mob::ZOMBIE, p.x, p.y, p.z);
     }
     // Keep the player alive through the hazard phases; count the top-ups.
-    if p.health < 8 && (t < P_REGEN || (t >= P_CONTACT && t < P_POTION)) {
+    if p.health < 8 && (t < P_REGEN || (t >= P_CONTACT && t < P_POTION) || t >= P_CAVE) {
         p.health = MAX_HEALTH;
         unsafe { TOPUPS += 1 };
     }
