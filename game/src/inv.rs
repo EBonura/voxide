@@ -260,6 +260,9 @@ pub fn furnace_input(idx: usize, pad: ButtonState, previous: ButtonState) {
         };
         let m = press_count(pad, previous, *count);
         if m > 0 {
+            if y == F_OUT {
+                crate::furnace_took(idx, *kind, m);
+            }
             inv_give(*kind, m);
             *count -= m;
             if *count == 0 {
@@ -457,7 +460,7 @@ pub fn draw_furnace(font: &FontAtlas, idx: usize, player: &Player) {
     slot(F_SLOT_X, F_FUEL_Y);
     if fuel > 0 {
         draw_icon(F_SLOT_X + 1, F_FUEL_Y + 1, COAL_ORE, 128);
-        draw_count(F_SLOT_X, F_FUEL_Y, fuel);
+        draw_count(F_SLOT_X, F_FUEL_Y, fuel / 2); // whole smelts left (fuel is in halves)
     }
     // Flame between input and fuel: lit while there is fuel.
     let lit = if fuel > 0 {

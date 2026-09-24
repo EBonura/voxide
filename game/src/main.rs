@@ -1348,7 +1348,10 @@ static mut CHEST_D: [u8; MAX_CHESTS] = [0; MAX_CHESTS];
 const MAX_FURNACES: usize = 8;
 const SMELT_TIME: u16 = secs(5) as u16; // 5s to smelt one item (ponytail: half Java's 10s, a nod
                              // to our compressed clock; FURN_FUEL counts item-smelts)
-const COAL_SMELTS: u16 = 8; // one coal smelts 8 items (Java)
+/// FURN_FUEL counts half item-smelts: one coal smelts 8 items, a log or a
+/// plank 1.5 (minecraft.wiki/w/Smelting#Fuel).
+const COAL_SMELTS: u16 = 8;
+const FUEL_PER_SMELT: u16 = 2;
 static mut FURN_X: [i32; MAX_FURNACES] = [0; MAX_FURNACES];
 static mut FURN_Y: [i32; MAX_FURNACES] = [0; MAX_FURNACES];
 static mut FURN_Z: [i32; MAX_FURNACES] = [0; MAX_FURNACES];
@@ -1370,8 +1373,8 @@ const FURN_ITEMS: [u8; 8] = [
 /// Fuel value in item-smelts (0 = not a fuel). Coal 8 (Java), wood/planks 2.
 fn fuel_smelts(item: u8) -> u16 {
     match item {
-        COAL_ORE => COAL_SMELTS,
-        WOOD | PLANK => 2,
+        COAL_ORE => COAL_SMELTS * FUEL_PER_SMELT,
+        WOOD | PLANK => 3,
         _ => 0,
     }
 }
@@ -1422,7 +1425,7 @@ struct Player {
     sword: u8,
     armor: u8, // 0 none, 1 iron, 2 diamond (scales combat damage taken)
     selected: u8,
-    xp: i32,         // experience from kills + ore; XP_PER_LEVEL each level
+    xp: i32,         // total experience points (xp_level for the level)
     efficiency: u8,  // mining-speed enchant level (0..3), bought with XP at a table
     sharpness: u8,   // melee-damage enchant level (0..3)
     protection: u8,  // damage-reduction enchant level (0..3)
@@ -1444,8 +1447,56 @@ struct Player {
     was_fwd: bool,      // forward-input edge detector for the sprint double-tap
 }
 
-const XP_PER_LEVEL: i32 = 20;
-const ENCHANT_COST: i32 = 3 * XP_PER_LEVEL; // 3 levels per efficiency upgrade
+/// Levels spent per enchantment at the table.
+const ENCHANT_LEVELS: i32 = 3;
+
+/// Total experience to reach level `l`, Java's curve (minecraft.wiki/w/
+/// Experience#Leveling up): 2l + 7 points per level to 16, 5l - 38 to 31,
+/// 9l - 158 after.
+fn xp_total(l: i32) -> i32 {
+    if l <= 16 {
+        l * l + 6 * l
+    } else if l <= 31 {
+        (5 * l * l - 81 * l) / 2 + 360
+    } else {
+        (9 * l * l - 325 * l) / 2 + 2220
+    }
+}
+
+/// The level a total of `xp` points reaches.
+fn xp_level(xp: i32) -> i32 {
+    let mut l = 0;
+    while xp_total(l + 1) <= xp {
+        l += 1;
+    }
+    l
+}
+
+/// Smelting experience per item taken out, in hundredths (minecraft.wiki/w/
+/// Smelting): iron ingot 0.7, steak 0.35, brick 0.3, glass and stone 0.1.
+fn smelt_xp100(out: u8) -> i32 {
+    match out {
+        IRON_INGOT => 70,
+        COOKED_MEAT => 35,
+        BRICK => 30,
+        GLASS | STONE => 10,
+        _ => 0,
+    }
+}
+
+/// Smelting experience earned but not yet given to the player (whole points),
+/// and each furnace's leftover fraction, which stays with it as in Java.
+static mut XP_PENDING: i32 = 0;
+static mut FURN_XP_FRAC: [i32; MAX_FURNACES] = [0; MAX_FURNACES];
+
+/// Take `n` items out of furnace `i`'s output: pay their experience.
+pub(crate) fn furnace_took(i: usize, out: u8, n: u16) {
+    unsafe {
+        let x = FURN_XP_FRAC[i] + n as i32 * smelt_xp100(out);
+        XP_PENDING += x / 100;
+        FURN_XP_FRAC[i] = x % 100;
+    }
+}
 const MAX_EFFICIENCY: u8 = 3;
 
 /// Reduce damage by the worn armour and the protection enchant. Armour is
@@ -2602,7 +2653,7 @@ fn main() {
             // the same window the bed interaction itself accepts.
             PROMPT_SLEEP = pick.hit
                 && get_block_i32(pick.bx, pick.by, pick.bz) == BED
-                && (day_brightness(day % DAY_LEN) as i32) <= NIGHT_LIGHT + 20;
+                && bed_time(day);
         }
 
         let mut mine_den: u32 = 0;
@@ -2660,7 +2711,7 @@ fn main() {
                         RESPAWN_BZ = pick.bz;
                     }
                     let dt = day % DAY_LEN;
-                    if (day_brightness(dt) as i32) <= NIGHT_LIGHT + 20 {
+                    if bed_time(dt) {
                         // Only the world clock skips. `frame` keeps counting
                         // the frames that actually happened.
                         day += DAY_LEN - dt;
@@ -2672,8 +2723,9 @@ fn main() {
                     // enchantment from the ones the item can take; here the
                     // table cycles efficiency -> sharpness -> protection, so
                     // three visits gets you one of each rather than a lottery.
-                    if player.xp >= ENCHANT_COST && enchant_next(&player) != 0 {
-                        player.xp -= ENCHANT_COST;
+                    let lvl = xp_level(player.xp);
+                    if lvl >= ENCHANT_LEVELS && enchant_next(&player) != 0 {
+                        player.xp -= xp_total(lvl) - xp_total(lvl - ENCHANT_LEVELS);
                         match enchant_next(&player) {
                             1 => player.efficiency += 1,
                             2 => player.sharpness += 1,
@@ -2893,8 +2945,10 @@ fn main() {
                 } else if player.selected == FISHING_ROD {
                     // Cast onto water; a bite arrives after cast_t frames (below).
                     if cast_t == 0 && is_water(get_block_i32(pick.bx, pick.by, pick.bz)) {
-                        // A bite in 1.7 to 5.9 s.
-                        cast_t = (ms(1667) + (frame & 0xFF) as i32) as u16;
+                        // A bite in 5 to 30 s, Java's 100 to 600 game ticks
+                        // (minecraft.wiki/w/Fishing).
+                        let r = (frame.wrapping_mul(2_654_435_761) >> 16) % 501;
+                        cast_t = units::java_ticks(100 + r as i32) as u16;
                         sfx::splash();
                     }
                 } else if is_potion(player.selected) {
@@ -3036,6 +3090,10 @@ fn main() {
             }
             mob::clear_deaths();
             player.xp += mob::take_xp() as i32;
+            unsafe {
+                player.xp += XP_PENDING;
+                XP_PENDING = 0;
+            }
         }
 
         // Weather: rain in one of every three ~40s windows. Phase 2, not 0, so a
@@ -4283,8 +4341,11 @@ static mut SIM_TICK: u32 = 0;
 const MAX_CATCHUP: u32 = ms(500) as u32;
 /// Redstone scans the player-edited blocks every 0.27 s (budgeted work).
 const REDSTONE_PERIOD: u32 = ms(267) as u32;
-/// Fluids step every 0.17 s (budgeted: only cells a player edit woke).
-const FLUID_PERIOD: u32 = ms(167) as u32;
+/// Fluids step every 5 game ticks, 0.25 s: Java's water rate (minecraft.wiki
+/// /w/Water#Spreading). Lava steps every 6th of these, Java's 30 ticks, or
+/// every 2nd in the Inferno, the Nether's 10 (world::fluid_tick). Budgeted:
+/// only cells a player edit woke.
+const FLUID_PERIOD: u32 = units::java_ticks(5) as u32;
 
 /// Advance the world's own timers `n` sim ticks: furnaces, the portal dwell,
 /// TNT fuses, crops, saplings, redstone, fluids, particles and item drops.
@@ -8349,7 +8410,7 @@ fn draw_sky(cam: &Camera, day: u32, tod: u32, light: u8, horizon: (u8, u8, u8), 
     // direction is simply the sign of `c` below. Warmth at a given screen column
     // is the sunset strength scaled by how much that column faces the sun.
     let t = tod as i32;
-    let phi = 1024 + 4096 * (t - 2 * DAY_LEN as i32 / 10) / DAY_LEN as i32;
+    let phi = 1024 + 4096 * (t - DAY_LEN as i32 / 4) / DAY_LEN as i32;
     let sun_c = sincos::cos_q12(phi as u16);
     let warmth = sunset_warmth(tod, raining);
 
@@ -8452,7 +8513,7 @@ fn draw_sky(cam: &Camera, day: u32, tod: u32, light: u8, horizon: (u8, u8, u8), 
     // Sun and (opposite) moon arc through the north-south vertical plane, one
     // full turn per day; phi = 90deg (zenith) at noon.
     let t = tod as i32;
-    let phi = 1024 + 4096 * (t - 2 * DAY_LEN as i32 / 10) / DAY_LEN as i32;
+    let phi = 1024 + 4096 * (t - DAY_LEN as i32 / 4) / DAY_LEN as i32;
     let s = sincos::sin_q12(phi as u16); // elevation, Q12
     let c = sincos::cos_q12(phi as u16);
     // Overcast hides both: a sun disc burning through a grey rain sky was the
@@ -9081,12 +9142,14 @@ fn draw_hotbar(tool: (u8, u8)) {
 /// Ten heart pips, left of the hotbar (2 hp each, rounded up).
 /// Experience bar (green) just above the hotbar, filling toward the next level.
 fn draw_xp(xp: i32) {
-    let prog = xp.rem_euclid(XP_PER_LEVEL);
+    let l = xp_level(xp);
+    let prog = xp - xp_total(l);
+    let span = xp_total(l + 1) - xp_total(l);
     let bx = HOTBAR_X0;
     let bw = HOTBAR_W;
     let by = HUD_XP_Y;
     rect(bx, by, bw, 2, 28, 54, 28);
-    let fill = (prog * bw as i32 / XP_PER_LEVEL) as i16;
+    let fill = (prog * bw as i32 / span) as i16;
     if fill > 0 {
         rect(bx, by, fill, 2, 110, 235, 70);
     }
@@ -10618,17 +10681,32 @@ pub(crate) fn block_light(x: i32, y: i32, z: i32) -> i32 {
 /// Sky light (0..128) for a point in the day. Trapezoid: ~40% full day, short
 /// dusk down to night, ~40% night, short dawn back up.
 fn day_brightness(t: u32) -> u8 {
-    let q = (DAY_LEN / 10) as i32;
-    let t = t as i32;
-    if t < 4 * q {
+    let t = java_time(t);
+    if t < 12_000 {
         128
-    } else if t < 5 * q {
-        lerp_u8(128, NIGHT_LIGHT, t - 4 * q, q)
-    } else if t < 9 * q {
+    } else if t < 13_000 {
+        lerp_u8(128, NIGHT_LIGHT, t - 12_000, 1000)
+    } else if t < 23_000 {
         NIGHT_LIGHT as u8
     } else {
-        lerp_u8(NIGHT_LIGHT, 128, t - 9 * q, q)
+        lerp_u8(NIGHT_LIGHT, 128, t - 23_000, 1000)
     }
+}
+
+/// A point in the day on Java's 24,000-tick clock: 0 sunrise, 6,000 noon,
+/// 12,000 sunset, 18,000 midnight (minecraft.wiki/w/Daylight cycle). The day
+/// here is DAY_LEN long, half Java's 20 minutes, with the same shape: 10 of 20
+/// parts day, a 1-part sunset, 10 parts night and a 1-part sunrise (it was a
+/// 40/10/40/10 trapezoid).
+fn java_time(t: u32) -> i32 {
+    (t as i32 % DAY_LEN as i32) * 24_000 / DAY_LEN as i32
+}
+
+/// Java lets you sleep from tick 12,542 to 23,459 in clear weather
+/// (minecraft.wiki/w/Daylight cycle).
+fn bed_time(t: u32) -> bool {
+    let j = java_time(t);
+    j >= 12_542 && j < 23_460
 }
 
 #[inline]
@@ -10651,18 +10729,16 @@ fn sunset_warmth(tod: u32, raining: bool) -> i32 {
     if raining {
         return 0;
     }
-    let q = (DAY_LEN / 10) as i32;
-    let t = tod as i32;
+    let t = java_time(tod);
     let window = |start: i32| -> i32 {
         let d = t - start;
-        if d < 0 || d >= q {
+        if d < 0 || d >= 1000 {
             return 0;
         }
-        let half = (q / 2).max(1);
-        let m = if d < half { d } else { q - d };
-        m * 255 / half
+        let m = if d < 500 { d } else { 1000 - d };
+        m * 255 / 500
     };
-    window(4 * q).max(window(9 * q)) // dusk, then dawn
+    window(12_000).max(window(23_000)) // dusk, then dawn
 }
 
 fn apply_sunset(sky: (u8, u8, u8), tod: u32, raining: bool) -> (u8, u8, u8) {
@@ -10988,7 +11064,7 @@ fn furn_remove(x: i32, y: i32, z: i32) {
                 inv_give(FURN_IN[i], FURN_IN_N[i]);
             }
             // Refund only whole unburnt coal (partial fuel is lost, as in Java).
-            inv_give(COAL_ORE, FURN_FUEL[i] / COAL_SMELTS);
+            inv_give(COAL_ORE, FURN_FUEL[i] / (COAL_SMELTS * FUEL_PER_SMELT));
             if FURN_OUT[i] != AIR {
                 inv_give(FURN_OUT[i], FURN_OUT_N[i]);
             }
@@ -11003,7 +11079,7 @@ fn furn_deposit(i: usize, item: u8) {
         if f > 0 {
             if INV[item as usize] > 0 {
                 INV[item as usize] -= 1;
-                FURN_FUEL[i] = FURN_FUEL[i].saturating_add(f); // coal 8 smelts, wood/planks 2
+                FURN_FUEL[i] = FURN_FUEL[i].saturating_add(f); // coal 8 smelts, wood/planks 1.5
             }
         } else if smelt_result(item) != AIR
             && INV[item as usize] > 0
@@ -11022,14 +11098,14 @@ fn furn_tick() {
     let mut i = 0;
     while i < MAX_FURNACES {
         unsafe {
-            if FURN_USED[i] && FURN_IN_N[i] > 0 && FURN_FUEL[i] > 0 {
+            if FURN_USED[i] && FURN_IN_N[i] > 0 && FURN_FUEL[i] >= FUEL_PER_SMELT {
                 let r = smelt_result(FURN_IN[i]);
                 if r != AIR && (FURN_OUT[i] == AIR || FURN_OUT[i] == r) {
                     FURN_PROG[i] += 1;
                     if FURN_PROG[i] >= SMELT_TIME {
                         FURN_PROG[i] = 0;
                         FURN_IN_N[i] -= 1;
-                        FURN_FUEL[i] -= 1;
+                        FURN_FUEL[i] -= FUEL_PER_SMELT;
                         FURN_OUT[i] = r;
                         FURN_OUT_N[i] = FURN_OUT_N[i].saturating_add(1);
                         if FURN_IN_N[i] == 0 {

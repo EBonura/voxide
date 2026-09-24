@@ -25,7 +25,7 @@ const MAGIC_V1: [u8; 4] = *b"MCPX";
 /// VERSION and teaches `layout` where its sections moved; every older version
 /// still loads.
 const MAGIC: [u8; 4] = *b"VOXS";
-const VERSION: u16 = 6;
+const VERSION: u16 = 7;
 /// BIOS file name: region+product code + label, 20 ASCII chars max.
 const FILE_NAME: &str = "BESLES-00000VOXIDE01";
 /// Human-readable label shown by the console's memory-card manager.
@@ -54,6 +54,8 @@ const V1_HDR: usize = V1_PROGRESS + 9; // armor u8, efficiency u8, xp i32, 3 too
 // so a game saved in the Inferno loads there; earlier saves load overworld.
 // Version 6 uses byte 7 (pad, written 0) for world flags: bit 0 = the void
 // dragon is slain. No earlier version recorded the kill, so their dragon lives.
+// Version 7 stores furnace fuel in half smelts (a log or plank burns 1.5
+// items); older saves' fuel doubles on load.
 const OFF_HOTBAR_SEL: usize = 41;
 const OFF_HOTBAR: usize = 42;
 const OFF_INV: usize = 52;
@@ -71,6 +73,8 @@ struct Layout {
     hdr: usize,
     /// Where x,y,z end in a container record: 8 with the dimension, else 6.
     pos: usize,
+    /// Furnace fuel is stored in half smelts (logs and planks burn 1.5).
+    half_fuel: bool,
 }
 
 const fn layout(version: u16) -> Layout {
@@ -83,6 +87,7 @@ const fn layout(version: u16) -> Layout {
         counts,
         hdr: counts + 4,
         pos: if version >= 4 { 8 } else { 6 },
+        half_fuel: version >= 7,
     }
 }
 
@@ -450,6 +455,9 @@ fn load_versioned(p: &mut Player, buf: &[u8], l: Layout) -> bool {
             FURN_OUT[i] = buf[o + 1];
             FURN_IN_N[i] = get_u16(buf, o + 2);
             FURN_FUEL[i] = get_u16(buf, o + 4);
+            if !l.half_fuel {
+                FURN_FUEL[i] = FURN_FUEL[i].saturating_mul(2);
+            }
             FURN_OUT_N[i] = get_u16(buf, o + 6);
             FURN_PROG[i] = get_u16(buf, o + 8);
         }
