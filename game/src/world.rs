@@ -24,6 +24,9 @@ use psx_gte::math::Vec3I16;
 use psx_gte::scene;
 use psx_math::int32::isqrt_i32;
 
+mod rle;
+use rle::{rget, rset};
+
 /// A cross-sprite plant (wheat/sapling/flower/tall grass): rendered as an
 /// X-billboard, never as a meshed cube. `face_here` treats these as see-through
 /// so they neither emit cube faces nor hide the block behind them; `commit_mesh`
@@ -52,66 +55,10 @@ const GRIDU: usize = 5;
 const NCHUNKS: usize = GRIDU * GRIDU; // 25  GRID fits RAM but boots slow -- needs a screen.
 const MAX_FACES: usize = 3000; // headroom: meshing the sea floor (faces vs water) adds faces/chunk
 
-// Blocks pack to 5 bits each (we have 24 block kinds; 5 bits hold 32). 16384
-// blocks * 5 bits = 10240 bytes/chunk vs 16384 at one byte each -- 37.5% less
-// RAM, so the loaded ring can hold more chunks. +1 byte so a 5-bit field at the
-// last index can be read as a 2-byte window without overrunning.
-// 7-bit block ids (0..127). 5 bits (24 kinds) ran out, then 6 did too: the
-// water levels took 54..60 and slabs/fences 61..62, leaving no room for the
-// four stair facings or the lava levels. 7 costs ~2KB/chunk (25 loaded chunks,
-// so ~51KB of 2MB) and buys 65 spare ids.
-//
-// The 16-bit bget/bset window still works: a 7-bit field at bit offset 0..7
-// spans at most bits 0..14. `pack_blocks` is the one place that cares about the
-// width beyond these constants, because it packs whole bytes.
-const PACKED_SIZE: usize = (CHUNK_VOL * 7 + 7) / 8 + 1; // 14337
+// Blocks are stored as per-column runs (world/rle.rs). They were 7-bit packed,
+// 14,337 bytes a chunk whatever it held.
+#[allow(dead_code)]
 const BLOCK_BITS: usize = 7;
-const BLOCK_MASK: u32 = 0x7F;
-
-/// Read the 5-bit block at flat index `i` from a packed chunk store.
-#[inline]
-fn bget(data: &[u8; PACKED_SIZE], i: usize) -> u8 {
-    let bit = i * BLOCK_BITS;
-    let byte = bit >> 3;
-    let off = bit & 7;
-    let win = data[byte] as u32 | ((data[byte + 1] as u32) << 8);
-    ((win >> off) & BLOCK_MASK) as u8
-}
-
-/// Decode the eight blocks of group `g` (blocks 8g..8g+8). Eight 7-bit fields
-/// are exactly seven bytes, so a group never straddles a byte and the eight
-/// values come out of two little-endian windows with constant shifts: seven
-/// byte loads instead of sixteen, and no per-block multiply by 7.
-#[inline(always)]
-fn bget8(data: &[u8; PACKED_SIZE], g: usize) -> [u8; 8] {
-    let p = g * 7;
-    let d = &data[p..p + 7];
-    let lo = d[0] as u32 | (d[1] as u32) << 8 | (d[2] as u32) << 16 | (d[3] as u32) << 24;
-    let hi = d[3] as u32 | (d[4] as u32) << 8 | (d[5] as u32) << 16 | (d[6] as u32) << 24;
-    [
-        (lo & 0x7F) as u8,
-        ((lo >> 7) & 0x7F) as u8,
-        ((lo >> 14) & 0x7F) as u8,
-        ((lo >> 21) & 0x7F) as u8,
-        ((hi >> 4) & 0x7F) as u8,
-        ((hi >> 11) & 0x7F) as u8,
-        ((hi >> 18) & 0x7F) as u8,
-        ((hi >> 25) & 0x7F) as u8,
-    ]
-}
-
-/// Write the 5-bit block `v` at flat index `i` into a packed chunk store.
-#[inline]
-fn bset(data: &mut [u8; PACKED_SIZE], i: usize, v: u8) {
-    let bit = i * BLOCK_BITS;
-    let byte = bit >> 3;
-    let off = bit & 7;
-    let mask = BLOCK_MASK << off;
-    let win = data[byte] as u32 | ((data[byte + 1] as u32) << 8);
-    let win = (win & !mask) | (((v as u32) & BLOCK_MASK) << off);
-    data[byte] = win as u8;
-    data[byte + 1] = (win >> 8) as u8;
-}
 
 // Unpacked u8 scratch for terrain gen (gen_column/maybe_tree fill it; finish_chunk
 // packs it into the chunk). Only one chunk generates at a time, so one is enough.
@@ -133,16 +80,15 @@ static mut MESH_SCRATCH: [u8; CHUNK_VOL] = [AIR; CHUNK_VOL];
 // 16K packed-block decode on every hit.
 static mut MESH_SCRATCH_OWNER: usize = usize::MAX;
 
-/// Unpack chunk `s`'s 5-bit store into MESH_SCRATCH for fast meshing.
+/// Unpack chunk `s`'s block runs into MESH_SCRATCH for fast meshing.
 fn decode_to_mesh_scratch(s: usize) {
     unsafe {
         if MESH_SCRATCH_OWNER == s {
             return;
         }
-        let src = &CHUNKS[s].blocks;
         let mut top = 0usize;
         col_masks_reset();
-        decode_blocks::<false>(src, 0, CHUNK_VOL, &mut top);
+        decode_blocks::<false>(s, 0, CHUNK_VOL, &mut top);
         // Highest ly holding anything but air. Nothing above it can emit a face
         // (a face needs a MESHABLE cell, and every cell up there is air), so the
         // mesher clips its y range to this -- see dir_dims.
@@ -201,7 +147,7 @@ struct Chunk {
     dirty: bool,               // mesh out of date (block edit or a neighbour appeared)
     face_slot: u16,            // index into FACE_POOL, or NO_SLOT if this chunk has no mesh
     face_lod: u8,              // LOD level the current mesh was built at (0 near, 1 far)
-    blocks: [u8; PACKED_SIZE], // 5-bit-packed block ids; access via bget/bset
+                               // blocks: world/rle.rs, indexed by slot
 }
 
 const EMPTY_CHUNK: Chunk = Chunk {
@@ -214,7 +160,6 @@ const EMPTY_CHUNK: Chunk = Chunk {
     // the EXE. boot_prepare stamps NO_SLOT before anything reads it.
     face_slot: 0,
     face_lod: 0,
-    blocks: [0; PACKED_SIZE], // all-zero packs to all-AIR (AIR == 0)
 };
 
 static mut CHUNKS: [Chunk; NCHUNKS] = [EMPTY_CHUNK; NCHUNKS];
@@ -473,109 +418,11 @@ fn col_masks_reset() {
 /// store into MESH_SCRATCH, noting the column masks. `top` tracks the highest
 /// non-air index. With FULL the stream mesher's extras are recorded as well:
 /// per-column sky top, light sources and plants.
-#[inline(never)]
-fn decode_blocks<const FULL: bool>(src: &[u8; PACKED_SIZE], i0: usize, i1: usize, top: &mut usize) {
-    // Layers that are all air (every layer above the terrain, a third or more
-    // of a chunk) only clear their scratch row and mark every column
-    // see-through; their see bits are ORed in once per call.
-    let mut air_layers = 0u64;
-    let mut i = i0;
-    while i < i1 {
-        // One layer: the y bit of the column masks is fixed for 256 blocks.
-        let ly = i >> 8;
-        let bit = 1u64 << ly;
-        let layer_end = i + CWU * CWU;
-        // 256 7-bit fields are exactly 224 bytes, starting on a byte.
-        if packed_zero(src, ly * (CWU * CWU * BLOCK_BITS / 8), CWU * CWU * BLOCK_BITS / 8) {
-            unsafe { core::ptr::write_bytes(core::ptr::addr_of_mut!(MESH_SCRATCH[i]), AIR, CWU * CWU) };
-            air_layers |= bit;
-            i = layer_end;
-            continue;
-        }
-        while i < layer_end {
-            let blk = bget8(src, i >> 3);
-            let mut k = 0;
-            while k < 8 {
-                let b = blk[k];
-                let idx = i + k;
-                let cls = unsafe { BCLASS[b as usize] };
-                unsafe { MESH_SCRATCH[idx] = b };
-                if b != AIR {
-                    *top = idx;
-                    // Air is see-through only; everything else touches a mask.
-                    let col = idx & (CWU * CWU - 1);
-                    unsafe {
-                        if cls & CLS_MESH != 0 {
-                            COL_MESH[col] |= bit;
-                            if FULL {
-                                SKY_TOP[col] = ly as u8;
-                            }
-                        }
-                        if cls & CLS_SEE != 0 {
-                            COL_SEE[col] |= bit;
-                        }
-                        if FULL && cls & CLS_SPECIAL != 0 {
-                            let lx = col & (CWU - 1);
-                            let lz = col >> 4;
-                            if MESH_NLIGHT < MAX_SOURCES && is_light_source(b) {
-                                MESH_LIGHT_SOURCES[MESH_NLIGHT] = (lx, ly, lz);
-                                MESH_NLIGHT += 1;
-                            }
-                            if MESH_NPLANT < MAX_PLANTS && (is_cross_plant(b) || is_small_block(b))
-                            {
-                                MESH_PLANTS[MESH_NPLANT] = lx as u32
-                                    | ((ly as u32) << 4)
-                                    | ((lz as u32) << 10)
-                                    | ((b as u32) << 14);
-                                MESH_NPLANT += 1;
-                            }
-                        }
-                    }
-                } else {
-                    let col = idx & (CWU * CWU - 1);
-                    unsafe { COL_SEE[col] |= bit };
-                }
-                k += 1;
-            }
-            i += 8;
-        }
-    }
-    if air_layers != 0 {
-        let mut col = 0;
-        while col < CWU * CWU {
-            unsafe { COL_SEE[col] |= air_layers };
-            col += 1;
-        }
-    }
-}
-
-/// True when `len` packed bytes from `off` are all zero (all AIR, AIR == 0).
-/// Word loads once aligned; the first non-zero word ends it, so a layer with
-/// terrain in it costs a load or two.
 #[inline(always)]
-fn packed_zero(src: &[u8; PACKED_SIZE], off: usize, len: usize) -> bool {
-    let end = off + len;
-    let mut i = off;
-    while i < end && (src.as_ptr() as usize + i) & 3 != 0 {
-        if src[i] != 0 {
-            return false;
-        }
-        i += 1;
-    }
-    while i + 4 <= end {
-        // SAFETY: in bounds (i + 4 <= end <= PACKED_SIZE) and 4-byte aligned.
-        if unsafe { *(src.as_ptr().add(i) as *const u32) } != 0 {
-            return false;
-        }
-        i += 4;
-    }
-    while i < end {
-        if src[i] != 0 {
-            return false;
-        }
-        i += 1;
-    }
-    true
+fn decode_blocks<const FULL: bool>(s: usize, i0: usize, i1: usize, top: &mut usize) {
+    // Batches stay in cell units (multiples of 4096) so the stream and edit
+    // cursors are unchanged; one column is 64 cells.
+    rle::decode_cols::<FULL>(s, i0 / CHU, i1 / CHU, top);
 }
 
 /// Rewrite the bits of scratch index `i` after an edit stored block `b`.
@@ -1826,52 +1673,20 @@ fn decorate_columns(cx: i32, cz: i32, from: usize, count: usize) -> usize {
     end
 }
 
-/// Pack a range of scratch blocks into slot `s`'s bit store.
-///
-/// Packing in whole-byte groups keeps this resumable with no carry state:
-/// BLOCK_BITS is 7, so 8 blocks are exactly 56 bits = 7 whole bytes. That is
-/// what lets the pack be spread over several ticks instead of landing as one
-/// 16K-iteration lump inside a single frame. (It was 4 blocks / 3 bytes at 6
-/// bits; PACK_BATCH is a multiple of 8 either way.)
+/// Pack scratch blocks `from..from+count` (cell units, multiples of 4096 so
+/// the gen cursor is unchanged: 64 cells are one column) into slot `s`'s
+/// run store. Returns the new cursor, or usize::MAX if the block arena had no
+/// room for the chunk (see rle::BLK_SHORT).
 fn pack_blocks(s: usize, from: usize, count: usize) -> usize {
-    // Release-safe guard where a debug_assert used to be: a misaligned or
-    // out-of-range cursor here previously meant miscompiled gen state, and
-    // the resulting index panic FROZE the console. Realign and log rather
-    // than halt; the inline(never) barriers above are the real fix.
-    let from = if from % 8 != 0 || from > CHUNK_VOL {
+    let from = if from % CHU != 0 || from > CHUNK_VOL {
         psx_rt::tty::println("pack_blocks: misaligned cursor, realigned");
-        (from & !7).min(CHUNK_VOL)
+        (from & !(CHU - 1)).min(CHUNK_VOL)
     } else {
         from
     };
-    debug_assert!(from % 8 == 0 && count % 8 == 0);
     let end = (from + count).min(CHUNK_VOL);
-    unsafe {
-        let dst = &mut CHUNKS[s].blocks;
-        let mut i = from;
-        let mut bi = from / 8 * 7;
-        while i < end {
-            // Two 28-bit halves rather than one 56-bit value: the R3000 has no
-            // 64-bit shift, so a u64 here would cost a library call per group.
-            let lo = (GEN_SCRATCH[i] as u32) & BLOCK_MASK
-                | (((GEN_SCRATCH[i + 1] as u32) & BLOCK_MASK) << 7)
-                | (((GEN_SCRATCH[i + 2] as u32) & BLOCK_MASK) << 14)
-                | (((GEN_SCRATCH[i + 3] as u32) & BLOCK_MASK) << 21);
-            let hi = (GEN_SCRATCH[i + 4] as u32) & BLOCK_MASK
-                | (((GEN_SCRATCH[i + 5] as u32) & BLOCK_MASK) << 7)
-                | (((GEN_SCRATCH[i + 6] as u32) & BLOCK_MASK) << 14)
-                | (((GEN_SCRATCH[i + 7] as u32) & BLOCK_MASK) << 21);
-            dst[bi] = lo as u8;
-            dst[bi + 1] = (lo >> 8) as u8;
-            dst[bi + 2] = (lo >> 16) as u8;
-            // Byte 3 straddles the halves: top nibble of lo, low nibble of hi.
-            dst[bi + 3] = ((lo >> 24) as u8 & 0x0F) | ((hi as u8 & 0x0F) << 4);
-            dst[bi + 4] = (hi >> 4) as u8;
-            dst[bi + 5] = (hi >> 12) as u8;
-            dst[bi + 6] = (hi >> 20) as u8;
-            bi += 7;
-            i += 8;
-        }
+    if !rle::pack_cols(s, from / CHU, end / CHU) {
+        return usize::MAX;
     }
     end
 }
@@ -1915,7 +1730,7 @@ fn replay_edits(s: usize, cx: i32, cz: i32) {
             let y = unsafe { crate::EDIT_Y[i] as i32 };
             if y >= 0 && y < CH {
                 let idx = lidx((x - x0) as usize, y as usize, (z - z0) as usize);
-                unsafe { bset(&mut CHUNKS[s].blocks, idx, crate::EDIT_B[i]) };
+                rset(s, idx, unsafe { crate::EDIT_B[i] });
             }
         }
         i += 1;
@@ -1928,7 +1743,9 @@ fn finish_chunk(s: usize, cx: i32, cz: i32) {
         scatter_ores(blk, cx, cz); // no overworld ores down there
     }
     decorate_columns(cx, cz, 0, CHUNK_AREA);
-    pack_blocks(s, 0, CHUNK_VOL);
+    if pack_blocks(s, 0, CHUNK_VOL) == usize::MAX {
+        return; // no block RAM: stays unloaded (rle::BLK_SHORT counts it)
+    }
     publish_chunk(s, cx, cz);
 }
 
@@ -1990,7 +1807,7 @@ pub fn get(wx: i32, wy: i32, wz: i32) -> u8 {
         if CHUNKS[s].loaded && CHUNKS[s].cx == cx && CHUNKS[s].cz == cz {
             let lx = (wx - cx * CW) as usize;
             let lz = (wz - cz * CW) as usize;
-            bget(&CHUNKS[s].blocks, lidx(lx, wy as usize, lz))
+            rget(s, lidx(lx, wy as usize, lz))
         } else {
             AIR
         }
@@ -2012,7 +1829,7 @@ pub fn set(wx: i32, wy: i32, wz: i32, b: u8) {
         let lx = (wx - cx * CW) as usize;
         let lz = (wz - cz * CW) as usize;
         let i = lidx(lx, wy as usize, lz);
-        let old = bget(&CHUNKS[s].blocks, i);
+        let old = rget(s, i);
         // Does this edit move the column's skylight top? Scan for the current
         // top BEFORE the write (first sky-blocking cell from above, the same
         // test build_sky_column uses). The top rises if a blocking block lands
@@ -2023,7 +1840,7 @@ pub fn set(wx: i32, wy: i32, wz: i32, b: u8) {
         let mut col_top = 0i32;
         let mut y = CHU - 1;
         while y > 0 {
-            let cb = bget(&CHUNKS[s].blocks, lidx(lx, y, lz));
+            let cb = rget(s, lidx(lx, y, lz));
             if BCLASS[cb as usize] & CLS_MESH != 0 {
                 col_top = y as i32;
                 break;
@@ -2034,7 +1851,7 @@ pub fn set(wx: i32, wy: i32, wz: i32, b: u8) {
         let new_blocks = BCLASS[b as usize] & CLS_MESH != 0;
         let sky_changed =
             (new_blocks && wy > col_top) || (old_blocks && !new_blocks && wy == col_top);
-        bset(&mut CHUNKS[s].blocks, i, b);
+        rset(s, i, b);
         if MESH_SCRATCH_OWNER == s {
             MESH_SCRATCH[i] = b;
             col_masks_set(i, b);
@@ -2743,7 +2560,7 @@ fn raw_set(wx: i32, wy: i32, wz: i32, b: u8) {
             let lx = (wx - cx * CW) as usize;
             let lz = (wz - cz * CW) as usize;
             let i = lidx(lx, wy as usize, lz);
-            bset(&mut CHUNKS[s].blocks, i, b);
+            rset(s, i, b);
             if MESH_SCRATCH_OWNER == s {
                 MESH_SCRATCH[i] = b;
                 col_masks_set(i, b);
@@ -2905,7 +2722,7 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
         // The neighbour lives in the next chunk. Every cell of a border plane
         // reads the same neighbour chunk, so resolve it once here (what `get`
         // did per cell: floor_div, the slot hash and the residency test) and
-        // unpack its blocks directly. Past the top or bottom of the world, or
+        // read its runs directly. Past the top or bottom of the world, or
         // with the neighbour not resident, the neighbour is AIR, as `get`
         // answered. The dense fill writes every cell and builds the row
         // bitmaps as it goes.
@@ -2915,7 +2732,7 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
         let ns = slot(ncx, ncz);
         let nblocks = unsafe {
             if d.1 == 0 && CHUNKS[ns].loaded && CHUNKS[ns].cx == ncx && CHUNKS[ns].cz == ncz {
-                Some(&*core::ptr::addr_of!(CHUNKS[ns].blocks))
+                Some(ns)
             } else {
                 None
             }
@@ -2933,7 +2750,7 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                 let mut f = AIR;
                 if unsafe { BCLASS[blk as usize] } & CLS_MESH != 0 {
                     let nb = match nblocks {
-                        Some(nbk) => bget(
+                        Some(nbk) => rget(
                             nbk,
                             lidx(
                                 ((lx as i32 + d.0) & (CW - 1)) as usize,
@@ -3874,13 +3691,12 @@ fn mesh_edit_tick() {
 
         if EDIT_MESH_PHASE == 0 {
             if MESH_SCRATCH_OWNER != s {
-                let src = &CHUNKS[s].blocks;
                 let end = (EDIT_MESH_DECODE + EDIT_DECODE_BATCH).min(CHUNK_VOL);
                 if EDIT_MESH_DECODE == 0 {
                     col_masks_reset();
                 }
                 let mut top = EDIT_MESH_TOP;
-                decode_blocks::<false>(src, EDIT_MESH_DECODE, end, &mut top);
+                decode_blocks::<false>(s, EDIT_MESH_DECODE, end, &mut top);
                 EDIT_MESH_TOP = top;
                 EDIT_MESH_DECODE = end;
                 if end < CHUNK_VOL {
@@ -4161,6 +3977,9 @@ pub fn recenter(wx: i32, wz: i32) {
             GEN_PHASE = 0;
         }
     }
+    // Last, so no line above moves: the PGO profile is keyed by line offsets.
+    #[cfg(feature = "ram-stress-blk")]
+    rle::self_test_once();
 }
 
 /// Recentre on (bx, bz) and finish the chunk under it before returning.
@@ -4219,7 +4038,13 @@ pub fn gen_tick() {
             _ => {
                 // Multiple of 4 blocks: see pack_blocks.
                 GEN_COL = pack_blocks(s, GEN_COL, PACK_BATCH);
-                if GEN_COL >= CHUNK_VOL {
+                if GEN_COL == usize::MAX {
+                    // No block RAM (rle::BLK_SHORT): drop the chunk; recenter
+                    // starts it again.
+                    GEN_S = usize::MAX;
+                    GEN_PHASE = 0;
+                    GEN_COL = 0;
+                } else if GEN_COL >= CHUNK_VOL {
                     publish_chunk(s, GEN_CX, GEN_CZ);
                     GEN_S = usize::MAX;
                     GEN_PHASE = 0;
@@ -4379,13 +4204,12 @@ pub fn stream_tick() {
             if !ALLOW_CLAIM {
                 return;
             }
-            let src = &CHUNKS[s].blocks;
             let end = (MESH_DECODE + STREAM_DECODE_BATCH).min(CHUNK_VOL);
             if MESH_DECODE == 0 {
                 col_masks_reset();
             }
             let mut top = MESH_DECODE_TOP;
-            decode_blocks::<true>(src, MESH_DECODE, end, &mut top);
+            decode_blocks::<true>(s, MESH_DECODE, end, &mut top);
             MESH_DECODE_TOP = top;
             MESH_DECODE = end;
             if end < CHUNK_VOL {

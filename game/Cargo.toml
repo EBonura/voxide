@@ -21,6 +21,9 @@ ui-fixture = []
 # Mesh arena stress: a small arena so compaction runs constantly, plus an
 # invariant check after every allocation. Never ship.
 ram-stress = []
+# Block store stress: a block arena just above the routes' use, so regions
+# fragment and compaction runs. Never ship.
+ram-stress-blk = []
 
 [dependencies]
 psx-telemetry = { path = "../.psoxide/sdk/crates/psx-telemetry" }
