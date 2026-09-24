@@ -88,12 +88,34 @@ const NEAR_Z: i32 = 18;
 // distance step. The 4-level lighting measured FREE at this range (the
 // merge-break inflation scales with far-face area). Distance fog reaches
 // full ground-haze by the last band, so the short horizon reads as weather.
-const FAR_Z: i32 = 1024;
+//
+// The distance is one knob: DRAW_BLOCKS (16 ships). Build with
+// VOXIDE_DRAW_BLOCKS=<8..32> to sweep it; it moves the far plane, the side
+// cut, the fog ramp and the meshed ring (world::RENDER_R) together.
+const DRAW_BLOCKS: i32 = match option_env!("VOXIDE_DRAW_BLOCKS") {
+    Some(s) => parse_const_i32(s),
+    None => 16,
+};
+const _: () = assert!(DRAW_BLOCKS >= 8 && DRAW_BLOCKS <= 32, "draw distance is 8..32 blocks");
+const FAR_Z: i32 = DRAW_BLOCKS * BLOCK;
 // Side/bottom faces stop two bands earlier: beyond that every face is fully
 // hazed, so only the SILHOUETTE carries information, and a heightfield's
 // silhouette is its top faces (the 25..28-block-era ring measured far sides
 // at over 2x the tops' cost for no visible difference).
-const FAR_SIDE_Z: i32 = 896;
+const FAR_SIDE_Z: i32 = FAR_Z - 2 * BLOCK;
+
+/// Decimal digits to an i32, for build-time knobs read with `option_env!`.
+const fn parse_const_i32(s: &str) -> i32 {
+    let b = s.as_bytes();
+    let mut v = 0i32;
+    let mut i = 0;
+    while i < b.len() {
+        assert!(b[i].is_ascii_digit(), "expected decimal digits");
+        v = v * 10 + (b[i] - b'0') as i32;
+        i += 1;
+    }
+    v
+}
 
 const BLOCK: i32 = 64;
 
@@ -1116,19 +1138,23 @@ fn refresh_mat_ccmd() {
                 (lit.1 as u32 * sc / 128) as u8,
                 (lit.2 as u32 * sc / 128) as u8,
             );
+            // The ramp is laid out against the far plane: `full` is the band
+            // FAR_Z lands in (8 at 16 blocks) and `clear` a quarter of that.
+            const FULL: usize = (FAR_Z >> FOG_SHIFT) as usize;
+            const CLEAR: usize = FULL / 4;
             let mut b = 0;
             while b < FOG_BANDS {
-                // Clear until ~12 blocks out, then ramp to the far plane, so close
+                // Clear near the eye, then ramp to the far plane, so close
                 // terrain keeps full contrast and only the band where the hard edge
                 // against the sky used to be gets blended.
-                let t = if b <= 2 {
+                let t = if b <= CLEAR {
                     0
-                } else if b <= 5 {
-                    // Bands 0..7 at FAR_Z 1024: clear to ~5 blocks, ramp through
-                    // mid distance, full ground-haze in the last band so the
+                } else if b + 3 <= FULL {
+                    // At 16 blocks: clear to ~5 blocks, ramp through mid
+                    // distance, full ground-haze in the last band so the
                     // horizon dissolves into the below-horizon sky fill.
-                    ((b - 2) as i32) * 255 / 6
-                } else if b == 6 {
+                    ((b - CLEAR) as i32) * 255 / ((FULL - CLEAR) as i32)
+                } else if b + 2 == FULL {
                     200
                 } else {
                     255
@@ -1139,9 +1165,9 @@ fn refresh_mat_ccmd() {
                 // colour as the below-horizon sky behind them (ground_haze on
                 // both sides). Sky-blue full fog would repaint the old void
                 // sliver ON the terrain.
-                let target = if b <= 4 {
+                let target = if b <= FULL / 2 {
                     fog
-                } else if b <= 6 {
+                } else if b + 2 <= FULL {
                     (
                         ((fog.0 as u16 + haze.0 as u16) / 2) as u8,
                         ((fog.1 as u16 + haze.1 as u16) / 2) as u8,

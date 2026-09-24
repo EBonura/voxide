@@ -282,11 +282,16 @@ static mut PLAYER_CX: i32 = 0;
 static mut PLAYER_CZ: i32 = 0;
 // Chunk-radius that gets meshed (covers the draw distance in any facing). POOL
 // must be >= (2*RENDER_R+1)^2.
-const RENDER_R: i32 = 1; // mesh ring: 3x3 around the player. At FAR_Z 768
-                         // (12 blocks) a chunk entering this ring is 16+ blocks out -- past the far
-                         // plane, so it meshes before it can be seen. The old 5x5 ring meshed 25
-                         // chunks per boundary cross; that streaming load, not face count, was what
-                         // kept walking frames off the 30fps quantum below ~17-block draws.
+// Mesh ring: 3x3 around the player up to a 16-block draw. A chunk entering it
+// is 16+ blocks out -- past the far plane -- so it meshes before it can be
+// seen. The old 5x5 ring meshed 25 chunks per boundary cross; that streaming
+// load, not face count, was what kept walking frames off the 30fps quantum
+// below ~17-block draws. A longer draw (main::DRAW_BLOCKS) needs the 5x5 ring,
+// which is the whole loaded GRID: its outer chunks mesh as they load, inside
+// the view.
+const RENDER_R: i32 = if FAR_Z <= CW * crate::BLOCK { 1 } else { 2 };
+const _: () = assert!(POOL >= ((2 * RENDER_R + 1) * (2 * RENDER_R + 1)) as usize);
+const _: () = assert!(RENDER_R <= GRID / 2);
 
 /// Find a free pool slot for chunk `s`, or reuse its current one. Evicts a slot
 /// owned by an out-of-render-range chunk if the pool is full. Returns NO_SLOT if
