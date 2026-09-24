@@ -25,7 +25,7 @@ const MAGIC_V1: [u8; 4] = *b"MCPX";
 /// VERSION and teaches `layout` where its sections moved; every older version
 /// still loads.
 const MAGIC: [u8; 4] = *b"VOXS";
-const VERSION: u16 = 7;
+const VERSION: u16 = 8;
 /// BIOS file name: region+product code + label, 20 ASCII chars max.
 const FILE_NAME: &str = "BESLES-00000VOXIDE01";
 /// Human-readable label shown by the console's memory-card manager.
@@ -56,6 +56,9 @@ const V1_HDR: usize = V1_PROGRESS + 9; // armor u8, efficiency u8, xp i32, 3 too
 // dragon is slain. No earlier version recorded the kill, so their dragon lives.
 // Version 7 stores furnace fuel in half smelts (a log or plank burns 1.5
 // items); older saves' fuel doubles on load.
+// Version 8 appends the hunger state after the extras: saturation i32
+// (hundredths) and exhaustion i32 (1/64,000ths). Older saves load with
+// saturation 5.0 and no exhaustion, as a respawn does.
 const OFF_HOTBAR_SEL: usize = 41;
 const OFF_HOTBAR: usize = 42;
 const OFF_INV: usize = 52;
@@ -75,11 +78,14 @@ struct Layout {
     pos: usize,
     /// Furnace fuel is stored in half smelts (logs and planks burn 1.5).
     half_fuel: bool,
+    /// Saturation and exhaustion follow the extras.
+    hunger: bool,
 }
 
 const fn layout(version: u16) -> Layout {
     let extras = version >= 3;
-    let counts = OFF_EXTRA + if extras { 8 } else { 0 };
+    let hunger = version >= 8;
+    let counts = OFF_EXTRA + if extras { 8 } else { 0 } + if hunger { 8 } else { 0 };
     Layout {
         extras,
         dim: version >= 5,
@@ -88,6 +94,7 @@ const fn layout(version: u16) -> Layout {
         hdr: counts + 4,
         pos: if version >= 4 { 8 } else { 6 },
         half_fuel: version >= 7,
+        hunger,
     }
 }
 
@@ -196,6 +203,8 @@ pub fn save(p: &Player) -> bool {
     buf[OFF_EXTRA + 1] = p.protection;
     put_u16(buf, OFF_EXTRA + 2, 0);
     put_i32(buf, OFF_EXTRA + 4, p.food_items);
+    put_i32(buf, OFF_EXTRA + 8, p.saturation);
+    put_i32(buf, OFF_EXTRA + 12, p.exhaustion);
 
     let mut off = CUR.hdr;
     let mut chests = 0u8;
@@ -408,6 +417,13 @@ fn load_versioned(p: &mut Player, buf: &[u8], l: Layout) -> bool {
         p.sharpness = buf[OFF_EXTRA];
         p.protection = buf[OFF_EXTRA + 1];
         p.food_items = get_i32(buf, OFF_EXTRA + 4);
+    }
+    if l.hunger {
+        p.saturation = get_i32(buf, OFF_EXTRA + 8).clamp(0, p.food * 100);
+        p.exhaustion = get_i32(buf, OFF_EXTRA + 12).max(0);
+    } else {
+        p.saturation = 500.min(p.food * 100);
+        p.exhaustion = 0;
     }
     unsafe {
         HOTBAR_SEL = (buf[OFF_HOTBAR_SEL] as usize).min(HOTBAR_VIS - 1);
