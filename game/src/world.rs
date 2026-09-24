@@ -2260,10 +2260,14 @@ fn lowest_lava_level(x: i32, y: i32, z: i32) -> u8 {
 /// a few times a second (main's FLUID_PERIOD), so the call ABI is free.
 #[inline(never)]
 pub fn fluid_tick() {
-    // Java runs lava six times slower than water in the overworld. Rather than a
-    // second queue, lava cells only step on every sixth tick and get put back
-    // otherwise -- capped, so a queue full of lava cannot spin.
-    let lava_turn = unsafe { FLUID_PHASE % 6 == 0 };
+    // Java runs lava six times slower than water in the overworld and three
+    // times slower in the Nether. Rather than a second queue, lava cells only
+    // step on their turn and get put back otherwise -- capped, so a queue full
+    // of lava cannot spin.
+    // Lava every 6th step (Java's 30 game ticks) in the overworld, every 2nd
+    // (the Nether's 10) in the Inferno (minecraft.wiki/w/Lava).
+    let lava_every = if unsafe { DIM } == DIM_INFERNO { 2 } else { 6 };
+    let lava_turn = unsafe { FLUID_PHASE % lava_every == 0 };
     unsafe { FLUID_PHASE = FLUID_PHASE.wrapping_add(1) };
     let mut t = Touched {
         n: 0,
