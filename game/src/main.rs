@@ -841,11 +841,13 @@ const SWIM_UP: i32 = units::cbps_q8(223);
 const SWIM_ACCEL: i32 = units::cbps2_q8(5625);
 const SWIM_DRAG: i32 = units::cbps2_q8(1406);
 const SWIM_SINK: i32 = units::cbps_q8(281);
-/// Stick look: full push turns 90 deg/s yaw and 75 deg/s pitch, the rates the
-/// code was written for (Java has no controller, and no Bedrock or Legacy
-/// Console default turn rate is documented). LOOK SPEED scales both.
-const LOOK_YAW_Q8: i32 = units::dps_q8(90);
-const LOOK_PITCH_Q8: i32 = units::dps_q8(75);
+/// Stick look: full push turns 117 deg/s yaw and 98 deg/s pitch at LOOK
+/// SPEED 100%, which scales both. Java has no controller and no Bedrock or
+/// Legacy Console default turn rate is documented; these are 30% over the
+/// 90 / 75 deg/s the code was first written for, Manny's call after playing
+/// 0.2.0 on a console (it felt slow to turn).
+const LOOK_YAW_Q8: i32 = units::dps_q8(117);
+const LOOK_PITCH_Q8: i32 = units::dps_q8(98);
 
 const FONT_TPAGE: Tpage = Tpage::new(320, 0, TexDepth::Bit4);
 const FONT_CLUT: Clut = Clut::new(320, 256);
@@ -4817,7 +4819,7 @@ fn update_player(
         .map_or((0, 0), |(x, y)| (x as i32, y as i32));
     // Response CURVE, not a flat divisor: half linear, half quadratic, so aim
     // stays precise near centre (placing blocks with a stick) and a full push
-    // turns at LOOK_YAW_Q8 / LOOK_PITCH_Q8 (90 / 75 deg/s at LOOK SPEED 100%).
+    // turns at LOOK_YAW_Q8 / LOOK_PITCH_Q8 (117 / 98 deg/s at LOOK SPEED 100%).
     // Turning is EXCLUSIVELY on the right stick -- the left stick and d-pad only
     // ever move/strafe, never yaw.
     let lp = unsafe { SET_LOOK_PCT };
