@@ -1907,6 +1907,31 @@ fn spawn_at(kind: u8, sx: i32, sz: i32) {
     }
 }
 
+/// Cheat menu: stand a `kind` at (x, z) on the first clear height at or up
+/// to three blocks over `y`. A full roster gives up its first non-dragon
+/// slot, so the cheat always spawns.
+pub fn cheat_spawn(kind: u8, x: i32, y: i32, z: i32) {
+    let s = free_slot().unwrap_or(if unsafe { MOBS[0].kind } == DRAGON { 1 } else { 0 });
+    let (hw, h) = dims(kind);
+    let mut feet = y;
+    let mut k = 0;
+    while k < 3 && aabb_collides_dims(x, feet, z, hw, h) {
+        feet += BLOCK;
+        k += 1;
+    }
+    unsafe {
+        MOBS[s] = Mob {
+            kind,
+            alive: true,
+            x,
+            y: feet,
+            z,
+            health: max_health(kind),
+            ..DEAD
+        };
+    }
+}
+
 /// Seed a few passive mobs in front of the player (+Z at spawn) at world start.
 /// Despawn everything (mobs + arrows) -- the "NEW WORLD" reset. A new world
 /// has its dragon back.

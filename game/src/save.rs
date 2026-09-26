@@ -54,6 +54,8 @@ const V1_HDR: usize = V1_PROGRESS + 9; // armor u8, efficiency u8, xp i32, 3 too
 // so a game saved in the Inferno loads there; earlier saves load overworld.
 // Version 6 uses byte 7 (pad, written 0) for world flags: bit 0 = the void
 // dragon is slain. No earlier version recorded the kill, so their dragon lives.
+// Bit 1 (from 0.2.1, same layout version) = the hidden cheat menu was used in
+// this world; earlier builds write 0 and ignore it on load.
 // Version 7 stores furnace fuel in half smelts (a log or plank burns 1.5
 // items); older saves' fuel doubles on load.
 const OFF_HOTBAR_SEL: usize = 41;
@@ -163,7 +165,7 @@ pub fn save(p: &Player) -> bool {
     buf[..4].copy_from_slice(&MAGIC);
     put_u16(buf, 4, VERSION);
     buf[6] = crate::world::dimension();
-    buf[7] = crate::mob::dragon_slain() as u8;
+    buf[7] = crate::mob::dragon_slain() as u8 | (crate::cheat::used() as u8) << 1;
     put_i32(buf, 8, p.x);
     put_i32(buf, 12, p.y);
     put_i32(buf, 16, p.z);
@@ -291,6 +293,7 @@ pub fn load(p: &mut Player) -> Option<u8> {
     if len >= V1_HDR && buf[..4] == MAGIC_V1 {
         load_v1(p, &buf[..len]);
         crate::mob::set_dragon_slain(false);
+        crate::cheat::set_used(false);
         Some(crate::world::DIM_OVERWORLD)
     } else if len >= 6 && buf[..4] == MAGIC && (2..=VERSION).contains(&get_u16(buf, 4)) {
         let l = layout(get_u16(buf, 4));
@@ -298,6 +301,7 @@ pub fn load(p: &mut Player) -> Option<u8> {
             return None;
         }
         crate::mob::set_dragon_slain(l.flags && buf[7] & 1 != 0);
+        crate::cheat::set_used(l.flags && buf[7] & 2 != 0);
         let d = buf[6];
         Some(if l.dim && d <= crate::world::DIM_VOID {
             d

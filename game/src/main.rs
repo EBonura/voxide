@@ -14,6 +14,7 @@
 extern crate psx_rt;
 
 mod bonnie;
+mod cheat;
 mod craft;
 #[cfg(feature = "ui-fixture")]
 mod fixture;
@@ -2475,6 +2476,7 @@ fn main() {
                 1 => 0,        // the crafting strip navigates itself (craft.rs)
                 2 => 0,        // the container panes navigate themselves (inv.rs)
                 MENU_INV => 0, // the grid navigates itself (inv.rs)
+                MENU_CHEAT => cheat::ROWS.len(),
                 MENU_OPTIONS => OPTIONS.len(),
                 MENU_DEAD => 1,
                 _ => 0,
@@ -2577,6 +2579,40 @@ fn main() {
                     }
                     sfx::confirm();
                 }
+                // The hidden cheat menu (cheat.rs): hold L1 + R1, press SELECT.
+                if cheat::combo(pad, previous) {
+                    menu = MENU_CHEAT;
+                    menu_sel = 0;
+                    sfx::confirm();
+                }
+            } else if menu == MENU_CHEAT {
+                match cheat::input(pad, previous, menu_sel, &mut player) {
+                    cheat::Act::None => {}
+                    cheat::Act::Time(t) => {
+                        // Forward to that point of the day, as sleeping does.
+                        let target = (t as i64 * DAY_LEN as i64 / 24_000) as u32;
+                        day += (target + DAY_LEN - day % DAY_LEN) % DAY_LEN;
+                    }
+                    cheat::Act::Travel(to) => {
+                        travel_to(&mut player, to, &mut fb, &font);
+                        portal_dwell = PORTAL_IMMUNE;
+                        menu = 0;
+                    }
+                    cheat::Act::Home => {
+                        if world::dimension() != world::DIM_OVERWORLD {
+                            travel_to(&mut player, world::DIM_OVERWORLD, &mut fb, &font);
+                        }
+                        let sp = spawn_player();
+                        player.x = sp.x;
+                        player.y = sp.y;
+                        player.z = sp.z;
+                        player.vy = 0;
+                        player.fall_peak = player.y;
+                        world::recenter(world_to_block_x(player.x), world_to_block_z(player.z));
+                        portal_dwell = PORTAL_IMMUNE;
+                        menu = 0;
+                    }
+                }
             } else if menu == 1 {
                 craft::craft_input(pad, previous, &mut player);
             } else if menu == 2 {
@@ -2621,6 +2657,9 @@ fn main() {
                     player.hurt_cd = PLAYER_HURT_CD;
                     player.hurt_tilt = HURT_TILT_FRAMES;
                     player.regen_delay = REGEN_DELAY;
+                }
+                if cheat::god() {
+                    cheat::hold_god(&mut player);
                 }
                 if player.health < hp_before {
                     sfx::hurt();
@@ -3265,6 +3304,9 @@ fn main() {
         if SHOW_FPS {
             ui_text(&font, 276, 6, &decimal3(fps as u16), (0xE0, 0xE0, 0x60));
         }
+        if cheat::hud() && menu == 0 {
+            cheat::draw_hud(&font, &player, fps);
+        }
         if DEMO_PLAY {
             // Frame, player block position (+500 for signed coordinates), and
             // loaded/meshed/dirty chunk counts document headless captures.
@@ -3892,6 +3934,7 @@ fn reset_game_state() {
         RESPAWN_BZ = WORLD_BZ;
     }
     mob::clear();
+    cheat::reset();
 }
 
 /// Wait for the next VBlank IRQ (the SDK's fixed version of the old
@@ -4468,6 +4511,18 @@ fn portal_travel(player: &mut Player, fb: &mut FrameBuffer, font: &FontAtlas) {
     } else {
         world::DIM_INFERNO
     };
+    travel_to(player, to, fb, font);
+}
+
+/// Cross to dimension `to` from wherever the player stands, as a portal
+/// does: the ring regenerated behind a loading screen, the player on the
+/// ground at the scaled position, a return portal built there.
+#[inline(never)]
+#[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
+fn travel_to(player: &mut Player, to: u8, fb: &mut FrameBuffer, font: &FontAtlas) {
+    let bx = world_to_block_x(player.x);
+    let bz = world_to_block_z(player.z);
+    let here = world::dimension();
     // Java's 8:1 scaling: the Inferno is eight times smaller, so a long
     // overworld haul is a short walk down there and back. The End always drops
     // you on its island, near the origin, whatever you came from.
@@ -9265,6 +9320,8 @@ fn draw_menu(font: &FontAtlas, menu: u8, sel: usize, chest_idx: usize, player: P
         inv::draw_inventory(font, &player);
     } else if menu == MENU_DEAD {
         draw_death(font);
+    } else if menu == MENU_CHEAT {
+        cheat::draw(font, sel, &player);
     }
 }
 
@@ -9744,6 +9801,8 @@ const MENU_DEAD: u8 = 6;
 /// TRIANGLE's inventory panel (Bedrock PS layout): pick any placeable directly
 /// instead of R1-cycling the whole hotbar one item at a time.
 const MENU_INV: u8 = 5;
+/// The hidden cheat menu (cheat.rs), reached only from OPTIONS.
+const MENU_CHEAT: u8 = 7;
 
 /// Index of `sel` in PLACEABLE, so the inventory opens on the item in hand.
 const OPT_FLIGHT: usize = 0;
