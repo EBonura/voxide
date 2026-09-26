@@ -1,6 +1,9 @@
 # Changelog
 
-## 0.2.1 (not yet published)
+## 0.2.1 | 2026-09-26
+
+Standalone disc published on itch.io.
+
 
 - The right stick turns 30% faster: a full push is 117 degrees a second of
   yaw and 98 of pitch at LOOK SPEED 100% (was 90 and 75).
