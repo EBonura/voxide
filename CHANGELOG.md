@@ -1,6 +1,9 @@
 # Changelog
 
-## 0.2.0 (not yet published)
+## 0.2.0 | 2026-09-26
+
+Standalone disc published on itch.io.
+
 
 - Gameplay follows Minecraft Java Edition's numbers: walking, sprinting, sneaking,
   jumping and swimming, block break times, combat and explosions, burning, healing
