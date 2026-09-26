@@ -28,6 +28,8 @@ mod texdata;
 mod units;
 #[cfg(feature = "tune-lab")]
 mod tunelab;
+#[cfg(any(feature = "pick-lab", feature = "look-lab"))]
+mod picklab;
 mod world;
 
 // Profiler stage IDs (PSoXide --profile-log). Arbitrary distinct numbers; the
@@ -1571,6 +1573,10 @@ struct Proj {
 #[derive(Copy, Clone)]
 struct Pick {
     hit: bool,
+    /// World units from the eye to where the ray enters the hit block
+    /// (PICK_RANGE when nothing is hit): an entity nearer than this takes the
+    /// crosshair instead.
+    dist: i32,
     bx: i32,
     by: i32,
     bz: i32,
@@ -1581,6 +1587,7 @@ struct Pick {
 
 const NO_PICK: Pick = Pick {
     hit: false,
+    dist: PICK_RANGE,
     bx: 0,
     by: 0,
     bz: 0,
@@ -2414,6 +2421,8 @@ fn main() {
                 demo_checkpoint(frame, &player);
             }
         }
+        #[cfg(feature = "pick-lab")]
+        picklab::frame(frame, &mut player, &mut lstick, &mut rstick);
         if POSE_TEST {
             // Freeze all input and pin the exact pose; two ordinary edits
             // build the trigger tower ahead of the player, then nothing else
@@ -2640,7 +2649,25 @@ fn main() {
             player.pitch = (-140i32 & 0x0FFF) as i16; // eye-level, slight down: the real gameplay view
         }
         let cam = camera_from_player(player);
-        let pick = if menu != 0 { NO_PICK } else { trace_pick(&cam) };
+        // Java's crosshair: the block ray out to 4.5 blocks, then any mob
+        // whose box the ray enters first, out to the 3-block entity reach.
+        // A targeted mob takes the crosshair from the block behind it: no
+        // outline, no cracks, no mining or placing there.
+        let (pick, target) = if menu != 0 {
+            (NO_PICK, None)
+        } else {
+            let p = trace_pick(&cam);
+            let t = mob::ray_pick(
+                cam.x,
+                cam.y,
+                cam.z,
+                (cam.sy * cam.cp) >> 12,
+                cam.sp,
+                (cam.cy * cam.cp) >> 12,
+                p.dist.min(ENTITY_REACH),
+            );
+            (if t.is_some() { NO_PICK } else { p }, t)
+        };
         // The block under the crosshair decides which tool the HUD and the hand
         // show, so the set reads as one tool that changes to suit the job.
         let aimed_block = if pick.hit {
@@ -2759,10 +2786,9 @@ fn main() {
                 swing = SWING_TICKS;
             }
 
-            // Melee: tap R2 to strike a mob in front (before block mining).
-            if pad.pressed_since(previous, button::R2) {
-                let fx = (cam.sy * cam.cp) >> 12;
-                let fz = (cam.cy * cam.cp) >> 12;
+            // Melee: tap R2 to strike the mob under the crosshair. One hit a
+            // press, as Java's attack key: holding it only mines.
+            if let (true, Some(t)) = (pad.pressed_since(previous, button::R2), target) {
                 // Java sword damage: fist 1, then wood 4 / stone 5 / iron 6 / diamond 7.
                 let mut dmg = if player.sword == 0 {
                     1
@@ -2773,7 +2799,7 @@ fn main() {
                     dmg += dmg / 2; // Java strength I: +3 hearts-ish, here +50%
                 }
                 dmg += player.sharpness as i16; // Java: +1.25 per level, rounded here
-                if mob::melee(cam.x, cam.y, cam.z, fx, fz, ENTITY_REACH, dmg) {
+                if mob::strike(t, cam.x, cam.z, dmg) {
                     sfx::hit_mob();
                 }
             }
@@ -3205,6 +3231,10 @@ fn main() {
         telemetry::stage_end(ST_RENDER);
         telemetry::stage_begin(ST_R_TAIL);
         render_particles(&cam);
+        #[cfg(feature = "look-lab")]
+        picklab::look(&player);
+        #[cfg(feature = "pick-lab")]
+        picklab::record(frame, &pick, target.map_or(-1, |t| t as i32), mine_progress);
         draw_pick_outline(&cam, pick);
         // Minecraft puts the destroy stage ON the block you are hitting. Ours
         // only had an 18px bar under the crosshair, which is nearly subliminal at
@@ -8742,12 +8772,14 @@ fn trace_pick(cam: &Camera) -> Pick {
     }
     let reach = PICK_RANGE << T_FRAC;
     let mut place = cell;
+    let mut t_in = 0; // where the ray entered `cell`
     // A ray this long crosses at most ceil(reach)+1 walls per axis.
     let mut guard = 0;
     while guard <= 3 * (PICK_RANGE / BLOCK + 2) {
         if get_block_i32(cell[0], cell[1], cell[2]) != AIR {
             return Pick {
                 hit: true,
+                dist: t_in >> T_FRAC,
                 bx: cell[0],
                 by: cell[1],
                 bz: cell[2],
@@ -8768,6 +8800,7 @@ fn trace_pick(cam: &Camera) -> Pick {
         }
         place = cell;
         cell[a] += step[a];
+        t_in = t_wall[a];
         t_wall[a] += t_cell[a];
         guard += 1;
     }

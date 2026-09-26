@@ -18,6 +18,13 @@ lockstep = []
 # Headless UI captures only (src/fixture.rs): a stocked inventory and SELECT
 # to build a table/chest/furnace at the crosshair. Never ship.
 ui-fixture = []
+# Headless crosshair measurements only (src/picklab.rs): a pig pinned in front
+# of a held view, and PICK_LAB to watch what the pick and the attack reach.
+# Never ship.
+pick-lab = []
+# Headless turn-rate measurements only: publishes the view angles (LOOK_LAB in
+# src/picklab.rs) for a stick tape to read. Never ship.
+look-lab = []
 # Mesh arena stress: a small arena so compaction runs constantly, plus an
 # invariant check after every allocation. Never ship.
 ram-stress = []

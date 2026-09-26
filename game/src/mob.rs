@@ -788,8 +788,56 @@ pub fn lab_pin(kind: u8, x: i32, y: i32, z: i32) {
     }
 }
 
+/// Crosshair lab (feature `pick-lab`): where the pinned pig stands.
+#[cfg(feature = "pick-lab")]
+static mut PICK_PIN: (i32, i32, i32) = (0, 0, 0);
+
+/// Crosshair lab: clear the roster and stand one `kind` at (x, y, z), side on
+/// to a camera looking +Z. It is held there until first hurt.
+#[cfg(feature = "pick-lab")]
+pub fn lab_pin_pick(kind: u8, x: i32, y: i32, z: i32) {
+    unsafe {
+        MOBS = [DEAD; CAP];
+        PICK_PIN = (x, y, z);
+        let m = &mut MOBS[0];
+        m.kind = kind;
+        m.alive = true;
+        m.on_ground = true;
+        m.health = max_health(kind);
+        m.facing = 1;
+        (m.x, m.y, m.z) = (x, y, z);
+    }
+}
+
+/// Crosshair lab: slot 0's health and position (health 0 once it is gone).
+#[cfg(feature = "pick-lab")]
+pub fn lab_pig() -> (i32, i32, i32) {
+    let m = unsafe { MOBS[0] };
+    if m.alive {
+        (m.health as i32, m.x, m.z)
+    } else {
+        (0, m.x, m.z)
+    }
+}
+
+#[cfg(feature = "pick-lab")]
+fn lab_hold() {
+    unsafe {
+        let m = &mut MOBS[0];
+        if m.alive && m.health == max_health(m.kind) && PICK_PIN.0 != 0 {
+            (m.x, m.y, m.z) = PICK_PIN;
+            m.vy = 0;
+            m.state = ST_IDLE;
+            m.timer = 0;
+            m.facing = 1;
+        }
+    }
+}
+
 /// Advance all mobs: spawn budget, AI, physics, despawn.
 pub fn update(px: i32, py: i32, pz: i32, sky: i32) {
+    #[cfg(feature = "pick-lab")]
+    lab_hold();
     #[cfg(feature = "mob-lab")]
     lab_setup(px, pz);
     #[cfg(feature = "mob-lab")]
@@ -1649,33 +1697,114 @@ pub fn contact_damage(px: i32, py: i32, pz: i32) -> i32 {
     dmg
 }
 
-/// Player melee: damage the closest mob roughly along the look ray within reach.
-/// Returns true on a hit. Survivors of a passive hit flee; killed mobs vanish.
-pub fn melee(px: i32, py: i32, pz: i32, fx: i32, fz: i32, reach: i32, damage: i16) -> bool {
-    let mut best = CAP;
-    let mut best_d = reach * reach;
+/// Java Edition hitbox widths (minecraft.wiki/w/Hitbox), as half-widths in
+/// world units: pig, cow and sheep 0.9, chicken 0.4, spider 1.4, wither
+/// skeleton 0.7, and 0.6 for the zombie, skeleton, creeper, enderman, wolf,
+/// villager and blaze. Java's heights (pig 0.9, cow 1.4, sheep 1.3, chicken
+/// 0.7, zombie 1.95...) all stand taller than the models drawn here, so the
+/// box stops at the top of the drawn model (dims) instead: a Java-height
+/// zombie box would take hits in the air half a block over its head. The
+/// ghast and the dragon are drawn far smaller than Java's 4 and 16 blocks, so
+/// they keep their drawn size.
+fn java_half_w(kind: u8) -> i32 {
+    match kind {
+        PIG | COW | SHEEP => 29,
+        CHICKEN => 13,
+        SPIDER => 45,
+        CHARRED_SK => 22,
+        _ => 19,
+    }
+}
+
+/// The box the crosshair hits, as (x0, x1, z0, z1) around the mob's centre
+/// and a height over its feet. Java's hitbox, widened only where the drawn
+/// model reaches past it: a four-legged mob's head sticks out 3 half-widths
+/// ahead of its centre (see main's render_mob), and aiming at a pig's snout
+/// has to hit the pig, not the grass behind it.
+fn pick_box(m: &Mob) -> (i32, i32, i32, i32, i32) {
+    let (hw, h) = dims(m.kind);
+    match m.kind {
+        DRAGON => (-2 * hw, 2 * hw, -2 * hw, 2 * hw, h),
+        ZOMBIE | SKELETON | SAPPER | WRAITH | VILLAGER | EMBER | CHARRED_SK => {
+            let j = java_half_w(m.kind).max(hw);
+            (-j, j, -j, j, h)
+        }
+        _ => {
+            let j = if m.kind == WAILER { hw } else { java_half_w(m.kind).max(hw) };
+            let (f, b) = (j.max(3 * hw), j.max(hw * 3 / 2));
+            match m.facing {
+                0 => (-j, j, -b, f, h),
+                1 => (-b, f, -j, j, h),
+                2 => (-j, j, -f, b, h),
+                _ => (-f, b, -j, j, h),
+            }
+        }
+    }
+}
+
+/// One axis of the slab test: narrow [t0, t1] (1/16 world units along the
+/// ray) to where the ray is between `lo` and `hi`. `o` is the ray origin and
+/// `d` its Q12 direction on this axis. False when the ray misses the slab.
+#[inline(always)]
+fn slab(o: i32, d: i32, lo: i32, hi: i32, t0: &mut i32, t1: &mut i32) -> bool {
+    if d == 0 {
+        return o >= lo && o <= hi;
+    }
+    // Offsets stay within a few hundred units (the caller rejects far mobs),
+    // so << 16 keeps well inside i32: t in 1/16 units, as d is Q12.
+    let (mut a, mut b) = (((lo - o) << 16) / d, ((hi - o) << 16) / d);
+    if a > b {
+        core::mem::swap(&mut a, &mut b);
+    }
+    *t0 = (*t0).max(a);
+    *t1 = (*t1).min(b);
+    *t0 <= *t1
+}
+
+/// The mob the crosshair is on: the nearest whose box the ray from (ox, oy,
+/// oz) along the Q12 unit vector (dx, dy, dz) enters within `max_t` world
+/// units, which the caller sets to the entity reach or the distance to the
+/// block the ray hits, whichever is nearer. Java's rule: an entity in front
+/// of the targeted block takes the crosshair (minecraft.wiki/w/Hitbox).
+#[inline(never)]
+pub fn ray_pick(ox: i32, oy: i32, oz: i32, dx: i32, dy: i32, dz: i32, max_t: i32) -> Option<usize> {
+    let mut best = None;
+    let mut best_t = max_t << 4;
     let mut i = 0;
     while i < CAP {
-        let m = unsafe { MOBS[i] };
-        if m.alive {
-            let dx = m.x - px;
-            let dz = m.z - pz;
-            let dy = (m.y - py).abs();
-            // In front (dot with facing > 0) and within reach + vertical band.
-            if dx * fx + dz * fz > 0 && dy < 2 * BLOCK {
-                let d2 = dx * dx + dz * dz;
-                if d2 < best_d {
-                    best_d = d2;
-                    best = i;
-                }
+        let m = unsafe { &MOBS[i] };
+        // Quick reject: no box reaches more than 6 blocks from its mob's
+        // position (the dragon's is 5 wide a side of it).
+        if m.alive
+            && (m.x - ox).abs() < max_t + 6 * BLOCK
+            && (m.z - oz).abs() < max_t + 6 * BLOCK
+            && (m.y - oy).abs() < max_t + 6 * BLOCK
+        {
+            let (x0, x1, z0, z1, h) = pick_box(m);
+            let (mut t0, mut t1) = (0, best_t);
+            if slab(ox, dx, m.x + x0, m.x + x1, &mut t0, &mut t1)
+                && slab(oy, dy, m.y, m.y + h, &mut t0, &mut t1)
+                && slab(oz, dz, m.z + z0, m.z + z1, &mut t0, &mut t1)
+                && t0 < best_t
+            {
+                best_t = t0;
+                best = Some(i);
             }
         }
         i += 1;
     }
-    if best == CAP {
+    best
+}
+
+/// Player melee on mob `best` (the crosshair target from ray_pick): damage
+/// and knockback away from the player at (px, pz). True on a hit; false while
+/// the mob is still invulnerable from the last one. Survivors of a passive
+/// hit flee; killed mobs vanish.
+pub fn strike(best: usize, px: i32, pz: i32, damage: i16) -> bool {
+    let mut m = unsafe { MOBS[best] };
+    if !m.alive {
         return false;
     }
-    let mut m = unsafe { MOBS[best] };
     if m.hurt_cd > 0 {
         return false; // still invulnerable from the last hit
     }
