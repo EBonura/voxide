@@ -97,8 +97,9 @@ explicit source override for SDK development and demo-disc integration.
 The layout follows Minecraft Bedrock's PS4/PS5 defaults.
 
 - Left stick: move (forward/back + strafe); D-pad works as a fallback
-  (up/down walk, left/right turn)
-- Right stick: turn and look
+  (up/down walk, left/right strafe)
+- Right stick: turn and look (a full push turns 117 degrees a second and
+  pitches 98 at LOOK SPEED 100%)
 - Cross: jump; hold it in water to swim up; in creative fly (toggled in the
   options menu) Cross rises and Circle sinks
 - Circle: hold to sneak (slow, and you will not walk off a ledge); backs
@@ -113,8 +114,9 @@ The layout follows Minecraft Bedrock's PS4/PS5 defaults.
 - L2: use -- interact with the targeted mob or block (chest, furnace, bed,
   enchant table, door), otherwise place/use the held block or item (bow,
   bucket, wheat, ...); sneak + L2 force-places
-- R2: tap to attack, hold to mine the targeted block (time scales with
-  hardness and tool)
+- R2: tap to attack the mob under the crosshair, hold to mine the targeted
+  block (time scales with hardness and tool). As in Java, a mob in front of
+  a block takes the crosshair: no block outline or cracks show behind it
 - L1 / R1: hotbar previous/next (9 slots, wraps; an empty slot is an empty
   hand)
 - L3 or double-tap forward: sprint (drops when forward stops)
@@ -136,6 +138,26 @@ bare-hand pace. Only a pickaxe of the right tier will yield ore, and melee
 damage comes from the sword.
 
 Holding up or down in any menu autorepeats after a beat.
+
+### Cheats (for testing)
+
+A hidden menu for testing: press Start for OPTIONS, then hold L1 + R1 and
+press Select. Up/down picks a row, left/right changes TIME and SPAWN, Cross
+acts, Circle closes.
+
+- FLY (NO CLIP): the options menu's flight, which passes through blocks
+- GOD MODE: health, hunger and breath stay full
+- SHOW XYZ + FPS: block coordinates and frame rate in the top-left corner
+- GIVE EVERYTHING: 64 of every block and item, diamond tools and armour
+- TIME: jump to sunrise, noon, sunset or midnight
+- SPAWN: any mob, dragon included, three blocks in front of you
+- TO SPAWN POINT: back to the world spawn (or the bed you last slept in)
+- TO INFERNO / TO VOID / TO OVERWORLD: cross as a portal would, with a
+  return portal built where you land
+
+Using any of them except the readout marks the world, and the mark is saved
+with it (the menu title then reads CHEATS - WORLD MARKED). A world that never
+opened the menu saves exactly as before.
 
 The HUD carries hearts, hunger, air bubbles, armour pips, the XP bar and the
 hotbar. Mining draws crack stages on the block itself rather than a progress
@@ -174,5 +196,7 @@ with Mojang Studios or Microsoft. Minecraft is a trademark of Mojang Studios.
 
 ## Recent changes
 
-Source snapshot **2026.09.05**: Switched standalone builds to the extracted SDK and separate emulator.
+**0.2.1**: the camera turns 30% faster, the crosshair picks the mob in
+front of a block the way Java does, and a hidden cheat menu for testing
+(see Cheats above).
 See the [changelog](CHANGELOG.md) for the remaining changes and published download versions.
