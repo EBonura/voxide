@@ -2356,6 +2356,14 @@ fn main() {
     // counter cannot be both monotonic and skippable.
     let mut day: u32 = 0;
     let mut prev_vbl = interrupts::vblank_count();
+    // Game time runs on the shared psx-tick clock: one sim tick per VBlank,
+    // and a frame catches up every tick owed since the last one, up to
+    // MAX_CATCHUP (half a second). Longer stalls -- the loading screen behind
+    // a dimension change -- drop the excess, counted in the clock's stats.
+    let mut game_clock = psx_tick::FixedClock::new(
+        psx_tick::TickConfig::new(psx_tick::TickRate::HZ60).with_cap(MAX_CATCHUP as u16),
+        prev_vbl.wrapping_add(1),
+    );
     let mut cast_t: u16 = 0; // fishing: frames until a bite while the rod is cast
     let mut swing: u32 = 0; // held-item swing countdown in sim ticks (mine/place/attack)
     let mut dig_t: u32 = 0; // sim ticks since the last dig sound
@@ -2396,7 +2404,20 @@ fn main() {
         let sim_n = if cfg!(feature = "lockstep") {
             1
         } else {
-            dt.min(MAX_CATCHUP)
+            // Wait for a tick rather than invent one: a frame shorter than a
+            // VBlank must not advance game time.
+            let mut n = 0u32;
+            loop {
+                let now = interrupts::vblank_count();
+                while game_clock.due(now) {
+                    n += 1;
+                }
+                if n != 0 {
+                    break;
+                }
+            }
+            game_clock.end_frame();
+            n
         };
 
         telemetry::stage_begin(49); // TEMP: pad poll (SIO exchange)
