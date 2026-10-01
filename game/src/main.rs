@@ -1565,7 +1565,9 @@ struct Player {
     fall_peak: i32,   // highest y since last on ground, for fall damage
     air: i32,         // breath remaining underwater
     burn: i32,        // burning timer (set by lava/fire), damages over time
-    hurt_cd: i32,     // i-frames between environmental damage ticks
+    hurt_cd: i32,     // sim ticks of hit invulnerability left (take_hit)
+    last_hurt: i32,   // raw damage of the hit those i-frames belong to
+    hazard_t: i32,    // sim ticks until lava, fire, cactus, drowning or burning bite again
     regen_tick: i32,  // sim ticks toward the next regen/starve point (Java's foodTickTimer)
     heal_frac: i32,   // saturation-boost healing not yet a whole hp, hundredths
     food: i32,        // hunger, 0..MAX_FOOD
@@ -1716,6 +1718,38 @@ fn armored(raw: i32, p: &Player) -> i32 {
     let after_armor = (raw * (2500 - r) + 1250) / 2500;
     let p = (protection.min(MAX_EFFICIENCY)) as i32;
     (after_armor * (100 - p * 12) / 100).max(1)
+}
+
+/// Every hit on the player goes through Java's invulnerability rule
+/// (minecraft.wiki/w/Damage#Invulnerability timer): a hit starts 10 game
+/// ticks of invulnerability, a weaker or equal hit inside them does nothing,
+/// and a stronger one deals only the difference. `raw` is before armour, as in
+/// Java; `armoured` routes it through `armored`. Returns the health taken.
+fn take_hit(p: &mut Player, raw: i32, armoured: bool) -> i32 {
+    if raw <= 0 {
+        return 0;
+    }
+    let fresh = if p.hurt_cd == 0 {
+        p.hurt_cd = PLAYER_HURT_CD;
+        raw
+    } else if raw > p.last_hurt {
+        raw - p.last_hurt
+    } else {
+        return 0;
+    };
+    p.last_hurt = raw;
+    let dmg = if armoured {
+        // Armour-protected damage wears the armour and costs exhaustion
+        // (minecraft.wiki/w/Durability#Armor durability, Hunger#Exhaustion).
+        let d = armored(fresh, p);
+        wear_armor(p, fresh);
+        p.exhaustion += EXH_DAMAGE;
+        d
+    } else {
+        fresh
+    };
+    p.health -= dmg;
+    dmg
 }
 
 // Survival clocks count sim ticks (update_survival runs once per tick);
@@ -2882,20 +2916,19 @@ fn main() {
             let mut st = 0;
             while st < sim_n {
                 let prev_i = if st == 0 { previous } else { pad };
-                update_player(&mut player, pad, prev_i, lstick, rstick);
+                // Before update_player, so a fall's damage also plays the hurt sound.
                 let hp_before = player.health;
+                update_player(&mut player, pad, prev_i, lstick, rstick);
                 update_survival(&mut player);
                 mob::set_lure(player.selected == WHEAT_ITEM); // animals follow held wheat
                 mob::update(player.x, player.y, player.z, sky_level(day % DAY_LEN));
                 let raw_hit =
                     mob::contact_damage(player.x, player.y, player.z) + mob::hazard_damage();
-                let mob_hit = armored(raw_hit, &player);
-                if mob_hit > 0 && player.hurt_cd == 0 {
-                    player.health -= mob_hit;
-                    wear_armor(&mut player, raw_hit);
-                    player.hurt_cd = PLAYER_HURT_CD;
+                // Mob contact, arrows and sapper blasts, through Java's
+                // invulnerability rule (take_hit): a stronger hit inside the
+                // i-frames deals the difference instead of nothing.
+                if take_hit(&mut player, raw_hit, true) > 0 {
                     player.hurt_tilt = HURT_TILT_FRAMES;
-                    player.exhaustion += EXH_DAMAGE;
                 }
                 if cheat::god() {
                     cheat::hold_god(&mut player);
@@ -4462,6 +4495,8 @@ fn spawn_player() -> Player {
         air: MAX_AIR,
         burn: 0,
         hurt_cd: 0,
+        last_hurt: 0,
+        hazard_t: 0,
         regen_tick: 0,
         heal_frac: 0,
         food: MAX_FOOD,
@@ -4939,8 +4974,15 @@ fn update_survival(player: &mut Player) {
     if player.hurt_cd > 0 {
         player.hurt_cd -= 1;
     }
+    if player.hazard_t > 0 {
+        player.hazard_t -= 1;
+    }
 
-    // Per-hazard damage + cadence in sim ticks, matching Java rates.
+    // Per-hazard damage + cadence in sim ticks, matching Java rates. The
+    // cadence is the hazard's own clock, not the hit invulnerability: sharing
+    // hurt_cd let a burn or a drowning tick re-arm 0.5-1 s of i-frames every
+    // time, so a burning, drowning or cactus-pricked player took no mob, arrow
+    // or blast damage at all.
     let mut hurt = 0;
     let mut cd = HAZARD_FAST_CD;
     let mut fiery = false;
@@ -5016,17 +5058,11 @@ fn update_survival(player: &mut Player) {
         }
     }
 
-    if hurt > 0 && player.hurt_cd == 0 {
-        if armoured {
-            // Lava, fire and cactus are armour-protected damage in Java
-            // (minecraft.wiki/w/Durability#Armor durability).
-            player.health -= armored(hurt, player);
-            wear_armor(player, hurt);
-            player.exhaustion += EXH_DAMAGE;
-        } else {
-            player.health -= hurt;
-        }
-        player.hurt_cd = cd;
+    if hurt > 0 && player.hazard_t == 0 {
+        player.hazard_t = cd;
+        // Lava, fire and cactus are armour-protected damage in Java
+        // (minecraft.wiki/w/Durability#Armor durability).
+        take_hit(player, hurt, armoured);
     }
 
     // Exhaustion spends saturation, then hunger.
@@ -10751,13 +10787,7 @@ fn tnt_tick(player: &mut Player) {
                             player.y - wy,
                             player.z - wz,
                         );
-                        let dmg = armored(raw, player);
-                        if dmg > 0 && player.hurt_cd == 0 {
-                            player.health -= dmg;
-                            wear_armor(player, raw);
-                            player.hurt_cd = PLAYER_HURT_CD;
-                            player.exhaustion += EXH_DAMAGE;
-                        }
+                        take_hit(player, raw, true);
                     }
                 }
             }
