@@ -9010,8 +9010,87 @@ const SUN_CORE_PX: i16 = (PROJ_H * 15 / 100) as i16;
 const SUN_HALO_PX: i16 = (PROJ_H * 268 / 1000) as i16; // tan 15 deg
 const MOON_CORE_PX: i16 = (PROJ_H * 10 / 100) as i16;
 
-/// The sun: an opaque core square and an additive square halo around it.
-fn draw_sun(x: i16, y: i16) {
+/// A Gouraud triangle cut at the horizon line `ymax`: only the part above
+/// it is drawn, colours interpolated along the cut. The sun and moon set
+/// BEHIND the horizon; drawn whole, a low sun showed through the ground
+/// haze below the skyline wherever no terrain covered it.
+fn tri_above(v: [(i16, i16); 3], c: [(u8, u8, u8); 3], ymax: i32, add: bool) {
+    let mut pv: [(i32, i32); 4] = [(0, 0); 4];
+    let mut pc: [(i32, i32, i32); 4] = [(0, 0, 0); 4];
+    let mut n = 0;
+    let mut i = 0;
+    while i < 3 {
+        let j = (i + 1) % 3;
+        let (a, b) = (v[i], v[j]);
+        let (ca, cb) = (c[i], c[j]);
+        let ain = (a.1 as i32) <= ymax;
+        let bin = (b.1 as i32) <= ymax;
+        if ain {
+            pv[n] = (a.0 as i32, a.1 as i32);
+            pc[n] = (ca.0 as i32, ca.1 as i32, ca.2 as i32);
+            n += 1;
+        }
+        if ain != bin {
+            let (ay, by) = (a.1 as i32, b.1 as i32);
+            let num = ymax - ay;
+            let den = by - ay;
+            let l = |p: i32, q: i32| p + (q - p) * num / den;
+            pv[n] = (l(a.0 as i32, b.0 as i32), ymax);
+            pc[n] = (
+                l(ca.0 as i32, cb.0 as i32),
+                l(ca.1 as i32, cb.1 as i32),
+                l(ca.2 as i32, cb.2 as i32),
+            );
+            n += 1;
+        }
+        i += 1;
+    }
+    let mut k = 1;
+    while k + 1 < n {
+        let t = [pv[0], pv[k], pv[k + 1]];
+        let tc = [pc[0], pc[k], pc[k + 1]];
+        let vv = [
+            (t[0].0 as i16, t[0].1 as i16),
+            (t[1].0 as i16, t[1].1 as i16),
+            (t[2].0 as i16, t[2].1 as i16),
+        ];
+        let cc = [
+            (tc[0].0 as u8, tc[0].1 as u8, tc[0].2 as u8),
+            (tc[1].0 as u8, tc[1].1 as u8, tc[1].2 as u8),
+            (tc[2].0 as u8, tc[2].1 as u8, tc[2].2 as u8),
+        ];
+        if add {
+            ui_tri_add_gouraud(vv, cc);
+        } else {
+            ui_tri_gouraud(vv, cc);
+        }
+        k += 1;
+    }
+}
+
+/// A flat square cut at the horizon line `ymax`.
+fn square_above(x: i16, y: i16, hw: i16, ymax: i32, col: (u8, u8, u8)) {
+    let top = y as i32 - hw as i32;
+    let bot = (y as i32 + hw as i32).min(ymax);
+    if bot <= top {
+        return;
+    }
+    ui_quad_flat(
+        [
+            (x - hw, top as i16),
+            (x + hw, top as i16),
+            (x - hw, bot as i16),
+            (x + hw, bot as i16),
+        ],
+        col.0,
+        col.1,
+        col.2,
+    );
+}
+
+/// The sun: an opaque core square and an additive square halo around it,
+/// both cut at the horizon line.
+fn draw_sun(x: i16, y: i16, hy: i32) {
     let (c, h) = (SUN_CORE_PX, SUN_HALO_PX);
     let warm = (96, 88, 52);
     let off = (0, 0, 0);
@@ -9020,11 +9099,11 @@ fn draw_sun(x: i16, y: i16) {
     let mut k = 0;
     while k < 4 {
         let n = (k + 1) % 4;
-        ui_tri_add_gouraud([inner[k], outer[k], outer[n]], [warm, off, off]);
-        ui_tri_add_gouraud([inner[k], outer[n], inner[n]], [warm, off, warm]);
+        tri_above([inner[k], outer[k], outer[n]], [warm, off, off], hy, true);
+        tri_above([inner[k], outer[n], inner[n]], [warm, off, warm], hy, true);
         k += 1;
     }
-    billboard(x, y, c, c, (0xFF, 0xF4, 0xC8));
+    square_above(x, y, c, hy, (0xFF, 0xF4, 0xC8));
 }
 
 /// A camera-facing flat square (sun, moon, star).
@@ -9257,11 +9336,11 @@ fn draw_sky(cam: &Camera, day: u32, tod: u32, light: u8, horizon: (u8, u8, u8), 
                             x + ((sincos::cos_q12(a1) * rr) >> 12) as i16,
                             y + ((sincos::sin_q12(a1) * rr * 2 / 3) >> 12) as i16,
                         );
-                        ui_tri_gouraud([(x, y), p0, p1], [core, rim, rim]);
+                        tri_above([(x, y), p0, p1], [core, rim, rim], hy, false);
                         k += 1;
                     }
                 }
-                draw_sun(x, y);
+                draw_sun(x, y, hy);
             }
         }
         // The moon's visible disc is 5.7 deg from its centre: sin 6.
@@ -9271,13 +9350,13 @@ fn draw_sky(cam: &Camera, day: u32, tod: u32, light: u8, horizon: (u8, u8, u8), 
                 // 38/128 -- it rendered DARKER than the cloud slabs and was
                 // genuinely hard to find in the sky. It is the brightest thing
                 // up there in Java.
-                billboard(x, y, MOON_CORE_PX, MOON_CORE_PX, (0xE8, 0xEA, 0xF4));
+                square_above(x, y, MOON_CORE_PX, hy, (0xE8, 0xEA, 0xF4));
                 // Phase: a sky-coloured occluder slid across the disc. Eight
                 // phases over eight days, as in Java.
                 let ph = ((day / DAY_LEN) % 8) as i32; // Java's moon phase: days % 8
                 if ph != 0 {
                     let shift = ((ph - 4) as i16) * MOON_CORE_PX / 2;
-                    billboard(x + shift, y, MOON_CORE_PX, MOON_CORE_PX, zenith);
+                    square_above(x + shift, y, MOON_CORE_PX, hy, zenith);
                 }
             }
         }
