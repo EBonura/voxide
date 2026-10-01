@@ -5947,21 +5947,9 @@ fn scale_rgb(c: (u8, u8, u8), pct: u32) -> (u8, u8, u8) {
     )
 }
 
-/// First-person "held item": a small isometric block in the bottom-right,
-/// coloured by the selected block, bobbing gently. ponytail: flat-shaded faux-3D
-/// cube (no texture), three shaded faces -- reads clearly as "you hold this".
-/// One textured face of the held-item cube, shaded flat (128 = full-bright).
-fn held_face(verts: [(i16, i16); 4], tile: u8, bt: BlockTex, shade: u8) {
-    let (u, v) = tex::tile_uv(tile);
-    let win = TextureWindow::power_of_two_tile(u, v, 16, 16);
-    let mat = TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, (shade, shade, shade))
-        .with_texture_window(win);
-    ui_quad_textured(verts, [(0, 0), (16, 0), (0, 16), (16, 16)], mat);
-}
-
-/// First-person held item: a TEXTURED faux-3D cube in the bottom-right using the
-/// selected block's real tiles, with an idle bob and a downward dip while
-/// swinging (mining/placing).
+/// First-person held item in the bottom-right: the arm, then the item as Java
+/// holds it (a flat icon, or the block's 3D model in its real tiles), with an
+/// idle bob and a downward dip while swinging (mining/placing).
 #[inline(never)]
 fn draw_held_item(selected: u8, tool: (u8, u8), tick: u32, swing: i32) {
     let bob = (sincos::sin_q12(((tick * 18) & 0x0FFF) as u16) >> 9) as i16; // ~-8..8, 1.9 s cycle
@@ -6080,14 +6068,13 @@ fn draw_held_item(selected: u8, tool: (u8, u8), tick: u32, swing: i32) {
         }
         return; // otherwise: just the arm, like the original
     }
-    let icon = icon_tile(selected);
-    if icon != face_tile(selected, 0) {
-        // An item with its own icon (materials, food, buckets, potions, the
-        // torch, and the blocks whose world faces borrow another tile) is held
-        // the way the hotbar shows it: its icon as a flat sprite in the fist,
-        // on the same slant as a held tool, lit like the arm. As a cube it
-        // wore some other block's faces.
-        let l = unsafe { LIGHT } as u32;
+    let l = unsafe { LIGHT } as u32;
+    if held_flat(selected) {
+        // Java holds items, and the blocks whose item form is a sprite
+        // (torch, ladder, door, plants, dust, sugar cane), as a flat icon in
+        // the fist. Mirrored like the held tool, so a handle drawn at the
+        // icon's bottom-left (bow, rod, torch) meets the hand.
+        let icon = icon_tile(selected);
         let f = (48 + l * 80 / 128).clamp(16, 255) as u8;
         let (u, v) = tex::tile_uv(icon);
         let win = TextureWindow::power_of_two_tile(u, v, 16, 16);
@@ -6101,29 +6088,117 @@ fn draw_held_item(selected: u8, tool: (u8, u8), tick: u32, swing: i32) {
                 (wx - 44, wy - 4),
                 (wx + 22, wy + 10),
             ],
-            [(0, 0), (16, 0), (0, 16), (16, 16)],
+            [(16, 0), (0, 0), (16, 16), (0, 16)],
             mat,
         );
         return;
     }
-    let t = (cx, cyt - r / 2);
-    let rt = (cx + r, cyt);
-    let lf = (cx - r, cyt);
-    let b = (cx, cyt + r / 2);
-    let bl = (cx, cyt + r / 2 + h);
-    let ll = (cx - r, cyt + h);
-    let rl = (cx + r, cyt + h);
+    // Every other block is held as its placed model (Java renders a block
+    // item with its block model): a cube, or the slab, stairs, fence, bed
+    // and enchanting-table shapes, wearing the world faces.
     let bt = unsafe { BLOCK_TEX };
     // Take the world's light, like every other surface. Held items sit in the
     // player's own hand so Java keeps them a little brighter than ambient; a
     // floor under the skylight rather than a full multiply.
-    let lit = |base: u32| {
-        let l = unsafe { LIGHT } as u32;
-        (base * (48 + l * 80 / 128) / 128).clamp(16, 255) as u8
+    let lit = |base: u32| (base * (48 + l * 80 / 128) / 128).clamp(16, 255) as u8;
+    let shades = (lit(128), lit(98), lit(72));
+    let tiles = (
+        face_tile(selected, 2),
+        face_tile(selected, 4),
+        face_tile(selected, 0),
+    );
+    let cybase = cyt - r / 2 + h;
+    let boxes = held_model(selected);
+    for bx in boxes.iter() {
+        if bx.1 > bx.0 {
+            held_box(cx, cybase, r, h, *bx, tiles, shades, bt);
+        }
+    }
+}
+
+/// True when Java holds `item` as a flat sprite rather than a 3D block.
+fn held_flat(item: u8) -> bool {
+    match item {
+        FURNACE | BED | PISTON | ENCHANT | FENCE | GLASS | SLAB => false,
+        STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W => false,
+        TORCH | LADDER | DOOR_C | DOOR_O | WIRE | SUGAR_CANE => true,
+        _ => world::is_cross_plant(item) || icon_tile(item) != face_tile(item, 0),
+    }
+}
+
+/// A held block's model as up to five boxes, in sixteenths: (x0, x1, y0, y1,
+/// z0, z1), x to the right, y up, z toward the viewer, drawn in this order
+/// (back to front). Unused entries are empty (x1 <= x0).
+type HeldBox = (i16, i16, i16, i16, i16, i16);
+fn held_model(item: u8) -> [HeldBox; 5] {
+    const E: HeldBox = (0, 0, 0, 0, 0, 0);
+    match item {
+        SLAB => [(0, 16, 0, 8, 0, 16), E, E, E, E],
+        // A bottom slab and the raised back half.
+        STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W => {
+            [(0, 16, 0, 8, 0, 16), (0, 16, 8, 16, 0, 8), E, E, E]
+        }
+        // Post and two rails, the rails split around the post for draw order.
+        FENCE => [
+            (0, 6, 6, 9, 7, 9),
+            (0, 6, 12, 15, 7, 9),
+            (6, 10, 0, 16, 6, 10),
+            (10, 16, 6, 9, 7, 9),
+            (10, 16, 12, 15, 7, 9),
+        ],
+        BED => [(0, 16, 0, 9, 0, 16), E, E, E, E],
+        ENCHANT => [(0, 16, 0, 12, 0, 16), E, E, E, E],
+        _ => [(0, 16, 0, 16, 0, 16), E, E, E, E],
+    }
+}
+
+/// One box of a held model: its top, front-left (+z) and front-right (+x)
+/// faces in the held cube's projection, UVs cut to the box so a slab shows
+/// half a texture, not a squashed whole one.
+#[allow(clippy::too_many_arguments)]
+fn held_box(
+    cx: i16,
+    cybase: i16,
+    r: i16,
+    h: i16,
+    b: HeldBox,
+    tiles: (u8, u8, u8),
+    shades: (u8, u8, u8),
+    bt: BlockTex,
+) {
+    let (x0, x1, y0, y1, z0, z1) = b;
+    let p = |x: i16, y: i16, z: i16| {
+        (
+            cx + (x - z) * r / 16,
+            cybase - y * h / 16 + (x + z) * r / 32,
+        )
     };
-    held_face([t, rt, lf, b], face_tile(selected, 2), bt, lit(128)); // top tile, bright
-    held_face([lf, b, ll, bl], face_tile(selected, 4), bt, lit(98)); // left side, mid
-    held_face([b, rt, bl, rl], face_tile(selected, 0), bt, lit(72)); // right side, dark
+    let uv = |u: i16, v: i16| (u as u8, v as u8);
+    let face = |verts: [(i16, i16); 4], uvs: [(u8, u8); 4], tile: u8, shade: u8| {
+        let (u, v) = tex::tile_uv(tile);
+        let win = TextureWindow::power_of_two_tile(u, v, 16, 16);
+        let mat = TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, (shade, shade, shade))
+            .with_texture_window(win);
+        ui_quad_textured(verts, uvs, mat);
+    };
+    face(
+        [p(x0, y1, z0), p(x1, y1, z0), p(x0, y1, z1), p(x1, y1, z1)],
+        [uv(x0, z0), uv(x1, z0), uv(x0, z1), uv(x1, z1)],
+        tiles.0,
+        shades.0,
+    );
+    face(
+        [p(x0, y1, z1), p(x1, y1, z1), p(x0, y0, z1), p(x1, y0, z1)],
+        [uv(x0, 16 - y1), uv(x1, 16 - y1), uv(x0, 16 - y0), uv(x1, 16 - y0)],
+        tiles.1,
+        shades.1,
+    );
+    face(
+        [p(x1, y1, z1), p(x1, y1, z0), p(x1, y0, z1), p(x1, y0, z0)],
+        [uv(16 - z1, 16 - y1), uv(16 - z0, 16 - y1), uv(16 - z1, 16 - y0), uv(16 - z0, 16 - y0)],
+        tiles.2,
+        shades.2,
+    );
 }
 
 /// Render a mob as a small set of cuboids (body + head + legs) -- recognizable
