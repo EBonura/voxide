@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.0 | unreleased
+
+Java Edition parity, round two, and a review round.
+
+- The world runs on Java's clocks: a 20-minute day, Java's weather, crops
+  and saplings on random ticks, 10 s smelting, a 4 s TNT fuse and portal.
+- Java's hunger (exhaustion and saturation), 1.9 attack cooldown, crits,
+  and durability for tools, armour, the bow, the rod and flint and steel.
+- Only the pause menu pauses the world; inventory and containers do not.
+- Mobs see before they hunt and stop at touching distance; skeletons keep
+  their range and shoot to 15 blocks; creepers (sappers) fuse within 3
+  blocks; tamed wolves follow, fight for you, persist and are saved.
+- Blocks are held as their 3D models, items as flat icons in the fist.
+- Sprinting needs food above 6; sink sand slows you; ladders climb when
+  you push against them; you can attack and build underwater.
+- Saves keep the world's seed, respawn point, day and tamed wolves, and a
+  load rebuilds the world (it kept blocks placed after the save).
+- Fixes: ladders no longer cause fall damage; burning or drowning no
+  longer makes you immune to mobs; embers and wailers hover instead of
+  rising forever; farms keep growing; held buttons in the furnace and
+  crafting no longer roll onto the next item; L2 acts on the mob under
+  the crosshair; an exploding sapper drops nothing; a sapper blast stalls
+  the game half as long.
+
 ## 0.2.1 | 2026-09-26
 
 Standalone disc published on itch.io.
