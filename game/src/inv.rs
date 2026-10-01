@@ -209,6 +209,22 @@ pub fn chest_input(idx: usize, pad: ButtonState, previous: ButtonState) {
     sfx::blip();
 }
 
+/// Draw a count of half smelts as smelts ("7" or "7.5"; coal is 8, a log
+/// 1.5, as in Java). Fuel has been stored in halves since save version 7 and
+/// the strip printed the halves, twice the real figure. Returns the end x.
+#[optimize(size)]
+fn draw_halves(font: &FontAtlas, x: i16, y: i16, halves: u16) -> i16 {
+    let mut b = [0u8; 5];
+    let whole = number(halves / FUEL_PER_SMELT, &mut b);
+    let mut end = x + whole.len() as i16 * 8;
+    ui_text(font, x, y, whole, GREY);
+    if halves % FUEL_PER_SMELT != 0 {
+        ui_text(font, end, y, ".5", GREY);
+        end += 16;
+    }
+    end
+}
+
 /// Your smeltables and fuels, in FURN_ITEMS order.
 #[optimize(size)]
 fn furnace_list(out: &mut [u8; BLOCK_KINDS]) -> usize {
@@ -527,15 +543,8 @@ pub fn draw_furnace(font: &FontAtlas, idx: usize, player: &Player) {
     };
     if right && y == F_FUEL {
         ui_text(font, 42, 134, "FUEL", LABEL);
-        let mut b = [0u8; 5];
-        ui_text(font, 42, 148, number(fuel, &mut b), GREY);
-        ui_text(
-            font,
-            50 + number(fuel, &mut [0u8; 5]).len() as i16 * 8,
-            148,
-            "SMELTS LEFT",
-            GREY,
-        );
+        let end = draw_halves(font, 42, 148, fuel);
+        ui_text(font, end + 8, 148, "SMELTS LEFT", GREY);
     } else if item != AIR {
         draw_icon(22, 135, item, 128);
         ui_text(font, 42, 134, block_name(item), LABEL);
@@ -550,9 +559,8 @@ pub fn draw_furnace(font: &FontAtlas, idx: usize, player: &Player) {
             let f = fuel_smelts(item);
             if f > 0 {
                 ui_text(font, 42, 148, "FUEL: SMELTS", GREY);
-                let mut b = [0u8; 5];
-                ui_text(font, 42 + 13 * 8, 148, number(f, &mut b), GREY);
-                ui_text(font, 42 + 15 * 8, 148, "EACH", GREY);
+                let end = draw_halves(font, 42 + 13 * 8, 148, f);
+                ui_text(font, end + 8, 148, "EACH", GREY);
             } else {
                 ui_text(font, 42, 148, "SMELTS INTO", GREY);
                 ui_text(font, 42 + 12 * 8, 148, block_name(smelt_result(item)), GREY);

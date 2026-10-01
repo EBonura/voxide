@@ -2736,6 +2736,9 @@ fn main() {
         // START opens the options menu, and closes whatever menu is open
         // (the death screen excepted -- only respawn leaves it).
         if menu != MENU_DEAD && pad.pressed_since(previous, button::START) {
+            if menu == MENU_OPTIONS {
+                persist_shared_settings(); // as CIRCLE does; START used to skip it
+            }
             menu = if menu == 0 { MENU_OPTIONS } else { 0 };
             menu_sel = 0;
         }
@@ -2860,7 +2863,7 @@ fn main() {
                     cheat::Act::None => {}
                     cheat::Act::Time(t) => {
                         // Forward to that point of the day, as sleeping does.
-                        let target = (t as i64 * DAY_LEN as i64 / 24_000) as u32;
+                        let target = t as u32 * DAY_LEN / 24_000; // fits u32: 18,000 x DAY_LEN
                         day += (target + DAY_LEN - day % DAY_LEN) % DAY_LEN;
                     }
                     cheat::Act::Travel(to) => {
