@@ -1966,14 +1966,19 @@ pub fn explode(wx: i32, wy: i32, wz: i32, power: i32, seed: u32) {
         }
         dy += 1;
     }
-    let c0x = floor_div(wx - r, CW);
-    let c1x = floor_div(wx + r, CW);
-    let c0z = floor_div(wz - r, CW);
-    let c1z = floor_div(wz + r, CW);
-    let mut cz = c0z - 1;
-    while cz <= c1z + 1 {
-        let mut cx = c0x - 1;
-        while cx <= c1x + 1 {
+    // Remesh the chunks that hold a cell of the blast cube or border one: a
+    // chunk's mesh reads one cell into its neighbours (faces and AO), and its
+    // sky and torch light are its own (build_sky_top floods inside the chunk).
+    // This used to remesh a whole extra ring of chunks around the blast's own:
+    // 9 to 16 synchronous chunk meshes where at most 4 are needed.
+    let c0x = floor_div(wx - r - 1, CW);
+    let c1x = floor_div(wx + r + 1, CW);
+    let c0z = floor_div(wz - r - 1, CW);
+    let c1z = floor_div(wz + r + 1, CW);
+    let mut cz = c0z;
+    while cz <= c1z {
+        let mut cx = c0x;
+        while cx <= c1x {
             remesh(cx, cz);
             cx += 1;
         }
