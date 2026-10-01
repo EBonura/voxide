@@ -26,6 +26,8 @@ static mut COL: usize = 0;
 static mut TIER: usize = 0;
 /// Frames CROSS has been held (hold to keep crafting).
 static mut HOLD_T: u16 = 0;
+/// The recipe a held CROSS is crafting.
+static mut HOLD_RI: usize = 0;
 static mut NAV_T: [u16; 4] = [0; 4];
 
 #[optimize(size)]
@@ -262,6 +264,15 @@ pub fn craft_input(pad: ButtonState, previous: ButtonState, p: &mut Player) {
         return;
     }
     *h = h.saturating_add(1);
+    // Repeats stay on the recipe the press chose. The columns are rebuilt
+    // every frame, so with CAN MAKE on a craft that makes another recipe
+    // affordable slides it under the cursor, and holding CROSS on PLANKS
+    // turned two logs into two crafting tables.
+    if *h == 1 {
+        unsafe { HOLD_RI = ri };
+    } else if unsafe { HOLD_RI } != ri {
+        return;
+    }
     let fire = *h == 1 || (!tiered(RECIPES[ri].out) && *h > 18 && (*h - 18) % 6 == 0);
     if !fire {
         return;

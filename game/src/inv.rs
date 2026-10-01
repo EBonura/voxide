@@ -22,6 +22,8 @@ const PANE_Y: i16 = 53;
 
 /// Frames CROSS has been held in a container menu.
 static mut HOLD_T: u16 = 0;
+/// The kind a held CROSS is moving (see `same_hold`).
+static mut HOLD_KIND: u8 = AIR;
 /// Cursor: column 0..6 is your pane, 7.. the container's; row 0..3.
 static mut BOX_X_CUR: usize = 0;
 static mut BOX_Y_CUR: usize = 0;
@@ -45,6 +47,21 @@ fn hold_step(held: bool) -> u16 {
         15..=44 => (*t % 3 == 0) as u16,
         45..=89 => 1,
         _ => 4,
+    }
+}
+
+/// False while a held CROSS has rolled onto a different kind. When the stack
+/// under the cursor runs out, the list closes up and the next kind slides
+/// under it; the repeat used to carry straight on into that one, which in the
+/// furnace burnt every log and plank you owned as fuel. A fresh press starts
+/// a new hold.
+#[optimize(size)]
+fn same_hold(pad: ButtonState, previous: ButtonState, item: u8) -> bool {
+    unsafe {
+        if !pad.is_held(button::CROSS) || pad.pressed_since(previous, button::CROSS) {
+            HOLD_KIND = item;
+        }
+        HOLD_KIND == item
     }
 }
 
@@ -166,6 +183,9 @@ pub fn chest_input(idx: usize, pad: ButtonState, previous: ButtonState) {
         hold_step(false);
         return;
     }
+    if !same_hold(pad, previous, item as u8) {
+        return;
+    }
     let have = unsafe {
         if pane == 0 {
             INV[item]
@@ -230,6 +250,9 @@ pub fn furnace_input(idx: usize, pad: ButtonState, previous: ButtonState) {
         let item = pane_item(&list, n, 0, x);
         if item == AIR {
             hold_step(false);
+            return;
+        }
+        if !same_hold(pad, previous, item) {
             return;
         }
         let m = press_count(pad, previous, unsafe { INV[item as usize] });
