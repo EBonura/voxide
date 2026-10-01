@@ -145,6 +145,7 @@ const WOLF_STOP_R: i32 = 2 * BLOCK;
 const WOLF_TELEPORT_R: i32 = 12 * BLOCK;
 const WOLF_TELEPORT_FIGHT_R: i32 = 16 * BLOCK;
 const WOLF_BITE: i16 = 4;
+const TEMPT_STOP: i32 = 5 * BLOCK / 2;
 /// Java's melee goal strikes every 20 game ticks (its MeleeAttackGoal; the
 /// wiki gives no figure).
 const WOLF_BITE_TICKS: u16 = java_ticks(20) as u16;
@@ -1865,7 +1866,15 @@ fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
                 } else {
                     (dx, dz, mhw + PLAYER_HALF_W)
                 };
-                if cdx.abs() > stop || cdz.abs() > stop {
+                // An animal tempted by food stops 2.5 blocks off, as Java's
+                // tempt goal does (its code; the wiki gives no figure).
+                let tempted = !is_hostile(m.kind) && m.kind != WOLF;
+                let far = if tempted {
+                    dist2 > TEMPT_STOP * TEMPT_STOP
+                } else {
+                    cdx.abs() > stop || cdz.abs() > stop
+                };
+                if far {
                     (vx, vz) = toward(cdx, cdz, walk);
                 }
             }
