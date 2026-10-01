@@ -8998,6 +8998,35 @@ fn billboard_blend(cx: i16, cy: i16, hw: i16, hh: i16, col: (u8, u8, u8)) {
     }
 }
 
+/// Java's sun and moon sizes (its sky renderer: a 30-unit half-size quad for
+/// the sun and 20 for the moon, 100 units away), in screen pixels at
+/// PROJ_H: tan 16.7 deg and tan 11.3 deg. In the sun texture the bright
+/// square is the middle half and a faint glow fills the rest, fading out by
+/// about 15 deg from the centre: that is when the wiki has the sun vanish,
+/// its centre 15 deg under the horizon at 13,702 and again at 22,300
+/// (minecraft.wiki/w/Daylight_cycle). The moon texture is the disc on black,
+/// so only its middle half shows.
+const SUN_CORE_PX: i16 = (PROJ_H * 15 / 100) as i16;
+const SUN_HALO_PX: i16 = (PROJ_H * 268 / 1000) as i16; // tan 15 deg
+const MOON_CORE_PX: i16 = (PROJ_H * 10 / 100) as i16;
+
+/// The sun: an opaque core square and an additive square halo around it.
+fn draw_sun(x: i16, y: i16) {
+    let (c, h) = (SUN_CORE_PX, SUN_HALO_PX);
+    let warm = (96, 88, 52);
+    let off = (0, 0, 0);
+    let inner = [(x - c, y - c), (x + c, y - c), (x + c, y + c), (x - c, y + c)];
+    let outer = [(x - h, y - h), (x + h, y - h), (x + h, y + h), (x - h, y + h)];
+    let mut k = 0;
+    while k < 4 {
+        let n = (k + 1) % 4;
+        ui_tri_add_gouraud([inner[k], outer[k], outer[n]], [warm, off, off]);
+        ui_tri_add_gouraud([inner[k], outer[n], inner[n]], [warm, off, warm]);
+        k += 1;
+    }
+    billboard(x, y, c, c, (0xFF, 0xF4, 0xC8));
+}
+
 /// A camera-facing flat square (sun, moon, star).
 fn billboard(cx: i16, cy: i16, hw: i16, hh: i16, col: (u8, u8, u8)) {
     ui_quad_flat(
@@ -9183,7 +9212,8 @@ fn draw_sky(cam: &Camera, day: u32, tod: u32, light: u8, horizon: (u8, u8, u8), 
     // skylight now, so they dim into dusk instead of staying full-bright in an
     // almost-black sky.
     if !raining {
-        if s > -500 {
+        // Drawn until its halo, 15 deg from the centre, has set: sin 15.5.
+        if s > -1094 {
             if let Some((x, y, _)) = project_dir(cam, 0, s, c) {
                 // Java's sun stays a near-white pale disc right down to the
                 // horizon; it does not dim with skylight. Around sunrise and
@@ -9231,22 +9261,23 @@ fn draw_sky(cam: &Camera, day: u32, tod: u32, light: u8, horizon: (u8, u8, u8), 
                         k += 1;
                     }
                 }
-                billboard(x, y, 15, 15, (0xFF, 0xF4, 0xC8));
+                draw_sun(x, y);
             }
         }
-        if -s > -500 {
+        // The moon's visible disc is 5.7 deg from its centre: sin 6.
+        if -s > -428 {
             if let Some((x, y, _)) = project_dir(cam, 0, -s, -c) {
                 // The moon used to be scaled by `light` too, which at night is
                 // 38/128 -- it rendered DARKER than the cloud slabs and was
                 // genuinely hard to find in the sky. It is the brightest thing
                 // up there in Java.
-                billboard(x, y, 12, 12, (0xE8, 0xEA, 0xF4));
+                billboard(x, y, MOON_CORE_PX, MOON_CORE_PX, (0xE8, 0xEA, 0xF4));
                 // Phase: a sky-coloured occluder slid across the disc. Eight
                 // phases over eight days, as in Java.
                 let ph = ((day / DAY_LEN) % 8) as i32; // Java's moon phase: days % 8
                 if ph != 0 {
-                    let shift = ((ph - 4) * 6) as i16;
-                    billboard(x + shift, y, 12, 12, zenith);
+                    let shift = ((ph - 4) as i16) * MOON_CORE_PX / 2;
+                    billboard(x + shift, y, MOON_CORE_PX, MOON_CORE_PX, zenith);
                 }
             }
         }
@@ -10177,6 +10208,27 @@ fn ui_tri_blend(v: [(i16, i16); 3], r: u8, g: u8, b: u8) {
         *p.add(4) = xy(v[0].0, v[0].1);
         *p.add(5) = xy(v[1].0, v[1].1);
         *p.add(6) = xy(v[2].0, v[2].1);
+    }
+}
+
+/// Additive Gouraud triangle (GP0 0x32 with the Add blend): black adds
+/// nothing, so a fan from a bright edge out to black fades into the sky
+/// with no visible rim. Java draws its sun texture additively too.
+fn ui_tri_add_gouraud(v: [(i16, i16); 3], c: [(u8, u8, u8); 3]) {
+    let p = ui_alloc(8);
+    if p.is_null() {
+        return;
+    }
+    let mat = TextureMaterial::blended(0, 0, c[0], BlendMode::Add);
+    unsafe {
+        *p.add(1) = mat.draw_mode_word();
+        *p.add(2) = mat.texture_window_word();
+        *p.add(3) = 0x3200_0000 | rgb(c[0].0, c[0].1, c[0].2);
+        *p.add(4) = xy(v[0].0, v[0].1);
+        *p.add(5) = rgb(c[1].0, c[1].1, c[1].2);
+        *p.add(6) = xy(v[1].0, v[1].1);
+        *p.add(7) = rgb(c[2].0, c[2].1, c[2].2);
+        *p.add(8) = xy(v[2].0, v[2].1);
     }
 }
 
