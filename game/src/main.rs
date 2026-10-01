@@ -7135,18 +7135,15 @@ const DROP_H: i32 = 10;
 // what makes vanilla pickup feel like attraction, so ours matches it:
 // half-width 19 + 64 + the item's 6 = 89 units (~1.4 blocks) from centre.
 const DROP_PICKUP_R: i32 = PLAYER_HALF_W + BLOCK + DROP_HALF_W;
-/// Magnet bubble: inside this range a drop stops settling and steers at the
-/// player. Well past pickup range, so items visibly swim to you.
-const DROP_ATTRACT_R: i32 = 5 * BLOCK / 2;
 /// The cosmetic zoom-to-player after collection, 0.27 s (Java animates
 /// roughly this long; the item entity there never actually moves).
 const DROP_FLY_FRAMES: u8 = ms(267) as u8;
 /// 40 s. Vanilla is 5 minutes, but the pool is 24 and a player who
 /// strip-mines would otherwise fill it and silently lose later drops.
 const DROP_TTL: u16 = secs(40) as u16;
-/// A third of a second before an item can be collected, so a drop is visible
-/// rather than vanishing the moment it spawns.
-const DROP_PICKUP_DELAY: u8 = ms(333) as u8;
+/// Java's 10 game ticks (half a second) before a dropped item can be
+/// collected (minecraft.wiki/w/Item_(entity)).
+const DROP_PICKUP_DELAY: u8 = units::java_ticks(10) as u8;
 /// Drop gravity: the particles' pull, in quarter units a tick per tick.
 const DROP_GRAVITY: i32 = PART_GRAVITY;
 
@@ -7237,26 +7234,8 @@ fn tick_drops(player: &Player) {
             if DROP_DELAY[i] > 0 {
                 DROP_DELAY[i] -= 1;
             }
-            // Magnet: inside the bubble the drop un-settles and steers at the
-            // player's chest -- through the collision steps below, so it flows
-            // around corners rather than through walls. Speed is proportional
-            // to distance, so it decelerates into the pickup radius.
-            if DROP_DELAY[i] == 0 {
-                let adx = player.x - (DROP_X[i] >> 2);
-                let ady = player.y + 40 - (DROP_Y[i] >> 2);
-                let adz = player.z - (DROP_Z[i] >> 2);
-                if adx.abs() < DROP_ATTRACT_R
-                    && adz.abs() < DROP_ATTRACT_R
-                    && ady.abs() < DROP_ATTRACT_R
-                {
-                    DROP_REST[i] = false;
-                    // A sixth of the gap per 30th of a second, in quarter
-                    // units a tick; + DROP_GRAVITY pre-cancels gravity.
-                    DROP_VX[i] = (adx / 3).clamp(-36, 36);
-                    DROP_VZ[i] = (adz / 3).clamp(-36, 36);
-                    DROP_VY[i] = (ady / 3).clamp(-28, 28) + DROP_GRAVITY;
-                }
-            }
+            // No magnet: Java's item entity never moves toward the player
+            // (minecraft.wiki/w/Item_(entity)); the pickup box below reaches it.
             if !DROP_REST[i] {
                 // Axis at a time, reverting the axis that hits, so an item
                 // sliding into a wall keeps the rest of its motion.
@@ -7293,13 +7272,12 @@ fn tick_drops(player: &Player) {
                 let dx = ((DROP_X[i] >> 2) - player.x).abs();
                 let dz = ((DROP_Z[i] >> 2) - player.z).abs();
                 let dy = (DROP_Y[i] >> 2) - player.y;
-                // Generous vertically on purpose: mining straight down drops the
-                // item into the hole you are about to stand in, and a tight
-                // window there would lose drops the old teleport never lost.
+                // Java's pickup box: the player's, half a block taller at
+                // each end (minecraft.wiki/w/Item_(entity)).
                 if dx <= DROP_PICKUP_R
                     && dz <= DROP_PICKUP_R
-                    && dy > -2 * BLOCK
-                    && dy < PLAYER_HEIGHT + BLOCK
+                    && dy > -BLOCK / 2 - DROP_H
+                    && dy < PLAYER_HEIGHT + BLOCK / 2
                 {
                     inv_give(item, 1);
                     DROP_FLY[i] = DROP_FLY_FRAMES;
