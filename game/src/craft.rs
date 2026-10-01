@@ -51,11 +51,15 @@ fn have_tier(p: &Player, out: u8) -> u8 {
 }
 
 /// Makeable now: affordable, reachable here, and not a tier already owned
-/// (the old list happily spent the ingredients on a tool you already had).
+/// in full (the same tier replaces a worn tool or set).
 #[optimize(size)]
 fn makeable(i: usize, p: &Player) -> bool {
     let r = &RECIPES[i];
-    craftable_here(i) && !(tiered(r.out) && r.out_qty as u8 <= have_tier(p, r.out))
+    let t = r.out_qty as u8;
+    let have = have_tier(p, r.out);
+    // A lower tier is never worth it; the same tier only replaces a worn one.
+    craftable_here(i)
+        && !(tiered(r.out) && (t < have || (t == have && tier_full(p, r.out, t))))
 }
 
 /// The recipes of one column: every tier of a tiered output (in RECIPES
