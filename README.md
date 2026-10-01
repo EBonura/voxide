@@ -21,9 +21,8 @@ the portals.
 Some things work differently to Java, deliberately. Crafting is a tabbed recipe
 book rather than a 2x2/3x3 grid, because placing items into a grid with a d-pad
 is worse than picking what you want to make; Minecraft's own console editions
-made the same call. Tools have no durability and aren't selected by hand: the
-game equips the best of each and uses whichever suits the block you're aiming
-at. There's no music. Structures, falling sand, boats and rails, hoppers and
+made the same call. Tools aren't selected by hand: the game equips the best of
+each and uses whichever suits the block you're aiming at. There's no music. Structures, falling sand, boats and rails, hoppers and
 signs aren't in yet.
 
 Detailed terrain
@@ -130,8 +129,8 @@ move, jump, chop a tree, craft planks, craft a table, place it, open it, then
 make a pickaxe. OPTIONS > TUTORIAL turns it off.
 
 There are four tools, a pickaxe, axe, shovel and sword, each crafted per tier
-from wood up to diamond. They aren't cycled or selected: there's no durability,
-a better one auto-equips, and the game picks whichever suits the block under
+from wood up to diamond. They aren't cycled or selected: they wear out at
+Java's rates, a better one auto-equips, and the game picks whichever suits the block under
 your crosshair, so the slot beside the hotbar changes as you look around. Using
 the right tool is what makes a block break quickly; the wrong one works at
 bare-hand pace. Only a pickaxe of the right tier will yield ore, and melee
@@ -195,6 +194,11 @@ assets, code or data, and it is not affiliated with, endorsed by or associated
 with Mojang Studios or Microsoft. Minecraft is a trademark of Mojang Studios.
 
 ## Recent changes
+
+**0.3.0**: Java Edition parity, round two: Java's day, weather, hunger,
+attack cooldown and durability; only the pause menu pauses; mobs that see,
+keep their distance and fight like Java's, tamed wolves that follow and
+fight; blocks held as 3D models; saves that keep the world's seed.
 
 **0.2.1**: the camera turns 30% faster, the crosshair picks the mob in
 front of a block the way Java does, and a hidden cheat menu for testing
