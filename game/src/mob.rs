@@ -1620,7 +1620,22 @@ fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
         let cruise = if m.kind == DRAGON {
             DRAGON_CRUISE
         } else {
-            m.y / BLOCK * BLOCK + 2 * BLOCK
+            // Two blocks over the floor beneath it, found within 8 blocks.
+            // This used to be its own height plus two blocks, a target always
+            // above it, so embers and wailers rose without end through the
+            // Inferno roof, out of reach of the player and of contact damage.
+            // Inside a block (they phase through pillars) it holds height.
+            let (bx, bz) = (world_to_block_x(m.x), world_to_block_z(m.z));
+            let mut fy = world_to_block_y(m.y);
+            if world::get(bx, fy, bz) != crate::AIR {
+                m.y
+            } else {
+                let lo = (fy - 8).max(1);
+                while fy > lo && world::get(bx, fy - 1, bz) == crate::AIR {
+                    fy -= 1;
+                }
+                fy * BLOCK + 2 * BLOCK
+            }
         };
         let want = cruise + ((m.timer as i32 / 2 % 64) - 32) * 2;
         if m.y < want {
