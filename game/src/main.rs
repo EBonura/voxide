@@ -4697,6 +4697,7 @@ fn load_game(player: &mut Player, fb: &mut FrameBuffer, font: &FontAtlas) -> boo
         enter_dimension(dim, bx, bz, fb, font);
     }
     save::apply_edits();
+    regrow_from_edits();
     world::recenter(bx, bz);
     // Set the Void up as a portal arrival does: its return portal on the
     // island's centre (saves before return portals were logged edits do not
@@ -10816,8 +10817,13 @@ static mut CROP_X: [i32; MAX_CROPS] = [0; MAX_CROPS];
 static mut CROP_Y: [i32; MAX_CROPS] = [0; MAX_CROPS];
 static mut CROP_Z: [i32; MAX_CROPS] = [0; MAX_CROPS];
 static mut CROP_T: [u16; MAX_CROPS] = [0; MAX_CROPS]; // 0 = free slot, else stage 1..CROP_RIPE_STAGE
+static mut CROP_D: [u8; MAX_CROPS] = [0; MAX_CROPS]; // the dimension it was planted in
 
 fn plant_crop(x: i32, y: i32, z: i32) {
+    plant_crop_in(x, y, z, world::dimension());
+}
+
+fn plant_crop_in(x: i32, y: i32, z: i32, d: u8) {
     unsafe {
         let mut i = 0;
         while i < MAX_CROPS {
@@ -10826,6 +10832,7 @@ fn plant_crop(x: i32, y: i32, z: i32) {
                 CROP_Y[i] = y;
                 CROP_Z[i] = z;
                 CROP_T[i] = 1;
+                CROP_D[i] = d;
                 return;
             }
             i += 1;
@@ -10921,6 +10928,36 @@ fn crop_grow(x: i32, y: i32, z: i32, stages: u16) -> bool {
     false
 }
 
+/// Re-register every planted crop and sapling in the loaded edit log. The
+/// pools are not saved, so after a load nothing planted ever grew; they
+/// restart young (their age is not saved either).
+#[inline(never)]
+#[optimize(size)]
+fn regrow_from_edits() {
+    unsafe {
+        let mut k = 0;
+        while k < MAX_CROPS {
+            CROP_T[k] = 0;
+            k += 1;
+        }
+        let mut k = 0;
+        while k < MAX_SAPS {
+            SAP_T[k] = 0;
+            k += 1;
+        }
+        let mut i = 0;
+        while i < EDIT_N {
+            let (x, y, z) = (EDIT_X[i] as i32, EDIT_Y[i] as i32, EDIT_Z[i] as i32);
+            if EDIT_B[i] == WHEAT {
+                plant_crop_in(x, y, z, EDIT_D[i]);
+            } else if EDIT_B[i] == SAPLING {
+                plant_sapling_in(x, y, z, EDIT_D[i]);
+            }
+            i += 1;
+        }
+    }
+}
+
 /// One sim tick of crop growth: each crop gets Java's random tick, and on one
 /// it grows a stage with crop_odds' chance if the light is 9 or more.
 #[inline(never)]
@@ -10928,8 +10965,12 @@ fn crop_tick() {
     let mut i = 0usize;
     while i < MAX_CROPS {
         unsafe {
-            if CROP_T[i] > 0 {
-                let (x, y, z) = (CROP_X[i], CROP_Y[i], CROP_Z[i]);
+            let (x, y, z) = (CROP_X[i], CROP_Y[i], CROP_Z[i]);
+            // A crop whose chunk is not loaded, or which belongs to another
+            // dimension, waits: get() answers AIR (or the other dimension's
+            // block) there, which used to free the slot, so walking away or
+            // taking a portal left the farm never growing again.
+            if CROP_T[i] > 0 && CROP_D[i] == world::dimension() && world::column_loaded(x, z) {
                 if get_block_i32(x, y, z) != WHEAT {
                     CROP_T[i] = 0; // harvested or blown up: free the slot
                 } else if world_rand() % RANDOM_TICK_ODDS == 0
@@ -10955,8 +10996,13 @@ static mut SAP_X: [i32; MAX_SAPS] = [0; MAX_SAPS];
 static mut SAP_Y: [i32; MAX_SAPS] = [0; MAX_SAPS];
 static mut SAP_Z: [i32; MAX_SAPS] = [0; MAX_SAPS];
 static mut SAP_T: [u16; MAX_SAPS] = [0; MAX_SAPS]; // 0 = free slot
+static mut SAP_D: [u8; MAX_SAPS] = [0; MAX_SAPS]; // the dimension it was planted in
 
 fn plant_sapling(x: i32, y: i32, z: i32) {
+    plant_sapling_in(x, y, z, world::dimension());
+}
+
+fn plant_sapling_in(x: i32, y: i32, z: i32, d: u8) {
     unsafe {
         let mut i = 0;
         while i < MAX_SAPS {
@@ -10965,6 +11011,7 @@ fn plant_sapling(x: i32, y: i32, z: i32) {
                 SAP_Y[i] = y;
                 SAP_Z[i] = z;
                 SAP_T[i] = 1;
+                SAP_D[i] = d;
                 return;
             }
             i += 1;
@@ -10978,8 +11025,9 @@ fn sap_tick() {
     let mut i = 0usize;
     while i < MAX_SAPS {
         unsafe {
-            if SAP_T[i] > 0 {
-                let (x, y, z) = (SAP_X[i], SAP_Y[i], SAP_Z[i]);
+            let (x, y, z) = (SAP_X[i], SAP_Y[i], SAP_Z[i]);
+            // Unloaded or in another dimension: wait, as crop_tick does.
+            if SAP_T[i] > 0 && SAP_D[i] == world::dimension() && world::column_loaded(x, z) {
                 if get_block_i32(x, y, z) != SAPLING {
                     SAP_T[i] = 0; // broken or blown up
                 } else if world_rand() % RANDOM_TICK_ODDS == 0 && plant_light(x, y + 1, z) >= 9 {
