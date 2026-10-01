@@ -6156,10 +6156,21 @@ fn draw_held_item(selected: u8, tool: (u8, u8), tick: u32, swing: i32) {
     // floor under the skylight rather than a full multiply.
     let lit = |base: u32| (base * (48 + l * 80 / 128) / 128).clamp(16, 255) as u8;
     let shades = (lit(128), lit(98), lit(72));
+    // The furnace, glass and piston wear another block's tiles in the world
+    // (stone, frost, planks), which held up close reads as that block; their
+    // sides take the item's icon instead, the face Java shows.
+    let side = match selected {
+        FURNACE | GLASS | PISTON => icon_tile(selected),
+        _ => face_tile(selected, 4),
+    };
     let tiles = (
         face_tile(selected, 2),
-        face_tile(selected, 4),
-        face_tile(selected, 0),
+        side,
+        if side == face_tile(selected, 4) {
+            face_tile(selected, 0)
+        } else {
+            side
+        },
     );
     let cybase = cyt - r / 2 + h;
     let boxes = held_model(selected);
