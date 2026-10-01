@@ -2718,8 +2718,8 @@ fn main() {
 
         // Bedrock PS layout: SQUARE toggles crafting, TRIANGLE the inventory.
         // Each opener only acts from the world or its own menu -- SQUARE means
-        // "withdraw" inside the chest/furnace panels. The world sim pauses
-        // while any menu is open.
+        // "withdraw" inside the chest/furnace panels. Only the pause menu
+        // (START) stops the world; see `paused` below.
         if (menu == 0 || menu == 1) && pad.pressed_since(previous, button::SQUARE) {
             menu = if menu == 1 { 0 } else { 1 };
             menu_sel = 0;
@@ -2909,16 +2909,30 @@ fn main() {
                 player.selected = unsafe { HOTBAR[HOTBAR_SEL] };
                 sfx::blip();
             }
+        }
+        // Java pauses a single-player world only for the pause menu (OPTIONS
+        // here, and the cheat menu behind it). Inventory, crafting and the
+        // container screens leave it running: mobs move and hit, you fall and
+        // burn, you just cannot steer (minecraft.wiki/w/Pause_menu). The
+        // death screen does not pause either.
+        let paused = menu == MENU_OPTIONS || menu == MENU_CHEAT;
+        if !paused && menu != MENU_DEAD {
+            // In a GUI the pad drives the GUI, not the player.
+            let (spad, sprev, sl, sr) = if menu == 0 {
+                (pad, previous, lstick, rstick)
+            } else {
+                (ButtonState::NONE, ButtonState::NONE, (0, 0), (0, 0))
+            };
             // Fixed timestep: advance movement / physics / mobs / survival sim_n times
             // (== capped fps delta) so pace is fps-independent. Edge actions inside
             // update_player (jump, fly toggle) fire only on the first sub-tick (prev_i).
             telemetry::stage_begin(ST_SIM);
             let mut st = 0;
             while st < sim_n {
-                let prev_i = if st == 0 { previous } else { pad };
+                let prev_i = if st == 0 { sprev } else { spad };
                 // Before update_player, so a fall's damage also plays the hurt sound.
                 let hp_before = player.health;
-                update_player(&mut player, pad, prev_i, lstick, rstick);
+                update_player(&mut player, spad, prev_i, sl, sr);
                 update_survival(&mut player);
                 mob::set_lure(player.selected == WHEAT_ITEM); // animals follow held wheat
                 mob::update(player.x, player.y, player.z, sky_level(day % DAY_LEN));
@@ -2950,10 +2964,10 @@ fn main() {
             }
             telemetry::stage_end(ST_SIM);
         }
-        // The world's own timers run on the same sim ticks, menus open or not
-        // (furnaces smelt while you browse); mining, fishing and the day
-        // below take sim_n as well.
-        if world_tick(&mut player, &mut portal_dwell, sim_n) {
+        // The world's own timers run on the same sim ticks, in any menu but
+        // the pause menu (furnaces smelt while you browse); mining, fishing
+        // and the day below take sim_n as well.
+        if world_tick(&mut player, &mut portal_dwell, if paused { 0 } else { sim_n }) {
             portal_travel(&mut player, &mut fb, &font);
         }
 
@@ -3600,7 +3614,9 @@ fn main() {
         frame_present(&mut fb, &mut render_in_flight);
         previous = pad;
         frame = frame.wrapping_add(1);
-        day = day.wrapping_add(sim_n);
+        if !(menu == MENU_OPTIONS || menu == MENU_CHEAT) {
+            day = day.wrapping_add(sim_n); // the pause menu stops the clock too
+        }
     }
 }
 
