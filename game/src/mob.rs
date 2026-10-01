@@ -1468,10 +1468,14 @@ fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
                     crate::sfx::sapper_hiss(); // the dreaded tsss
                 }
                 if m.fuse >= FUSE_MAX {
-                    explode(m.x, m.y, m.z, px, py, pz);
+                    // Free the slot first: blast_mobs would otherwise hit the
+                    // sapper itself and record a kill, dropping the gunpowder
+                    // and XP only a slain sapper gives (Java's creeper drops
+                    // nothing when it explodes, minecraft.wiki/w/Creeper).
                     unsafe {
                         MOBS[i] = DEAD;
                     }
+                    explode(m.x, m.y, m.z, px, py, pz);
                     return;
                 }
             } else if m.fuse > 0 {
