@@ -5450,6 +5450,10 @@ fn update_player(
         // blocks/s, sneaking holds on, and otherwise you slide down no faster
         // than 3 blocks/s.
         if at_ladder(player.x, player.y, player.z) {
+            // A ladder resets the fall, as Java's climbable blocks do: no fall
+            // damage on or after one (minecraft.wiki/w/Ladder). Without this,
+            // climbing raised fall_peak and sliding back down hurt on landing.
+            player.fall_peak = player.y;
             player.vy = if sneaking {
                 0
             } else if forward != 0 || strafe != 0 || pad.is_held(button::CROSS) {
