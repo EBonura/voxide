@@ -2771,8 +2771,9 @@ fn main() {
             // death screen, which only CROSS (respawn) leaves.
             if menu == MENU_DEAD {
                 if pad.pressed_since(previous, button::CROSS) {
+                    // Java's world carries on through a death: the mobs stay
+                    // where they are (they used to be wiped, tamed wolves too).
                     player = spawn_player();
-                    mob::reset();
                     menu = 0;
                 }
             } else if menu == MENU_INV {
@@ -2934,7 +2935,7 @@ fn main() {
                 let hp_before = player.health;
                 update_player(&mut player, spad, prev_i, sl, sr);
                 update_survival(&mut player);
-                mob::set_lure(player.selected == WHEAT_ITEM); // animals follow held wheat
+                mob::set_lure(player.selected); // animals follow their held food
                 mob::update(player.x, player.y, player.z, sky_level(day % DAY_LEN));
                 let raw_hit =
                     mob::contact_damage(player.x, player.y, player.z) + mob::hazard_damage();
@@ -2963,6 +2964,16 @@ fn main() {
                 st += 1;
             }
             telemetry::stage_end(ST_SIM);
+        } else if menu == MENU_DEAD {
+            // Java's death screen leaves the world running: mobs keep moving
+            // (and arrows flying) around where you fell; nothing can hurt you
+            // until you respawn.
+            let mut st = 0;
+            while st < sim_n {
+                mob::update(player.x, player.y, player.z, sky_level(day % DAY_LEN));
+                let _ = mob::contact_damage(player.x, player.y, player.z) + mob::hazard_damage();
+                st += 1;
+            }
         }
         // The world's own timers run on the same sim ticks, in any menu but
         // the pause menu (furnaces smelt while you browse); mining, fishing
@@ -3257,16 +3268,14 @@ fn main() {
                 }
             }
 
-            // Feed: tap L2 with wheat to put a nearby animal in love mode; two
-            // fed animals breed (needs no block target).
-            if !used && player.selected == WHEAT_ITEM && use_pressed {
-                let fx = (cam.sy * cam.cp) >> 12;
-                let fz = (cam.cy * cam.cp) >> 12;
-                if unsafe { INV[WHEAT_ITEM as usize] } > 0
-                    && mob::feed(cam.x, cam.y, cam.z, fx, fz, ENTITY_REACH)
-                {
-                    inv_take(WHEAT_ITEM);
+            // Feed: L2 on the animal under the crosshair with its food puts it
+            // in love mode (two fed animals breed); meat heals a tamed wolf.
+            if let (false, true, Some(t)) = (used, use_pressed, target) {
+                let item = player.selected;
+                if unsafe { INV[item as usize] } > 0 && mob::feed(t, item) {
+                    inv_take(item);
                     sfx::eat();
+                    used = true;
                 }
             }
 
@@ -3428,9 +3437,19 @@ fn main() {
             while d < deaths {
                 let (mx, my, mz, kind) = mob::death_at(d);
                 let seed = frame.wrapping_add(d as u32 * 977);
-                if !mob::is_hostile(kind) {
-                    give_drop(mx, my + BLOCK / 2, mz, RAW_MEAT, seed);
-                    give_drop(mx, my + BLOCK / 2, mz, RAW_MEAT, seed ^ 0x51ED);
+                // Meat per kind (minecraft.wiki/w/Pig, /w/Cow, /w/Sheep,
+                // /w/Chicken): pig and cow 1-3, sheep 1-2, chicken 1, all as
+                // the one raw meat here. Wolves and villagers drop nothing.
+                let meat = match kind {
+                    mob::PIG | mob::COW => 1 + seed % 3,
+                    mob::SHEEP => 1 + seed % 2,
+                    mob::CHICKEN => 1,
+                    _ => 0,
+                };
+                let mut k = 0;
+                while k < meat {
+                    give_drop(mx, my + BLOCK / 2, mz, RAW_MEAT, seed ^ (k * 0x51ED));
+                    k += 1;
                 }
                 let extra = match kind {
                     mob::SHEEP => WOOL,
@@ -4876,6 +4895,9 @@ fn travel_to(player: &mut Player, to: u8, fb: &mut FrameBuffer, font: &FontAtlas
     } else {
         (bx * 8, bz * 8)
     };
+    // The mobs belong to the dimension being left; tamed wolves are parked
+    // there and come back when you do.
+    mob::leave_dimension();
     enter_dimension(to, nx, nz, fb, font);
     // The ring generator digs its arrival pocket raw, after replaying the
     // edit log, so it erased whatever the player had built there, the linked
