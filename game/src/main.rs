@@ -3011,7 +3011,7 @@ fn main() {
             let use_pressed = pad.pressed_since(previous, button::L2);
             let mut used = false;
             if use_pressed {
-                used = mob_interact(&player);
+                used = mob_interact(target);
             }
             if !used && use_pressed && pick.hit && !player.sneaking {
                 let tb = get_block_i32(pick.bx, pick.by, pick.bz);
@@ -10364,12 +10364,17 @@ fn draw_all_hud(font: &FontAtlas, player: Player, menu: u8, tool: (u8, u8)) {
 /// R3 on a mob: feed a wolf a bone to tame it, or trade 8 wheat with a villager
 /// for an iron ingot (this port's stand-in for emeralds).
 #[inline(never)]
-/// True if a mob in front took the interaction (so a shared "use" button
-/// doesn't also place a block through it).
-fn mob_interact(player: &Player) -> bool {
+/// True if the mob under the crosshair took the interaction (so a shared
+/// "use" button doesn't also place a block through it). Java interacts with
+/// the targeted entity only; this used to take any wolf or villager within
+/// three blocks, behind you included, before the chest or bed you aimed at.
+fn mob_interact(target: Option<usize>) -> bool {
+    let Some(t) = target else {
+        return false;
+    };
     let has_bone = unsafe { INV[BONE as usize] } > 0;
     let wheat = unsafe { INV[WHEAT_ITEM as usize] };
-    match mob::interact(player.x, player.y, player.z, has_bone, wheat) {
+    match mob::interact(t, has_bone, wheat) {
         mob::Interact::Tamed => {
             inv_take(BONE);
             sfx::confirm();

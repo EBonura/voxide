@@ -626,34 +626,28 @@ pub fn slay_dragon() {
     }
 }
 
-/// Interact with the nearest mob within reach: feed a wolf a bone to tame it,
-/// or trade with a villager. Returns what the player should be charged and
-/// given, or None if nothing was in reach.
+/// Interact with mob slot `i`, the one under the crosshair: feed a wolf a bone
+/// to tame it, or trade with a villager. Returns what the player should be
+/// charged and given, or None if that mob takes nothing.
 ///
 /// `love == u16::MAX` marks a tamed wolf. It reuses the breeding field because a
 /// tamed wolf never breeds, and a whole extra byte per mob for one flag is not
 /// worth it on this machine.
-pub fn interact(px: i32, py: i32, pz: i32, has_bone: bool, wheat: u16) -> Interact {
-    let reach = 3 * BLOCK;
-    let mut i = 0;
-    while i < CAP {
-        let mut m = unsafe { MOBS[i] };
-        if m.alive
-            && (m.x - px).abs() < reach
-            && (m.z - pz).abs() < reach
-            && (m.y - py).abs() < 2 * BLOCK
-        {
-            if m.kind == WOLF && m.love != u16::MAX && has_bone {
-                m.love = u16::MAX;
-                m.health = TAMED_WOLF_HEALTH;
-                unsafe { MOBS[i] = m };
-                return Interact::Tamed;
-            }
-            if m.kind == VILLAGER && wheat >= 8 {
-                return Interact::Traded;
-            }
+pub fn interact(i: usize, has_bone: bool, wheat: u16) -> Interact {
+    if i >= CAP {
+        return Interact::None;
+    }
+    let mut m = unsafe { MOBS[i] };
+    if m.alive {
+        if m.kind == WOLF && m.love != u16::MAX && has_bone {
+            m.love = u16::MAX;
+            m.health = TAMED_WOLF_HEALTH;
+            unsafe { MOBS[i] = m };
+            return Interact::Tamed;
         }
-        i += 1;
+        if m.kind == VILLAGER && wheat >= 8 {
+            return Interact::Traded;
+        }
     }
     Interact::None
 }
