@@ -1,9 +1,17 @@
-VoXide (PSX)  -  v0.2.1
+VoXide (PSX)  -  v0.3.0
 ======================
 
 A Minecraft-style survival sandbox for the PlayStation 1, written in Rust.
 This is an early playable build: world generation, mining, crafting and
 survival work, but much of the game is still unfinished.
+
+New in v0.3.0: closer still to Minecraft Java Edition. Java's day and night
+(sky light, the sun's arc and size, sunsets, thunderstorms), Java's hunger,
+attack cooldown and tool durability; only the pause menu pauses; mobs that
+see you, keep their distance, shoot from range, and tamed wolves that follow
+and fight; blocks held as 3D models; saves that keep the world's seed; and
+a round of fixes (ladder fall damage, farms, the furnace and crafting
+buttons, a load item duplication).
 
 New in v0.2.1: the right stick turns 30% faster, and a mob under the
 crosshair is targeted before the block behind it.

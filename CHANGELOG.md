@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.3.0 | unreleased
+## 0.3.0 | 2026-10-01
+
+Standalone disc published on itch.io.
 
 Java Edition parity, round two, and a review round.
 
@@ -20,6 +22,8 @@ Java Edition parity, round two, and a review round.
   their range and shoot to 15 blocks; creepers (sappers) fuse within 3
   blocks; tamed wolves follow, fight for you, persist and are saved.
 - Blocks are held as their 3D models, items as flat icons in the fist.
+- The sun and moon are Java's size; the sun has its halo and sets behind
+  the horizon.
 - Sprinting needs food above 6; sink sand slows you; ladders climb when
   you push against them; you can attack and build underwater.
 - Saves keep the world's seed, respawn point, day and tamed wolves, and a
