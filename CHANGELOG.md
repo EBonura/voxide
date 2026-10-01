@@ -4,8 +4,15 @@
 
 Java Edition parity, round two, and a review round.
 
-- The world runs on Java's clocks: a 20-minute day, Java's weather, crops
-  and saplings on random ticks, 10 s smelting, a 4 s TNT fuse and portal.
+- The world runs on Java's clocks: a 20-minute day, Java's weather (now
+  with thunderstorms), crops and saplings on random ticks, 10 s smelting,
+  a 4 s TNT fuse and portal.
+- Java's day and night: sky light steps down at dusk and up at dawn by
+  Java's table (darker in rain, darker still in a storm) while the screen
+  fades smoothly; the sun and moon follow Java's eased arc, crossing the
+  horizon at 12,786 and 23,216, with the sunset glow centred there.
+  Monsters spawn outdoors from 13,188 to 22,812 in clear weather and by
+  day in a thunderstorm; beds work and the undead burn on Java's ticks.
 - Java's hunger (exhaustion and saturation), 1.9 attack cooldown, crits,
   and durability for tools, armour, the bow, the rod and flint and steel.
 - Only the pause menu pauses the world; inventory and containers do not.
