@@ -972,7 +972,7 @@ const FLY_Q8: i32 = units::cbps_q8(1092);
 const SPRINT_FLY_Q8: i32 = units::cbps_q8(2160);
 /// Creative fly, vertical: 7.49 blocks/s (minecraft.wiki/w/Transportation,
 /// vertical transportation table), 8 units a tick.
-const FLY_SPEED: i32 = units::cbps_q8(749) >> 8;
+const FLY_SPEED: i32 = (units::cbps_q8(749) + 128) >> 8;
 /// Gravity and air drag, Java's 0.08 blocks/tick^2 and 0.98 a tick
 /// (minecraft.wiki/w/Entity#Motion) spread over three sim ticks: 0.98^(1/3)
 /// = 1 - 55/8192 of the velocity kept each tick, and the pull that gives the
@@ -2994,7 +2994,9 @@ fn main() {
         let (pick, target) = if menu != 0 {
             (NO_PICK, None)
         } else {
-            let p = trace_pick(&cam);
+            // Java's crosshair ray passes through water and lava; only the
+            // empty bucket (and here the rod's cast) aims at a fluid.
+            let p = trace_pick(&cam, matches!(player.selected, BUCKET | FISHING_ROD));
             let t = mob::ray_pick(
                 cam.x,
                 cam.y,
@@ -3137,6 +3139,7 @@ fn main() {
             }
             if let (true, Some(t)) = (swung, target) {
                 if dmg > 0 && mob::strike(t, cam.x, cam.z, dmg) {
+                    player.sprint_latch = false; // a hit ends a sprint (Sprinting)
                     sfx::hit_mob();
                     player.exhaustion += EXH_ATTACK;
                     wear_tool(&mut player, TOOL_SWORD, 1);
@@ -3386,8 +3389,9 @@ fn main() {
                         inv_add(BUCKET);
                         sfx::splash();
                     }
-                } else if get_block_i32(pick.px, pick.py, pick.pz) == AIR
+                } else if replaceable(get_block_i32(pick.px, pick.py, pick.pz))
                     && !place_intersects_player(&player, pick.px, pick.py, pick.pz, player.selected)
+                    && container_room(player.selected)
                     && inv_take(player.selected)
                 {
                     let put = if player.selected == STAIRS_N {
@@ -5061,6 +5065,11 @@ fn update_survival(player: &mut Player) {
     if is_water(head) {
         if player.air > 0 {
             player.air -= 1;
+            if player.air == 0 {
+                // Java's first drowning hit lands a second after the air
+                // runs out, at 16 s (minecraft.wiki/w/Damage#Drowning).
+                player.hazard_t = player.hazard_t.max(HAZARD_SLOW_CD);
+            }
         } else if hurt < 2 {
             hurt = 2; // out of air -> drown 2 hp per 1s
             cd = HAZARD_SLOW_CD;
@@ -5069,6 +5078,11 @@ fn update_survival(player: &mut Player) {
         player.burn = 0; // water douses fire
     } else {
         player.air = MAX_AIR;
+        // Rain puts out a burning player under the open sky
+        // (minecraft.wiki/w/Fire).
+        if player.burn > 0 && rain_amount() > 0 && under_open_sky(player) {
+            player.burn = 0;
+        }
     }
     // Potion timers run down here, once a sim tick like every other survival clock.
     if player.eff_speed > 0 {
@@ -5355,7 +5369,9 @@ fn update_player(
     if pad.pressed_since(previous, button::L3) {
         player.sprint_latch = true;
     }
-    if !fwd_now {
+    // Java: no sprinting with 6 food or less, and a sprint ends there
+    // (minecraft.wiki/w/Sprinting). Flight is creative's and needs no food.
+    if !fwd_now || (player.food <= 6 && !player.fly) {
         player.sprint_latch = false;
     }
     let sprinting = !sneaking && player.sprint_latch && fwd_now;
@@ -5382,6 +5398,18 @@ fn update_player(
     };
     if player.eff_speed > 0 {
         speed += speed / 5; // Speed I: +20% (minecraft.wiki/w/Speed)
+    }
+    // Sink sand is Java's soul sand: movement on it is about 41.91% slower
+    // (minecraft.wiki/w/Soul_Sand). The comment on SINK_SAND promised this;
+    // nothing read it.
+    if !player.fly
+        && get_block_i32(
+            world_to_block_x(player.x),
+            world_to_block_y(player.y - 1),
+            world_to_block_z(player.z),
+        ) == SINK_SAND
+    {
+        speed = speed * 5809 / 10000;
     }
     player.sprinting = sprinting;
     // Q8 units a tick along each axis.
@@ -5420,7 +5448,11 @@ fn update_player(
         player.z_frac = qz & 255;
         player.x += qx >> 8;
         player.z += qz >> 8;
-        player.y += ((sp * forward) >> 12) >> 8;
+        // The pitched part carries its remainder like x and z; floored on its
+        // own, any downward look sank you a unit a tick.
+        let qy = ((sp * forward) >> 12) + player.vy_frac;
+        player.vy_frac = qy & 255;
+        player.y += qy >> 8;
         if pad.is_held(button::CROSS) {
             player.y += FLY_SPEED;
         }
@@ -5479,6 +5511,10 @@ fn update_player(
             player.z_frac = 0;
             blocked |= dz != 0;
         }
+        // Running into a wall ends a sprint (minecraft.wiki/w/Sprinting).
+        if blocked && sprinting {
+            player.sprint_latch = false;
+        }
         // Exhaustion from distance actually covered: 0.01 a block in water,
         // 0.1 a block sprinting on land; walking costs nothing (Food#Exhaustion).
         let (mx, mz) = ((player.x - x0).abs(), (player.z - z0).abs());
@@ -5489,9 +5525,10 @@ fn update_player(
             player.exhaustion += moved * EXH_SPRINT_PER_UNIT;
         }
 
-        // Ladders, as in Java: any movement input (or jump) climbs at 2.35
-        // blocks/s, sneaking holds on, and otherwise you slide down no faster
-        // than 3 blocks/s.
+        // Ladders, as in Java (minecraft.wiki/w/Ladder): pushing against the
+        // wall, or holding jump, climbs at 2.35 blocks/s, sneaking holds on,
+        // and otherwise you slide down no faster than 3 blocks/s. Any stick
+        // input used to climb, backing away from the ladder included.
         if at_ladder(player.x, player.y, player.z) {
             // A ladder resets the fall, as Java's climbable blocks do: no fall
             // damage on or after one (minecraft.wiki/w/Ladder). Without this,
@@ -5499,7 +5536,7 @@ fn update_player(
             player.fall_peak = player.y;
             player.vy = if sneaking {
                 0
-            } else if forward != 0 || strafe != 0 || pad.is_held(button::CROSS) {
+            } else if blocked || pad.is_held(button::CROSS) {
                 LADDER_UP
             } else {
                 (player.vy - GRAVITY).max(-LADDER_DOWN)
@@ -9278,7 +9315,7 @@ fn depth_slot(depth: i32) -> usize {
 /// the reported place cell is now always face-adjacent to the hit, where the
 /// sampler could hand back a diagonal neighbour.
 #[inline(never)]
-fn trace_pick(cam: &Camera) -> Pick {
+fn trace_pick(cam: &Camera, fluids: bool) -> Pick {
     let dir = [(cam.sy * cam.cp) >> 12, cam.sp, (cam.cy * cam.cp) >> 12];
     let pos = [cam.x, cam.y, cam.z];
     let mut cell = [
@@ -9319,7 +9356,8 @@ fn trace_pick(cam: &Camera) -> Pick {
     // A ray this long crosses at most ceil(reach)+1 walls per axis.
     let mut guard = 0;
     while guard <= 3 * (PICK_RANGE / BLOCK + 2) {
-        if get_block_i32(cell[0], cell[1], cell[2]) != AIR {
+        let b = get_block_i32(cell[0], cell[1], cell[2]);
+        if b != AIR && (fluids || !(is_water(b) || is_lava(b))) {
             return Pick {
                 hit: true,
                 dist: t_in >> T_FRAC,
@@ -10885,6 +10923,17 @@ static mut TNT_Y: [i32; MAX_TNT] = [0; MAX_TNT];
 static mut TNT_Z: [i32; MAX_TNT] = [0; MAX_TNT];
 static mut TNT_FUSE: [u8; MAX_TNT] = [0; MAX_TNT]; // 0 = inactive
 
+/// Item drops on the ground and lit TNT belong to the world being replaced
+/// by a load: left in place, the drops were free items on top of the save.
+#[inline(never)]
+#[optimize(size)]
+fn clear_world_entities() {
+    unsafe {
+        DROP_ITEM = [AIR; MAX_DROPS];
+        TNT_FUSE = [0; MAX_TNT];
+    }
+}
+
 fn ignite_tnt(x: i32, y: i32, z: i32) {
     prime_tnt(x, y, z, TNT_FUSE_FRAMES);
 }
@@ -11688,6 +11737,48 @@ fn chest_find_in(x: i32, y: i32, z: i32, d: u8) -> Option<usize> {
         i += 1;
     }
     None
+}
+
+/// A cell a placed block may take: air, or water and lava, which Java's
+/// blocks replace. The crosshair now aims through fluids, so this is what
+/// lets you build underwater.
+fn replaceable(b: u8) -> bool {
+    b == AIR || is_water(b) || is_lava(b)
+}
+
+/// Room for one more chest or furnace. The registries are fixed (16 chests,
+/// 8 furnaces: RAM); Java has no limit. A full one used to place a block
+/// that could never be opened; now nothing is placed and a note says why.
+fn container_room(item: u8) -> bool {
+    let cap = match item {
+        CHEST => MAX_CHESTS,
+        FURNACE => MAX_FURNACES,
+        _ => return true,
+    };
+    let mut used = 0;
+    let mut i = 0;
+    while i < cap {
+        used += unsafe {
+            if item == CHEST {
+                CHEST_USED[i]
+            } else {
+                FURN_USED[i]
+            }
+        } as usize;
+        i += 1;
+    }
+    let full = used == cap;
+    if full {
+        unsafe {
+            EQUIP_MSG = if item == CHEST {
+                "TOO MANY CHESTS"
+            } else {
+                "TOO MANY FURNACES"
+            };
+            EQUIP_T = 100;
+        }
+    }
+    !full
 }
 
 fn chest_register(x: i32, y: i32, z: i32) {
