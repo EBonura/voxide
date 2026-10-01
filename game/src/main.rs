@@ -226,8 +226,9 @@ const INFERNO_LIGHT: u8 = 88;
 /// day to it.
 const VOID_FOG: (u8, u8, u8) = (16, 10, 26);
 const VOID_LIGHT: u8 = 76;
-/// Sim ticks of standing in portal sheet before it takes you: 1.5 s.
-const PORTAL_DWELL: u16 = ms(1500) as u16;
+/// Standing in portal sheet 80 game ticks (4 s) takes you through, as in
+/// Survival (minecraft.wiki/w/Nether Portal).
+const PORTAL_DWELL: u16 = units::java_ticks(80) as u16;
 /// Sentinel: standing in the portal you just arrived in, so it will not fire.
 const PORTAL_IMMUNE: u16 = u16::MAX;
 const FIRE: u8 = 70;
@@ -274,10 +275,10 @@ fn is_potion(b: u8) -> bool {
     b >= POTION_AWKWARD && b <= POTION_FIRE
 }
 
-/// How long an effect lasts. Java's are 3 to 8 minutes; that is a very long
-/// time to carry a buff on a machine with no status HUD, so these last a
-/// minute.
-const POTION_TIME: u16 = secs(60) as u16;
+/// Brewed (not extended) potion durations, Java's (minecraft.wiki/w/Potion):
+/// Swiftness, Strength and Fire Resistance 3:00, Regeneration 0:45.
+const POTION_TIME: u16 = secs(180) as u16;
+const POTION_REGEN_TIME: u16 = secs(45) as u16;
 
 /// Fill a 2x3 obsidian frame with portal sheet. `(bx, by, bz)` is the block the
 /// player struck; we look for the frame around and above it. Returns true if a
@@ -476,9 +477,159 @@ const CRAFT_ARMOR: u8 = 254; // recipe output sentinel: upgrade the armour tier
 const BLOCK_KINDS: usize = 128;
 
 // Worn-armour tier (0 none, 1 iron, 2 diamond) scales incoming combat damage.
-/// (defense points, toughness) for no armour, full iron, full diamond
-/// (minecraft.wiki/w/Armor#Full sets).
-const ARMOR_SETS: [(i32, i32); 3] = [(0, 0), (15, 0), (20, 8)];
+/// Per piece (helmet, chestplate, leggings, boots) for iron and diamond, from
+/// minecraft.wiki/w/Armor: defense points, toughness, durability.
+const ARMOR_POINTS: [[i32; 4]; 2] = [[2, 6, 5, 2], [3, 8, 6, 3]];
+const ARMOR_TOUGH: [i32; 2] = [0, 2];
+const ARMOR_DUR: [[u16; 4]; 2] = [[165, 240, 225, 195], [363, 528, 495, 429]];
+/// Tool durability by tier, wood / stone / iron / diamond
+/// (minecraft.wiki/w/Sword#Statistics, Pickaxe).
+const TOOL_DUR: [u16; 5] = [0, 59, 131, 250, 1561];
+/// Bow 384, fishing rod 64, flint and steel 64 (minecraft.wiki/w/Bow,
+/// Fishing_Rod, Flint_and_Steel).
+const ITEM_DUR: [(u8, u16); 3] = [(BOW, 384), (FISHING_ROD, 64), (FLINT_STEEL, 64)];
+
+/// Defense points and toughness of the pieces still worn.
+fn armor_points(p: &Player) -> (i32, i32) {
+    if p.armor == 0 {
+        return (0, 0);
+    }
+    let t = (p.armor as usize - 1).min(1);
+    let (mut pts, mut tough) = (0, 0);
+    let mut k = 0;
+    while k < 4 {
+        if p.armor_dur[k] > 0 {
+            pts += ARMOR_POINTS[t][k];
+            tough += ARMOR_TOUGH[t];
+        }
+        k += 1;
+    }
+    (pts, tough)
+}
+
+/// Armour takes a hit of `raw` damage: each worn piece loses max(1, raw / 4)
+/// uses (minecraft.wiki/w/Durability#Armor durability). A piece at 0 breaks;
+/// with all four gone the set is gone.
+fn wear_armor(p: &mut Player, raw: i32) {
+    if p.armor == 0 || raw <= 0 {
+        return;
+    }
+    let loss = (raw / 4).max(1) as u16;
+    let mut left = 0;
+    let mut k = 0;
+    while k < 4 {
+        if p.armor_dur[k] > 0 {
+            p.armor_dur[k] = p.armor_dur[k].saturating_sub(loss);
+            if p.armor_dur[k] == 0 {
+                sfx::break_block();
+            }
+        }
+        if p.armor_dur[k] > 0 {
+            left += 1;
+        }
+        k += 1;
+    }
+    if left == 0 {
+        p.armor = 0;
+    }
+}
+
+/// The durability slot for a tool class.
+fn tool_slot(class: u8) -> usize {
+    match class {
+        TOOL_PICK => 0,
+        TOOL_AXE => 1,
+        TOOL_SHOVEL => 2,
+        _ => 3,
+    }
+}
+
+/// A tool of `class` is used `uses` times (minecraft.wiki/w/Durability: 1 for
+/// a block that does not break instantly, 1 for a sword hit). At 0 it breaks
+/// and its tier is gone.
+fn wear_tool(p: &mut Player, class: u8, uses: u16) {
+    let tier = tool_tier(p, class);
+    if tier == 0 || class == TOOL_NONE {
+        return;
+    }
+    let d = &mut p.tool_dur[tool_slot(class)];
+    if *d == 0 || *d > TOOL_DUR[tier as usize] {
+        *d = TOOL_DUR[tier as usize];
+    }
+    *d = d.saturating_sub(uses);
+    if *d == 0 {
+        match class {
+            TOOL_PICK => p.pick = 0,
+            TOOL_AXE => p.axe = 0,
+            TOOL_SHOVEL => p.shovel = 0,
+            _ => p.sword = 0,
+        }
+        sfx::break_block();
+        unsafe {
+            EQUIP_MSG = "TOOL BROKE";
+            EQUIP_T = 100;
+        }
+    }
+}
+
+/// One use of the current bow, rod or flint and steel; when it runs out the
+/// item breaks (one is taken) and the next one starts fresh.
+fn wear_item(p: &mut Player, item: u8) {
+    let mut k = 0;
+    while k < 3 {
+        let (it, max) = ITEM_DUR[k];
+        if it == item {
+            let d = &mut p.item_dur[k];
+            if *d == 0 || *d > max {
+                *d = max;
+            }
+            *d -= 1;
+            if *d == 0 {
+                inv_take(item);
+                *d = max;
+                sfx::break_block();
+            }
+            return;
+        }
+        k += 1;
+    }
+}
+
+/// Every owned tool and armour piece at full durability (loading a save made
+/// before durability existed).
+pub(crate) fn full_durability(p: &mut Player) {
+    let tiers = [p.pick, p.axe, p.shovel, p.sword];
+    let mut k = 0;
+    while k < 4 {
+        p.tool_dur[k] = TOOL_DUR[(tiers[k] as usize).min(4)];
+        k += 1;
+    }
+    p.armor_dur = if p.armor == 0 { [0; 4] } else { ARMOR_DUR[(p.armor as usize - 1).min(1)] };
+    p.item_dur = [0; 3];
+}
+
+/// Whether a tiered recipe's output is already owned at that tier and
+/// undamaged (so crafting it again would waste the ingredients).
+pub(crate) fn tier_full(p: &Player, out: u8, tier: u8) -> bool {
+    if out == CRAFT_ARMOR {
+        let t = (tier as usize).max(1).min(2) - 1;
+        let mut k = 0;
+        while k < 4 {
+            if p.armor_dur[k] < ARMOR_DUR[t][k] {
+                return false;
+            }
+            k += 1;
+        }
+        return true;
+    }
+    let class = match out {
+        CRAFT_AXE => TOOL_AXE,
+        CRAFT_SHOVEL => TOOL_SHOVEL,
+        CRAFT_SWORD => TOOL_SWORD,
+        _ => TOOL_PICK,
+    };
+    p.tool_dur[tool_slot(class)] >= TOOL_DUR[tier as usize]
+}
 
 // Blocks the hotbar lets you select and place (building set; ores/fluids excluded).
 // SEEDS is selectable but plants a crop instead of placing a block (see place path).
@@ -853,11 +1004,11 @@ const LOOK_PITCH_Q8: i32 = units::dps_q8(98);
 const FONT_TPAGE: Tpage = Tpage::new(320, 0, TexDepth::Bit4);
 const FONT_CLUT: Clut = Clut::new(320, 256);
 
-// Day/night: a full cycle is DAY_LEN sim ticks (~600s / 10 min -- about 2x
-// the pace of Java's 20-min day, no longer the old 20x-compressed 60s). LIGHT
-// (0..128) scales the global sky light; NIGHT_LIGHT keeps night dim but not pitch
-// black (no block-light yet). Sky colour lerps between night and day by brightness.
-const DAY_LEN: u32 = secs(600) as u32;
+// Day/night: a full cycle is DAY_LEN sim ticks, Java's 20 minutes (24,000
+// game ticks, minecraft.wiki/w/Daylight cycle). LIGHT (0..128) scales the
+// global sky light; NIGHT_LIGHT keeps night dim but not pitch black. Sky colour
+// lerps between night and day by brightness.
+const DAY_LEN: u32 = units::java_ticks(24_000) as u32;
 const NIGHT_LIGHT: i32 = 38;
 // Java's plains biome sky_color is 0x78A7FF. The old (82,130,190) was a dull,
 // slightly green-leaning blue that read as late afternoon at altitude.
@@ -1351,8 +1502,7 @@ static mut CHEST_D: [u8; MAX_CHESTS] = [0; MAX_CHESTS];
 
 // Per-furnace state, keyed by the furnace block's world position.
 const MAX_FURNACES: usize = 8;
-const SMELT_TIME: u16 = secs(5) as u16; // 5s to smelt one item (ponytail: half Java's 10s, a nod
-                             // to our compressed clock; FURN_FUEL counts item-smelts)
+const SMELT_TIME: u16 = units::java_ticks(200) as u16; // 10 s an item (minecraft.wiki/w/Smelting)
 /// FURN_FUEL counts half item-smelts: one coal smelts 8 items, a log or a
 /// plank 1.5 (minecraft.wiki/w/Smelting#Fuel).
 const COAL_SMELTS: u16 = 8;
@@ -1416,11 +1566,12 @@ struct Player {
     air: i32,         // breath remaining underwater
     burn: i32,        // burning timer (set by lava/fire), damages over time
     hurt_cd: i32,     // i-frames between environmental damage ticks
-    regen_delay: i32, // frames to wait after damage before regen resumes
-    regen_tick: i32,  // frames accumulated toward the next regen/starve point
+    regen_tick: i32,  // sim ticks toward the next regen/starve point (Java's foodTickTimer)
+    heal_frac: i32,   // saturation-boost healing not yet a whole hp, hundredths
     food: i32,        // hunger, 0..MAX_FOOD
     food_items: i32,  // raw food carried (mob drops); auto-eaten when hungry
-    exhaustion: i32,  // counts toward the next hunger point lost
+    exhaustion: i32,  // Java's exhaustion, EXH_POINT to a point; 4 points cost a hunger point
+    saturation: i32,  // Java's saturation, hundredths, never above food
     // A tier per tool TYPE (0 none, 1 wood .. 4 diamond). They are player
     // stats rather than inventory items: there is no durability, the best of
     // each auto-equips, and the right one is chosen for whatever you swing at.
@@ -1429,12 +1580,18 @@ struct Player {
     shovel: u8,
     sword: u8,
     armor: u8, // 0 none, 1 iron, 2 diamond (scales combat damage taken)
+    // Uses left, Java's durability: the tool tiers (pick, axe, shovel, sword),
+    // the four armour pieces (helmet, chest, legs, boots; 0 = broken), and the
+    // current bow, fishing rod and flint and steel (0 = a fresh one).
+    tool_dur: [u16; 4],
+    armor_dur: [u16; 4],
+    item_dur: [u16; 3],
     selected: u8,
     xp: i32,         // total experience points (xp_level for the level)
     efficiency: u8,  // mining-speed enchant level (0..3), bought with XP at a table
     sharpness: u8,   // melee-damage enchant level (0..3)
     protection: u8,  // damage-reduction enchant level (0..3)
-    sprinting: bool, // latched by L3 or double-tap-forward: 1.3x speed, 3x exhaustion
+    sprinting: bool, // latched by L3 or double-tap-forward: 1.3x speed
     sneaking: bool,  // CIRCLE held: slow, and will not walk off a ledge
     eff_speed: u16,  // potion effect timers, in frames
     eff_strength: u16,
@@ -1448,6 +1605,7 @@ struct Player {
     /// toward the damage source and decays it over ~10 ticks.
     hurt_tilt: u8,
     sprint_tap: u8,     // frames left in the double-tap-forward window (sprint start)
+    attack_t: u16,      // sim ticks since the last swing or item switch (attack cooldown)
     sprint_latch: bool, // sprint engaged (L3 or double-tap); drops when forward stops
     was_fwd: bool,      // forward-input edge detector for the sprint double-tap
 }
@@ -1504,6 +1662,40 @@ pub(crate) fn furnace_took(i: usize, out: u8, n: u16) {
 }
 const MAX_EFFICIENCY: u8 = 3;
 
+/// Attack charge, Q8 (256 = full): Java's attack cooldown (minecraft.wiki/w/
+/// Damage#Attack cooldown) runs T = 20 / attack_speed game ticks, 1.6 for a
+/// sword and the default 4 bare-handed (minecraft.wiki/w/Attribute), and
+/// this is (t + 0.5) / T with t the game ticks since the last swing or item
+/// switch, capped at 1.
+fn attack_charge(p: &Player) -> i32 {
+    // 6T in sim ticks: T = 12.5 game ticks (sword) or 5 (fist); t + 0.5 game
+    // ticks is (2 x attack_t + 3) / 6 of them.
+    let six_t = if p.sword > 0 { 75 } else { 30 };
+    ((2 * p.attack_t as i32 + 3) * 256 / six_t).min(256)
+}
+
+/// Melee damage now, Java's formula (minecraft.wiki/w/Damage): base (fist 1,
+/// swords 4/5/6/7, Sword) plus Strength (+3, Strength) times the cooldown
+/// multiplier 0.2 + 0.8 x charge^2; x 1.5 rounded down for a critical hit
+/// (falling, charge 0.9 or more); plus Sharpness (0.5 x level + 0.5,
+/// Sharpness) times the unsquared 0.2 + 0.8 x charge. Health is whole
+/// points, so the total rounds to the nearest; a weak hit can round to 0.
+fn melee_damage(p: &Player) -> i16 {
+    let base = if p.sword == 0 { 1 } else { 3 + p.sword as i32 }
+        + if p.eff_strength > 0 { 3 } else { 0 };
+    let r = attack_charge(p);
+    let mut d100 = base * (5120 + 20480 * r * r / 65536) / 256; // hundredths
+    let falling = !p.on_ground && p.vy < 0 && !p.fly;
+    if falling && r >= 230 {
+        d100 = d100 * 3 / 2 / 100 * 100; // critical, rounded down to whole hp
+    }
+    if p.sharpness > 0 {
+        let sharp = 50 * p.sharpness as i32 + 50;
+        d100 += sharp * (51 + 205 * r / 256) / 256;
+    }
+    ((d100 + 50) / 100) as i16
+}
+
 /// Reduce damage by the worn armour and the protection enchant. Armour is
 /// Java's formula (minecraft.wiki/w/Armor#Damage formulas): full iron is 15
 /// defense points, full diamond 20 with 8 toughness, and the damage taken is
@@ -1511,11 +1703,12 @@ const MAX_EFFICIENCY: u8 = 3;
 /// so iron takes 60% off and diamond up to 80%. Protection then takes 12% a
 /// level off what is left. Health is whole points here, so a hit that armour
 /// brings under one still costs one.
-fn armored(raw: i32, armor: u8, protection: u8) -> i32 {
+fn armored(raw: i32, p: &Player) -> i32 {
     if raw <= 0 {
         return 0;
     }
-    let (points, tough) = ARMOR_SETS[(armor as usize).min(ARMOR_SETS.len() - 1)];
+    let protection = p.protection;
+    let (points, tough) = armor_points(p);
     // Reduction in hundredths of a point.
     let r = (points * 20)
         .max(points * 100 - 400 * raw / (tough + 8))
@@ -1530,19 +1723,33 @@ fn armored(raw: i32, armor: u8, protection: u8) -> i32 {
 const MAX_HEALTH: i32 = 20;
 const SAFE_FALL_BLOCKS: i32 = 3; // first 3 blocks of a fall do no damage (Java)
 const MAX_AIR: i32 = secs(15); // 15s underwater before drowning (Java: 300 ticks)
-const REGEN_DELAY: i32 = secs(3); // ponytail: ~3s post-hit regen pause; Java has none,
-                                          // but our slow regen makes it near-moot. Kept for feel.
-const REGEN_PERIOD: i32 = secs(4); // slow regen: +1 hp / 4s (Java food>=18 tier)
-const REGEN_FAST: i32 = ms(500); // fast regen: +1 hp / 0.5s when well fed (food==20)
+// Hunger, Java's (minecraft.wiki/w/Food): actions add exhaustion; every 4.0
+// points of it cost a point of saturation, or of hunger once saturation is
+// gone. At hunger 18+ the player heals 1 hp every 80 game ticks for 6.0
+// exhaustion; at a full 20 with saturation left, every 10 ticks, healing
+// min(saturation, 6) / 6 hp for that much exhaustion (the saturation boost).
+// At 0 the player starves 1 hp every 80 ticks, down to 1 on Normal.
+// Exhaustion is kept in 1/64,000ths of a point so that a sprint's 0.1 a block
+// is a whole number per world unit.
+const EXH_POINT: i32 = 64_000;
+const EXH_SPRINT_PER_UNIT: i32 = EXH_POINT / 10 / BLOCK; // 0.1 a block sprinted
+const EXH_SWIM_PER_UNIT: i32 = EXH_POINT / 100 / BLOCK; // 0.01 a block swum
+const EXH_JUMP: i32 = EXH_POINT / 20; // 0.05
+const EXH_SPRINT_JUMP: i32 = EXH_POINT / 5; // 0.2
+const EXH_BREAK: i32 = EXH_POINT / 200; // 0.005 a block broken
+const EXH_ATTACK: i32 = EXH_POINT / 10; // 0.1 an attack landed
+const EXH_DAMAGE: i32 = EXH_POINT / 10; // 0.1 a hit of armour-protected damage
+const EXH_REGEN: i32 = 6 * EXH_POINT; // per hp healed
+/// Saturation on a new world or a respawn: 5.0 (Food, foodSaturationLevel).
+const SPAWN_SATURATION: i32 = 500;
+const REGEN_PERIOD: i32 = units::java_ticks(80); // hunger 18+: 1 hp / 4 s
+const REGEN_FAST: i32 = units::java_ticks(10); // full, saturated: every 0.5 s
 /// Burning after lava: 15 s, reset every tick in lava (minecraft.wiki/w/Lava).
 const FIRE_DURATION: i32 = secs(15);
 /// Burning after a fire block: 160 game ticks, 8 s (minecraft.wiki/w/Fire#Burning).
 const FIRE_BLOCK_BURN: i32 = units::java_ticks(160);
 const MAX_FOOD: i32 = 20;
-const FOOD_DRAIN: i32 = secs(20); // ~20s per hunger point lost (time-based; ponytail:
-                                          // Java uses per-action exhaustion, but heal-burns-food
-                                          // below carries the core "activity drains food" loop)
-const STARVE_PERIOD: i32 = secs(4); // lose 1 hp per 4s while starving (Java rate)
+const STARVE_PERIOD: i32 = units::java_ticks(80); // lose 1 hp per 4 s while starving
 /// Hazard cadences: lava, fire and cactus hurt every half second, drowning
 /// and burning every second, as in Java.
 const HAZARD_FAST_CD: i32 = ms(500);
@@ -2244,8 +2451,14 @@ fn craft(i: usize, player: &mut Player) {
             CRAFT_SWORD => &mut player.sword,
             _ => &mut player.pick,
         };
-        if tier > *slot {
+        if tier >= *slot {
             *slot = tier;
+            player.tool_dur[match r.out {
+                CRAFT_AXE => 1,
+                CRAFT_SHOVEL => 2,
+                CRAFT_SWORD => 3,
+                _ => 0,
+            }] = TOOL_DUR[tier as usize];
             unsafe {
                 EQUIP_MSG = match r.out {
                     CRAFT_AXE => "AXE EQUIPPED",
@@ -2257,8 +2470,9 @@ fn craft(i: usize, player: &mut Player) {
             }
         }
     } else if r.out == CRAFT_ARMOR {
-        if r.out_qty as u8 > player.armor {
+        if r.out_qty as u8 >= player.armor {
             player.armor = r.out_qty as u8;
+            player.armor_dur = ARMOR_DUR[(player.armor as usize - 1).min(1)];
             unsafe {
                 EQUIP_MSG = if player.armor == 1 {
                     "IRON ARMOR EQUIPPED"
@@ -2648,6 +2862,9 @@ fn main() {
             // straight to an item. Tools are not cycled: crafting a tier
             // equips it and better never hurts (no durability here).
             hotbar_sync(&mut player);
+            if pad.pressed_since(previous, button::R1) || pad.pressed_since(previous, button::L1) {
+                player.attack_t = 0; // switching items restarts the attack cooldown
+            }
             if pad.pressed_since(previous, button::R1) {
                 unsafe { HOTBAR_SEL = (HOTBAR_SEL + 1) % HOTBAR_VIS };
                 player.selected = unsafe { HOTBAR[HOTBAR_SEL] };
@@ -2672,12 +2889,13 @@ fn main() {
                 mob::update(player.x, player.y, player.z, sky_level(day % DAY_LEN));
                 let raw_hit =
                     mob::contact_damage(player.x, player.y, player.z) + mob::hazard_damage();
-                let mob_hit = armored(raw_hit, player.armor, player.protection);
+                let mob_hit = armored(raw_hit, &player);
                 if mob_hit > 0 && player.hurt_cd == 0 {
                     player.health -= mob_hit;
+                    wear_armor(&mut player, raw_hit);
                     player.hurt_cd = PLAYER_HURT_CD;
                     player.hurt_tilt = HURT_TILT_FRAMES;
-                    player.regen_delay = REGEN_DELAY;
+                    player.exhaustion += EXH_DAMAGE;
                 }
                 if cheat::god() {
                     cheat::hold_god(&mut player);
@@ -2801,6 +3019,8 @@ fn main() {
                     }
                     let dt = day % DAY_LEN;
                     if bed_time(dt) {
+                        weather_clear(); // sleeping ends the rain
+
                         // Only the world clock skips. `frame` keeps counting
                         // the frames that actually happened.
                         day += DAY_LEN - dt;
@@ -2848,21 +3068,20 @@ fn main() {
                 swing = SWING_TICKS;
             }
 
-            // Melee: tap R2 to strike the mob under the crosshair. One hit a
-            // press, as Java's attack key: holding it only mines.
-            if let (true, Some(t)) = (pad.pressed_since(previous, button::R2), target) {
-                // Java sword damage: fist 1, then wood 4 / stone 5 / iron 6 / diamond 7.
-                let mut dmg = if player.sword == 0 {
-                    1
-                } else {
-                    3 + player.sword as i16
-                };
-                if player.eff_strength > 0 {
-                    dmg += dmg / 2; // Java strength I: +3 hearts-ish, here +50%
-                }
-                dmg += player.sharpness as i16; // Java: +1.25 per level, rounded here
-                if mob::strike(t, cam.x, cam.z, dmg) {
+            // Melee: tap R2 to strike the mob under the crosshair (one hit a
+            // press, as Java's attack key: holding it only mines). Every
+            // swing restarts Java's attack cooldown, which scales the damage
+            // (melee_damage).
+            let swung = pad.pressed_since(previous, button::R2);
+            let dmg = melee_damage(&player); // on the charge before this swing
+            if swung {
+                player.attack_t = 0;
+            }
+            if let (true, Some(t)) = (swung, target) {
+                if dmg > 0 && mob::strike(t, cam.x, cam.z, dmg) {
                     sfx::hit_mob();
+                    player.exhaustion += EXH_ATTACK;
+                    wear_tool(&mut player, TOOL_SWORD, 1);
                 }
             }
 
@@ -2903,6 +3122,10 @@ fn main() {
                     }
                     if mine_progress >= mine_den && (mine_den == 0 || step > 0) {
                         sfx::break_block();
+                        player.exhaustion += EXH_BREAK;
+                        if hard > 0 {
+                            wear_tool(&mut player, tool_for(tb), 1);
+                        }
                         if mine_den > 0 {
                             mine_cool = units::java_ticks(6) as u32;
                         }
@@ -2982,6 +3205,7 @@ fn main() {
                     let fy = cam.sp;
                     let fz = (cam.cy * cam.cp) >> 12;
                     mob::player_shoot(cam.x, cam.y, cam.z, fx, fy, fz);
+                    wear_item(&mut player, BOW);
                     sfx::place(); // bow twang stand-in
                 }
             }
@@ -3058,11 +3282,11 @@ fn main() {
                         world::light_fire_at(pick.px, pick.py, pick.pz);
                         sfx::place();
                     }
+                    wear_item(&mut player, FLINT_STEEL);
                 } else if player.selected == BONEMEAL {
-                    // Bonemeal a young crop straight to ripe.
+                    // Bone meal grows a crop 2 to 5 stages (minecraft.wiki/w/Bone_Meal).
                     if get_block_i32(pick.bx, pick.by, pick.bz) == WHEAT && inv_take(BONEMEAL) {
-                        set_block_i32(pick.bx, pick.by, pick.bz, WHEAT_RIPE);
-                        record_edit(pick.bx, pick.by, pick.bz, WHEAT_RIPE);
+                        crop_grow(pick.bx, pick.by, pick.bz, 2 + (world_rand() % 4) as u16);
                         spawn_particles(
                             block_to_world_x(pick.bx) + BLOCK / 2,
                             pick.by * BLOCK + BLOCK,
@@ -3138,6 +3362,7 @@ fn main() {
                     cast_t = cast_t.saturating_sub(sim_n as u16);
                     if cast_t == 0 {
                         player.food_items += 1;
+                        wear_item(&mut player, FISHING_ROD);
                         sfx::splash();
                     }
                 }
@@ -3898,6 +4123,7 @@ fn menu_button_now(font: &FontAtlas, y: i16, label: &str, sel: bool) {
 #[inline(never)] // once, at boot: kept out of main() so the size attribute holds
 fn reset_game_state() {
     tut_reset();
+    weather_clear();
     unsafe {
         let mut i = 0;
         while i < BLOCK_KINDS {
@@ -4236,11 +4462,12 @@ fn spawn_player() -> Player {
         air: MAX_AIR,
         burn: 0,
         hurt_cd: 0,
-        regen_delay: 0,
         regen_tick: 0,
+        heal_frac: 0,
         food: MAX_FOOD,
         food_items: 0,
         exhaustion: 0,
+        saturation: SPAWN_SATURATION,
         sprinting: false,
         sneaking: false,
         eff_speed: 0,
@@ -4254,12 +4481,16 @@ fn spawn_player() -> Player {
         shovel: 0,
         sword: 0,
         armor: 0,
+        tool_dur: [0; 4],
+        armor_dur: [0; 4],
+        item_dur: [0; 3],
         selected: DIRT,
         xp: 0,
         efficiency: 0,
         sharpness: 0,
         protection: 0,
         sprint_tap: 0,
+        attack_t: 0,
         sprint_latch: false,
         was_fwd: false,
     }
@@ -4269,28 +4500,64 @@ fn spawn_player() -> Player {
 ///
 /// Pulled out of the gameplay loop rather than left inline: the loop is one
 /// enormous function and MIPS branches only reach +/-128KB, so every block that
-/// Rain strength, 0 (clear) to 255 (full shower), as a trapezoid over the
-/// weather cycle: one window in three rains, and each one fades in and back
-/// out over RAIN_RAMP frames. A hard boolean made showers snap on and off
-/// mid-stride, which read as a glitch rather than as weather.
-fn rain_amount(frame: u32) -> i32 {
+/// Weather, Java's cycle (minecraft.wiki/w/Weather): rain stays on for 12,000
+/// to 24,000 game ticks and off for 12,000 to 180,000, a new random length
+/// each time; a new world starts clear. Rain fades in and out over
+/// RAIN_RAMP so a shower does not snap on mid-stride. Sleeping through rain
+/// clears it (minecraft.wiki/w/Bed). Not saved: a loaded world rolls anew.
+static mut WEATHER_RAIN: bool = false;
+static mut WEATHER_T: u32 = 0; // sim ticks left in this spell (0 = not rolled)
+static mut RAIN_Q: u32 = 0; // 0..RAIN_RAMP, the fade
+const RAIN_RAMP: u32 = secs(8) as u32;
+
+/// A random number for world timers (weather, crops, saplings).
+fn world_rand() -> u32 {
+    static mut SEED: u32 = 0x2545_F491;
+    unsafe {
+        SEED = SEED.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+        SEED >> 8
+    }
+}
+
+fn weather_roll(rain: bool) -> u32 {
+    let (lo, span) = if rain { (12_000, 12_001) } else { (12_000, 168_001) };
+    units::java_ticks(lo + (world_rand() % span) as i32) as u32
+}
+
+/// One sim tick of weather.
+fn weather_tick() {
+    unsafe {
+        if WEATHER_T == 0 {
+            WEATHER_T = weather_roll(WEATHER_RAIN);
+        }
+        WEATHER_T -= 1;
+        if WEATHER_T == 0 {
+            WEATHER_RAIN = !WEATHER_RAIN;
+            WEATHER_T = weather_roll(WEATHER_RAIN);
+        }
+        if WEATHER_RAIN {
+            RAIN_Q = (RAIN_Q + 1).min(RAIN_RAMP);
+        } else {
+            RAIN_Q = RAIN_Q.saturating_sub(1);
+        }
+    }
+}
+
+/// Clear the sky (sleeping through rain, a new world).
+fn weather_clear() {
+    unsafe {
+        WEATHER_RAIN = false;
+        WEATHER_T = 0;
+        RAIN_Q = 0;
+    }
+}
+
+/// Rain strength, 0 (clear) to 255 (full shower).
+fn rain_amount() -> i32 {
     if FORCE_TIME >= 0 {
         return 0; // deterministic captures stay dry
     }
-    const WINDOW: u32 = secs(40) as u32;
-    const RAIN_RAMP: u32 = secs(8) as u32; // ~8s in and out
-    let phase = frame % (WINDOW * 3);
-    if phase < WINDOW * 2 {
-        return 0;
-    }
-    let p = phase - WINDOW * 2;
-    if p < RAIN_RAMP {
-        (p * 255 / RAIN_RAMP) as i32
-    } else if p >= WINDOW - RAIN_RAMP {
-        ((WINDOW - p) * 255 / RAIN_RAMP) as i32
-    } else {
-        255
-    }
+    (unsafe { RAIN_Q } * 255 / RAIN_RAMP) as i32
 }
 
 /// can live behind a call has to.
@@ -4305,7 +4572,7 @@ fn world_lighting(day: u32) -> (u32, i32, u8, (u8, u8, u8)) {
     } else {
         day % DAY_LEN
     };
-    let rain = rain_amount(day);
+    let rain = rain_amount();
     let mut light = day_brightness(tod);
     if rain > 0 {
         // Scaled by the ramp, so the terrain darkens as the shower arrives
@@ -4357,7 +4624,7 @@ fn drink_potion(player: &mut Player, kind: u8) {
     match kind {
         POTION_SPEED => player.eff_speed = POTION_TIME,
         POTION_STRENGTH => player.eff_strength = POTION_TIME,
-        POTION_REGEN => player.eff_regen = POTION_TIME,
+        POTION_REGEN => player.eff_regen = POTION_REGEN_TIME,
         POTION_FIRE => player.eff_fire = POTION_TIME,
         _ => {} // awkward: no effect, exactly as in Java
     }
@@ -4460,6 +4727,7 @@ fn world_tick(player: &mut Player, dwell: &mut u16, n: u32) -> bool {
         tnt_tick(player); // burn lit fuses; explode on zero
         crop_tick(); // age planted crops; ripen the mature ones
         sap_tick(); // grow planted saplings into trees
+        weather_tick();
         if t % REDSTONE_PERIOD == 0 {
             redstone_tick(); // budgeted: amortized, only over player-edited blocks
         }
@@ -4651,7 +4919,15 @@ fn portal_near(bx: i32, by: i32, bz: i32) -> bool {
 }
 
 /// Environmental survival: lava + drowning damage (with i-frames via
-/// regen_delay), and passive health regen when unhurt for a while.
+/// Java's food timer), and health regen by hunger and saturation.
+/// Eat: `food` hunger points and `sat` hundredths of saturation, which never
+/// exceeds the hunger level (minecraft.wiki/w/Food#Saturation).
+fn eat(player: &mut Player, food: i32, sat: i32) {
+    player.food = (player.food + food).min(MAX_FOOD);
+    player.saturation = (player.saturation + sat).min(player.food * 100);
+    sfx::eat();
+}
+
 #[inline(never)]
 fn update_survival(player: &mut Player) {
     let bx = world_to_block_x(player.x);
@@ -4668,16 +4944,19 @@ fn update_survival(player: &mut Player) {
     let mut hurt = 0;
     let mut cd = HAZARD_FAST_CD;
     let mut fiery = false;
+    let mut armoured = false; // lava, fire and cactus are armour-protected damage
     if is_lava(feet) || is_lava(mid) {
         hurt = 4; // Java: 4 hp per 0.5s in lava
         cd = HAZARD_FAST_CD;
         player.burn = FIRE_DURATION; // and catch fire
         fiery = true;
+        armoured = true;
     } else if feet == FIRE || mid == FIRE {
         hurt = 1; // Java: 1 hp per 0.5s in a fire block (Damage#Fire)
         cd = HAZARD_FAST_CD;
         player.burn = player.burn.max(FIRE_BLOCK_BURN);
         fiery = true;
+        armoured = true;
     }
     // Cactus pricks: standing against one (any cardinal neighbour at feet or
     // mid height) costs 1 hp per half second, like Java contact damage.
@@ -4695,6 +4974,7 @@ fn update_survival(player: &mut Player) {
         {
             hurt = 1;
             cd = HAZARD_FAST_CD;
+            armoured = true;
         }
     }
     if is_water(head) {
@@ -4703,6 +4983,7 @@ fn update_survival(player: &mut Player) {
         } else if hurt < 2 {
             hurt = 2; // out of air -> drown 2 hp per 1s
             cd = HAZARD_SLOW_CD;
+            armoured = false;
         }
         player.burn = 0; // water douses fire
     } else {
@@ -4731,49 +5012,56 @@ fn update_survival(player: &mut Player) {
         if hurt == 0 {
             hurt = 1; // burning: 1 hp per 1s even after leaving lava
             cd = HAZARD_SLOW_CD;
+            armoured = false;
         }
     }
 
     if hurt > 0 && player.hurt_cd == 0 {
-        player.health -= hurt;
+        if armoured {
+            // Lava, fire and cactus are armour-protected damage in Java
+            // (minecraft.wiki/w/Durability#Armor durability).
+            player.health -= armored(hurt, player);
+            wear_armor(player, hurt);
+            player.exhaustion += EXH_DAMAGE;
+        } else {
+            player.health -= hurt;
+        }
         player.hurt_cd = cd;
-        player.regen_delay = REGEN_DELAY;
     }
 
-    // Hunger drains over time; auto-eat carried food (mob drops) when hungry.
-    player.exhaustion += if player.sprinting { 3 } else { 1 };
-    if player.exhaustion >= FOOD_DRAIN {
-        player.exhaustion = 0;
-        if player.food > 0 {
+    // Exhaustion spends saturation, then hunger.
+    if player.exhaustion >= 4 * EXH_POINT {
+        player.exhaustion -= 4 * EXH_POINT;
+        if player.saturation > 0 {
+            player.saturation = (player.saturation - 100).max(0);
+        } else if player.food > 0 {
             player.food -= 1;
         }
     }
-    // Auto-eat, best food first, at Java's hunger values: steak +8, bread +5,
-    // raw beef +3, raw cod +2 (minecraft.wiki/w/Steak, Bread, Raw Beef, Raw Cod).
+    // Auto-eat carried food when hungry.
+    // Auto-eat, best food first, at Java's hunger and saturation values: steak
+    // 8 and 12.8, bread 5 and 6, raw beef 3 and 1.8, raw cod 2 and 0.4
+    // (minecraft.wiki/w/Steak, Bread, Raw Beef, Raw Cod).
     if player.food <= MAX_FOOD - 8 && unsafe { INV[COOKED_MEAT as usize] } > 0 {
         unsafe {
             INV[COOKED_MEAT as usize] -= 1;
         }
-        player.food = (player.food + 8).min(MAX_FOOD);
-        sfx::eat();
+        eat(player, 8, 1280);
     } else if player.food <= MAX_FOOD - 5 && unsafe { INV[BREAD as usize] } > 0 {
         unsafe {
             INV[BREAD as usize] -= 1;
         }
-        player.food = (player.food + 5).min(MAX_FOOD);
-        sfx::eat();
+        eat(player, 5, 600);
     } else if player.food <= MAX_FOOD - 3 && unsafe { INV[RAW_MEAT as usize] } > 0 {
         // Raw meat is the last resort; cook it for double the value.
         unsafe {
             INV[RAW_MEAT as usize] -= 1;
         }
-        player.food = (player.food + 3).min(MAX_FOOD);
-        sfx::eat();
+        eat(player, 3, 180);
     } else if player.food <= MAX_FOOD - 2 && player.food_items > 0 {
         // Fish from the rod, eaten raw: Java's raw cod.
-        player.food = (player.food + 2).min(MAX_FOOD);
+        eat(player, 2, 40);
         player.food_items -= 1;
-        sfx::eat();
     }
 
     // Regeneration potion heals regardless of food or recent damage, which is
@@ -4781,9 +5069,28 @@ fn update_survival(player: &mut Player) {
     if player.eff_regen > 0 && player.health < MAX_HEALTH && player.eff_regen % REGEN_POTION_PERIOD == 0 {
         player.health += 1;
     }
-    // Regen only when fed and unhurt; starve (to 1 hp) when out of food.
-    if player.regen_delay > 0 {
-        player.regen_delay -= 1;
+    // Java's food timer: the saturation boost at a full bar, natural regen at
+    // 18+, starving at 0 (down to 1 hp, Normal difficulty).
+    let hurt_now = player.health < MAX_HEALTH;
+    if player.food >= MAX_FOOD && player.saturation > 0 && hurt_now {
+        player.regen_tick += 1;
+        if player.regen_tick >= REGEN_FAST {
+            let f = player.saturation.min(600); // hundredths of a point
+            player.heal_frac += f / 6; // hundredths of an hp
+            if player.heal_frac >= 100 {
+                player.heal_frac -= 100;
+                player.health += 1;
+            }
+            player.exhaustion += f * EXH_POINT / 100;
+            player.regen_tick = 0;
+        }
+    } else if player.food >= REGEN_FOOD_MIN && hurt_now {
+        player.regen_tick += 1;
+        if player.regen_tick >= REGEN_PERIOD {
+            player.health += 1;
+            player.exhaustion += EXH_REGEN;
+            player.regen_tick = 0;
+        }
     } else if player.food == 0 {
         player.regen_tick += 1;
         if player.regen_tick >= STARVE_PERIOD {
@@ -4792,19 +5099,8 @@ fn update_survival(player: &mut Player) {
             }
             player.regen_tick = 0;
         }
-    } else if player.health < MAX_HEALTH && player.food >= REGEN_FOOD_MIN {
-        player.regen_tick += 1;
-        // Fast regen when well fed (Java: food==20 & saturation>0), else slow.
-        let period = if player.food == MAX_FOOD {
-            REGEN_FAST
-        } else {
-            REGEN_PERIOD
-        };
-        if player.regen_tick >= period {
-            player.health += 1;
-            player.food -= 1; // healing burns food (Java: ~1.5 food/hp via exhaustion)
-            player.regen_tick = 0;
-        }
+    } else {
+        player.regen_tick = 0;
     }
     // Tuning lab (never shipped): script the next step, mirror the player.
     #[cfg(feature = "tune-lab")]
@@ -4882,6 +5178,7 @@ fn update_player(
         ..PadState::NONE
     };
     let actions = action_map.input(current, prior);
+    player.attack_t = player.attack_t.saturating_add(1);
 
     // --- look: RIGHT stick = camera (yaw + pitch), proportional analog ---
     //
@@ -4969,7 +5266,7 @@ fn update_player(
     // double-tap window. The latch drops the moment forward input stops, so a
     // sprint is one gesture and then just steering -- no held button fighting
     // the look stick. 1.3x speed (Java 5.612 vs 4.317 b/s), extra hunger
-    // (exhaustion accrues 3x, see update_survival).
+    // (0.1 exhaustion a block, see EXH_SPRINT_PER_UNIT).
     let fwd_now = forward > 0;
     if fwd_now && !player.was_fwd {
         if player.sprint_tap > 0 {
@@ -5009,7 +5306,7 @@ fn update_player(
         WALK_Q8
     };
     if player.eff_speed > 0 {
-        speed += speed * 3 / 10; // Java speed I: +20%; a touch more here
+        speed += speed / 5; // Speed I: +20% (minecraft.wiki/w/Speed)
     }
     player.sprinting = sprinting;
     // Q8 units a tick along each axis.
@@ -5084,6 +5381,7 @@ fn update_player(
         // step -- the player could not walk at all (fly skips this branch, which
         // is why flying still worked).
         let mut blocked = false;
+        let (x0, z0) = (player.x, player.z);
         player.x += dx;
         if !world::column_loaded(world_to_block_x(player.x), world_to_block_z(player.z))
             || aabb_collides(player.x, player.y, player.z)
@@ -5101,6 +5399,15 @@ fn update_player(
             player.z -= dz;
             player.z_frac = 0;
             blocked |= dz != 0;
+        }
+        // Exhaustion from distance actually covered: 0.01 a block in water,
+        // 0.1 a block sprinting on land; walking costs nothing (Food#Exhaustion).
+        let (mx, mz) = ((player.x - x0).abs(), (player.z - z0).abs());
+        let moved = (mx.max(mz) * 123 + mx.min(mz) * 51) >> 7; // ~Euclidean
+        if in_water_body(player.x, player.y, player.z) {
+            player.exhaustion += moved * EXH_SWIM_PER_UNIT;
+        } else if sprinting {
+            player.exhaustion += moved * EXH_SPRINT_PER_UNIT;
         }
 
         // Ladders, as in Java: any movement input (or jump) climbs at 2.35
@@ -5207,7 +5514,6 @@ fn update_player(
                 let blocks = (player.fall_peak - player.y) / BLOCK;
                 if blocks > SAFE_FALL_BLOCKS {
                     player.health -= blocks - SAFE_FALL_BLOCKS;
-                    player.regen_delay = REGEN_DELAY;
                 }
             }
             player.fall_peak = player.y;
@@ -5221,6 +5527,7 @@ fn update_player(
         // only strokes up.
         let shore = blocked && in_water_body(player.x, player.y, player.z);
         if (player.on_ground || shore) && pad.pressed_since(previous, button::CROSS) {
+            player.exhaustion += if sprinting { EXH_SPRINT_JUMP } else { EXH_JUMP };
             player.vy = JUMP_VY;
             player.on_ground = false;
             unsafe { TUT_JUMPED = true };
@@ -9249,8 +9556,20 @@ fn draw_hotbar(tool: (u8, u8)) {
         let uv = tex::tile_uv(tile);
         let mat = TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, tool_tint(tool.1));
         ui_sprite(tx + 1, y0 + 1, 16, 16, uv, mat);
+        // Java's durability bar, once the tool is worn: green to red.
+        let max = TOOL_DUR[(tool.1 as usize).min(4)] as i32;
+        let left = (unsafe { TOOL_DUR_SHOWN } as i32).min(max);
+        if left > 0 && left < max {
+            let w = (14 * left / max).max(1) as i16;
+            let g = (255 * left / max) as u8;
+            rect(tx + 2, y0 + 13, 14, 2, 0, 0, 0);
+            rect(tx + 2, y0 + 13, w, 1, 255 - g, g, 0);
+        }
     }
 }
+
+/// The shown tool's uses left, set by draw_all_hud for draw_hotbar.
+static mut TOOL_DUR_SHOWN: u16 = 0;
 
 /// Ten heart pips, left of the hotbar (2 hp each, rounded up).
 /// Experience bar (green) just above the hotbar, filling toward the next level.
@@ -9270,15 +9589,15 @@ fn draw_xp(xp: i32) {
 
 /// Armour pips one row above the hearts: more pips + a brighter colour at higher
 /// tiers (iron grey, diamond cyan). Hidden when unarmoured.
-fn draw_armor(armor: u8) {
-    if armor == 0 {
+fn draw_armor(p: &Player) {
+    // Java's armour bar: one pip per 2 defense points of the pieces still
+    // worn (minecraft.wiki/w/Armor), so it shrinks as pieces break.
+    let (points, _) = armor_points(p);
+    if points == 0 {
         return;
     }
-    let (pips, col) = if armor >= 2 {
-        (5i16, (120, 200, 220))
-    } else {
-        (3i16, (184, 184, 196))
-    };
+    let col = if p.armor >= 2 { (120, 200, 220) } else { (184, 184, 196) };
+    let pips = ((points + 1) / 2) as i16;
     let x0 = 8i16;
     let y = HUD_ROW2_Y;
     let mut i = 0i16;
@@ -9977,14 +10296,21 @@ fn draw_all_hud(font: &FontAtlas, player: Player, menu: u8, tool: (u8, u8)) {
         // Vanilla drops the crosshair whenever a GUI is up; ours used to sit in
         // the middle of every menu.
         draw_crosshair();
+        // Java's attack indicator: a bar under the crosshair while charging.
+        let r = attack_charge(&player);
+        if r < 256 {
+            rect(CX - 8, CY + 8, 16, 2, 40, 40, 40);
+            rect(CX - 8, CY + 8, (16 * r / 256) as i16, 2, 235, 235, 220);
+        }
         draw_tutorial(font);
         draw_sleep_prompt(font);
     }
     if menu != MENU_INV && !(1..=3).contains(&menu) {
+        unsafe { TOOL_DUR_SHOWN = player.tool_dur[tool_slot(tool.0)] };
         draw_hotbar(tool); // these menus draw it over their dimming
     }
     draw_xp(player.xp);
-    draw_armor(player.armor);
+    draw_armor(&player);
     draw_hearts(player.health);
     draw_food(player.food);
     draw_hud(font, player);
@@ -10390,7 +10716,7 @@ pub(crate) fn prime_tnt(x: i32, y: i32, z: i32, fuse: u8) {
         }
     }
 }
-const TNT_FUSE_FRAMES: u8 = ms(1500) as u8; // 1.5s (Java: 80 ticks)
+const TNT_FUSE_FRAMES: u8 = units::java_ticks(80) as u8; // 4 s (minecraft.wiki/w/TNT)
 static mut TNT_X: [i32; MAX_TNT] = [0; MAX_TNT];
 static mut TNT_Y: [i32; MAX_TNT] = [0; MAX_TNT];
 static mut TNT_Z: [i32; MAX_TNT] = [0; MAX_TNT];
@@ -10425,11 +10751,12 @@ fn tnt_tick(player: &mut Player) {
                             player.y - wy,
                             player.z - wz,
                         );
-                        let dmg = armored(raw, player.armor, player.protection);
+                        let dmg = armored(raw, player);
                         if dmg > 0 && player.hurt_cd == 0 {
                             player.health -= dmg;
+                            wear_armor(player, raw);
                             player.hurt_cd = PLAYER_HURT_CD;
-                            player.regen_delay = REGEN_DELAY;
+                            player.exhaustion += EXH_DAMAGE;
                         }
                     }
                 }
@@ -10441,11 +10768,16 @@ fn tnt_tick(player: &mut Player) {
 
 // ---- Crops: plant seeds on dirt/grass, grow over time, harvest wheat + seeds.
 const MAX_CROPS: usize = 24;
-const CROP_GROW: u16 = secs(30) as u16; // 30s to mature (a compressed crop cycle)
+// Growth by Java's random ticks (minecraft.wiki/w/Tick#Random tick: 3 blocks
+// in each 4,096-block subchunk a game tick, so a block gets one every 68.27 s
+// on average, here 1 in 4,096 each sim tick). Wheat has 8 stages, 7 steps to
+// ripe (minecraft.wiki/w/Tutorial:Crop farming).
+const RANDOM_TICK_ODDS: u32 = 4096;
+const CROP_RIPE_STAGE: u16 = 8; // CROP_T runs 1 (planted) .. 8 (ripe)
 static mut CROP_X: [i32; MAX_CROPS] = [0; MAX_CROPS];
 static mut CROP_Y: [i32; MAX_CROPS] = [0; MAX_CROPS];
 static mut CROP_Z: [i32; MAX_CROPS] = [0; MAX_CROPS];
-static mut CROP_T: [u16; MAX_CROPS] = [0; MAX_CROPS]; // 0 = free slot, else age 1..CROP_GROW
+static mut CROP_T: [u16; MAX_CROPS] = [0; MAX_CROPS]; // 0 = free slot, else stage 1..CROP_RIPE_STAGE
 
 fn plant_crop(x: i32, y: i32, z: i32) {
     unsafe {
@@ -10465,20 +10797,94 @@ fn plant_crop(x: i32, y: i32, z: i32) {
     }
 }
 
-/// Water within ~2 blocks of the soil under a crop (the 4 near + 4 far cardinal
-/// cells at soil level). Cheap: 8 lookups, not a full area scan.
+/// Farmland hydration, Java's rule (minecraft.wiki/w/Farmland#Hydration):
+/// water up to 4 blocks away horizontally, diagonals included, at the soil's
+/// level or one above. Rain on an open crop counts too. Dirt and grass stand
+/// in for farmland here. 162 block reads, only on a random tick.
 fn hydrated(x: i32, y: i32, z: i32) -> bool {
     let sy = y - 1; // soil block under the crop
-    is_water(get_block_i32(x + 1, sy, z))
-        || is_water(get_block_i32(x - 1, sy, z))
-        || is_water(get_block_i32(x, sy, z + 1))
-        || is_water(get_block_i32(x, sy, z - 1))
-        || is_water(get_block_i32(x + 2, sy, z))
-        || is_water(get_block_i32(x - 2, sy, z))
-        || is_water(get_block_i32(x, sy, z + 2))
-        || is_water(get_block_i32(x, sy, z - 2))
+    if rain_amount() > 0 && y >= world::surface_y(x, z) {
+        return true;
+    }
+    let mut dz = -4;
+    while dz <= 4 {
+        let mut dx = -4;
+        while dx <= 4 {
+            if is_water(get_block_i32(x + dx, sy, z + dz))
+                || is_water(get_block_i32(x + dx, sy + 1, z + dz))
+            {
+                return true;
+            }
+            dx += 1;
+        }
+        dz += 1;
+    }
+    false
 }
 
+fn is_crop(b: u8) -> bool {
+    b == WHEAT || b == WHEAT_RIPE
+}
+
+/// Light at a plant for growth: 15 under open sky (Java checks raw light, so
+/// crops grow on clear nights too), else the block light.
+fn plant_light(x: i32, y: i32, z: i32) -> i32 {
+    if y >= world::surface_y(x, z) {
+        15
+    } else {
+        block_light(x, y, z)
+    }
+}
+
+/// A crop's chance to grow on a random tick, Java's rule (minecraft.wiki/w/
+/// Tutorial:Crop farming#Growth rate): 1 / (floor(25 / speed) + 1), speed 4 on
+/// hydrated farmland or 2 on dry, plus 0.75 (hydrated) or 0.25 (dry) for each
+/// of the 8 neighbours that is farmland, halved when the same crop grows on a
+/// diagonal or along both axes. Neighbouring crops stand in for neighbouring
+/// farmland. Returns the 1-in-N N.
+fn crop_odds(x: i32, y: i32, z: i32) -> u32 {
+    let wet = hydrated(x, y, z);
+    let mut speed4 = if wet { 16 } else { 8 }; // speed x 4
+    let c = |dx: i32, dz: i32| is_crop(get_block_i32(x + dx, y, z + dz));
+    let (n, s_, e, w) = (c(0, -1), c(0, 1), c(1, 0), c(-1, 0));
+    let diag = c(1, 1) || c(1, -1) || c(-1, 1) || c(-1, -1);
+    let around = [n, s_, e, w, c(1, 1), c(1, -1), c(-1, 1), c(-1, -1)];
+    let mut k = 0;
+    while k < 8 {
+        if around[k] {
+            speed4 += if wet { 3 } else { 1 };
+        }
+        k += 1;
+    }
+    if diag || ((n || s_) && (e || w)) {
+        speed4 /= 2;
+    }
+    (100 / speed4.max(1)) as u32 + 1
+}
+
+/// Advance a crop (x, y, z) `stages` steps; true once it is ripe.
+fn crop_grow(x: i32, y: i32, z: i32, stages: u16) -> bool {
+    unsafe {
+        let mut i = 0;
+        while i < MAX_CROPS {
+            if CROP_T[i] > 0 && CROP_X[i] == x && CROP_Y[i] == y && CROP_Z[i] == z {
+                CROP_T[i] = (CROP_T[i] + stages).min(CROP_RIPE_STAGE);
+                if CROP_T[i] >= CROP_RIPE_STAGE {
+                    set_block_i32(x, y, z, WHEAT_RIPE);
+                    record_edit(x, y, z, WHEAT_RIPE);
+                    CROP_T[i] = 0;
+                    return true;
+                }
+                return false;
+            }
+            i += 1;
+        }
+    }
+    false
+}
+
+/// One sim tick of crop growth: each crop gets Java's random tick, and on one
+/// it grows a stage with crop_odds' chance if the light is 9 or more.
 #[inline(never)]
 fn crop_tick() {
     let mut i = 0usize;
@@ -10488,14 +10894,11 @@ fn crop_tick() {
                 let (x, y, z) = (CROP_X[i], CROP_Y[i], CROP_Z[i]);
                 if get_block_i32(x, y, z) != WHEAT {
                     CROP_T[i] = 0; // harvested or blown up: free the slot
-                } else {
-                    // Hydrated soil (water within ~2 blocks) grows 3x faster.
-                    CROP_T[i] += if hydrated(x, y, z) { 3 } else { 1 };
-                    if CROP_T[i] >= CROP_GROW {
-                        set_block_i32(x, y, z, WHEAT_RIPE);
-                        record_edit(x, y, z, WHEAT_RIPE);
-                        CROP_T[i] = 0;
-                    }
+                } else if world_rand() % RANDOM_TICK_ODDS == 0
+                    && plant_light(x, y, z) >= 9
+                    && world_rand() % crop_odds(x, y, z) == 0
+                {
+                    crop_grow(x, y, z, 1);
                 }
             }
         }
@@ -10505,7 +10908,11 @@ fn crop_tick() {
 
 // ---- Saplings: plant on soil, grow into a tree (renewable wood).
 const MAX_SAPS: usize = 8;
-const SAP_GROW: u16 = secs(45) as u16; // 45s
+/// Saplings grow two stages, then into a tree, on random ticks with light 9
+/// or more above them (minecraft.wiki/w/Sapling). The wiki gives no chance a
+/// random tick advances a stage, so every one does here: a tree comes after
+/// two random ticks, about 2.3 minutes on average. SAP_T runs 1..3.
+const SAP_TREE_STAGE: u16 = 3;
 static mut SAP_X: [i32; MAX_SAPS] = [0; MAX_SAPS];
 static mut SAP_Y: [i32; MAX_SAPS] = [0; MAX_SAPS];
 static mut SAP_Z: [i32; MAX_SAPS] = [0; MAX_SAPS];
@@ -10537,9 +10944,9 @@ fn sap_tick() {
                 let (x, y, z) = (SAP_X[i], SAP_Y[i], SAP_Z[i]);
                 if get_block_i32(x, y, z) != SAPLING {
                     SAP_T[i] = 0; // broken or blown up
-                } else {
+                } else if world_rand() % RANDOM_TICK_ODDS == 0 && plant_light(x, y + 1, z) >= 9 {
                     SAP_T[i] += 1;
-                    if SAP_T[i] >= SAP_GROW {
+                    if SAP_T[i] >= SAP_TREE_STAGE {
                         world::grow_tree(x, y, z);
                         record_edit(x, y, z, WOOD); // trunk base persists in the edit log
                         SAP_T[i] = 0;
@@ -10811,10 +11218,7 @@ fn day_brightness(t: u32) -> u8 {
 }
 
 /// A point in the day on Java's 24,000-tick clock: 0 sunrise, 6,000 noon,
-/// 12,000 sunset, 18,000 midnight (minecraft.wiki/w/Daylight cycle). The day
-/// here is DAY_LEN long, half Java's 20 minutes, with the same shape: 10 of 20
-/// parts day, a 1-part sunset, 10 parts night and a 1-part sunrise (it was a
-/// 40/10/40/10 trapezoid).
+/// 12,000 sunset, 18,000 midnight (minecraft.wiki/w/Daylight cycle).
 fn java_time(t: u32) -> i32 {
     (t as i32 % DAY_LEN as i32) * 24_000 / DAY_LEN as i32
 }
