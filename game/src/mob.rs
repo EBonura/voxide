@@ -601,7 +601,11 @@ fn try_spawn(px: i32, pz: i32, sky: i32) {
             ZOMBIE + (rng() % 4) as u8
         }
     } else {
-        if world::get(bx, sy - 1, bz) != GRASS || sky.max(crate::block_light(bx, sy, bz)) < 9 {
+        // Animals need light 9, but under open sky that is the raw sky light,
+        // 15 day or night (minecraft.wiki/w/Light#Mobs): Java spawns them at
+        // night too. Only a covered cell needs block light.
+        let open = if sy >= top { 15 } else { 0 };
+        if world::get(bx, sy - 1, bz) != GRASS || open.max(crate::block_light(bx, sy, bz)) < 9 {
             return;
         }
         // Wolves and villagers share the roll with the farm animals.
@@ -917,7 +921,9 @@ fn lab_hold() {
 }
 
 /// Advance all mobs: spawn budget, AI, physics, despawn.
-pub fn update(px: i32, py: i32, pz: i32, sky: i32) {
+/// `sky` is the internal sky light mobs spawn by (thunder already folded
+/// in); `burn` is whether it is day enough for the undead to burn.
+pub fn update(px: i32, py: i32, pz: i32, sky: i32, burn: bool) {
     #[cfg(feature = "pick-lab")]
     lab_hold();
     #[cfg(feature = "mob-lab")]
@@ -972,7 +978,7 @@ pub fn update(px: i32, py: i32, pz: i32, sky: i32) {
                     }
                 }
             }
-            if !night {
+            if burn {
                 sun_burn(i);
             }
             unsafe {

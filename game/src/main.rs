@@ -2939,7 +2939,7 @@ fn main() {
                 update_player(&mut player, spad, prev_i, sl, sr);
                 update_survival(&mut player);
                 mob::set_lure(player.selected); // animals follow their held food
-                mob::update(player.x, player.y, player.z, sky_level(day % DAY_LEN));
+                mob::update(player.x, player.y, player.z, spawn_sky(day), undead_burn_time(day));
                 let raw_hit =
                     mob::contact_damage(player.x, player.y, player.z) + mob::hazard_damage();
                 // Mob contact, arrows and sapper blasts, through Java's
@@ -2973,7 +2973,7 @@ fn main() {
             // until you respawn.
             let mut st = 0;
             while st < sim_n {
-                mob::update(player.x, player.y, player.z, sky_level(day % DAY_LEN));
+                mob::update(player.x, player.y, player.z, spawn_sky(day), undead_burn_time(day));
                 let _ = mob::contact_damage(player.x, player.y, player.z) + mob::hazard_damage();
                 st += 1;
             }
@@ -3810,7 +3810,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             cp: sincos::cos_q12(pitch),
             roll: 0, // the menu orbit does not bob
         };
-        let light = day_brightness(t % DAY_LEN);
+        let light = day_light(t % DAY_LEN, 0, 0);
         unsafe {
             LIGHT = light;
         }
@@ -4586,6 +4586,12 @@ static mut WEATHER_RAIN: bool = false;
 static mut WEATHER_T: u32 = 0; // sim ticks left in this spell (0 = not rolled)
 static mut RAIN_Q: u32 = 0; // 0..RAIN_RAMP, the fade
 const RAIN_RAMP: u32 = secs(8) as u32;
+/// Java's second weather flag (minecraft.wiki/w/Weather): thunder, on for
+/// 3,600 to 15,600 ticks and off for 12,000 to 180,000, cycling on its own;
+/// a thunderstorm is rain while it is on.
+static mut WEATHER_THUNDER: bool = false;
+static mut THUNDER_T: u32 = 0;
+static mut THUNDER_Q: u32 = 0; // 0..RAIN_RAMP, the storm's fade
 
 /// A random number for world timers (weather, crops, saplings).
 fn world_rand() -> u32 {
@@ -4598,6 +4604,11 @@ fn world_rand() -> u32 {
 
 fn weather_roll(rain: bool) -> u32 {
     let (lo, span) = if rain { (12_000, 12_001) } else { (12_000, 168_001) };
+    units::java_ticks(lo + (world_rand() % span) as i32) as u32
+}
+
+fn thunder_roll(on: bool) -> u32 {
+    let (lo, span) = if on { (3_600, 12_001) } else { (12_000, 168_001) };
     units::java_ticks(lo + (world_rand() % span) as i32) as u32
 }
 
@@ -4617,6 +4628,19 @@ fn weather_tick() {
         } else {
             RAIN_Q = RAIN_Q.saturating_sub(1);
         }
+        if THUNDER_T == 0 {
+            THUNDER_T = thunder_roll(WEATHER_THUNDER);
+        }
+        THUNDER_T -= 1;
+        if THUNDER_T == 0 {
+            WEATHER_THUNDER = !WEATHER_THUNDER;
+            THUNDER_T = thunder_roll(WEATHER_THUNDER);
+        }
+        if WEATHER_RAIN && WEATHER_THUNDER {
+            THUNDER_Q = (THUNDER_Q + 1).min(RAIN_RAMP);
+        } else {
+            THUNDER_Q = THUNDER_Q.saturating_sub(1);
+        }
     }
 }
 
@@ -4626,7 +4650,18 @@ fn weather_clear() {
         WEATHER_RAIN = false;
         WEATHER_T = 0;
         RAIN_Q = 0;
+        WEATHER_THUNDER = false;
+        THUNDER_T = 0;
+        THUNDER_Q = 0;
     }
+}
+
+/// Thunderstorm strength, 0 to 255 (it only builds while it rains).
+fn thunder_amount() -> i32 {
+    if FORCE_TIME >= 0 {
+        return 0;
+    }
+    (unsafe { THUNDER_Q } * 255 / RAIN_RAMP) as i32
 }
 
 /// Rain strength, 0 (clear) to 255 (full shower).
@@ -4650,12 +4685,11 @@ fn world_lighting(day: u32) -> (u32, i32, u8, (u8, u8, u8)) {
         day % DAY_LEN
     };
     let rain = rain_amount();
-    let mut light = day_brightness(tod);
-    if rain > 0 {
-        // Scaled by the ramp, so the terrain darkens as the shower arrives
-        // rather than the instant it starts. Full rain is the old x0.7.
-        light = (light as i32 * (2550 - 3 * rain) / 2550) as u8;
-    }
+    let thunder = thunder_amount();
+    // Java's darkening: rain takes 5/16 off the sky's brightness and a
+    // thunderstorm another 5/16, both following the shower's fade.
+    let clear = day_light(tod, 0, 0);
+    let mut light = day_light(tod, rain, thunder);
     let lf = light as i32 - NIGHT_LIGHT;
     let ld = 128 - NIGHT_LIGHT;
     let mut sky = (
@@ -4670,11 +4704,22 @@ fn world_lighting(day: u32) -> (u32, i32, u8, (u8, u8, u8)) {
         // `light` already carries the rain dimming (which belongs on the
         // terrain), while an overcast deck stays bright at noon. The deck
         // then blends in over the ramp, so cloud cover rolls in.
-        let d = day_brightness(tod) as i32;
+        let d = clear as i32;
         sky = (
             lerp_u8(sky.0 as i32, (OVERCAST.0 * d / 128) as i32, rain, 255),
             lerp_u8(sky.1 as i32, (OVERCAST.1 * d / 128) as i32, rain, 255),
             lerp_u8(sky.2 as i32, (OVERCAST.2 * d / 128) as i32, rain, 255),
+        );
+    }
+    if thunder > 0 {
+        // Java's storm sky: three quarters of the way to a fifth of its own
+        // grey (its sky colour under thunder).
+        let g = (sky.0 as i32 * 30 + sky.1 as i32 * 59 + sky.2 as i32 * 11) / 500;
+        let k = thunder * 3 / 4;
+        sky = (
+            lerp_u8(sky.0 as i32, g, k, 255),
+            lerp_u8(sky.1 as i32, g, k, 255),
+            lerp_u8(sky.2 as i32, g, k, 255),
         );
     }
     sky = apply_sunset(sky, tod, rain > 128);
@@ -4689,7 +4734,7 @@ fn world_lighting(day: u32) -> (u32, i32, u8, (u8, u8, u8)) {
         light = VOID_LIGHT;
     }
     unsafe {
-        NIGHT_BIAS = (128 - day_brightness(tod) as i32).clamp(0, 90) as u8;
+        NIGHT_BIAS = (128 - clear as i32).clamp(0, 90) as u8;
         SUN_WARMTH = sunset_warmth(tod, rain > 128).clamp(0, 255) as u8;
     }
     (tod, rain, light, sky)
@@ -9027,9 +9072,8 @@ fn draw_sky(cam: &Camera, day: u32, tod: u32, light: u8, horizon: (u8, u8, u8), 
     // Sun azimuth: the disc always sits in the x=0 plane, so its horizontal
     // direction is simply the sign of `c` below. Warmth at a given screen column
     // is the sunset strength scaled by how much that column faces the sun.
-    let t = tod as i32;
-    let phi = 1024 + 4096 * (t - DAY_LEN as i32 / 4) / DAY_LEN as i32;
-    let sun_c = sincos::cos_q12(phi as u16);
+    let phi = 1024 + celestial_q12(java_time(tod));
+    let sun_c = sincos::cos_q12((phi & 0x0FFF) as u16);
     let warmth = sunset_warmth(tod, raining);
 
     let mut col: [(u8, u8, u8); SKY_COLS + 1] = [horizon; SKY_COLS + 1];
@@ -9130,10 +9174,10 @@ fn draw_sky(cam: &Camera, day: u32, tod: u32, light: u8, horizon: (u8, u8, u8), 
 
     // Sun and (opposite) moon arc through the north-south vertical plane, one
     // full turn per day; phi = 90deg (zenith) at noon.
-    let t = tod as i32;
-    let phi = 1024 + 4096 * (t - DAY_LEN as i32 / 4) / DAY_LEN as i32;
-    let s = sincos::sin_q12(phi as u16); // elevation, Q12
-    let c = sincos::cos_q12(phi as u16);
+    // phi = 90 degrees (zenith) at noon, along Java's eased celestial angle.
+    let phi = 1024 + celestial_q12(java_time(tod));
+    let s = sincos::sin_q12((phi & 0x0FFF) as u16); // elevation, Q12
+    let c = sincos::cos_q12((phi & 0x0FFF) as u16);
     // Overcast hides both: a sun disc burning through a grey rain sky was the
     // single most wrong-looking thing on screen. Sun/moon also track the
     // skylight now, so they dim into dusk instead of staying full-bright in an
@@ -9199,9 +9243,7 @@ fn draw_sky(cam: &Camera, day: u32, tod: u32, light: u8, horizon: (u8, u8, u8), 
                 billboard(x, y, 12, 12, (0xE8, 0xEA, 0xF4));
                 // Phase: a sky-coloured occluder slid across the disc. Eight
                 // phases over eight days, as in Java.
-                let phase = ((tod / DAY_LEN.max(1)) % 8) as i32;
-                let days = (day / DAY_LEN.max(1)) as i32;
-                let ph = (days + phase) % 8;
+                let ph = ((day / DAY_LEN) % 8) as i32; // Java's moon phase: days % 8
                 if ph != 0 {
                     let shift = ((ph - 4) * 6) as i16;
                     billboard(x + shift, y, 12, 12, zenith);
@@ -9216,7 +9258,7 @@ fn draw_sky(cam: &Camera, day: u32, tod: u32, light: u8, horizon: (u8, u8, u8), 
     // delta that tipped frames past the 2-vblank 30fps line.
     // Gate on the TIME OF DAY, not on `light`: `light` carries the rain dimming,
     // so the old test lit up the whole star field during a midday shower.
-    let nightness = 128i32 - day_brightness(tod) as i32;
+    let nightness = 128i32 - day_light(tod, 0, 0) as i32;
     if !raining && nightness > 16 {
         let a = (nightness.min(96) * 255 / 96) as u8;
         let star = (a, a, a);
@@ -11412,11 +11454,134 @@ fn draw_frame_sky(cam: &Camera, day: u32, tod: u32, light: u8, sky: (u8, u8, u8)
     }
 }
 
-/// Java's internal sky light under open sky at this point in the day: 15 at
-/// noon down to 4 at midnight (minecraft.wiki/w/Light#Internal sky light),
-/// scaled from the renderer's brightness.
+/// Java's internal sky light under open sky (minecraft.wiki/w/Light#Internal
+/// sky light): a stepped table, every boundary copied from the wiki's chart,
+/// in clear weather, rain or snowfall, and a thunderstorm. Each row is the
+/// first tick of a level; the level holds until the next row.
+const SKY_CLEAR: [(i32, i32); 23] = [
+    (0, 15),
+    (12_041, 14),
+    (12_210, 13),
+    (12_377, 12),
+    (12_542, 11),
+    (12_705, 10),
+    (12_867, 9),
+    (13_027, 8),
+    (13_188, 7),
+    (13_348, 6),
+    (13_509, 5),
+    (13_670, 4),
+    (22_331, 5),
+    (22_492, 6),
+    (22_653, 7),
+    (22_813, 8),
+    (22_974, 9),
+    (23_135, 10),
+    (23_297, 11),
+    (23_460, 12),
+    (23_624, 13),
+    (23_791, 14),
+    (23_961, 15),
+];
+const SKY_RAIN: [(i32, i32); 17] = [
+    (0, 12),
+    (12_010, 11),
+    (12_256, 10),
+    (12_497, 9),
+    (12_734, 8),
+    (12_969, 7),
+    (13_203, 6),
+    (13_436, 5),
+    (13_670, 4),
+    (22_331, 5),
+    (22_566, 6),
+    (22_799, 7),
+    (23_032, 8),
+    (23_267, 9),
+    (23_505, 10),
+    (23_746, 11),
+    (23_992, 12),
+];
+const SKY_THUNDER: [(i32, i32); 13] = [
+    (0, 9),
+    (60, 10),
+    (11_941, 9),
+    (12_300, 8),
+    (12_648, 7),
+    (12_990, 6),
+    (13_330, 5),
+    (13_670, 4),
+    (22_331, 5),
+    (22_672, 6),
+    (23_011, 7),
+    (23_353, 8),
+    (23_701, 9),
+];
+
+/// The wiki's table at Java tick `j` (0..24,000) for the given weather.
+fn sky_table(j: i32, rain: bool, thunder: bool) -> i32 {
+    let t: &[(i32, i32)] = if thunder {
+        &SKY_THUNDER
+    } else if rain {
+        &SKY_RAIN
+    } else {
+        &SKY_CLEAR
+    };
+    let mut l = t[0].1;
+    let mut i = 0;
+    while i < t.len() && t[i].0 <= j {
+        l = t[i].1;
+        i += 1;
+    }
+    l
+}
+
+/// Rain and a thunderstorm as Java's table switches: once the shower has
+/// faded in halfway.
+fn weather_now() -> (bool, bool) {
+    let rain = rain_amount() > 128;
+    (rain, rain && thunder_amount() > 128)
+}
+
+/// Internal sky light under open sky now, for mob spawning, crops, beds and
+/// burning undead.
 fn sky_level(t: u32) -> i32 {
-    4 + (day_brightness(t) as i32 - NIGHT_LIGHT) * 11 / (128 - NIGHT_LIGHT)
+    let (rain, thunder) = weather_now();
+    sky_table(java_time(t), rain, thunder)
+}
+
+/// Java's celestial angle (minecraft.wiki/w/Daylight_cycle#Sky angle), a
+/// Q12 turn with 0 at noon: (2d + 0.5 - cos(pi d) / 2) / 3 with
+/// d = frac(t / 24,000 - 0.25). The sky moves fast at noon and midnight and
+/// slowly through sunrise and sunset. It was linear, which put the sun on
+/// the horizon at 12,000 and 0 instead of Java's 12,786 and 23,216.
+fn celestial_q12(j: i32) -> i32 {
+    let d = ((j + 18_000) % 24_000) * 4096 / 24_000;
+    let e = 2048 - (sincos::cos_q12((d / 2) as u16) >> 1);
+    (2 * d + e) / 3
+}
+
+/// The sun's elevation, Q12 (sine of its angle above the horizon).
+fn sun_height_q12(j: i32) -> i32 {
+    sincos::cos_q12((celestial_q12(j) & 0x0FFF) as u16)
+}
+
+/// Java's continuous sky brightness, Q12 0..4096, the curve the stepped
+/// internal sky light is cut from: clamp(2 x sun elevation + 0.5, 0, 1),
+/// times 1 - 5/16 x rain and 1 - 5/16 x thunder (each 0..255 here).
+fn sky_bright_q12(j: i32, rain: i32, thunder: i32) -> i32 {
+    let mut b = (2 * sun_height_q12(j) + 2048).clamp(0, 4096);
+    b = b * (4096 - rain * 1280 / 255) / 4096;
+    b * (4096 - thunder * 1280 / 255) / 4096
+}
+
+/// Rendered sky light (0..128) for a point in the day: the same curve as the
+/// internal sky light, but continuous, so the screen fades rather than
+/// stepping (Java renders from the continuous darkening too). Level 4 maps
+/// to NIGHT_LIGHT and level 15 to full.
+fn day_light(t: u32, rain: i32, thunder: i32) -> u8 {
+    let b = sky_bright_q12(java_time(t), rain, thunder);
+    (NIGHT_LIGHT + (128 - NIGHT_LIGHT) * b / 4096) as u8
 }
 
 /// Block light at a cell for mob spawning, Java's rule: an emitter's level
@@ -11461,32 +11626,36 @@ pub(crate) fn block_light(x: i32, y: i32, z: i32) -> i32 {
     best.max(0)
 }
 
-/// Sky light (0..128) for a point in the day. Trapezoid: ~40% full day, short
-/// dusk down to night, ~40% night, short dawn back up.
-fn day_brightness(t: u32) -> u8 {
-    let t = java_time(t);
-    if t < 12_000 {
-        128
-    } else if t < 13_000 {
-        lerp_u8(128, NIGHT_LIGHT, t - 12_000, 1000)
-    } else if t < 23_000 {
-        NIGHT_LIGHT as u8
-    } else {
-        lerp_u8(NIGHT_LIGHT, 128, t - 23_000, 1000)
-    }
-}
-
 /// A point in the day on Java's 24,000-tick clock: 0 sunrise, 6,000 noon,
 /// 12,000 sunset, 18,000 midnight (minecraft.wiki/w/Daylight cycle).
 fn java_time(t: u32) -> i32 {
     (t as i32 % DAY_LEN as i32) * 24_000 / DAY_LEN as i32
 }
 
-/// Java lets you sleep from tick 12,542 to 23,459 in clear weather
-/// (minecraft.wiki/w/Daylight cycle).
+/// Java lets you sleep when it is not day, that is when the internal sky
+/// light is 11 or less, or in a thunderstorm: 12,542 to 23,459 in clear
+/// weather, 12,010 to 23,991 in rain (minecraft.wiki/w/Daylight_cycle,
+/// /w/Light#Internal sky light).
 fn bed_time(t: u32) -> bool {
-    let j = java_time(t);
-    j >= 12_542 && j < 23_460
+    sky_level(t) <= 11 || weather_now().1
+}
+
+/// The internal sky light mob spawning reads: the table's, except that in a
+/// thunderstorm hostile mobs spawn as if it were 5 (minecraft.wiki/w/Light).
+fn spawn_sky(t: u32) -> i32 {
+    let l = sky_level(t);
+    if weather_now().1 {
+        l.min(5)
+    } else {
+        l
+    }
+}
+
+/// Undead burn while it is day: internal sky light 12 or more (from 23,460
+/// to 12,541 in clear weather, minecraft.wiki/w/Daylight_cycle) and not in
+/// rain, which wets them.
+fn undead_burn_time(t: u32) -> bool {
+    sky_level(t) >= 12 && rain_amount() <= 128
 }
 
 #[inline]
@@ -11494,31 +11663,30 @@ fn lerp_u8(a: i32, b: i32, num: i32, den: i32) -> u8 {
     (a + (b - a) * num / den).clamp(0, 255) as u8
 }
 
-/// Warm the horizon toward sunset orange during the dawn/dusk transition windows
-/// (day_brightness ramps light over 4q..5q dusk and 9q..10q dawn). Warmth peaks
-/// mid-window and is zero in full day/night; rain suppresses it. Only the sky
-/// horizon is tinted -- the terrain keeps the day/night light.
 /// Warm orange glow colour at the horizon around sunrise/sunset.
 const SUNSET: (i32, i32, i32) = (236, 122, 60);
 
-/// How warm the horizon is right now, 0..255. Split out of `apply_sunset` so
-/// `draw_sky` can apply it PER AZIMUTH: Java's sunset is a band in the sun's
-/// direction only, and tinting all 360 degrees at once (which is what the old
-/// single-colour horizon did) is the least Minecraft-looking thing the sky did.
+/// How warm the horizon is right now, 0..255: Java's sunrise colour band
+/// (its sky renderer's sunrise colour), which glows while the sun is within
+/// an elevation of 0.4 of the horizon, peaks as it crosses (12,786 and
+/// 23,216) and fades as (1 - 0.99 (1 - sin(pi f)))^2. It used to ramp on the
+/// light windows 12,000-13,000 and 23,000-24,000, a sunset before sundown.
+/// Split out of `apply_sunset` so `draw_sky` can apply it PER AZIMUTH: Java's
+/// sunset is a band in the sun's direction only.
 fn sunset_warmth(tod: u32, raining: bool) -> i32 {
     if raining {
         return 0;
     }
-    let t = java_time(tod);
-    let window = |start: i32| -> i32 {
-        let d = t - start;
-        if d < 0 || d >= 1000 {
-            return 0;
-        }
-        let m = if d < 500 { d } else { 1000 - d };
-        m * 255 / 500
-    };
-    window(12_000).max(window(23_000)) // dusk, then dawn
+    let h = sun_height_q12(java_time(tod)); // Q12 elevation
+    let band = 4096 * 4 / 10;
+    if h < -band || h > band {
+        return 0;
+    }
+    // f = h / 0.4 * 0.5 + 0.5, Q12; sin(pi f) is a half turn of f.
+    let f = (h * 2048 / band + 2048).clamp(0, 4096);
+    let sn = sincos::sin_q12((f / 2) as u16);
+    let a = 4096 - (4096 - sn) * 99 / 100;
+    (a * a / 4096) * 255 / 4096
 }
 
 fn apply_sunset(sky: (u8, u8, u8), tod: u32, raining: bool) -> (u8, u8, u8) {
