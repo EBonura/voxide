@@ -2810,7 +2810,7 @@ fn main() {
                             unsafe { OPT_MSG = "" };
                         }
                         OPT_SAVE => {
-                            let ok = save::save(&player);
+                            let ok = save::save(&player, day);
                             unsafe {
                                 OPT_MSG = if ok {
                                     "SAVED"
@@ -2829,7 +2829,7 @@ fn main() {
                             unsafe { OPT_MSG = "" };
                         }
                         OPT_LOAD => {
-                            if load_game(&mut player, &mut fb, &font) {
+                            if load_game(&mut player, &mut day, &mut fb, &font) {
                                 // A save made at the Void arrival point loads
                                 // standing in the rebuilt return portal: be
                                 // immune until you step out, as on arrival.
@@ -4727,13 +4727,27 @@ fn enchant_next(p: &Player) -> u8 {
 /// different chunk. False, with nothing changed, when there is no save.
 #[inline(never)]
 #[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
-fn load_game(player: &mut Player, fb: &mut FrameBuffer, font: &FontAtlas) -> bool {
-    let Some(dim) = save::load(player) else {
+fn load_game(player: &mut Player, day: &mut u32, fb: &mut FrameBuffer, font: &FontAtlas) -> bool {
+    let Some((dim, meta)) = save::load(player) else {
         return false;
     };
     let (bx, bz) = (world_to_block_x(player.x), world_to_block_z(player.z));
-    if dim != world::dimension() {
-        enter_dimension(dim, bx, bz, fb, font);
+    // Always rebuild the ring on the save's seed: the loaded edit log is the
+    // world now. The session's mobs, drops and fuses go with the old one.
+    mob::reset();
+    clear_world_entities();
+    world::reload(dim, meta.seed, bx, bz, |done, total| {
+        draw_loading(fb, font, done, total)
+    });
+    finish_loading(fb, font);
+    if let Some((rx, rz)) = meta.respawn {
+        unsafe {
+            RESPAWN_BX = rx;
+            RESPAWN_BZ = rz;
+        }
+    }
+    if let Some(d) = meta.day {
+        *day = d;
     }
     save::apply_edits();
     regrow_from_edits();

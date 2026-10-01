@@ -113,6 +113,22 @@ fn seedx() -> i32 {
     SEED ^ unsafe { SEED_XTRA }
 }
 
+/// The NEW WORLD seed in use (0 = the default world), for the save.
+pub fn seed_extra() -> i32 {
+    unsafe { SEED_XTRA }
+}
+
+/// Rebuild the ring for `dim` around (bx, bz) on the seed `extra`, even when
+/// the dimension and seed are the ones loaded: a load replaces the world, and
+/// the old early return in set_dimension kept every chunk holding the
+/// session's edits, so blocks placed after a save survived its load (an item
+/// duplication), and a NEW WORLD save replayed onto the default terrain.
+pub fn reload<F: FnMut(usize, usize)>(dim: u8, extra: i32, bx: i32, bz: i32, mut progress: F) {
+    prepare_new_world(extra);
+    unsafe { DIM = dim };
+    sync_init(bx, bz, &mut progress);
+}
+
 /// Reset every chunk/pool/stream static so `init` can regenerate a fresh world
 /// with `extra` mixed into the seed (the "NEW WORLD" path).
 pub fn prepare_new_world(extra: i32) {

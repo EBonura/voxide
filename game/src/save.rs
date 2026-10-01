@@ -25,7 +25,7 @@ const MAGIC_V1: [u8; 4] = *b"MCPX";
 /// VERSION and teaches `layout` where its sections moved; every older version
 /// still loads.
 const MAGIC: [u8; 4] = *b"VOXS";
-const VERSION: u16 = 9;
+const VERSION: u16 = 10;
 /// BIOS file name: region+product code + label, 20 ASCII chars max.
 const FILE_NAME: &str = "BESLES-00000VOXIDE01";
 /// Human-readable label shown by the console's memory-card manager.
@@ -65,6 +65,11 @@ const V1_HDR: usize = V1_PROGRESS + 9; // armor u8, efficiency u8, xp i32, 3 too
 // axe, shovel, sword), armour pieces [u16; 4], bow / rod / flint and steel
 // [u16; 3], pad u16. Older saves load with every owned tool and armour piece
 // at full durability.
+// Version 10 appends the world after that: the NEW WORLD seed i32, the
+// respawn column (bx i32, bz i32), the day clock u32, then the tamed wolves:
+// count u8, pad [u8; 3], and TAMED_CAP records of dimension u8, pad u8,
+// health i16, x y z i32. Older saves load as the default world (seed 0),
+// keep the session's respawn point and day, and have no tamed wolves.
 const OFF_HOTBAR_SEL: usize = 41;
 const OFF_HOTBAR: usize = 42;
 const OFF_INV: usize = 52;
@@ -88,16 +93,20 @@ struct Layout {
     hunger: bool,
     /// Durability follows the hunger state.
     durability: bool,
+    /// Seed, respawn, day and tamed wolves follow the durability.
+    world: bool,
 }
 
 const fn layout(version: u16) -> Layout {
     let extras = version >= 3;
     let hunger = version >= 8;
     let durability = version >= 9;
+    let world = version >= 10;
     let counts = OFF_EXTRA
         + if extras { 8 } else { 0 }
         + if hunger { 8 } else { 0 }
-        + if durability { 24 } else { 0 };
+        + if durability { 24 } else { 0 }
+        + if world { WORLD_BYTES } else { 0 };
     Layout {
         extras,
         dim: version >= 5,
@@ -108,6 +117,32 @@ const fn layout(version: u16) -> Layout {
         half_fuel: version >= 7,
         hunger,
         durability,
+        world,
+    }
+}
+
+const OFF_WORLD: usize = OFF_EXTRA + 40;
+const OFF_WOLVES: usize = OFF_WORLD + 20;
+const WOLF_REC: usize = 16;
+const WORLD_BYTES: usize = 20 + crate::mob::TAMED_CAP * WOLF_REC;
+
+/// What a save says about the world itself, for the caller to rebuild it.
+pub struct WorldMeta {
+    /// The NEW WORLD seed (0 = the default world).
+    pub seed: i32,
+    /// Respawn column and day clock; None for saves before version 10.
+    pub respawn: Option<(i32, i32)>,
+    pub day: Option<u32>,
+}
+
+/// An id read off the card, kept inside the item tables: a corrupt byte used
+/// to index INV out of range and hang the game.
+#[inline]
+fn kind(b: u8) -> u8 {
+    if (b as usize) < BLOCK_KINDS {
+        b
+    } else {
+        AIR
     }
 }
 
@@ -178,7 +213,7 @@ pub fn selftest() -> bool {
 /// card file. Formats a blank card first; overwrites any previous VOXIDE save.
 #[inline(never)]
 #[optimize(size)] // card I/O dominates; keep the bytes
-pub fn save(p: &Player) -> bool {
+pub fn save(p: &Player, day: u32) -> bool {
     let buf = unsafe { &mut BUF[..] };
     buf[..4].copy_from_slice(&MAGIC);
     put_u16(buf, 4, VERSION);
@@ -230,6 +265,28 @@ pub fn save(p: &Player) -> bool {
         k += 1;
     }
     put_u16(buf, OFF_EXTRA + 38, 0);
+    put_i32(buf, OFF_WORLD, crate::world::seed_extra());
+    unsafe {
+        put_i32(buf, OFF_WORLD + 4, crate::RESPAWN_BX);
+        put_i32(buf, OFF_WORLD + 8, crate::RESPAWN_BZ);
+    }
+    put_i32(buf, OFF_WORLD + 12, day as i32);
+    let mut wolves = [crate::mob::NO_PARKED; crate::mob::TAMED_CAP];
+    let nw = crate::mob::tamed_list(&mut wolves);
+    buf[OFF_WORLD + 16] = nw as u8;
+    buf[OFF_WORLD + 17..OFF_WORLD + 20].fill(0);
+    let mut w = 0;
+    while w < crate::mob::TAMED_CAP {
+        let o = OFF_WOLVES + w * WOLF_REC;
+        let r = wolves[w];
+        buf[o] = r.dim;
+        buf[o + 1] = 0;
+        put_i16(buf, o + 2, r.hp);
+        put_i32(buf, o + 4, r.x);
+        put_i32(buf, o + 8, r.y);
+        put_i32(buf, o + 12, r.z);
+        w += 1;
+    }
 
     let mut off = CUR.hdr;
     let mut chests = 0u8;
@@ -316,7 +373,7 @@ pub fn save(p: &Player) -> bool {
 /// cannot say which dimension the player was in without guessing.
 #[inline(never)]
 #[optimize(size)] // card I/O dominates; keep the bytes
-pub fn load(p: &mut Player) -> Option<u8> {
+pub fn load(p: &mut Player) -> Option<(u8, WorldMeta)> {
     let buf = unsafe { &mut BUF[..] };
     let len = match card().read(FILE_NAME, buf) {
         Ok(len) => len.min(buf.len()),
@@ -326,7 +383,13 @@ pub fn load(p: &mut Player) -> Option<u8> {
         load_v1(p, &buf[..len]);
         crate::mob::set_dragon_slain(false);
         crate::cheat::set_used(false);
-        Some(crate::world::DIM_OVERWORLD)
+        crate::mob::set_tamed(&[]);
+        let meta = WorldMeta {
+            seed: 0,
+            respawn: None,
+            day: None,
+        };
+        Some((crate::world::DIM_OVERWORLD, meta))
     } else if len >= 6 && buf[..4] == MAGIC && (2..=VERSION).contains(&get_u16(buf, 4)) {
         let l = layout(get_u16(buf, 4));
         if len < l.hdr || !load_versioned(p, &buf[..len], l) {
@@ -335,11 +398,42 @@ pub fn load(p: &mut Player) -> Option<u8> {
         crate::mob::set_dragon_slain(l.flags && buf[7] & 1 != 0);
         crate::cheat::set_used(l.flags && buf[7] & 2 != 0);
         let d = buf[6];
-        Some(if l.dim && d <= crate::world::DIM_VOID {
+        let dim = if l.dim && d <= crate::world::DIM_VOID {
             d
         } else {
             crate::world::DIM_OVERWORLD
-        })
+        };
+        let meta = if l.world {
+            let mut wolves = [crate::mob::NO_PARKED; crate::mob::TAMED_CAP];
+            let nw = (buf[OFF_WORLD + 16] as usize).min(crate::mob::TAMED_CAP);
+            let mut w = 0;
+            while w < nw {
+                let o = OFF_WOLVES + w * WOLF_REC;
+                wolves[w] = crate::mob::Parked {
+                    used: true,
+                    dim: buf[o].min(crate::world::DIM_VOID),
+                    hp: get_i16(buf, o + 2).max(1),
+                    x: get_i32(buf, o + 4),
+                    y: get_i32(buf, o + 8),
+                    z: get_i32(buf, o + 12),
+                };
+                w += 1;
+            }
+            crate::mob::set_tamed(&wolves[..nw]);
+            WorldMeta {
+                seed: get_i32(buf, OFF_WORLD),
+                respawn: Some((get_i32(buf, OFF_WORLD + 4), get_i32(buf, OFF_WORLD + 8))),
+                day: Some(get_i32(buf, OFF_WORLD + 12) as u32),
+            }
+        } else {
+            crate::mob::set_tamed(&[]);
+            WorldMeta {
+                seed: 0,
+                respawn: None,
+                day: None,
+            }
+        };
+        Some((dim, meta))
     } else {
         None
     }
@@ -353,7 +447,7 @@ fn load_v1(p: &mut Player, buf: &[u8]) {
     p.z = get_i32(buf, 12);
     p.yaw = get_u16(buf, 16);
     p.pick = buf[18];
-    p.selected = buf[19];
+    p.selected = kind(buf[19]);
     p.health = get_i32(buf, 20);
     p.food = get_i32(buf, 24);
     let mut k = 0;
@@ -430,9 +524,9 @@ fn load_versioned(p: &mut Player, buf: &[u8], l: Layout) -> bool {
     p.z = get_i32(buf, 16);
     p.yaw = get_u16(buf, 20);
     p.pick = buf[22];
-    p.selected = buf[23];
+    p.selected = kind(buf[23]);
     p.health = get_i32(buf, 24);
-    p.food = get_i32(buf, 28);
+    p.food = get_i32(buf, 28).clamp(0, crate::MAX_FOOD);
     p.armor = buf[32];
     p.efficiency = buf[33];
     p.xp = get_i32(buf, 34);
@@ -471,7 +565,7 @@ fn load_versioned(p: &mut Player, buf: &[u8], l: Layout) -> bool {
         HOTBAR_SEL = (buf[OFF_HOTBAR_SEL] as usize).min(HOTBAR_VIS - 1);
         let mut h = 0;
         while h < HOTBAR_VIS {
-            HOTBAR[h] = buf[OFF_HOTBAR + h];
+            HOTBAR[h] = kind(buf[OFF_HOTBAR + h]);
             h += 1;
         }
         let mut k = 0;
@@ -509,8 +603,8 @@ fn load_versioned(p: &mut Player, buf: &[u8], l: Layout) -> bool {
             FURN_Z[i] = get_i16(buf, off + 4) as i32;
             FURN_D[i] = if l.pos > 6 { buf[off + 6] } else { 0 };
             let o = off + l.pos;
-            FURN_IN[i] = buf[o];
-            FURN_OUT[i] = buf[o + 1];
+            FURN_IN[i] = kind(buf[o]);
+            FURN_OUT[i] = kind(buf[o + 1]);
             FURN_IN_N[i] = get_u16(buf, o + 2);
             FURN_FUEL[i] = get_u16(buf, o + 4);
             if !l.half_fuel {
@@ -536,7 +630,7 @@ fn read_edits(buf: &[u8], base: usize, n: usize) {
             EDIT_X[idx] = get_i16(buf, off);
             EDIT_Y[idx] = get_i16(buf, off + 2);
             EDIT_Z[idx] = get_i16(buf, off + 4);
-            EDIT_B[idx] = buf[off + 6];
+            EDIT_B[idx] = kind(buf[off + 6]);
             // The record's last byte was pad before dimensions existed; it
             // reads back 0 (= overworld) on saves written before them.
             EDIT_D[idx] = buf[off + 7];
