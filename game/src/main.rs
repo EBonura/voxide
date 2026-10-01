@@ -5359,6 +5359,10 @@ fn update_player(
     let dx = qx >> 8;
     let dz = qz >> 8;
 
+    // The hurt tilt decays in flight too; it used to freeze while flying.
+    if player.hurt_tilt > 0 {
+        player.hurt_tilt -= 1;
+    }
     if player.fly {
         // Fly along the FULL look vector, pitch included. dx/dz above are built
         // from yaw only, which is right for walking but made flying feel like
@@ -5388,15 +5392,15 @@ fn update_player(
         // the chunk's y range, where every lookup reads AIR.
         player.y = player.y.clamp(BLOCK, (world::CH - 2) * BLOCK);
         player.on_ground = false;
+        // Flying cancels the fall, as in Java: switching flight off counts a
+        // fall from there, not from wherever you last stood.
+        player.fall_peak = player.y;
     } else {
         let was_ground = player.on_ground;
         // Bob phase advances with GROUND distance covered, so it freezes the
         // instant you stop and speeds up when you sprint, for free.
         if was_ground {
             player.bob = player.bob.wrapping_add((dx.abs() + dz.abs()) as u32);
-        }
-        if player.hurt_tilt > 0 {
-            player.hurt_tilt -= 1;
         }
         // Collide-and-slide, axis-separated: undo whichever axis hits a wall so
         // the other still moves (lets the player slide along faces).
