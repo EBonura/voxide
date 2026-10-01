@@ -111,8 +111,69 @@ const FLEE_TICKS: u16 = secs(3) as u16;
 const DRAGON_Q8: i32 = q8(469);
 /// Melee knockback, units (one shove per hit, not per tick).
 const KNOCKBACK: i32 = 15;
-const CHASE_R: i32 = 12 * BLOCK; // hostile aggro radius
-const LOSE_R: i32 = 18 * BLOCK; // give-up radius
+const CHASE_R: i32 = 12 * BLOCK; // aggro radius of kinds without a Java value here
+const LOSE_R: i32 = 18 * BLOCK; // give-up radius for those
+/// Java's follow ranges: zombies pursue from 35 blocks (minecraft.wiki/w/
+/// Zombie), skeletons 16 (/w/Skeleton), creepers 16 (/w/Creeper). Mobs
+/// despawn past DESPAWN_R, the edge of the streamed ring, so a zombie hunts
+/// from 28 blocks here (PS1 limit: the 30-block ring).
+fn follow_r(kind: u8) -> i32 {
+    match kind {
+        ZOMBIE => 28 * BLOCK,
+        SKELETON | SAPPER => 16 * BLOCK,
+        _ => CHASE_R,
+    }
+}
+fn lose_r(kind: u8) -> i32 {
+    match kind {
+        ZOMBIE | SKELETON | SAPPER => follow_r(kind) + 2 * BLOCK,
+        _ => LOSE_R,
+    }
+}
+/// Skeletons shoot within 15 blocks with a clear line of sight and back off
+/// inside 4 (minecraft.wiki/w/Skeleton).
+const SHOOT_R: i32 = 15 * BLOCK;
+const RETREAT_R: i32 = 4 * BLOCK;
+/// A creeper lights its fuse within 3 blocks and gives up past 7 or out of
+/// sight (minecraft.wiki/w/Creeper).
+const FUSE_START_R: i32 = 3 * BLOCK;
+const FUSE_KEEP_R: i32 = 7 * BLOCK;
+/// Tamed wolves (minecraft.wiki/w/Wolf): follow past 10 blocks, teleport past
+/// 12 (16 while fighting), bite for 4.
+const WOLF_FOLLOW_R: i32 = 10 * BLOCK;
+const WOLF_STOP_R: i32 = 2 * BLOCK;
+const WOLF_TELEPORT_R: i32 = 12 * BLOCK;
+const WOLF_TELEPORT_FIGHT_R: i32 = 16 * BLOCK;
+const WOLF_BITE: i16 = 4;
+/// Java's melee goal strikes every 20 game ticks (its MeleeAttackGoal; the
+/// wiki gives no figure).
+const WOLF_BITE_TICKS: u16 = java_ticks(20) as u16;
+/// Tamed wolves kept off the mob pool: in another dimension, or left behind
+/// outside the loaded ring (Java's unloaded chunk). Saved with the world.
+pub const TAMED_CAP: usize = 4;
+#[derive(Copy, Clone)]
+pub struct Parked {
+    pub used: bool,
+    pub dim: u8,
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+    pub hp: i16,
+}
+pub const NO_PARKED: Parked = Parked {
+    used: false,
+    dim: 0,
+    x: 0,
+    y: 0,
+    z: 0,
+    hp: 0,
+};
+static mut PARKED: [Parked; TAMED_CAP] = [NO_PARKED; TAMED_CAP];
+/// The mob tamed wolves go for: the last one the player hit or that hurt the
+/// player, or a skeleton near the pack. CAP = none.
+static mut PACK_TGT: usize = CAP;
+/// Per-slot line of sight to the player, refreshed every 10 ticks.
+static mut SIGHT: [bool; CAP] = [false; CAP];
 const LURE_R: i32 = 8 * BLOCK; // passive-animal follow radius when luring with wheat
 const DESPAWN_R: i32 = 30 * BLOCK;
 const SPAWN_MIN: i32 = 8 * BLOCK;
@@ -168,10 +229,13 @@ const DEAD: Mob = Mob {
 
 // Arrows fired by skeletons.
 const ARROW_CAP: usize = 8;
-/// Skeleton arrows: 26 units a tick along the Manhattan-normalised aim with 2
-/// units a tick of drop (Java's skeleton launch speed is not documented).
-const ARROW_SPEED: i32 = 26;
-const ARROW_GRAVITY: i32 = 2 * 256;
+/// Skeleton arrows fly like every arrow, on the bow's gravity and drag
+/// (minecraft.wiki/w/Arrow). The launch speed is not on the wiki: Java's
+/// skeleton shoots at 1.6 blocks a game tick (32 blocks/s), aimed above the
+/// target by a fifth of the horizontal distance to carry it there. They used
+/// to fly 26 units a tick on a Manhattan-normalised aim with a steep drop, and
+/// fell short past about 5 blocks.
+const SKEL_Q8: i32 = crate::units::cbps_q8(3200);
 /// Player arrows, Java's bow at full draw: 3 blocks a game tick (60 blocks/s,
 /// a block a sim tick), gravity 0.05 blocks/tick^2 and 0.99 drag a game tick
 /// (minecraft.wiki/w/Arrow), spread over three sim ticks: 91/256 of a unit a
@@ -281,7 +345,7 @@ pub fn clear_deaths() {
         DEATH_N = 0;
     }
 }
-static mut LURE: bool = false; // true while the player holds wheat (animals follow)
+static mut LURE: u8 = 0; // the item the player holds (animals follow their food)
 
 /// Take and clear accumulated XP from kills this frame.
 pub fn take_xp() -> u16 {
@@ -293,9 +357,20 @@ pub fn take_xp() -> u16 {
 }
 
 /// Set each frame: passive animals follow the player while this is true.
-pub fn set_lure(on: bool) {
+pub fn set_lure(item: u8) {
     unsafe {
-        LURE = on;
+        LURE = item;
+    }
+}
+
+/// What tempts and breeds each animal (minecraft.wiki/w/Breeding): cows and
+/// sheep wheat, chickens seeds. Pigs take carrots in Java; with no carrots
+/// here they keep wheat. Villagers are not fed by hand.
+fn eats(kind: u8, item: u8) -> bool {
+    match kind {
+        COW | SHEEP | PIG => item == crate::WHEAT_ITEM,
+        CHICKEN => item == crate::SEEDS,
+        _ => false,
     }
 }
 
@@ -445,12 +520,24 @@ fn try_spawn(px: i32, pz: i32, sky: i32) {
         Some(s) => s,
         None => return,
     };
-    // Random offset ring around the player.
-    let ang = rng();
-    let dx = SPAWN_MIN + (ang % (SPAWN_MAX - SPAWN_MIN) as u32) as i32;
-    let dz = SPAWN_MIN + ((ang >> 8) % (SPAWN_MAX - SPAWN_MIN) as u32) as i32;
-    let sx = if ang & 1 == 0 { px + dx } else { px - dx };
-    let sz = if ang & 2 == 0 { pz + dz } else { pz - dz };
+    // A random point in the ring SPAWN_MIN..SPAWN_MAX around the player. It
+    // used to draw both offsets from 8..14 blocks, four diagonal squares that
+    // never put a mob anywhere near either axis.
+    let span = (2 * SPAWN_MAX + 1) as u32;
+    let mut k = 0;
+    let (sx, sz) = loop {
+        if k >= 4 {
+            return;
+        }
+        let r = rng();
+        let dx = (r % span) as i32 - SPAWN_MAX;
+        let dz = ((r >> 12) % span) as i32 - SPAWN_MAX;
+        let d2 = dx * dx + dz * dz;
+        if d2 >= SPAWN_MIN * SPAWN_MIN && d2 <= SPAWN_MAX * SPAWN_MAX {
+            break (px + dx, pz + dz);
+        }
+        k += 1;
+    };
     let bx = world_to_block_x(sx);
     let bz = world_to_block_z(sz);
     let top = world::surface_y(bx, bz);
@@ -851,6 +938,14 @@ pub fn update(px: i32, py: i32, pz: i32, sky: i32) {
 
     unsafe {
         BURN_TICK = BURN_TICK.wrapping_add(1);
+        let t = PACK_TGT;
+        if t < CAP && !MOBS[t].alive {
+            PACK_TGT = CAP;
+        }
+    }
+    if unsafe { BURN_TICK } % secs(1) as u16 == 0 {
+        unpark_near(px, pz);
+        pack_pick_skeleton(px, pz);
     }
     let mut i = 0;
     while i < CAP {
@@ -896,6 +991,38 @@ pub fn update(px: i32, py: i32, pz: i32, sky: i32) {
     update_arrows(px, py, pz);
 }
 
+/// A pack with nothing to fight goes for a skeleton within 16 blocks of the
+/// owner: standing tamed wolves attack skeletons unprovoked
+/// (minecraft.wiki/w/Wolf).
+fn pack_pick_skeleton(px: i32, pz: i32) {
+    if unsafe { PACK_TGT } < CAP {
+        return;
+    }
+    let mut wolves = false;
+    let mut i = 0;
+    while i < CAP {
+        wolves |= is_tamed(i);
+        i += 1;
+    }
+    if !wolves {
+        return;
+    }
+    let r = 16 * BLOCK;
+    let mut i = 0;
+    while i < CAP {
+        let m = unsafe { MOBS[i] };
+        if m.alive
+            && (m.kind == SKELETON || m.kind == CHARRED_SK)
+            && (m.x - px).abs() < r
+            && (m.z - pz).abs() < r
+        {
+            unsafe { PACK_TGT = i };
+            return;
+        }
+        i += 1;
+    }
+}
+
 /// Pair up two nearby in-love same-kind animals into a new one, then clear both.
 fn breed_tick() {
     let mut i = 0;
@@ -909,7 +1036,7 @@ fn breed_tick() {
                     let d = (mi.x - mj.x).abs() + (mi.z - mj.z).abs();
                     if d < 2 * BLOCK {
                         let (cx, cz) = ((mi.x + mj.x) / 2, (mi.z + mj.z) / 2);
-                        spawn_offspring(mi.kind, cx, cz);
+                        spawn_offspring(mi.kind, mi.x, mi.y, mi.z);
                         unsafe {
                             MOBS[i].love = 0;
                             MOBS[j].love = 0;
@@ -935,21 +1062,20 @@ fn breed_tick() {
     }
 }
 
-fn spawn_offspring(kind: u8, x: i32, z: i32) {
+/// The young appear at a parent, as in Java; they used to drop onto the
+/// column's surface, on the roof over a barn.
+fn spawn_offspring(kind: u8, x: i32, y: i32, z: i32) {
     let s = match free_slot() {
         Some(s) => s,
         None => return,
     };
-    let bx = world_to_block_x(x);
-    let bz = world_to_block_z(z);
-    let sy = world::surface_y(bx, bz);
     unsafe {
         MOBS[s] = Mob {
             kind,
             alive: true,
             on_ground: false,
             x,
-            y: sy * BLOCK,
+            y,
             z,
             vy: 0,
             health: max_health(kind),
@@ -966,43 +1092,36 @@ fn spawn_offspring(kind: u8, x: i32, z: i32) {
     }
 }
 
-/// Feed wheat to the nearest passive animal in front (within reach): it enters
-/// "love mode". Returns true if an animal was fed (so the caller spends a wheat).
-pub fn feed(px: i32, py: i32, pz: i32, fx: i32, fz: i32, reach: i32) -> bool {
-    let mut best = CAP;
-    let mut best_d = reach * reach;
-    let mut i = 0;
-    while i < CAP {
-        let m = unsafe { MOBS[i] };
-        if m.alive && !is_hostile(m.kind) && m.love == 0 && m.cool == 0 {
-            let dx = m.x - px;
-            let dz = m.z - pz;
-            let dy = (m.y - py).abs();
-            if dx * fx + dz * fz > 0 && dy < 2 * BLOCK {
-                let d2 = dx * dx + dz * dz;
-                if d2 < best_d {
-                    best_d = d2;
-                    best = i;
-                }
-            }
-        }
-        i += 1;
-    }
-    if best == CAP {
+/// Feed mob `t`, the one under the crosshair, the held `item`: an animal
+/// takes its breeding food (`eats`) into love mode, a tamed wolf below full
+/// health takes meat and heals by its hunger points (raw meat 3, steak 8:
+/// minecraft.wiki/w/Wolf, /w/Raw_Beef, /w/Steak). True when it was eaten.
+/// It used to feed the nearest animal in front of you, whatever it ate.
+pub fn feed(t: usize, item: u8) -> bool {
+    if t >= CAP {
         return false;
     }
-    unsafe {
-        MOBS[best].love = LOVE_TICKS;
-        crate::spawn_particles(
-            MOBS[best].x,
-            MOBS[best].y + BLOCK,
-            MOBS[best].z,
-            (240, 120, 170),
-            5,
-            best as u32,
-            12,
-        );
+    let mut m = unsafe { MOBS[t] };
+    if !m.alive {
+        return false;
     }
+    if m.kind == WOLF && m.love == u16::MAX {
+        let heal = match item {
+            crate::RAW_MEAT => 3,
+            crate::COOKED_MEAT => 8,
+            _ => return false,
+        };
+        if m.health >= TAMED_WOLF_HEALTH {
+            return false;
+        }
+        m.health = (m.health + heal).min(TAMED_WOLF_HEALTH);
+    } else if eats(m.kind, item) && m.love == 0 && m.cool == 0 {
+        m.love = LOVE_TICKS;
+    } else {
+        return false;
+    }
+    unsafe { MOBS[t] = m };
+    crate::spawn_particles(m.x, m.y + BLOCK, m.z, (240, 120, 170), 5, t as u32, 12);
     true
 }
 
@@ -1044,10 +1163,22 @@ fn sun_burn(i: usize) {
     if m.kind != ZOMBIE && m.kind != SKELETON {
         return;
     }
+    // Java's undead burn only under open sky and out of water (minecraft.wiki
+    // /w/Zombie, /w/Skeleton): any block overhead, leaves included, shades
+    // them, and water puts them out. surface_y skips leaves and water, so
+    // they used to burn under trees and at the bottom of lakes.
     let bx = world_to_block_x(m.x);
     let bz = world_to_block_z(m.z);
-    if world_to_block_y(m.y) < world::surface_y(bx, bz) {
-        return; // sheltered below the surface
+    let by = world_to_block_y(m.y);
+    if crate::is_water(world::get(bx, by, bz)) || crate::is_water(world::get(bx, by + 1, bz)) {
+        return;
+    }
+    let mut y = by + 2;
+    while y < world::CH {
+        if world::get(bx, y, bz) != crate::AIR {
+            return; // shaded
+        }
+        y += 1;
     }
     crate::spawn_particles(
         m.x,
@@ -1066,6 +1197,154 @@ fn sun_burn(i: usize) {
     } else {
         unsafe {
             MOBS[i] = m;
+        }
+    }
+}
+
+/// Line of sight between two points (world units): sampled every quarter
+/// block, blocked by any solid block. Java's mobs need sight to pick a
+/// target, a skeleton to shoot and a creeper to keep its fuse lit.
+fn sees(ax: i32, ay: i32, az: i32, bx: i32, by: i32, bz: i32) -> bool {
+    let (dx, dy, dz) = (bx - ax, by - ay, bz - az);
+    let n = (dx.abs().max(dy.abs()).max(dz.abs()) / 16).max(1);
+    let mut k = 1;
+    while k < n {
+        if solid(ax + dx * k / n, ay + dy * k / n, az + dz * k / n) {
+            return false;
+        }
+        k += 1;
+    }
+    true
+}
+
+/// Experience a kill drops (minecraft.wiki/w/Experience): monsters 5, animals
+/// and wolves 1 to 3, villagers none.
+fn xp_for(kind: u8) -> u16 {
+    if kind == VILLAGER {
+        0
+    } else if is_hostile(kind) {
+        5
+    } else {
+        1 + (rng() % 3) as u16
+    }
+}
+
+pub fn is_tamed(i: usize) -> bool {
+    i < CAP && unsafe { MOBS[i].alive && MOBS[i].kind == WOLF && MOBS[i].love == u16::MAX }
+}
+
+/// Put a tamed wolf on the parked list. False when the list is full (the
+/// wolf is then lost: Java keeps any number, the PS1 build keeps four).
+fn park(m: &Mob) -> bool {
+    let dim = world::dimension();
+    unsafe {
+        let mut k = 0;
+        while k < TAMED_CAP {
+            if !PARKED[k].used {
+                PARKED[k] = Parked {
+                    used: true,
+                    dim,
+                    x: m.x,
+                    y: m.y,
+                    z: m.z,
+                    hp: m.health,
+                };
+                return true;
+            }
+            k += 1;
+        }
+    }
+    false
+}
+
+/// Leaving this dimension: tamed wolves go on the parked list, everything
+/// else in the pool belonged to this dimension and is dropped.
+pub fn leave_dimension() {
+    let mut i = 0;
+    while i < CAP {
+        if is_tamed(i) {
+            let m = unsafe { MOBS[i] };
+            park(&m);
+        }
+        i += 1;
+    }
+    reset();
+}
+
+/// Bring parked wolves of this dimension back once their spot is inside the
+/// loaded ring again.
+fn unpark_near(px: i32, pz: i32) {
+    let dim = world::dimension();
+    let mut k = 0;
+    while k < TAMED_CAP {
+        let p = unsafe { PARKED[k] };
+        if p.used
+            && p.dim == dim
+            && (p.x - px).abs() < DESPAWN_R - 4 * BLOCK
+            && (p.z - pz).abs() < DESPAWN_R - 4 * BLOCK
+        {
+            if let Some(s) = free_slot() {
+                unsafe {
+                    MOBS[s] = Mob {
+                        kind: WOLF,
+                        alive: true,
+                        x: p.x,
+                        y: p.y,
+                        z: p.z,
+                        health: p.hp,
+                        love: u16::MAX,
+                        ..DEAD
+                    };
+                    PARKED[k] = NO_PARKED;
+                }
+            }
+        }
+        k += 1;
+    }
+}
+
+/// Every tamed wolf in the world, for the save: parked ones and those in
+/// the pool (in this dimension). Returns how many were written.
+pub fn tamed_list(out: &mut [Parked; TAMED_CAP]) -> usize {
+    let mut n = 0;
+    let mut k = 0;
+    while k < TAMED_CAP {
+        let p = unsafe { PARKED[k] };
+        if p.used && n < TAMED_CAP {
+            out[n] = p;
+            n += 1;
+        }
+        k += 1;
+    }
+    let dim = world::dimension();
+    let mut i = 0;
+    while i < CAP {
+        if is_tamed(i) && n < TAMED_CAP {
+            let m = unsafe { MOBS[i] };
+            out[n] = Parked {
+                used: true,
+                dim,
+                x: m.x,
+                y: m.y,
+                z: m.z,
+                hp: m.health,
+            };
+            n += 1;
+        }
+        i += 1;
+    }
+    n
+}
+
+/// A loaded save's tamed wolves: all parked, so they come back as the ring
+/// reaches them.
+pub fn set_tamed(list: &[Parked]) {
+    unsafe {
+        PARKED = [NO_PARKED; TAMED_CAP];
+        let mut k = 0;
+        while k < list.len() && k < TAMED_CAP {
+            PARKED[k] = list[k];
+            k += 1;
         }
     }
 }
@@ -1098,18 +1377,19 @@ fn shoot_arrow(sx: i32, sy: i32, sz: i32, px: i32, py: i32, pz: i32) {
     };
     let (ex, ey, ez) = (sx, sy + 56, sz);
     let dx = px - ex;
-    let dy = (py + 40) - ey;
     let dz = pz - ez;
-    let dist = (dx.abs() + dy.abs() + dz.abs()).max(1);
+    let horiz = psx_math::int32::isqrt_i32(dx * dx + dz * dz);
+    let dy = (py + PLAYER_HEIGHT / 3) - ey + horiz / 5;
+    let len = psx_math::int32::isqrt_i32(dx * dx + dy * dy + dz * dz).max(1);
     unsafe {
         ARROWS[a] = Arrow {
             alive: true,
             x: ex << 8,
             y: ey << 8,
             z: ez << 8,
-            vx: (dx * ARROW_SPEED / dist) << 8,
-            vy: (dy * ARROW_SPEED / dist + 6) << 8, // slight arc
-            vz: (dz * ARROW_SPEED / dist) << 8,
+            vx: dx * SKEL_Q8 / len,
+            vy: dy * SKEL_Q8 / len,
+            vz: dz * SKEL_Q8 / len,
             life: ARROW_LIFE,
             from_player: false,
         };
@@ -1158,7 +1438,7 @@ fn arrow_hit_mob(ax: i32, ay: i32, az: i32, dmg: i16) -> bool {
                 if m.health <= 0 {
                     record_death(&m);
                     unsafe {
-                        XP_DROPS += if is_hostile(m.kind) { 5 } else { 2 };
+                        XP_DROPS += xp_for(m.kind);
                         MOBS[i] = DEAD;
                     }
                 } else {
@@ -1232,12 +1512,10 @@ fn update_arrows(px: i32, py: i32, pz: i32) {
     while i < ARROW_CAP {
         let mut a = unsafe { ARROWS[i] };
         if a.alive {
-            if a.from_player {
-                a.vy -= BOW_GRAVITY;
-                a.vx -= (a.vx * BOW_DRAG_16384) >> 14;
-                a.vy -= (a.vy * BOW_DRAG_16384) >> 14;
-                a.vz -= (a.vz * BOW_DRAG_16384) >> 14;
-            }
+            a.vy -= BOW_GRAVITY;
+            a.vx -= (a.vx * BOW_DRAG_16384) >> 14;
+            a.vy -= (a.vy * BOW_DRAG_16384) >> 14;
+            a.vz -= (a.vz * BOW_DRAG_16384) >> 14;
             // A bow arrow covers a block a tick: test it in steps of at most
             // 16 units so it cannot pass through a mob or a thin wall.
             let far = a.vx.abs().max(a.vy.abs()).max(a.vz.abs());
@@ -1269,9 +1547,6 @@ fn update_arrows(px: i32, py: i32, pz: i32) {
                     dead = true;
                 }
                 k += 1;
-            }
-            if !a.from_player {
-                a.vy -= ARROW_GRAVITY;
             }
             if a.life > 0 {
                 a.life -= 1;
@@ -1373,13 +1648,28 @@ fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
     let dz = pz - m.z;
     let dist2 = dx * dx + dz * dz;
 
-    // Despawn far mobs (protects fps + RAM).
+    // Despawn far mobs (protects fps + RAM). A tamed wolf never despawns in
+    // Java: one left outside the ring is parked instead (its chunk unloaded).
     if m.kind != DRAGON && (dx.abs() > DESPAWN_R || dz.abs() > DESPAWN_R) {
+        if m.kind == WOLF && m.love == u16::MAX {
+            park(&m);
+        }
         unsafe {
             MOBS[i] = DEAD;
         }
         return;
     }
+    let (mhw, mh) = dims(m.kind);
+    // Eyes, for line of sight: the mob's near the top of its box, the
+    // player's at 0.9 of its height.
+    let (eyey, peye) = (m.y + mh * 85 / 100, py + PLAYER_HEIGHT * 9 / 10);
+    if is_hostile(m.kind)
+        && dist2 < follow_r(m.kind) * follow_r(m.kind)
+        && (unsafe { BURN_TICK } as usize + i) % 10 == 0
+    {
+        unsafe { SIGHT[i] = sees(m.x, eyey, m.z, px, peye, pz) };
+    }
+    let sight = unsafe { SIGHT[i] };
 
     // State transitions.
     let was = m.state;
@@ -1413,26 +1703,69 @@ fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
         if m.state == ST_CHASE && dist2 > LOSE_R * LOSE_R {
             m.state = ST_IDLE;
         }
-    } else if is_hostile(m.kind) && (night || m.kind != SPIDER) && dist2 < CHASE_R * CHASE_R {
+    } else if is_hostile(m.kind)
+        && (night || m.kind != SPIDER)
+        && dist2 < follow_r(m.kind) * follow_r(m.kind)
+        && (m.state == ST_CHASE || sight)
+    {
         // Monsters hunt by day too (a cave spawn does); spiders only in the
-        // dark, as Java's are neutral in bright light.
+        // dark, as Java's are neutral in bright light. Java's monsters pick
+        // a target they can see, within their follow range, and keep it.
         m.state = ST_CHASE;
-    } else if m.state == ST_CHASE && dist2 > LOSE_R * LOSE_R {
+    } else if m.state == ST_CHASE && dist2 > lose_r(m.kind) * lose_r(m.kind) {
         m.state = ST_IDLE;
     }
 
-    // A tamed wolf follows its owner without needing wheat, and strolls about
-    // once it has caught up.
-    if m.kind == WOLF && m.love == u16::MAX {
-        if dist2 > (3 * BLOCK) * (3 * BLOCK) {
+    // A tamed wolf (minecraft.wiki/w/Wolf) goes for the pack target, else
+    // follows its owner past 10 blocks and stops within 2, and teleports to
+    // the owner past 12 blocks (16 while fighting).
+    let tamed = m.kind == WOLF && m.love == u16::MAX;
+    let mut tgt = CAP;
+    if tamed {
+        let t = unsafe { PACK_TGT };
+        if t < CAP && t != i && unsafe { MOBS[t].alive } && !is_tamed(t) {
+            tgt = t;
+        }
+        let tele = if tgt < CAP { WOLF_TELEPORT_FIGHT_R } else { WOLF_TELEPORT_R };
+        if dist2 > tele * tele {
+            // Two blocks off the owner, on the owner's level.
+            let (ux, uz) = toward(-dx, -dz, 2 * BLOCK);
+            if !aabb_collides_dims(px + ux, py, pz + uz, mhw, mh) {
+                m.x = px + ux;
+                m.y = py;
+                m.z = pz + uz;
+                m.vy = 0;
+            }
+        }
+        if tgt < CAP {
             m.state = ST_CHASE;
-        } else if m.state == ST_CHASE {
+        } else if dist2 > WOLF_FOLLOW_R * WOLF_FOLLOW_R {
+            m.state = ST_CHASE;
+        } else if m.state == ST_CHASE && dist2 < WOLF_STOP_R * WOLF_STOP_R {
             m.state = ST_IDLE;
         }
+        if m.fuse > 0 {
+            m.fuse -= 1; // bite cooldown (a wolf has no fuse)
+        }
+        if tgt < CAP {
+            let t = unsafe { MOBS[tgt] };
+            let (thw, _) = dims(t.kind);
+            let reach = mhw + thw + 8;
+            if m.fuse == 0
+                && (t.x - m.x).abs() < reach
+                && (t.z - m.z).abs() < reach
+                && (t.y - m.y).abs() < BLOCK
+            {
+                bite(tgt, m.x, m.z);
+                m.fuse = WOLF_BITE_TICKS;
+            }
+        }
+    } else if m.kind == WOLF && m.state == ST_CHASE && dist2 > LOSE_R * LOSE_R {
+        m.state = ST_IDLE; // a provoked wild wolf gives up, as hostiles do
     }
-    // Passive animals follow a player holding wheat (reuses the chase walk).
+    // Passive animals follow a player holding their food (reuses the chase walk).
     if !is_hostile(m.kind) && m.kind != WOLF && m.state != ST_FLEE {
-        let lure = unsafe { LURE };
+        let lure = eats(m.kind, unsafe { LURE });
         if lure && dist2 < LURE_R * LURE_R {
             m.state = ST_CHASE;
         } else if m.state == ST_CHASE && (!lure || dist2 > LURE_R * LURE_R) {
@@ -1451,12 +1784,19 @@ fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
         if m.kind == SKELETON {
             if m.timer > 0 {
                 m.timer -= 1;
-            } else {
+            } else if dist2 < SHOOT_R * SHOOT_R && sight {
                 shoot_arrow(m.x, m.y, m.z, px, py, pz);
                 m.timer = SHOT_TICKS;
             }
         } else if m.kind == SAPPER {
-            if dist2 < (2 * BLOCK) * (2 * BLOCK) {
+            // Java's swell: start within 3 blocks in sight, keep going while
+            // within 7 and in sight, otherwise wind back down. `cool` holds
+            // the direction (a sapper never breeds).
+            let dy = py - m.y;
+            let d3 = dist2 + dy * dy;
+            let r = if m.cool == 1 { FUSE_KEEP_R } else { FUSE_START_R };
+            m.cool = (sight && d3 < r * r) as u16;
+            if m.cool == 1 {
                 m.fuse += 1;
                 if m.fuse == 1 {
                     crate::sfx::sapper_hiss(); // the dreaded tsss
@@ -1498,9 +1838,35 @@ fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
     } else {
         let walk = walk_q8(m.kind);
         match m.state {
-            ST_CHASE => {
-                if dx.abs() > 4 || dz.abs() > 4 {
+            ST_CHASE if m.kind == SKELETON => {
+                // Close in until in range and in sight, back off inside 4
+                // blocks, otherwise strafe round the player.
+                if dist2 > SHOOT_R * SHOOT_R || !sight {
                     (vx, vz) = toward(dx, dz, walk);
+                } else if dist2 < RETREAT_R * RETREAT_R {
+                    (vx, vz) = toward(-dx, -dz, walk);
+                } else {
+                    if rng() % secs(2) as u32 == 0 {
+                        m.heading ^= 1;
+                    }
+                    let side = if m.heading & 1 == 0 { 1 } else { -1 };
+                    (vx, vz) = toward(dz * side, -dx * side, walk / 2);
+                }
+            }
+            ST_CHASE if m.kind == SAPPER && m.fuse > 0 => {} // stands while it swells
+            ST_CHASE => {
+                // Java's mobs never overlap their target: entity collision
+                // holds them at touching distance, half-widths summed. They
+                // used to walk to within 4 units of the player's centre and
+                // stand inside the camera.
+                let (cdx, cdz, stop) = if tgt < CAP {
+                    let t = unsafe { MOBS[tgt] };
+                    (t.x - m.x, t.z - m.z, mhw + dims(t.kind).0)
+                } else {
+                    (dx, dz, mhw + PLAYER_HALF_W)
+                };
+                if cdx.abs() > stop || cdz.abs() > stop {
+                    (vx, vz) = toward(cdx, cdz, walk);
                 }
             }
             ST_FLEE => {
@@ -1691,10 +2057,12 @@ fn melee_damage(kind: u8) -> i32 {
 /// Hostile contact damage to the player this frame (max over touching mobs).
 pub fn contact_damage(px: i32, py: i32, pz: i32) -> i32 {
     let mut dmg = 0;
+    let mut who = CAP;
     let mut i = 0;
     while i < CAP {
         let m = unsafe { MOBS[i] };
-        if m.alive && is_hostile(m.kind) {
+        let angry_wolf = m.kind == WOLF && m.love != u16::MAX && m.state == ST_CHASE;
+        if m.alive && (is_hostile(m.kind) || angry_wolf) {
             let dx = (px - m.x).abs();
             let dz = (pz - m.z).abs();
             let dy = (py - m.y).abs();
@@ -1702,11 +2070,14 @@ pub fn contact_damage(px: i32, py: i32, pz: i32) -> i32 {
                 // A wraith (Java's enderman) is neutral until provoked.
                 let d = if m.kind == WRAITH && m.state != ST_CHASE {
                     0
+                } else if angry_wolf {
+                    WOLF_BITE as i32
                 } else {
                     melee_damage(m.kind)
                 };
                 if d > dmg {
                     dmg = d;
+                    who = i;
                 }
             }
         }
@@ -1716,6 +2087,10 @@ pub fn contact_damage(px: i32, py: i32, pz: i32) -> i32 {
     unsafe {
         LAB_HITS += (dmg > 0) as u32;
         return 0;
+    }
+    // Tamed wolves attack what hurts their owner.
+    if who < CAP {
+        unsafe { PACK_TGT = who };
     }
     #[allow(unreachable_code)]
     dmg
@@ -1846,8 +2221,9 @@ pub fn strike(best: usize, px: i32, pz: i32, damage: i16) -> bool {
     // which is the itch report of mobs that "clip through blocks when you try
     // to attack them so it's unable to kill them".
     let (hw, h) = dims(m.kind);
-    let kx = if m.x >= px { KNOCKBACK } else { -KNOCKBACK };
-    let kz = if m.z >= pz { KNOCKBACK } else { -KNOCKBACK };
+    // Straight away from the attacker; it used to shove on both axes at
+    // once, always at 45 degrees.
+    let (kx, kz) = toward(m.x - px, m.z - pz, KNOCKBACK);
     if !aabb_collides_dims(m.x + kx, m.y, m.z, hw, h) {
         m.x += kx;
     }
@@ -1857,13 +2233,19 @@ pub fn strike(best: usize, px: i32, pz: i32, damage: i16) -> bool {
     if m.health <= 0 {
         record_death(&m);
         unsafe {
-            XP_DROPS += if is_hostile(m.kind) { 5 } else { 2 };
+            XP_DROPS += xp_for(m.kind);
         }
         unsafe {
             MOBS[best] = DEAD;
         }
     } else {
-        if !is_hostile(m.kind) {
+        if m.kind == WOLF {
+            // A wild wolf turns on whoever hits it (minecraft.wiki/w/Wolf);
+            // a tamed one never does.
+            if m.love != u16::MAX {
+                m.state = ST_CHASE;
+            }
+        } else if !is_hostile(m.kind) {
             m.state = ST_FLEE;
             m.timer = FLEE_TICKS;
         }
@@ -1871,7 +2253,42 @@ pub fn strike(best: usize, px: i32, pz: i32, damage: i16) -> bool {
             MOBS[best] = m;
         }
     }
+    // Tamed wolves attack what their owner attacks.
+    if !is_tamed(best) {
+        unsafe { PACK_TGT = best };
+    }
     true
+}
+
+/// A tamed wolf's bite on mob `t`: 4 damage (minecraft.wiki/w/Wolf), with
+/// the hit flash, knockback and, on a kill, the drops and XP a kill by the
+/// player gives (Java drops them for a tamed wolf's kill too).
+fn bite(t: usize, wx: i32, wz: i32) {
+    let mut m = unsafe { MOBS[t] };
+    if !m.alive || m.hurt_cd > 0 {
+        return;
+    }
+    m.health -= WOLF_BITE;
+    m.hurt_cd = HURT_TICKS;
+    let (hw, h) = dims(m.kind);
+    let (kx, kz) = toward(m.x - wx, m.z - wz, KNOCKBACK);
+    if !aabb_collides_dims(m.x + kx, m.y, m.z + kz, hw, h) {
+        m.x += kx;
+        m.z += kz;
+    }
+    if m.health <= 0 {
+        record_death(&m);
+        unsafe {
+            XP_DROPS += xp_for(m.kind);
+            MOBS[t] = DEAD;
+        }
+    } else {
+        if !is_hostile(m.kind) && m.kind != WOLF {
+            m.state = ST_FLEE;
+            m.timer = FLEE_TICKS;
+        }
+        unsafe { MOBS[t] = m };
+    }
 }
 
 pub fn reset() {
