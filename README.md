@@ -120,7 +120,8 @@ The layout follows Minecraft Bedrock's PS4/PS5 defaults.
   hand)
 - L3 or double-tap forward: sprint (drops when forward stops)
 - Start: options menu -- flight, save/load to memory card, the tutorial
-  toggle, and the stick and volume settings (left/right adjusts those)
+  toggle, CHEATS, and the stick and volume settings (left/right adjusts
+  those)
 - Main menu: up/down moves between PLAY GAME, NEW WORLD, SETTINGS and
   CREDITS; Cross confirms
 
@@ -138,25 +139,24 @@ damage comes from the sword.
 
 Holding up or down in any menu autorepeats after a beat.
 
-### Cheats (for testing)
+### Cheats
 
-A hidden menu for testing: press Start for OPTIONS, then hold L1 + R1 and
-press Select. Up/down picks a row, left/right changes TIME and SPAWN, Cross
-acts, Circle closes.
+Press Start for OPTIONS and pick CHEATS. Up/down picks a row, left/right
+changes TIME, WEATHER and SPAWN, Cross acts, Circle goes back to OPTIONS.
 
 - FLY (NO CLIP): the options menu's flight, which passes through blocks
 - GOD MODE: health, hunger and breath stay full
 - SHOW XYZ + FPS: block coordinates and frame rate in the top-left corner
 - GIVE EVERYTHING: 64 of every block and item, diamond tools and armour
 - TIME: jump to sunrise, noon, sunset or midnight
+- WEATHER: clear, rain or a thunderstorm (as Java's /weather sets them),
+  or LIGHTNING, a bolt four blocks in front of you
 - SPAWN: any mob, dragon included, three blocks in front of you
 - TO SPAWN POINT: back to the world spawn (or the bed you last slept in)
 - TO INFERNO / TO VOID / TO OVERWORLD: cross as a portal would, with a
   return portal built where you land
 
-Using any of them except the readout marks the world, and the mark is saved
-with it (the menu title then reads CHEATS - WORLD MARKED). A world that never
-opened the menu saves exactly as before.
+Like Java's commands, they leave no mark on the world or its save.
 
 The HUD carries hearts, hunger, air bubbles, armour pips, the XP bar and the
 hotbar. Mining draws crack stages on the block itself rather than a progress
@@ -195,6 +195,11 @@ with Mojang Studios or Microsoft. Minecraft is a trademark of Mojang Studios.
 
 ## Recent changes
 
+**0.3.1**: Java's thunderstorms (lightning, thunder, storm clouds, rain,
+snow or nothing by biome, a rain sound); saves keep the weather, no longer
+freeze the screen and survive a card pulled mid-save; the cheats are in
+OPTIONS.
+
 **0.3.0**: Java Edition parity, round two: Java's day, weather, hunger,
 attack cooldown and durability; only the pause menu pauses; mobs that see,
 keep their distance and fight like Java's, tamed wolves that follow and
@@ -202,5 +207,5 @@ fight; blocks held as 3D models; saves that keep the world's seed.
 
 **0.2.1**: the camera turns 30% faster, the crosshair picks the mob in
 front of a block the way Java does, and a hidden cheat menu for testing
-(see Cheats above).
+(now OPTIONS > CHEATS, see Cheats above).
 See the [changelog](CHANGELOG.md) for the remaining changes and published download versions.
