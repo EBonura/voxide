@@ -206,6 +206,10 @@ struct Mob {
     facing: u8,
     /// Stroll direction, 256 to the turn, 0 = +Z, 64 = +X.
     heading: u8,
+    /// Sim ticks left alight (lightning sets 8 s; rain and water put it out).
+    fire: u16,
+    /// A sapper struck by lightning: Java's charged creeper, blast power 6.
+    charged: bool,
 }
 
 const DEAD: Mob = Mob {
@@ -226,6 +230,8 @@ const DEAD: Mob = Mob {
     walk: 0,
     facing: 0,
     heading: 0,
+    fire: 0,
+    charged: false,
 };
 
 // Arrows fired by skeletons.
@@ -441,6 +447,8 @@ pub struct MobView {
     pub facing: u8,
     /// Struck within the last few frames -- the renderer flashes it red.
     pub hurt: bool,
+    /// A charged sapper, blinking its blue aura on (every 0.15 s).
+    pub charged: bool,
 }
 
 pub fn get(i: usize) -> MobView {
@@ -458,6 +466,7 @@ pub fn get(i: usize) -> MobView {
         // hurt_cd was set on every hit and decremented every frame and then read
         // by nothing at all -- a dead field. It is the damage flash now.
         hurt: m.hurt_cd > HURT_TICKS - FLASH_TICKS,
+        charged: m.charged && (unsafe { BURN_TICK } / ms(150) as u16) % 2 == 0,
     }
 }
 
@@ -639,6 +648,8 @@ fn try_spawn(px: i32, pz: i32, sky: i32) {
             walk: 0,
             facing: 0,
             heading: 0,
+            fire: 0,
+            charged: false,
         };
     }
 }
@@ -670,6 +681,8 @@ pub fn spawn_dragon(px: i32, pz: i32) {
             walk: 0,
             facing: 0,
             heading: 0,
+            fire: 0,
+            charged: false,
         };
     }
 }
@@ -789,6 +802,8 @@ pub fn debug_lineup(px: i32, py: i32, pz: i32) {
                 walk: 0,
                 facing: 0,
                 heading: 0,
+                fire: 0,
+                charged: false,
             };
         }
         k += 1;
@@ -981,6 +996,9 @@ pub fn update(px: i32, py: i32, pz: i32, sky: i32, burn: bool) {
             if burn {
                 sun_burn(i);
             }
+            if unsafe { MOBS[i].fire } > 0 {
+                mob_fire(i);
+            }
             unsafe {
                 // u16::MAX marks a tamed wolf and must not count down: it
                 // used to, so a wolf stayed tamed for a single tick.
@@ -1095,6 +1113,8 @@ fn spawn_offspring(kind: u8, x: i32, y: i32, z: i32) {
             walk: 0,
             facing: 0,
             heading: 0,
+            fire: 0,
+            charged: false,
         };
     }
 }
@@ -1465,7 +1485,9 @@ fn arrow_hit_mob(ax: i32, ay: i32, az: i32, dmg: i16) -> bool {
     false
 }
 
-fn explode(cx: i32, cy: i32, cz: i32, px: i32, py: i32, pz: i32) {
+fn explode(cx: i32, cy: i32, cz: i32, px: i32, py: i32, pz: i32, charged: bool) {
+    // A charged sapper blasts at twice the power, 6 (Creeper.explodeCreeper).
+    let power = if charged { 2 * SAPPER_POWER } else { SAPPER_POWER };
     crate::sfx::explode();
     crate::spawn_particles(cx, cy + BLOCK, cz, (96, 84, 72), 30, (cx ^ cz) as u32, 44);
     let cy = cy + BLOCK / 2; // the blast centre, half a block up the sapper
@@ -1473,16 +1495,16 @@ fn explode(cx: i32, cy: i32, cz: i32, px: i32, py: i32, pz: i32) {
         world_to_block_x(cx),
         world_to_block_y(cy),
         world_to_block_z(cz),
-        SAPPER_POWER,
+        power,
         (cx ^ cz) as u32,
     );
-    let dmg = crate::explosion_damage(SAPPER_POWER, px - cx, py - cy, pz - cz);
+    let dmg = crate::explosion_damage(power, px - cx, py - cy, pz - cz);
     if dmg > 0 {
         unsafe {
             HAZARD_DMG += dmg;
         }
     }
-    blast_mobs(cx, cy, cz, SAPPER_POWER);
+    blast_mobs(cx, cy, cz, power);
 }
 
 /// An explosion's damage to every mob in reach (Java hurts all entities).
@@ -1582,6 +1604,140 @@ pub fn hazard_damage() -> i32 {
         #[allow(unreachable_code)]
         d
     }
+}
+
+/// Damage to the player from the world (a lightning strike), applied with
+/// the mob hits through the same invulnerability rule.
+pub fn add_hazard(d: i32) {
+    unsafe { HAZARD_DMG += d };
+}
+
+/// Java's isRaining, mirrored from the weather each tick: rain puts out a
+/// burning mob under the open sky.
+static mut RAINING: bool = false;
+pub fn set_raining(on: bool) {
+    unsafe { RAINING = on };
+}
+
+/// A mob a strike may jump to: alive, within 3 blocks of the struck column,
+/// no lower than 3 under its ground, and under open sky (Java's
+/// findLightningTargetAround).
+fn thunder_ok(m: &Mob, bx: i32, by: i32, bz: i32) -> bool {
+    if !m.alive {
+        return false;
+    }
+    let (mx, my, mz) = (
+        world_to_block_x(m.x),
+        world_to_block_y(m.y),
+        world_to_block_z(m.z),
+    );
+    (mx - bx).abs() <= 3
+        && (mz - bz).abs() <= 3
+        && my >= by - 3
+        && crate::weather::sky_above(mx, my, mz)
+}
+
+/// How many mobs a strike on this column could jump to.
+#[inline(never)]
+#[optimize(size)] // only when lightning strikes
+pub fn thunder_candidates(bx: i32, by: i32, bz: i32) -> usize {
+    let mut n = 0;
+    let mut i = 0;
+    while i < CAP {
+        if thunder_ok(unsafe { &MOBS[i] }, bx, by, bz) {
+            n += 1;
+        }
+        i += 1;
+    }
+    n
+}
+
+/// The `k`th of those, its feet in world units.
+#[inline(never)]
+#[optimize(size)] // only when lightning strikes
+pub fn thunder_candidate(bx: i32, by: i32, bz: i32, k: usize) -> Option<(i32, i32, i32)> {
+    let mut n = 0;
+    let mut i = 0;
+    while i < CAP {
+        let m = unsafe { MOBS[i] };
+        if thunder_ok(&m, bx, by, bz) {
+            if n == k {
+                return Some((m.x, m.y, m.z));
+            }
+            n += 1;
+        }
+        i += 1;
+    }
+    None
+}
+
+/// A lightning flash's strike box, 3 blocks around the bolt and from 3
+/// below to 9 above (LightningBolt.tick): every mob in it takes the bolt's 5
+/// damage through its damage immunity and is set alight for `burn` sim
+/// ticks (Entity.thunderHit), and a sapper becomes charged, as a creeper does
+/// (minecraft.wiki/w/Creeper#Charged creeper). Java's other conversions have
+/// no VoXide mob to happen to: pigs into zombified piglins, villagers into
+/// witches, mooshrooms, turtles.
+#[inline(never)]
+#[optimize(size)] // only when lightning strikes
+pub fn thunder_hit(x: i32, y: i32, z: i32, burn: u16) {
+    let r = 3 * BLOCK;
+    let mut i = 0;
+    while i < CAP {
+        let mut m = unsafe { MOBS[i] };
+        if m.alive
+            && (m.x - x).abs() <= r
+            && (m.z - z).abs() <= r
+            && m.y >= y - r
+            && m.y <= y + 9 * BLOCK
+        {
+            if m.hurt_cd == 0 {
+                m.health -= 5;
+                m.hurt_cd = HURT_TICKS;
+            }
+            m.fire = m.fire.max(burn);
+            if m.kind == SAPPER {
+                m.charged = true;
+            }
+            if m.health <= 0 {
+                record_death(&m);
+                m = DEAD;
+            }
+            unsafe { MOBS[i] = m };
+        }
+        i += 1;
+    }
+}
+
+/// A burning mob: 1 damage a second while alight (Java hurts on every 20th
+/// fire tick), put out by water, or by rain where it can see the sky.
+#[inline(never)]
+fn mob_fire(i: usize) {
+    let mut m = unsafe { MOBS[i] };
+    if m.fire == 0 {
+        return;
+    }
+    let (bx, by, bz) = (
+        world_to_block_x(m.x),
+        world_to_block_y(m.y),
+        world_to_block_z(m.z),
+    );
+    if crate::is_water(world::get(bx, by, bz))
+        || (unsafe { RAINING } && crate::weather::sky_above(bx, by, bz))
+    {
+        m.fire = 0;
+    } else {
+        if m.fire % SUN_BURN_PERIOD == 0 {
+            m.health -= 1;
+            crate::spawn_particles(m.x, m.y + BLOCK, m.z, (240, 140, 40), 4, i as u32, 16);
+        }
+        m.fire -= 1;
+        if m.health <= 0 {
+            record_death(&m);
+            m = DEAD;
+        }
+    }
+    unsafe { MOBS[i] = m };
 }
 
 pub const fn arrow_cap() -> usize {
@@ -1816,7 +1972,7 @@ fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
                     unsafe {
                         MOBS[i] = DEAD;
                     }
-                    explode(m.x, m.y, m.z, px, py, pz);
+                    explode(m.x, m.y, m.z, px, py, pz, m.charged);
                     return;
                 }
             } else if m.fuse > 0 {
@@ -2359,6 +2515,8 @@ fn spawn_at(kind: u8, sx: i32, sz: i32) {
             walk: 0,
             facing: 0,
             heading: 0,
+            fire: 0,
+            charged: false,
         };
     }
 }

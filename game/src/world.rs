@@ -2359,7 +2359,11 @@ fn light_fire(t: &mut Touched, x: i32, y: i32, z: i32) {
                 FIRE_Z[i] = z;
                 FIRE_FUEL[i] = FIRE_LIFE;
             }
-            fluid_put(t, x, y, z, FIRE);
+            // Through `set`, the bounded partial rebuild a player edit gets,
+            // not the batched fluid remesh: that rebuilt the whole chunk in
+            // one frame (about 10 vblanks) every time a flame spread.
+            let _ = t;
+            set(x, y, z, FIRE);
             return;
         }
         i += 1;
@@ -2381,7 +2385,7 @@ fn ignition_adjacent(x: i32, y: i32, z: i32) -> bool {
         || hot(get(x, y - 1, z))
 }
 
-fn fire_tick(t: &mut Touched) {
+fn fire_tick(_t: &mut Touched) {
     let mut i = 0;
     while i < FIRE_CAP {
         let fuel = unsafe { FIRE_FUEL[i] };
@@ -2401,13 +2405,26 @@ fn fire_tick(t: &mut Touched) {
             || is_water(get(x, y, z + 1))
             || is_water(get(x, y, z - 1))
             || is_water(get(x, y + 1, z));
+        // Rain puts fire out: on each of its ticks a flame the rain reaches
+        // goes out with chance 0.2 + 0.03 x its age (FireBlock.tick), which
+        // is how a lightning fire in the open dies within seconds.
+        let doused = doused || {
+            let age = (FIRE_LIFE - fuel) as u32;
+            let h = (x.wrapping_mul(73_856_093) ^ z.wrapping_mul(19_349_663)) as u32
+                ^ unsafe { FLUID_PHASE }.wrapping_mul(2_654_435_761);
+            let rain = unsafe { RAINING };
+            rain && (h >> 8) % 100 < 20 + 3 * age && near_rain(x, y, z)
+        };
         unsafe { FIRE_FUEL[i] = fuel - 1 };
         if doused || fuel == 1 {
-            fluid_put(t, x, y, z, AIR);
+            // Through `set`, the bounded partial rebuild a player edit gets: the
+            // batched fluid remesh rebuilt the whole chunk, about 15 vblanks,
+            // each time a flame went out (rain puts lightning fires out).
+            set(x, y, z, AIR);
             // Burnt out: the fuel underneath goes with it, so a wooden floor
             // actually disappears rather than smouldering forever.
             if !doused && is_flammable(get(x, y - 1, z)) {
-                fluid_put(t, x, y - 1, z, AIR);
+                set(x, y - 1, z, AIR);
             }
             // Wake the ring around it: the neighbours are the next thing to
             // catch, and nothing else would ever schedule them.
@@ -2420,6 +2437,67 @@ fn fire_tick(t: &mut Touched) {
             unsafe { FIRE_FUEL[i] = 0 };
         }
         i += 1;
+    }
+}
+
+/// Java's isRaining, set by the weather every tick, for fire to read.
+static mut RAINING: bool = false;
+pub fn set_raining(on: bool) {
+    unsafe { RAINING = on };
+}
+
+/// Rain falls on this cell: open sky above it (Java's isRainingAt also
+/// wants rain, not snow, in the biome).
+#[inline(never)]
+#[optimize(size)] // lightning and rain on fire: rare
+fn rained_on(x: i32, y: i32, z: i32) -> bool {
+    let mut yy = y + 1;
+    while yy < CH {
+        let b = get(x, yy, z);
+        if b != AIR && !is_cross_plant(b) {
+            return false;
+        }
+        yy += 1;
+    }
+    let b = biome_at(x, z, y);
+    b != B_DESERT && b != B_SNOW
+}
+
+/// A fire the rain reaches: on the cell or any of its four sides
+/// (FireBlock.isNearRain).
+#[inline(never)]
+#[optimize(size)] // lightning and rain on fire: rare
+fn near_rain(x: i32, y: i32, z: i32) -> bool {
+    rained_on(x, y, z)
+        || rained_on(x + 1, y, z)
+        || rained_on(x - 1, y, z)
+        || rained_on(x, y, z + 1)
+        || rained_on(x, y, z - 1)
+}
+
+/// Fire lit by lightning (LightningBolt.spawnFire): only into air, and only
+/// where fire can stand, on a block with a solid top or beside something
+/// that burns (BaseFireBlock.canSurvive).
+#[inline(never)]
+#[optimize(size)] // lightning and rain on fire: rare
+pub fn lightning_fire(x: i32, y: i32, z: i32) {
+    if y < 1 || y >= CH || get(x, y, z) != AIR {
+        return;
+    }
+    let below = get(x, y - 1, z);
+    let floor = below != AIR
+        && !is_water(below)
+        && !is_lava(below)
+        && !is_cross_plant(below)
+        && !is_small_block(below);
+    let fuel = is_flammable(get(x + 1, y, z))
+        || is_flammable(get(x - 1, y, z))
+        || is_flammable(get(x, y, z + 1))
+        || is_flammable(get(x, y, z - 1))
+        || is_flammable(get(x, y + 1, z))
+        || is_flammable(below);
+    if floor || fuel {
+        light_fire_at(x, y, z);
     }
 }
 
