@@ -1,9 +1,15 @@
-VoXide (PSX)  -  v0.3.0
+VoXide (PSX)  -  v0.3.1
 ======================
 
 A Minecraft-style survival sandbox for the PlayStation 1, written in Rust.
 This is an early playable build: world generation, mining, crafting and
 survival work, but much of the game is still unfinished.
+
+New in v0.3.1: thunderstorms like Minecraft Java Edition's, with lightning,
+thunder and dark storm clouds; rain, snow or nothing depending on the biome,
+and a rain sound; saves that keep the weather, never freeze the screen and keep
+the previous save if the card is pulled mid-save; and a CHEATS page in the
+options menu (time, weather, lightning, flight and more).
 
 New in v0.3.0: closer still to Minecraft Java Edition. Java's day and night
 (sky light, the sun's arc and size, sunsets, thunderstorms), Java's hunger,
