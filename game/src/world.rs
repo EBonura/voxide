@@ -1028,6 +1028,31 @@ pub fn biome_at(wx: i32, wz: i32, h: i32) -> u8 {
     biome_from(vnoise::<96>(wx, wz, seedx() + 50), h)
 }
 
+/// What a column gets when it rains, Java's precipitation rule (minecraft.wiki
+/// /w/Rain, /w/Snowfall): nothing in dry biomes (the desert), snow where it
+/// is cold (the snowy biome, frozen ocean, and high ground above the
+/// generator's snow line, Java's temperature falling with height), rain
+/// elsewhere. Off the overworld nothing falls.
+pub const PRECIP_NONE: u8 = 0;
+pub const PRECIP_RAIN: u8 = 1;
+pub const PRECIP_SNOW: u8 = 2;
+#[inline(never)]
+pub fn precipitation(wx: i32, wz: i32) -> u8 {
+    if unsafe { DIM } != DIM_OVERWORLD {
+        return PRECIP_NONE;
+    }
+    let h = height_at(wx, wz);
+    let temp = vnoise::<96>(wx, wz, seedx() + 50);
+    let b = biome_from(temp, h);
+    if b == B_DESERT {
+        PRECIP_NONE
+    } else if b == B_SNOW || h > SEA + 22 || (b == B_OCEAN && temp < 74) {
+        PRECIP_SNOW
+    } else {
+        PRECIP_RAIN
+    }
+}
+
 /// Pick a world spawn on GRASS, the way Minecraft picks a spawn biome rather
 /// than a coordinate.
 ///
@@ -2459,8 +2484,7 @@ fn rained_on(x: i32, y: i32, z: i32) -> bool {
         }
         yy += 1;
     }
-    let b = biome_at(x, z, y);
-    b != B_DESERT && b != B_SNOW
+    precipitation(x, z) == PRECIP_RAIN
 }
 
 /// A fire the rain reaches: on the cell or any of its four sides

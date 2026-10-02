@@ -346,10 +346,9 @@ pub fn sky_above(bx: i32, by: i32, bz: i32) -> bool {
 }
 
 /// Rain, not snow and not dry air: Java's lightning needs it falling on the
-/// target, and deserts get none while snowy ground gets snow.
-fn rains_on(bx: i32, by: i32, bz: i32) -> bool {
-    let b = world::biome_at(bx, bz, by);
-    b != world::B_DESERT && b != world::B_SNOW
+/// target (world::precipitation).
+fn rains_on(bx: i32, bz: i32) -> bool {
+    world::precipitation(bx, bz) == world::PRECIP_RAIN
 }
 
 /// One sim tick of lightning: rolls strikes and runs the bolts on the game
@@ -369,6 +368,9 @@ pub fn lightning_tick(p: &mut Player) {
     }
     #[cfg(all(feature = "storm-lab", not(feature = "storm-calm")))]
     lab_strike(p);
+    #[cfg(any(feature = "storm-desert", feature = "storm-snow"))]
+    lab_goto(p);
+    rain_sound(p);
     let mut i = 0;
     while i < BOLT_CAP {
         if unsafe { BOLTS[i].live } {
@@ -431,7 +433,7 @@ fn strike_column(bx: i32, bz: i32, p: &Player) {
         world_to_block_y(ty),
         world_to_block_z(tz),
     );
-    if !sky_above(sx, sy, sz) || !rains_on(sx, sy, sz) {
+    if !sky_above(sx, sy, sz) || !rains_on(sx, sz) {
         return;
     }
     spawn_bolt(tx, ty, tz);
@@ -462,18 +464,33 @@ pub fn spawn_bolt(x: i32, y: i32, z: i32) {
     }
 }
 
+/// Distance in blocks to an offset (world units) and its bearing for the
+/// stereo mix: the sine of its angle off the player's view, Q12, positive
+/// to the right.
+fn bearing(p: &Player, dx: i32, dz: i32) -> (i32, i32) {
+    let (bx, bz) = (dx / BLOCK, dz / BLOCK); // blocks: squares stay in an i32
+    let d = psx_math::int32::isqrt_i32(bx * bx + bz * bz);
+    if d == 0 {
+        return (0, 0);
+    }
+    let (s, c) = (sincos::sin_q12(p.yaw), sincos::cos_q12(p.yaw));
+    let right = bx * c - bz * s; // Q12 blocks
+    (d, (right / d).clamp(-4096, 4096))
+}
+
 /// Java's LightningBolt.tick, once a game tick.
 #[inline(never)]
 #[optimize(size)] // weather changes and strikes are rare: bytes over cycles
 fn bolt_tick(i: usize, p: &mut Player) {
     let mut b = unsafe { BOLTS[i] };
     if b.life == 2 {
-        let d = ((b.x - p.x).abs() + (b.z - p.z).abs()) / BLOCK;
         // Thunder is heard everywhere in the dimension; the impact (Java's
         // explosion sound at pitch 0.5-0.7, volume 2.0) carries 32 blocks.
-        sfx::thunder(80 + below(21));
+        // Both come from the bolt's side of the player.
+        let (d, pan) = bearing(p, b.x - p.x, b.z - p.z);
+        sfx::thunder(80 + below(21), pan);
         if d < 32 {
-            sfx::bolt_impact(d, 50 + below(21));
+            sfx::bolt_impact(d, 50 + below(21), pan);
         }
         // Fire where it lands and at up to four spots in the 3x3x3 around
         // it, on Normal difficulty (LightningBolt.spawnFire(4)).
@@ -733,5 +750,101 @@ fn lab_strike(p: &Player) {
         let (bx, bz) = (world_to_block_x(x), world_to_block_z(z));
         let by = strike_top(bx, bz);
         spawn_bolt(bx * BLOCK + BLOCK / 2, by * BLOCK, bz * BLOCK + BLOCK / 2);
+    }
+}
+
+/// Java's rain sound (LevelRenderer.tickRain): when rain lands within 10
+/// blocks of the camera, across and up or down, Java plays weather.rain at
+/// volume 0.2 every few ticks, or the muffled weather.rain.above (0.1, pitch
+/// 0.5) when the drops land above the camera and something covers it. Snow
+/// and dry biomes are silent. Here four columns are probed a game tick and
+/// the hits steer the level of a looping hiss (sfx::rain).
+#[inline(never)]
+fn rain_sound(p: &Player) {
+    static mut SEED: u32 = 0x1F2E_3D4C;
+    static mut WET: i32 = 0;
+    let level = rain();
+    if level == 0 || world::dimension() != world::DIM_OVERWORLD {
+        unsafe { WET = 0 };
+        sfx::rain(0, false);
+        return;
+    }
+    let (pbx, pby, pbz) = (
+        world_to_block_x(p.x),
+        world_to_block_y(p.y + EYE_HEIGHT),
+        world_to_block_z(p.z),
+    );
+    let covered = !sky_above(pbx, pby, pbz);
+    let (mut hits, mut above) = (0, 0);
+    let mut k = 0;
+    while k < 4 {
+        let r = unsafe {
+            SEED = SEED.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            SEED >> 8
+        };
+        let (x, z) = (
+            pbx + (r % 21) as i32 - 10,
+            pbz + ((r >> 8) % 21) as i32 - 10,
+        );
+        let top = strike_top(x, z);
+        if top <= pby + 10 && top >= pby - 10 && world::precipitation(x, z) == world::PRECIP_RAIN {
+            hits += 1;
+            if top - 1 > pby + 1 && covered {
+                above += 1;
+            }
+        }
+        k += 1;
+    }
+    let wet = unsafe {
+        WET += (hits * 1024 - WET) / 8;
+        WET
+    };
+    sfx::rain(wet * level / 255, above * 2 > hits);
+}
+
+/// storm-desert / storm-snow: put the player on the nearest column with no
+/// rain or with snow, once, searching rings outward 8 blocks apart.
+#[cfg(any(feature = "storm-desert", feature = "storm-snow"))]
+fn lab_goto(p: &mut Player) {
+    static mut DONE: bool = false;
+    let want = if cfg!(feature = "storm-snow") {
+        world::PRECIP_SNOW
+    } else {
+        world::PRECIP_NONE
+    };
+    unsafe {
+        if DONE {
+            return;
+        }
+        DONE = true;
+    }
+    let (bx0, bz0) = (world_to_block_x(p.x), world_to_block_z(p.z));
+    let mut r = 0;
+    while r < 600 {
+        let mut a = -r;
+        while a <= r {
+            let c = [(a, -r), (a, r), (-r, a), (r, a)];
+            let mut k = 0;
+            while k < 4 {
+                let (x, z) = (bx0 + c[k].0, bz0 + c[k].1);
+                // Deep inside the region, not on its edge.
+                if world::precipitation(x, z) == want
+                    && world::precipitation(x + 16, z + 16) == want
+                    && world::precipitation(x - 16, z - 16) == want
+                    && world::precipitation(x + 16, z - 16) == want
+                    && world::precipitation(x - 16, z + 16) == want
+                {
+                    p.fly = true;
+                    p.vy = 0;
+                    p.x = x * BLOCK + BLOCK / 2;
+                    p.z = z * BLOCK + BLOCK / 2;
+                    p.y = (world::height_at(x, z) + 3) * BLOCK;
+                    return;
+                }
+                k += 1;
+            }
+            a += 8;
+        }
+        r += 8;
     }
 }

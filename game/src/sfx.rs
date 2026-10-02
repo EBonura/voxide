@@ -18,7 +18,7 @@ use crate::sfxdata::{
 };
 use psx_pack::cd::{self, SectorReader, SECTOR_WORDS};
 use psx_pack::SECTOR_BYTES;
-use psx_sfx::{OneShot, Player, Sample as SfxSample};
+use psx_sfx::{LoopingSample, OneShot, Player, Sample as SfxSample};
 use psx_spu::{Pitch, SpuAddr, Voice, Volume};
 
 /// SPU RAM byte offset of the sample bank: just above the 0x0000..0x1000
@@ -507,13 +507,24 @@ fn thunder_step() {
             ));
             GEN = None;
         }
+        rain_build(unsafe { THUNDER_AT } + (THUNDER_BLOCKS + 1) * 16);
     }
 }
 
-/// A peal of thunder, heard wherever the strike was (Java plays it at volume
-/// 10,000: full loudness at any distance), at `pct` percent pitch (Java's
-/// random 0.8 to 1.0).
-pub fn thunder(pct: u32) {
+/// Left and right levels for a sound `pan` (Q12 sine of its bearing, -4096
+/// hard left to 4096 hard right): the far ear drops to a quarter, as a
+/// positional source does in Java's OpenAL mix.
+fn panned(vol: i32, pan: i32) -> (Volume, Volume) {
+    let l = vol * (4096 - pan.max(0) * 3 / 4) / 4096;
+    let r = vol * (4096 + pan.min(0) * 3 / 4) / 4096;
+    (Volume(l as i16), Volume(r as i16))
+}
+
+/// A peal of thunder at `pct` percent pitch (Java's random 0.8 to 1.0) from
+/// bearing `pan`. Java plays it at volume 10,000, which carries 160,000
+/// blocks: full loudness wherever the strike is, with no delay, placed by
+/// direction.
+pub fn thunder(pct: u32, pan: i32) {
     unsafe {
         if !READY {
             return;
@@ -521,18 +532,156 @@ pub fn thunder(pct: u32) {
         let Some(sample) = THUNDER else {
             return;
         };
-        let vol = (0x3400 * VOL_PCT / 100) as i16;
-        let shot = OneShot::new(sample, Volume(vol))
+        let vol = 0x3800 * VOL_PCT / 100;
+        let shot = OneShot::new(sample, Volume(vol as i16))
             .with_pitch(Pitch::for_frequency(THUNDER_HZ * pct / 100, 44100));
         THUNDER_VOICE.play(&shot, TICK);
+        let (l, r) = panned(vol, pan);
+        THUNDER_VOICE.voice(0).set_volume(l, r);
     }
 }
 
-/// The crack where a bolt lands: Java's explosion sound at pitch 0.5 to 0.7,
-/// volume 2.0, so it fades out over 32 blocks.
-pub fn bolt_impact(dist_blocks: i32, pct: u32) {
+/// The crack where a bolt lands: Java's explosion sound at pitch 0.5 to 0.7
+/// and volume 2.0, so it fades out linearly over 32 blocks, from bearing
+/// `pan`.
+pub fn bolt_impact(dist_blocks: i32, pct: u32, pan: i32) {
     let v = 0x3800 * (32 - dist_blocks.clamp(0, 32)) / 32;
-    if v > 0x0200 {
-        play(S_EXPLODE, v as i16, pct);
+    if v <= 0x0200 {
+        return;
+    }
+    unsafe {
+        if !READY {
+            return;
+        }
+        let s: &Sample = &SAMPLES[S_EXPLODE];
+        let vol = v * VOL_PCT / 100;
+        let sample = SfxSample::resident(
+            SpuAddr::new(SPU_BASE + s.off),
+            s.rate as u32,
+            s.blocks as u32,
+        );
+        let shot = OneShot::new(sample, Volume(vol as i16))
+            .with_pitch(Pitch::for_frequency(s.rate as u32 * pct / 100, 44100));
+        let slot = PLAYER.play(&shot, TICK);
+        let (l, r) = panned(vol, pan);
+        PLAYER.voice(slot).set_volume(l, r);
+    }
+}
+
+// ---- Weather: rain ----
+
+/// Rain: half a second of synthesised hiss with droplet ticks, looped in
+/// hardware on a voice of its own, built after the thunder.
+const RAIN_HZ: u32 = 11_025;
+const RAIN_BLOCKS: u32 = 197;
+/// Gain to 0.9 of full scale, Q12: the synthesis peaks at 28,072 (host run
+/// of the same code).
+const RAIN_GAIN: i32 = 4_302;
+static mut RAIN: Option<SfxSample> = None;
+static mut RAIN_ON: bool = false;
+static mut RAIN_LEVEL: i32 = 0;
+const RAIN_VOICE: Voice = Voice::V5;
+
+/// The rain's synthesis: noise with its lows taken out (the hiss of drops on
+/// leaves and ground) and a few hundred short decaying ticks a second.
+struct RainSynth {
+    seed: u32,
+    lp: i32,
+    drop: i32,
+}
+
+impl RainSynth {
+    const fn new() -> Self {
+        Self {
+            seed: 0x51A7_2C03,
+            lp: 0,
+            drop: 0,
+        }
+    }
+
+    fn next(&mut self) -> i32 {
+        self.seed = self
+            .seed
+            .wrapping_mul(1_664_525)
+            .wrapping_add(1_013_904_223);
+        let w = (self.seed >> 16) as i32 - 32_768;
+        self.lp += ((w - self.lp) * 8_000) >> 15;
+        let hiss = (w - self.lp) >> 2;
+        if (self.seed >> 7) % 37 == 0 {
+            self.drop = 6_000 + ((self.seed >> 3) & 0x3FFF) as i32;
+        }
+        self.drop = self.drop * 29 / 32;
+        hiss + ((self.drop * w) >> 15)
+    }
+}
+
+/// Synthesise and upload the rain loop at `addr`: block 0 starts the loop,
+/// the last block ends it and repeats (flags 0x04 and 0x03).
+#[inline(never)]
+#[optimize(size)]
+fn rain_build(addr: u32) {
+    let mut s = RainSynth::new();
+    let mut buf = [0u32; RAIN_BLOCKS as usize * 4];
+    let bytes = unsafe {
+        core::slice::from_raw_parts_mut(buf.as_mut_ptr() as *mut u8, RAIN_BLOCKS as usize * 16)
+    };
+    let (mut p1, mut p2) = (0, 0);
+    let mut blk = [0i32; 28];
+    let mut b = 0;
+    while b < RAIN_BLOCKS as usize {
+        let mut i = 0;
+        while i < 28 {
+            blk[i] = ((s.next() * RAIN_GAIN) >> 12).clamp(-32_768, 32_767);
+            i += 1;
+        }
+        let out = &mut bytes[b * 16..b * 16 + 16];
+        adpcm_block(&blk, &mut p1, &mut p2, out);
+        out[1] = if b == 0 {
+            0x04
+        } else if b + 1 == RAIN_BLOCKS as usize {
+            0x03
+        } else {
+            0
+        };
+        b += 1;
+    }
+    psx_spu::upload_adpcm(SpuAddr::new(addr), bytes);
+    unsafe {
+        RAIN = Some(SfxSample::resident(
+            SpuAddr::new(addr),
+            RAIN_HZ,
+            RAIN_BLOCKS,
+        ));
+    }
+}
+
+/// Set the rain's level, 0 to 4096 of Java's weather.rain volume 0.2, and
+/// whether it is the muffled weather.rain.above (volume 0.1, pitch 0.5) a
+/// roof over the player gives. Once a game tick; the loop starts the first
+/// time it is wanted and then only its level moves.
+pub fn rain(level: i32, above: bool) {
+    unsafe {
+        let Some(sample) = RAIN else {
+            return;
+        };
+        if !READY {
+            return;
+        }
+        if !RAIN_ON {
+            if level == 0 {
+                return;
+            }
+            LoopingSample::new(sample, Volume::SILENCE).play(RAIN_VOICE);
+            RAIN_ON = true;
+        }
+        // Ease toward the target over about a quarter second.
+        RAIN_LEVEL += (level - RAIN_LEVEL) / 4;
+        let full = if above { 0x3800 / 10 } else { 0x3800 / 5 };
+        let v = (full * RAIN_LEVEL / 4096 * VOL_PCT / 100) as i16;
+        RAIN_VOICE.set_volume(Volume(v), Volume(v));
+        RAIN_VOICE.set_pitch(Pitch::for_frequency(
+            if above { RAIN_HZ / 2 } else { RAIN_HZ },
+            44100,
+        ));
     }
 }

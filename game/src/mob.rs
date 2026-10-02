@@ -1207,6 +1207,11 @@ fn sun_burn(i: usize) {
         }
         y += 1;
     }
+    // Rain wets them where it falls (Java's isInWaterRainOrBubble); in a
+    // desert or in snow they burn on.
+    if unsafe { RAINING } && world::precipitation(bx, bz) == world::PRECIP_RAIN {
+        return;
+    }
     crate::spawn_particles(
         m.x,
         m.y + BLOCK,
@@ -1723,7 +1728,9 @@ fn mob_fire(i: usize) {
         world_to_block_z(m.z),
     );
     if crate::is_water(world::get(bx, by, bz))
-        || (unsafe { RAINING } && crate::weather::sky_above(bx, by, bz))
+        || (unsafe { RAINING }
+            && crate::weather::sky_above(bx, by, bz)
+            && world::precipitation(bx, bz) == world::PRECIP_RAIN)
     {
         m.fire = 0;
     } else {

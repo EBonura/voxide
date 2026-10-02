@@ -1309,21 +1309,43 @@ fn init_mat_tables() {
 /// Shared by the fog ramp's far bands and the sky's below-horizon fill, which
 /// is what makes the end of the far ring meet the sky with no visible seam.
 fn ground_haze(light: u8) -> (u8, u8, u8) {
-    (
-        (light as u32 * 205 / 128).min(255) as u8,
-        (light as u32 * 192 / 128).min(255) as u8,
-        (light as u32 * 152 / 128).min(255) as u8,
-    )
+    let mut h = (
+        (light as i32 * 205 / 128).min(255),
+        (light as i32 * 192 / 128).min(255),
+        (light as i32 * 152 / 128).min(255),
+    );
+    // Weather greys and darkens it with the sky. Java's fog in rain is the
+    // sky's, greyed as the sky is (three quarters of the way to its grey at
+    // full rain), then dimmed by 1 - 0.5 rain in red and green and 1 - 0.4
+    // rain in blue, and by 1 - 0.5 thunder in all three (FogRenderer). The
+    // warm sand tone stayed lit under a storm sky. Clear weather is untouched.
+    let (rain, thunder) = (rain_amount(), thunder_amount());
+    if rain > 0 {
+        let g = (h.0 * 30 + h.1 * 59 + h.2 * 11) / 100;
+        let k = rain * 3 / 4;
+        h = (
+            (h.0 + (g - h.0) * k / 255) * (510 - rain) / 510,
+            (h.1 + (g - h.1) * k / 255) * (510 - rain) / 510,
+            (h.2 + (g - h.2) * k / 255) * (1275 - 2 * rain) / 1275,
+        );
+        h = (
+            h.0 * (510 - thunder) / 510,
+            h.1 * (510 - thunder) / 510,
+            h.2 * (510 - thunder) / 510,
+        );
+    }
+    (h.0 as u8, h.1 as u8, h.2 as u8)
 }
 
 /// The inputs the tint table depends on. `refresh_mat_ccmd` ran every frame
 /// (4% of a spawn-meadow frame) while LIGHT, FOG_RGB and CAVE only move a
 /// few times a minute; rebuild only when one of them has.
-static mut MAT_CCMD_KEY: (u8, (u8, u8, u8), u8) = (0xFF, (0, 0, 0), 0xFF);
+static mut MAT_CCMD_KEY: (u8, (u8, u8, u8), u8, i32) = (0xFF, (0, 0, 0), 0xFF, -1);
 
 fn refresh_mat_ccmd() {
     let fog = unsafe { FOG_RGB }; // already faded toward CAVE_FOG by the caller
-    let key = unsafe { (LIGHT, fog, CAVE) };
+    // The weather too: it tints the ground haze the far bands meet.
+    let key = unsafe { (LIGHT, fog, CAVE, rain_amount() << 8 | thunder_amount()) };
     if unsafe { MAT_CCMD_KEY } == key {
         return;
     }
@@ -4610,6 +4632,12 @@ fn is_raining() -> bool {
     FORCE_TIME < 0 && weather::raining()
 }
 
+/// Rain falling on a column: raining, and the column's biome gets rain, not
+/// snow or nothing (Java's Level.isRainingAt, world::precipitation).
+fn rain_falls_on(bx: i32, bz: i32) -> bool {
+    is_raining() && world::precipitation(bx, bz) == world::PRECIP_RAIN
+}
+
 /// Java's Level.isThundering (the thunder level above 0.9).
 fn is_thundering() -> bool {
     FORCE_TIME < 0 && weather::thundering()
@@ -5148,7 +5176,7 @@ fn update_survival(player: &mut Player) {
         player.air = MAX_AIR;
         // Rain puts out a burning player under the open sky
         // (minecraft.wiki/w/Fire).
-        if player.burn > 0 && is_raining() && under_open_sky(player) {
+        if player.burn > 0 && rain_falls_on(bx, bz) && under_open_sky(player) {
             player.burn = 0;
         }
     }
@@ -10694,6 +10722,17 @@ fn draw_options(font: &FontAtlas, sel: usize, player: Player) {
 /// as static rather than weather.
 #[inline(never)]
 fn draw_rain(tick: u32, cam: &Camera, rain: i32) {
+    // Java falls rain, snow or nothing by the biome under it
+    // (world::precipitation): dry deserts stay dry under a storm sky, cold
+    // and high ground gets snow.
+    let p = world::precipitation(world_to_block_x(cam.x), world_to_block_z(cam.z));
+    if p == world::PRECIP_NONE {
+        return;
+    }
+    if p == world::PRECIP_SNOW {
+        draw_snow(tick, cam, rain);
+        return;
+    }
     // Shear the streaks with the view direction so turning sells the wind.
     let lean = (cam.sy * 5) >> 12;
     // Streak count follows the ramp: a shower thickens as it arrives and
@@ -10712,6 +10751,36 @@ fn draw_rain(tick: u32, cam: &Camera, rain: i32) {
         // Streaks fall `speed` pixels per 30th of a second (two sim ticks).
         let y = ((h >> 8).wrapping_add(tick.wrapping_mul(speed) >> 1) % 248) as i16 - 8;
         ui_line(x, y, x + lean as i16, y + len, c.0, c.1, c.2);
+        i += 1;
+    }
+}
+
+/// Snowfall: white flakes, as many as the rain has streaks, drifting down at
+/// about a quarter of its speed and swaying side to side, as Java's snow
+/// falls slower and wanders.
+#[inline(never)]
+fn draw_snow(tick: u32, cam: &Camera, rain: i32) {
+    let lean = (cam.sy * 3) >> 12;
+    let n = (190 * rain / 255).clamp(0, 190) as u32;
+    let mut i = 0u32;
+    while i < n {
+        let h = i.wrapping_mul(2654435761) ^ (i << 7);
+        let near = i & 3 == 0;
+        let (speed, c) = if near {
+            (7u32, (250, 250, 255))
+        } else {
+            (4u32, (200, 204, 214))
+        };
+        let y = ((h >> 8).wrapping_add(tick.wrapping_mul(speed) >> 2) % 248) as i32 - 8;
+        let phase = ((tick.wrapping_mul(9) + (h >> 3)) & 0x0FFF) as u16;
+        let sway = (sincos::sin_q12(phase) * 3) >> 12;
+        let x = ((h % 320) as i32 + sway + lean * y / 240) as i16;
+        let y = y as i16;
+        if near {
+            ui_line(x, y, x + 1, y + 1, c.0, c.1, c.2);
+        } else {
+            ui_line(x, y, x, y, c.0, c.1, c.2);
+        }
         i += 1;
     }
 }
@@ -11290,7 +11359,7 @@ fn plant_crop_in(x: i32, y: i32, z: i32, d: u8) {
 /// in for farmland here. 162 block reads, only on a random tick.
 fn hydrated(x: i32, y: i32, z: i32) -> bool {
     let sy = y - 1; // soil block under the crop
-    if is_raining() && y >= world::surface_y(x, z) {
+    if rain_falls_on(x, z) && y >= world::surface_y(x, z) {
         return true;
     }
     let mut dz = -4;
@@ -11799,10 +11868,10 @@ fn spawn_sky(t: u32) -> i32 {
 }
 
 /// Undead burn while it is day: internal sky light 12 or more (from 23,460
-/// to 12,541 in clear weather, minecraft.wiki/w/Daylight_cycle) and not in
-/// rain, which wets them.
+/// to 12,541 in clear weather, minecraft.wiki/w/Daylight_cycle). Rain wets
+/// them only where it falls (mob.rs sun_burn): in a desert they burn on.
 fn undead_burn_time(t: u32) -> bool {
-    sky_level(t) >= 12 && !is_raining()
+    sky_level(t) >= 12
 }
 
 #[inline]

@@ -51,6 +51,10 @@ storm-lab = []
 # storm-lab without the scripted bolts: the storm at Java's natural strike
 # rate, for the frame-time gates. Never ship.
 storm-calm = ["storm-lab"]
+# storm-calm, then the player moved to the nearest desert (storm-desert)
+# or snowy column (storm-snow) at the first tick, flying. Never ship.
+storm-desert = ["storm-calm"]
+storm-snow = ["storm-calm"]
 
 [dependencies]
 psx-telemetry = { path = "../.psoxide/sdk/crates/psx-telemetry" }
