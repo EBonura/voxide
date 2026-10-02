@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+Thunderstorms and saves, test disc only.
+
+- Java's thunderstorms: lightning bolts drawn Java's way, a flash on the
+  sky and the world, thunder heard everywhere, the crack within 32 blocks,
+  darker storm clouds. Strikes come at Java's rate (about 2.4 a minute
+  within 128 blocks), land on the highest block or on a creature that sees
+  the sky, set fire around them, deal 5 damage, burn up dropped items and
+  charge sappers (twice the blast).
+- Rain and thunder levels and the sky light follow Java's formulas, so a
+  shower darkens the world as it rolls in; rain puts fires out.
+- Saves keep the weather (format 11). A save writes one card frame per
+  game frame with a progress bar instead of freezing the screen, and is
+  written beside the previous save, so pulling the card mid-save keeps
+  the old one. Older saves still load.
+- Cheat menu: WEATHER (clear, rain, thunder, or a lightning bolt).
+
 ## 0.3.0 | 2026-10-01
 
 Standalone disc published on itch.io.
