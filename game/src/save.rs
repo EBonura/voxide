@@ -15,7 +15,7 @@ use crate::{
     FURN_OUT, FURN_OUT_N, FURN_PROG, FURN_USED, FURN_X, FURN_Y, FURN_Z, HOTBAR, HOTBAR_SEL,
     HOTBAR_VIS, INV, MAX_CHESTS, MAX_EDITS, MAX_FURNACES, PLACEABLE,
 };
-use psx_mc::{Card, HardwareCard, Slot};
+use psx_mc::{Block, Card, Error as McError, HardwareCard, Slot, FRAME_SIZE};
 
 /// Version 1: the original layout. No version field; counts were one byte
 /// each, and chests, furnaces and the hotbar layout were not saved at all.
@@ -25,9 +25,14 @@ const MAGIC_V1: [u8; 4] = *b"MCPX";
 /// VERSION and teaches `layout` where its sections moved; every older version
 /// still loads.
 const MAGIC: [u8; 4] = *b"VOXS";
-const VERSION: u16 = 10;
-/// BIOS file name: region+product code + label, 20 ASCII chars max.
+const VERSION: u16 = 11;
+/// BIOS file names: region+product code + label, 20 ASCII chars max. A save
+/// is written under the name the card does not hold yet and the old one is
+/// deleted after it, so pulling the card mid-save leaves the last save
+/// whole (Java keeps level.dat_old for the same reason). Older builds
+/// only ever wrote the first name.
 const FILE_NAME: &str = "BESLES-00000VOXIDE01";
+const FILE_NAME_B: &str = "BESLES-00000VOXIDE02";
 /// Human-readable label shown by the console's memory-card manager.
 const FILE_TITLE: &str = "VOXIDE";
 
@@ -68,8 +73,15 @@ const V1_HDR: usize = V1_PROGRESS + 9; // armor u8, efficiency u8, xp i32, 3 too
 // Version 10 appends the world after that: the NEW WORLD seed i32, the
 // respawn column (bx i32, bz i32), the day clock u32, then the tamed wolves:
 // count u8, pad [u8; 3], and TAMED_CAP records of dimension u8, pad u8,
-// health i16, x y z i32. Older saves load as the default world (seed 0),
-// keep the session's respawn point and day, and have no tamed wolves.
+// health i16, x y z i32. Older saves load as the default world (seed 0) at
+// its spawn point at sunrise, with no tamed wolves.
+// Version 11 appends the weather and a save counter after the wolves:
+// flags u8 (bit 0 raining, bit 1 thundering), pad [u8; 3], then the rain,
+// thunder and clear-weather timers u32 in sim ticks (Java's rainTime,
+// thunderTime and clearWeatherTime, three sim ticks to a game tick), then the
+// save counter u32, which picks the newer file when both names are on the
+// card. Older saves load in clear weather, as a level.dat without those
+// fields does.
 const OFF_HOTBAR_SEL: usize = 41;
 const OFF_HOTBAR: usize = 42;
 const OFF_INV: usize = 52;
@@ -95,6 +107,8 @@ struct Layout {
     durability: bool,
     /// Seed, respawn, day and tamed wolves follow the durability.
     world: bool,
+    /// The weather and the save counter follow the wolves.
+    weather: bool,
 }
 
 const fn layout(version: u16) -> Layout {
@@ -102,11 +116,13 @@ const fn layout(version: u16) -> Layout {
     let hunger = version >= 8;
     let durability = version >= 9;
     let world = version >= 10;
+    let weather = version >= 11;
     let counts = OFF_EXTRA
         + if extras { 8 } else { 0 }
         + if hunger { 8 } else { 0 }
         + if durability { 24 } else { 0 }
-        + if world { WORLD_BYTES } else { 0 };
+        + if world { WORLD_BYTES } else { 0 }
+        + if weather { WEATHER_BYTES } else { 0 };
     Layout {
         extras,
         dim: version >= 5,
@@ -118,6 +134,7 @@ const fn layout(version: u16) -> Layout {
         hunger,
         durability,
         world,
+        weather,
     }
 }
 
@@ -125,14 +142,31 @@ const OFF_WORLD: usize = OFF_EXTRA + 40;
 const OFF_WOLVES: usize = OFF_WORLD + 20;
 const WOLF_REC: usize = 16;
 const WORLD_BYTES: usize = 20 + crate::mob::TAMED_CAP * WOLF_REC;
+const OFF_WEATHER: usize = OFF_WORLD + WORLD_BYTES;
+const WEATHER_BYTES: usize = 20;
 
 /// What a save says about the world itself, for the caller to rebuild it.
 pub struct WorldMeta {
     /// The NEW WORLD seed (0 = the default world).
     pub seed: i32,
-    /// Respawn column and day clock; None for saves before version 10.
+    /// Respawn column; None (the world spawn) for saves before version 10.
     pub respawn: Option<(i32, i32)>,
-    pub day: Option<u32>,
+    /// Day clock; 0 (sunrise, as a new world starts) before version 10.
+    pub day: u32,
+    /// Weather; None (clear) before version 11.
+    pub weather: Option<crate::weather::Saved>,
+}
+
+impl WorldMeta {
+    /// What a save that predates a field gets for it: the default world at
+    /// its spawn point at sunrise in clear weather, which is what Java gives
+    /// a level.dat missing SpawnX/Z, DayTime and the weather tags.
+    const DEFAULT: WorldMeta = WorldMeta {
+        seed: 0,
+        respawn: None,
+        day: 0,
+        weather: None,
+    };
 }
 
 /// An id read off the card, kept inside the item tables: a corrupt byte used
@@ -209,11 +243,11 @@ pub fn selftest() -> bool {
     card().is_formatted().is_ok()
 }
 
-/// Persist player, inventory, hotbar, chests, furnaces and edit deltas as one
-/// card file. Formats a blank card first; overwrites any previous VOXIDE save.
+/// Lay player, inventory, hotbar, world, weather, chests, furnaces and edit
+/// deltas out in BUF as one save payload; returns its length.
 #[inline(never)]
 #[optimize(size)] // card I/O dominates; keep the bytes
-pub fn save(p: &Player, day: u32) -> bool {
+fn serialize(p: &Player, day: u32) -> usize {
     let buf = unsafe { &mut BUF[..] };
     buf[..4].copy_from_slice(&MAGIC);
     put_u16(buf, 4, VERSION);
@@ -287,6 +321,17 @@ pub fn save(p: &Player, day: u32) -> bool {
         put_i32(buf, o + 12, r.z);
         w += 1;
     }
+    let ws = crate::weather::saved();
+    buf[OFF_WEATHER] = ws.raining as u8 | (ws.thundering as u8) << 1;
+    buf[OFF_WEATHER + 1..OFF_WEATHER + 4].fill(0);
+    put_i32(buf, OFF_WEATHER + 4, ws.rain_t as i32);
+    put_i32(buf, OFF_WEATHER + 8, ws.thunder_t as i32);
+    put_i32(buf, OFF_WEATHER + 12, ws.clear_t as i32);
+    put_i32(
+        buf,
+        OFF_WEATHER + 16,
+        unsafe { SAVE_SEQ }.wrapping_add(1) as i32,
+    );
 
     let mut off = CUR.hdr;
     let mut chests = 0u8;
@@ -350,17 +395,287 @@ pub fn save(p: &Player, day: u32) -> bool {
         idx += 1;
     }
 
-    let mut card = card();
-    match card.is_formatted() {
-        Ok(true) => {}
-        Ok(false) => {
-            if card.format().is_err() {
-                return false;
+    off
+}
+
+// ---- Saving without stopping the frame ------------------------------------
+//
+// A card frame write is about 4 ms of transfer and then two video periods
+// the card needs to commit (psx-mc's POST_WRITE_SETTLE_SPINS), and a save is
+// tens of frames: written in one call, 0.3.0 held the screen still for 44
+// vblanks on a fresh world and a few seconds on a big one. So the save is
+// planned first, entirely in RAM: psx-mc runs the format, write and delete
+// against JOURNAL, a card that serves the directory from a cache read one
+// frame per game frame, and records every frame it would write. Then one
+// recorded frame goes to the card per game frame, and the menu keeps
+// drawing, polling and animating its progress bar between them.
+
+/// Frames a plan may write: a format (64), the largest save (2 title + 102
+/// data frames for 13,032 bytes with its container header, + 2 directory),
+/// freeing an overwritten copy (2) and deleting the old one (2): 174.
+const JOURNAL_CAP: usize = 176;
+/// Directory frames 0..=15, read ahead one a frame.
+const DIR_FRAMES: usize = 16;
+
+static mut J_FRAME: [u16; JOURNAL_CAP] = [0; JOURNAL_CAP];
+static mut J_DATA: [[u8; FRAME_SIZE]; JOURNAL_CAP] = [[0; FRAME_SIZE]; JOURNAL_CAP];
+static mut J_N: usize = 0;
+static mut DIR: [[u8; FRAME_SIZE]; DIR_FRAMES] = [[0; FRAME_SIZE]; DIR_FRAMES];
+
+/// The card a save is planned on: reads come from the frames it has already
+/// recorded, then from the directory cache; writes are recorded, not sent.
+struct Journal;
+
+impl Block for Journal {
+    fn read_frame(&mut self, frame: u16, out: &mut [u8; FRAME_SIZE]) -> psx_mc::Result<()> {
+        unsafe {
+            let mut i = J_N;
+            while i > 0 {
+                i -= 1;
+                if J_FRAME[i] == frame {
+                    *out = J_DATA[i];
+                    return Ok(());
+                }
+            }
+            if (frame as usize) < DIR_FRAMES {
+                *out = DIR[frame as usize];
+                return Ok(());
             }
         }
-        Err(_) => return false,
+        // The plan never reads past the directory; if it did, ask the card.
+        HardwareCard::new(Slot::One).read_frame(frame, out)
     }
-    card.write(FILE_NAME, FILE_TITLE, &buf[..off]).is_ok()
+
+    fn write_frame(&mut self, frame: u16, data: &[u8; FRAME_SIZE]) -> psx_mc::Result<()> {
+        unsafe {
+            if J_N == JOURNAL_CAP {
+                return Err(McError::NoSpace);
+            }
+            J_FRAME[J_N] = frame;
+            J_DATA[J_N] = *data;
+            J_N += 1;
+        }
+        Ok(())
+    }
+}
+
+/// Where a save in progress has got to.
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum Phase {
+    Idle,
+    /// Reading directory frame n into DIR.
+    Probe(usize),
+    Plan,
+    /// Sending recorded frame n.
+    Write(usize),
+}
+
+static mut PHASE: Phase = Phase::Idle;
+static mut PAYLOAD: usize = 0;
+/// The save counter of the newest save this session wrote or loaded.
+static mut SAVE_SEQ: u32 = 0;
+/// Which name holds this session's save (0 = FILE_NAME, 1 = FILE_NAME_B),
+/// once known; the next save goes under the other.
+static mut CUR_SLOT: Option<u8> = None;
+static mut TARGET: u8 = 0;
+
+/// What a finished save reports.
+pub enum Outcome {
+    Saved,
+    NoCard,
+    Full,
+    Removed,
+    Failed,
+}
+
+/// Start a save: lay the payload out now (it is a snapshot; the world may
+/// change while it is written) and begin reading the card's directory.
+pub fn begin(p: &Player, day: u32) {
+    unsafe {
+        PAYLOAD = serialize(p, day);
+        PHASE = Phase::Probe(0);
+    }
+}
+
+pub fn busy() -> bool {
+    unsafe { PHASE != Phase::Idle }
+}
+
+/// Progress of the save in progress, 0..=256.
+pub fn progress() -> i32 {
+    unsafe {
+        match PHASE {
+            Phase::Idle => 0,
+            Phase::Probe(n) => (n * 16 / DIR_FRAMES) as i32,
+            Phase::Plan => 16,
+            Phase::Write(n) => 16 + (n * 240 / J_N.max(1)) as i32,
+        }
+    }
+}
+
+fn fail(o: Outcome) -> Option<Outcome> {
+    unsafe { PHASE = Phase::Idle };
+    Some(o)
+}
+
+/// One step of the save, once a game frame: one card frame read or written.
+/// Some(outcome) when it has finished.
+#[inline(never)]
+#[optimize(size)] // card I/O dominates; keep the bytes
+pub fn pump() -> Option<Outcome> {
+    let phase = unsafe { PHASE };
+    match phase {
+        Phase::Idle => None,
+        Phase::Probe(n) => {
+            let r = HardwareCard::new(Slot::One).read_frame(n as u16, unsafe { &mut DIR[n] });
+            match r {
+                Ok(()) => {}
+                Err(McError::NoCard) => return fail(Outcome::NoCard),
+                Err(_) => return fail(Outcome::Failed),
+            }
+            unsafe {
+                PHASE = if n + 1 < DIR_FRAMES {
+                    Phase::Probe(n + 1)
+                } else {
+                    Phase::Plan
+                };
+            }
+            None
+        }
+        Phase::Plan => match plan() {
+            Ok(()) => {
+                unsafe { PHASE = Phase::Write(0) };
+                None
+            }
+            Err(McError::NoSpace) => fail(Outcome::Full),
+            Err(_) => fail(Outcome::Failed),
+        },
+        Phase::Write(n) => {
+            #[cfg(feature = "save-pull")]
+            {
+                static mut PULLED: bool = false;
+                if n == 3 && !unsafe { PULLED } {
+                    unsafe { PULLED = true };
+                    return fail(Outcome::Removed);
+                }
+            }
+            let (frame, data) = unsafe { (J_FRAME[n], &J_DATA[n]) };
+            match HardwareCard::new(Slot::One).write_frame(frame, data) {
+                Ok(()) => {}
+                Err(McError::NoCard) => return fail(Outcome::Removed),
+                Err(_) => return fail(Outcome::Failed),
+            }
+            unsafe {
+                if n + 1 < J_N {
+                    PHASE = Phase::Write(n + 1);
+                    None
+                } else {
+                    PHASE = Phase::Idle;
+                    SAVE_SEQ = SAVE_SEQ.wrapping_add(1);
+                    CUR_SLOT = Some(TARGET);
+                    Some(Outcome::Saved)
+                }
+            }
+        }
+    }
+}
+
+const NAMES: [&str; 2] = [FILE_NAME, FILE_NAME_B];
+
+/// Plan the card writes in RAM: format a blank card, write the payload under
+/// the name not in use, then delete the old file. When the card has no room
+/// for a second copy, overwrite the old file in place instead: not safe
+/// against pulling the card, but it still saves on a nearly full card.
+#[inline(never)]
+#[optimize(size)]
+fn plan() -> psx_mc::Result<()> {
+    unsafe { J_N = 0 };
+    let mut card = Card::new(Journal);
+    if !card.is_formatted()? {
+        card.format()?;
+    }
+    let mut list = [psx_mc::Entry {
+        name: [0; psx_mc::MAX_NAME + 1],
+        name_len: 0,
+        blocks: 0,
+    }; psx_mc::DATA_BLOCKS];
+    let n = card.list(&mut list)?;
+    let mut have = [false; 2];
+    let mut i = 0;
+    while i < n {
+        let mut s = 0;
+        while s < 2 {
+            if list[i].name() == NAMES[s] {
+                have[s] = true;
+            }
+            s += 1;
+        }
+        i += 1;
+    }
+    // The file this session's save lives in, if any: the one it loaded or
+    // last wrote, else the one on the card (the first if both are).
+    let cur = match unsafe { CUR_SLOT } {
+        Some(s) if have[s as usize] => Some(s),
+        _ if have[0] => Some(0),
+        _ if have[1] => Some(1),
+        _ => None,
+    };
+    let mut target = cur.map_or(0, |c| c ^ 1);
+    let payload = unsafe { &BUF[..PAYLOAD] };
+    let mark = unsafe { J_N };
+    match card.write(NAMES[target as usize], FILE_TITLE, payload) {
+        Ok(()) => {
+            // Both old copies go once the new one is down, the stray one a
+            // pulled card may have left behind included.
+            let mut s = 0;
+            while s < 2 {
+                if s != target as usize && have[s] {
+                    card.delete(NAMES[s])?;
+                }
+                s += 1;
+            }
+        }
+        Err(McError::NoSpace) if cur.is_some() => {
+            unsafe { J_N = mark };
+            target = cur.unwrap_or(0);
+            card.write(NAMES[target as usize], FILE_TITLE, payload)?;
+        }
+        Err(e) => return Err(e),
+    }
+    unsafe { TARGET = target };
+    Ok(())
+}
+
+/// The save counter of a payload in BUF, if it is a save this build reads
+/// (0 for versions before 11, which had none).
+#[inline(never)]
+#[optimize(size)] // card I/O dominates; keep the bytes
+fn readable_seq(len: usize) -> Option<u32> {
+    let buf = unsafe { &BUF[..len] };
+    if len >= V1_HDR && buf[..4] == MAGIC_V1 {
+        return Some(0);
+    }
+    if len < 6 || buf[..4] != MAGIC || !(2..=VERSION).contains(&get_u16(buf, 4)) {
+        return None;
+    }
+    let l = layout(get_u16(buf, 4));
+    if len < l.hdr {
+        return None;
+    }
+    Some(if l.weather {
+        get_i32(buf, OFF_WEATHER + 16) as u32
+    } else {
+        0
+    })
+}
+
+/// Read one of the two names into BUF: its length and counter, if readable.
+#[inline(never)]
+#[optimize(size)] // card I/O dominates; keep the bytes
+fn read_slot(s: usize) -> Option<(usize, u32)> {
+    let buf = unsafe { &mut BUF[..] };
+    let len = card().read(NAMES[s], buf).ok()?.min(buf.len());
+    readable_seq(len).map(|q| (len, q))
 }
 
 /// Load a save from the card: the dimension the player saved in, or None,
@@ -368,31 +683,34 @@ pub fn save(p: &Player, day: u32) -> bool {
 /// EDIT log; the caller enters that dimension, then calls [`apply_edits`] to
 /// replay them into the world (raw sets, then one remesh).
 ///
+/// With both names on the card (a save cut short by pulling the card, before
+/// the old file was deleted) the higher save counter wins; a half-written
+/// file does not read back, so the old one is used.
+///
 /// Saves before version 5 load in the overworld. A version 1 save's edit log
 /// does know each edit's dimension, but not where the player stood, so it
 /// cannot say which dimension the player was in without guessing.
 #[inline(never)]
 #[optimize(size)] // card I/O dominates; keep the bytes
 pub fn load(p: &mut Player) -> Option<(u8, WorldMeta)> {
-    let buf = unsafe { &mut BUF[..] };
-    let len = match card().read(FILE_NAME, buf) {
-        Ok(len) => len.min(buf.len()),
-        Err(_) => return None,
+    let b = read_slot(1);
+    let a = read_slot(0);
+    let (slot, len, seq) = match (a, b) {
+        (Some(a), Some(b)) if b.1 > a.1 => (1, read_slot(1)?.0, b.1),
+        (Some(a), _) => (0, a.0, a.1),
+        (None, Some(b)) => (1, read_slot(1)?.0, b.1),
+        (None, None) => return None,
     };
-    if len >= V1_HDR && buf[..4] == MAGIC_V1 {
+    let buf = unsafe { &mut BUF[..] };
+    let out = if len >= V1_HDR && buf[..4] == MAGIC_V1 {
         load_v1(p, &buf[..len]);
         crate::mob::set_dragon_slain(false);
         crate::cheat::set_used(false);
         crate::mob::set_tamed(&[]);
-        let meta = WorldMeta {
-            seed: 0,
-            respawn: None,
-            day: None,
-        };
-        Some((crate::world::DIM_OVERWORLD, meta))
-    } else if len >= 6 && buf[..4] == MAGIC && (2..=VERSION).contains(&get_u16(buf, 4)) {
+        Some((crate::world::DIM_OVERWORLD, WorldMeta::DEFAULT))
+    } else {
         let l = layout(get_u16(buf, 4));
-        if len < l.hdr || !load_versioned(p, &buf[..len], l) {
+        if !load_versioned(p, &buf[..len], l) {
             return None;
         }
         crate::mob::set_dragon_slain(l.flags && buf[7] & 1 != 0);
@@ -403,7 +721,8 @@ pub fn load(p: &mut Player) -> Option<(u8, WorldMeta)> {
         } else {
             crate::world::DIM_OVERWORLD
         };
-        let meta = if l.world {
+        let mut meta = WorldMeta::DEFAULT;
+        if l.world {
             let mut wolves = [crate::mob::NO_PARKED; crate::mob::TAMED_CAP];
             let nw = (buf[OFF_WORLD + 16] as usize).min(crate::mob::TAMED_CAP);
             let mut w = 0;
@@ -420,23 +739,29 @@ pub fn load(p: &mut Player) -> Option<(u8, WorldMeta)> {
                 w += 1;
             }
             crate::mob::set_tamed(&wolves[..nw]);
-            WorldMeta {
-                seed: get_i32(buf, OFF_WORLD),
-                respawn: Some((get_i32(buf, OFF_WORLD + 4), get_i32(buf, OFF_WORLD + 8))),
-                day: Some(get_i32(buf, OFF_WORLD + 12) as u32),
-            }
+            meta.seed = get_i32(buf, OFF_WORLD);
+            meta.respawn = Some((get_i32(buf, OFF_WORLD + 4), get_i32(buf, OFF_WORLD + 8)));
+            meta.day = get_i32(buf, OFF_WORLD + 12) as u32;
         } else {
             crate::mob::set_tamed(&[]);
-            WorldMeta {
-                seed: 0,
-                respawn: None,
-                day: None,
-            }
-        };
+        }
+        if l.weather {
+            let f = buf[OFF_WEATHER];
+            meta.weather = Some(crate::weather::Saved {
+                raining: f & 1 != 0,
+                thundering: f & 2 != 0,
+                rain_t: get_i32(buf, OFF_WEATHER + 4) as u32,
+                thunder_t: get_i32(buf, OFF_WEATHER + 8) as u32,
+                clear_t: get_i32(buf, OFF_WEATHER + 12) as u32,
+            });
+        }
         Some((dim, meta))
-    } else {
-        None
+    };
+    unsafe {
+        SAVE_SEQ = seq;
+        CUR_SLOT = Some(slot);
     }
+    out
 }
 
 #[inline(never)]
