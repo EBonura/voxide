@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 | 2026-10-02
 
-Thunderstorms and saves, test disc only.
+Standalone disc published on itch.io.
+
+Thunderstorms, saves and the cheats page.
 
 - Java's thunderstorms: lightning bolts drawn Java's way, a flash on the
   sky and the world, thunder heard everywhere, the crack within 32 blocks,
@@ -12,11 +14,17 @@ Thunderstorms and saves, test disc only.
   charge sappers (twice the blast).
 - Rain and thunder levels and the sky light follow Java's formulas, so a
   shower darkens the world as it rolls in; rain puts fires out.
+- Rain, snow or nothing by biome as in Java: deserts stay dry under a
+  storm sky, cold and high ground gets snow. Rain has a sound (muffled
+  under a roof); thunder comes from the strike's side. The distant haze
+  darkens with the storm instead of staying sand-coloured.
 - Saves keep the weather (format 11). A save writes one card frame per
   game frame with a progress bar instead of freezing the screen, and is
   written beside the previous save, so pulling the card mid-save keeps
   the old one. Older saves still load.
-- Cheat menu: WEATHER (clear, rain, thunder, or a lightning bolt).
+- The cheats are a CHEATS page in OPTIONS (the hidden combo is gone),
+  with WEATHER: clear, rain, thunder or a lightning bolt. Using them no
+  longer marks the world, as in Java.
 
 ## 0.3.0 | 2026-10-01
 
