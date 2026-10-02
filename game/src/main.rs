@@ -2791,7 +2791,13 @@ fn main() {
                 if menu == MENU_OPTIONS {
                     persist_shared_settings();
                 }
-                menu = 0;
+                // The cheats page backs out to OPTIONS, where it was opened.
+                if menu == MENU_CHEAT {
+                    menu = MENU_OPTIONS;
+                    menu_sel = OPT_CHEATS;
+                } else {
+                    menu = 0;
+                }
             } else if menu == MENU_OPTIONS {
                 // Settings rows adjust with left/right, like the main menu card.
                 if menu_sel >= OPT_SETTINGS {
@@ -2820,6 +2826,11 @@ fn main() {
                             save::begin(&player, day);
                             unsafe { OPT_MSG = "SAVING - DO NOT REMOVE THE CARD" };
                         }
+                        OPT_CHEATS => {
+                            menu = MENU_CHEAT;
+                            menu_sel = 0;
+                            unsafe { OPT_MSG = "" };
+                        }
                         OPT_TUTORIAL => {
                             unsafe { TUT_ENABLED = !TUT_ENABLED };
                             if unsafe { TUT_ENABLED } && unsafe { TUT_STEP } >= TUT_DONE {
@@ -2846,12 +2857,6 @@ fn main() {
                         }
                         _ => {}
                     }
-                    sfx::confirm();
-                }
-                // The hidden cheat menu (cheat.rs): hold L1 + R1, press SELECT.
-                if cheat::combo(pad, previous) {
-                    menu = MENU_CHEAT;
-                    menu_sel = 0;
                     sfx::confirm();
                 }
             } else if menu == MENU_CHEAT {
@@ -10599,7 +10604,7 @@ const MENU_DEAD: u8 = 6;
 /// TRIANGLE's inventory panel (Bedrock PS layout): pick any placeable directly
 /// instead of R1-cycling the whole hotbar one item at a time.
 const MENU_INV: u8 = 5;
-/// The hidden cheat menu (cheat.rs), reached only from OPTIONS.
+/// The cheats page (cheat.rs), reached from OPTIONS.
 const MENU_CHEAT: u8 = 7;
 
 /// Index of `sel` in PLACEABLE, so the inventory opens on the item in hand.
@@ -10607,15 +10612,18 @@ const OPT_FLIGHT: usize = 0;
 const OPT_SAVE: usize = 1;
 const OPT_LOAD: usize = 2;
 const OPT_TUTORIAL: usize = 3;
+/// Opens the cheats page (cheat.rs): weather, time, flight and the rest.
+const OPT_CHEATS: usize = 4;
 /// Rows from OPT_SETTINGS on are the SETTINGS card's own rows, folded into
 /// the in-game menu so stick feel and volume can be tuned mid-session
 /// instead of only from the main menu before a world loads.
-const OPT_SETTINGS: usize = 4;
+const OPT_SETTINGS: usize = 5;
 const OPTIONS: [&str; OPT_SETTINGS + SETTING_ROWS] = [
     "FLIGHT",
     "SAVE TO CARD",
     "LOAD FROM CARD",
     "TUTORIAL",
+    "CHEATS",
     SETTING_NAMES[0],
     SETTING_NAMES[1],
     SETTING_NAMES[2],
