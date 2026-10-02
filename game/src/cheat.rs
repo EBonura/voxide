@@ -19,6 +19,7 @@ static mut HUD: bool = false;
 /// Row selections that live across openings.
 static mut TIME_SEL: usize = 1;
 static mut MOB_SEL: usize = 0;
+static mut WEATHER_SEL: usize = 2;
 /// Outcome of the last action, shown under the rows.
 static mut MSG: &str = "";
 
@@ -27,17 +28,19 @@ const R_GOD: usize = 1;
 const R_HUD: usize = 2;
 const R_GIVE: usize = 3;
 const R_TIME: usize = 4;
-const R_SPAWN_MOB: usize = 5;
-const R_HOME: usize = 6;
-const R_INFERNO: usize = 7;
-const R_VOID: usize = 8;
-const R_OVERWORLD: usize = 9;
-pub const ROWS: [&str; 10] = [
+const R_WEATHER: usize = 5;
+const R_SPAWN_MOB: usize = 6;
+const R_HOME: usize = 7;
+const R_INFERNO: usize = 8;
+const R_VOID: usize = 9;
+const R_OVERWORLD: usize = 10;
+pub const ROWS: [&str; 11] = [
     "FLY (NO CLIP)",
     "GOD MODE",
     "SHOW XYZ + FPS",
     "GIVE EVERYTHING",
     "TIME",
+    "WEATHER",
     "SPAWN",
     "TO SPAWN POINT",
     "TO INFERNO",
@@ -53,6 +56,10 @@ const TIMES: [(&str, i32); 4] = [
     ("SUNSET", 12_000),
     ("MIDNIGHT", 18_000),
 ];
+
+/// Java's /weather clear, rain and thunder (random durations, weather.rs),
+/// and /summon lightning_bolt four blocks ahead of the player.
+const WEATHERS: [&str; 4] = ["CLEAR", "RAIN", "THUNDER", "LIGHTNING"];
 
 const MOBS: [(&str, u8); 15] = [
     ("PIG", mob::PIG),
@@ -171,6 +178,8 @@ pub fn input(pad: ButtonState, prev: ButtonState, sel: usize, player: &mut Playe
         unsafe {
             if sel == R_TIME {
                 TIME_SEL = (TIME_SEL as i32 + dir).rem_euclid(TIMES.len() as i32) as usize;
+            } else if sel == R_WEATHER {
+                WEATHER_SEL = (WEATHER_SEL as i32 + dir).rem_euclid(WEATHERS.len() as i32) as usize;
             } else if sel == R_SPAWN_MOB {
                 MOB_SEL = (MOB_SEL as i32 + dir).rem_euclid(MOBS.len() as i32) as usize;
             }
@@ -203,6 +212,20 @@ pub fn input(pad: ButtonState, prev: ButtonState, sel: usize, player: &mut Playe
             let (name, t) = TIMES[unsafe { TIME_SEL }];
             mark(name);
             return Act::Time(t);
+        }
+        R_WEATHER => {
+            let w = unsafe { WEATHER_SEL };
+            if w < 3 {
+                weather::command(w as u8);
+            } else {
+                let sy = sincos::sin_q12(player.yaw);
+                let cy = sincos::cos_q12(player.yaw);
+                let bx = world_to_block_x(player.x + ((sy * 4 * BLOCK) >> 12));
+                let bz = world_to_block_z(player.z + ((cy * 4 * BLOCK) >> 12));
+                let by = world::surface_y(bx, bz);
+                weather::spawn_bolt(bx * BLOCK + BLOCK / 2, by * BLOCK, bz * BLOCK + BLOCK / 2);
+            }
+            mark(WEATHERS[w]);
         }
         R_SPAWN_MOB => {
             let (name, kind) = MOBS[unsafe { MOB_SEL }];
@@ -351,9 +374,11 @@ pub fn draw(font: &FontAtlas, sel: usize, player: &Player) {
                 ("OFF", MC_LABEL_OFF)
             };
             ui_text(font, 230, y, label, tint);
-        } else if i == R_TIME || i == R_SPAWN_MOB {
+        } else if i == R_TIME || i == R_WEATHER || i == R_SPAWN_MOB {
             let v = if i == R_TIME {
                 TIMES[unsafe { TIME_SEL }].0
+            } else if i == R_WEATHER {
+                WEATHERS[unsafe { WEATHER_SEL }]
             } else {
                 MOBS[unsafe { MOB_SEL }].0
             };

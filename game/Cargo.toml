@@ -38,6 +38,12 @@ mob-lab = []
 # Headless tuning measurements only (src/tunelab.rs): a scripted arena and
 # timeline of movement and survival scenarios. Never ship.
 tune-lab = []
+# Headless storm captures and gates only (weather.rs): a full thunderstorm
+# from the first tick and a bolt 12 blocks ahead every 4 s. Never ship.
+storm-lab = []
+# storm-lab without the scripted bolts: the storm at Java's natural strike
+# rate, for the frame-time gates. Never ship.
+storm-calm = ["storm-lab"]
 
 [dependencies]
 psx-telemetry = { path = "../.psoxide/sdk/crates/psx-telemetry" }

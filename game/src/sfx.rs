@@ -53,7 +53,9 @@ pub fn tick() {
     unsafe {
         TICK = TICK.wrapping_add(1);
         PLAYER.tick(TICK);
+        THUNDER_VOICE.tick(TICK);
     }
+    thunder_step();
 }
 static mut READY: bool = false;
 
@@ -80,6 +82,9 @@ pub fn init() {
     }
     unsafe {
         READY = ok;
+        if ok {
+            thunder_init(BANK_END);
+        }
     }
 }
 
@@ -114,6 +119,7 @@ unsafe fn stream_bank() -> bool {
         left = left.saturating_sub(SECTOR_BYTES);
     }
     rd.stop();
+    BANK_END = addr;
     true
 }
 
@@ -248,4 +254,285 @@ pub fn door() {
 /// Chest or furnace opened.
 pub fn chest_open() {
     play(S_CHEST, 0x2800, 100);
+}
+
+// ---- Weather: thunder ----
+
+/// SPU RAM just past the cooked bank, where the thunder is built at boot.
+static mut BANK_END: u32 = SPU_BASE;
+/// The thunder roll, synthesised into SPU RAM at boot (no recording, no disc
+/// data): 4 s of filtered noise at 11,025 Hz.
+static mut THUNDER: Option<SfxSample> = None;
+/// Thunder rolls on for seconds, so it gets a voice of its own: on the shared
+/// round-robin the next footstep would cut it off.
+static mut THUNDER_VOICE: Player<1> = Player::new([Voice::V4], 60);
+
+const THUNDER_HZ: u32 = 11_025;
+const THUNDER_LEN: u32 = 4 * THUNDER_HZ;
+const THUNDER_BLOCKS: u32 = (THUNDER_LEN + 27) / 28;
+
+/// The rolls: start (ms), peak (Q15), decay time constant (ms). One sharp
+/// crack-led first peal, then the rumble rolling on in uneven waves.
+const ROLLS: [(u32, i32, u32); 5] = [
+    (0, 32_767, 420),
+    (330, 24_000, 520),
+    (900, 27_000, 600),
+    (1_650, 17_000, 700),
+    (2_450, 11_000, 800),
+];
+
+/// Deterministic synthesis state: noise, two low-passes, the envelope.
+struct Synth {
+    seed: u32,
+    crack: i32,
+    lp1: i32,
+    lp2: i32,
+    wob: i32,
+    n: u32,
+    /// The envelopes, refreshed every 28 samples (2.5 ms): per-sample
+    /// envelopes cost a dozen divides a sample, a second of boot.
+    env: i32,
+    ce: i32,
+}
+
+impl Synth {
+    const fn new() -> Self {
+        Self {
+            seed: 0x7C3A_91E5,
+            crack: 0,
+            lp1: 0,
+            lp2: 0,
+            wob: 0,
+            n: 0,
+            env: 0,
+            ce: 0,
+        }
+    }
+
+    /// Envelope of one roll at sample `n`, Q15: a 30 ms linear attack, then
+    /// exponential decay, done as exp(-t/tau) ~ (1 - t/(4 tau))^4 on Q15.
+    fn roll(n: u32, r: (u32, i32, u32)) -> i32 {
+        let start = r.0 * THUNDER_HZ / 1000;
+        if n < start {
+            return 0;
+        }
+        let t = n - start;
+        let att = 30 * THUNDER_HZ / 1000;
+        if t < att {
+            return (r.1 as u32 * t / att) as i32;
+        }
+        let span = 4 * r.2 * THUNDER_HZ / 1000;
+        let u = t - att;
+        if u >= span {
+            return 0;
+        }
+        let k = ((span - u) << 15) / span; // 1 - t/(4 tau), Q15
+        let k2 = (k * k) >> 15;
+        let k4 = (k2 * k2) >> 15;
+        ((r.1 as u32 * k4) >> 15) as i32
+    }
+
+    /// Next sample, about +/-32k before scaling.
+    fn next(&mut self) -> i32 {
+        self.seed = self
+            .seed
+            .wrapping_mul(1_664_525)
+            .wrapping_add(1_013_904_223);
+        let w = (self.seed >> 16) as i32 - 32_768;
+        // Crack: bright noise (one-pole at about 2 kHz), gone in 0.2 s.
+        self.crack += ((w - self.crack) * 13_000) >> 15;
+        // Rumble: noise through two one-poles at about 90 Hz, made up in gain.
+        self.lp1 += ((w - self.lp1) * 1_700) >> 15;
+        self.lp2 += ((self.lp1 - self.lp2) * 1_700) >> 15;
+        // Slow wobble (about 3 Hz) so the roll swells and sags.
+        self.wob += ((w - self.wob) * 60) >> 15;
+        let n = self.n;
+        self.n += 1;
+        if n % 28 == 0 {
+            let mut env = 0;
+            let mut i = 0;
+            while i < ROLLS.len() {
+                env = env.max(Self::roll(n, ROLLS[i]));
+                i += 1;
+            }
+            self.env = env;
+            self.ce = Self::roll(n, (0, 32_767, 50));
+        }
+        let (env, ce) = (self.env, self.ce);
+        let wob = 24_576 + (self.wob * 12).clamp(-8_192, 8_192); // 0.5..1.0, Q15
+        let rumble = ((self.lp2 * 6) * ((env * wob) >> 15)) >> 15;
+        let crack = (self.crack * ce) >> 16;
+        rumble + crack
+    }
+}
+
+/// SPU-ADPCM, filter 0 to 4 per 28-sample block (the same coding as
+/// tools/convert_sfx.py, with the shift chosen from the block's largest
+/// residual instead of a full search, to keep boot short).
+const ADPCM_K: [(i32, i32); 5] = [(0, 0), (60, 0), (115, -52), (98, -55), (122, -60)];
+
+fn adpcm_block(s: &[i32; 28], p1: &mut i32, p2: &mut i32, out: &mut [u8]) {
+    // Pick the filter whose residuals (on the source) stay smallest.
+    let mut best = (i32::MAX, 0usize);
+    let mut f = 0;
+    while f < 5 {
+        let (k0, k1) = ADPCM_K[f];
+        let (mut a, mut b) = (*p1, *p2);
+        let mut m = 0;
+        let mut i = 0;
+        while i < 28 {
+            let r = s[i] - ((a * k0 + b * k1) >> 6);
+            m = m.max(r.abs());
+            b = a;
+            a = s[i];
+            i += 1;
+        }
+        if m < best.0 {
+            best = (m, f);
+        }
+        f += 1;
+    }
+    let f = best.1;
+    // Largest shift (finest step) whose range covers the residual.
+    let mut range = 12;
+    while range > 0 && (7 << (12 - range)) < best.0 {
+        range -= 1;
+    }
+    let shift = range;
+    let (k0, k1) = ADPCM_K[f];
+    out[0] = (shift as u8) | ((f as u8) << 4);
+    out[1] = 0;
+    let step = 12 - shift;
+    let mut i = 0;
+    while i < 28 {
+        let pred = (*p1 * k0 + *p2 * k1) >> 6;
+        let r = s[i] - pred;
+        let q = if step > 0 {
+            ((r + (1 << (step - 1))) >> step).clamp(-8, 7)
+        } else {
+            r.clamp(-8, 7)
+        };
+        let dec = ((q << step) + pred).clamp(-32_768, 32_767);
+        *p2 = *p1;
+        *p1 = dec;
+        let nib = (q & 0xF) as u8;
+        if i % 2 == 0 {
+            out[2 + i / 2] = nib;
+        } else {
+            out[2 + i / 2] |= nib << 4;
+        }
+        i += 1;
+    }
+}
+
+/// Gain to 0.9 of full scale, Q12. The synthesis is deterministic and peaks
+/// at 28,623 (measured by running the same code on the host), so there is no
+/// peak-finding pass to pay for on the console.
+const THUNDER_GAIN: i32 = 4_220;
+/// Blocks synthesised and uploaded per call of `thunder_step`: about a
+/// quarter of a vblank, once a frame, for the first 25 frames of the menu.
+const THUNDER_STEP: usize = 64;
+
+/// The thunder being built: synthesis state and the next block to write.
+struct Gen {
+    s: Synth,
+    b: u32,
+    at: u32,
+    p1: i32,
+    p2: i32,
+}
+static mut GEN: Option<Gen> = None;
+static mut THUNDER_AT: u32 = 0;
+
+/// Start building the thunder at `addr`. All 4 s in one go cost two thirds of
+/// a second of boot, so it is spread over the first menu frames instead
+/// (`thunder_step`, from `tick`); a strike before it is ready is silent.
+fn thunder_init(addr: u32) {
+    unsafe {
+        THUNDER_AT = addr;
+        GEN = Some(Gen {
+            s: Synth::new(),
+            b: 0,
+            at: addr,
+            p1: 0,
+            p2: 0,
+        });
+    }
+}
+
+/// Synthesise, encode and upload the next THUNDER_STEP blocks, ending with
+/// the self-looping silent block every sample here ends with.
+#[inline(never)]
+fn thunder_step() {
+    let g = unsafe {
+        match (*core::ptr::addr_of_mut!(GEN)).as_mut() {
+            Some(g) => g,
+            None => return,
+        }
+    };
+    let mut buf = [0u32; THUNDER_STEP * 4]; // word aligned for DMA
+    let bytes =
+        unsafe { core::slice::from_raw_parts_mut(buf.as_mut_ptr() as *mut u8, THUNDER_STEP * 16) };
+    let mut blk = [0i32; 28];
+    let mut fill = 0;
+    while fill < THUNDER_STEP && g.b <= THUNDER_BLOCKS {
+        let out = &mut bytes[fill * 16..fill * 16 + 16];
+        if g.b < THUNDER_BLOCKS {
+            let mut i = 0;
+            while i < 28 {
+                let v = if g.b * 28 + (i as u32) < THUNDER_LEN {
+                    g.s.next()
+                } else {
+                    0
+                };
+                blk[i] = ((v * THUNDER_GAIN) >> 12).clamp(-32_768, 32_767);
+                i += 1;
+            }
+            adpcm_block(&blk, &mut g.p1, &mut g.p2, out);
+        } else {
+            out.fill(0);
+            out[1] = 0x07; // loop start + loop end + repeat: park on silence
+        }
+        fill += 1;
+        g.b += 1;
+    }
+    psx_spu::upload_adpcm(SpuAddr::new(g.at), &bytes[..fill * 16]);
+    g.at += fill as u32 * 16;
+    if g.b > THUNDER_BLOCKS {
+        unsafe {
+            THUNDER = Some(SfxSample::resident(
+                SpuAddr::new(THUNDER_AT),
+                THUNDER_HZ,
+                THUNDER_BLOCKS,
+            ));
+            GEN = None;
+        }
+    }
+}
+
+/// A peal of thunder, heard wherever the strike was (Java plays it at volume
+/// 10,000: full loudness at any distance), at `pct` percent pitch (Java's
+/// random 0.8 to 1.0).
+pub fn thunder(pct: u32) {
+    unsafe {
+        if !READY {
+            return;
+        }
+        let Some(sample) = THUNDER else {
+            return;
+        };
+        let vol = (0x3400 * VOL_PCT / 100) as i16;
+        let shot = OneShot::new(sample, Volume(vol))
+            .with_pitch(Pitch::for_frequency(THUNDER_HZ * pct / 100, 44100));
+        THUNDER_VOICE.play(&shot, TICK);
+    }
+}
+
+/// The crack where a bolt lands: Java's explosion sound at pitch 0.5 to 0.7,
+/// volume 2.0, so it fades out over 32 blocks.
+pub fn bolt_impact(dist_blocks: i32, pct: u32) {
+    let v = 0x3800 * (32 - dist_blocks.clamp(0, 32)) / 32;
+    if v > 0x0200 {
+        play(S_EXPLODE, v as i16, pct);
+    }
 }

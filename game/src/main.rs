@@ -31,6 +31,7 @@ mod units;
 mod tunelab;
 #[cfg(any(feature = "pick-lab", feature = "look-lab"))]
 mod picklab;
+mod weather;
 mod world;
 
 // Profiler stage IDs (PSoXide --profile-log). Arbitrary distinct numbers; the
@@ -3082,7 +3083,11 @@ fn main() {
                     }
                     let dt = day % DAY_LEN;
                     if bed_time(dt) {
-                        weather_clear(); // sleeping ends the rain
+                        // Java resets the weather cycle when the night is
+                        // slept through in rain (ServerLevel.resetWeatherCycle).
+                        if weather::raining() {
+                            weather::sleep_clear();
+                        }
 
                         // Only the world clock skips. `frame` keeps counting
                         // the frames that actually happened.
@@ -4198,7 +4203,7 @@ fn menu_button_now(font: &FontAtlas, y: i16, label: &str, sel: bool) {
 #[inline(never)] // once, at boot: kept out of main() so the size attribute holds
 fn reset_game_state() {
     tut_reset();
-    weather_clear();
+    weather::reset();
     unsafe {
         let mut i = 0;
         while i < BLOCK_KINDS {
@@ -4573,27 +4578,7 @@ fn spawn_player() -> Player {
     }
 }
 
-/// Time of day, weather, terrain light and horizon colour for this frame.
-///
-/// Pulled out of the gameplay loop rather than left inline: the loop is one
-/// enormous function and MIPS branches only reach +/-128KB, so every block that
-/// Weather, Java's cycle (minecraft.wiki/w/Weather): rain stays on for 12,000
-/// to 24,000 game ticks and off for 12,000 to 180,000, a new random length
-/// each time; a new world starts clear. Rain fades in and out over
-/// RAIN_RAMP so a shower does not snap on mid-stride. Sleeping through rain
-/// clears it (minecraft.wiki/w/Bed). Not saved: a loaded world rolls anew.
-static mut WEATHER_RAIN: bool = false;
-static mut WEATHER_T: u32 = 0; // sim ticks left in this spell (0 = not rolled)
-static mut RAIN_Q: u32 = 0; // 0..RAIN_RAMP, the fade
-const RAIN_RAMP: u32 = secs(8) as u32;
-/// Java's second weather flag (minecraft.wiki/w/Weather): thunder, on for
-/// 3,600 to 15,600 ticks and off for 12,000 to 180,000, cycling on its own;
-/// a thunderstorm is rain while it is on.
-static mut WEATHER_THUNDER: bool = false;
-static mut THUNDER_T: u32 = 0;
-static mut THUNDER_Q: u32 = 0; // 0..RAIN_RAMP, the storm's fade
-
-/// A random number for world timers (weather, crops, saplings).
+/// A random number for world timers (weather, crops, saplings, lightning).
 fn world_rand() -> u32 {
     static mut SEED: u32 = 0x2545_F491;
     unsafe {
@@ -4602,66 +4587,13 @@ fn world_rand() -> u32 {
     }
 }
 
-fn weather_roll(rain: bool) -> u32 {
-    let (lo, span) = if rain { (12_000, 12_001) } else { (12_000, 168_001) };
-    units::java_ticks(lo + (world_rand() % span) as i32) as u32
-}
-
-fn thunder_roll(on: bool) -> u32 {
-    let (lo, span) = if on { (3_600, 12_001) } else { (12_000, 168_001) };
-    units::java_ticks(lo + (world_rand() % span) as i32) as u32
-}
-
-/// One sim tick of weather.
-fn weather_tick() {
-    unsafe {
-        if WEATHER_T == 0 {
-            WEATHER_T = weather_roll(WEATHER_RAIN);
-        }
-        WEATHER_T -= 1;
-        if WEATHER_T == 0 {
-            WEATHER_RAIN = !WEATHER_RAIN;
-            WEATHER_T = weather_roll(WEATHER_RAIN);
-        }
-        if WEATHER_RAIN {
-            RAIN_Q = (RAIN_Q + 1).min(RAIN_RAMP);
-        } else {
-            RAIN_Q = RAIN_Q.saturating_sub(1);
-        }
-        if THUNDER_T == 0 {
-            THUNDER_T = thunder_roll(WEATHER_THUNDER);
-        }
-        THUNDER_T -= 1;
-        if THUNDER_T == 0 {
-            WEATHER_THUNDER = !WEATHER_THUNDER;
-            THUNDER_T = thunder_roll(WEATHER_THUNDER);
-        }
-        if WEATHER_RAIN && WEATHER_THUNDER {
-            THUNDER_Q = (THUNDER_Q + 1).min(RAIN_RAMP);
-        } else {
-            THUNDER_Q = THUNDER_Q.saturating_sub(1);
-        }
-    }
-}
-
-/// Clear the sky (sleeping through rain, a new world).
-fn weather_clear() {
-    unsafe {
-        WEATHER_RAIN = false;
-        WEATHER_T = 0;
-        RAIN_Q = 0;
-        WEATHER_THUNDER = false;
-        THUNDER_T = 0;
-        THUNDER_Q = 0;
-    }
-}
-
-/// Thunderstorm strength, 0 to 255 (it only builds while it rains).
+/// Thunderstorm strength, 0 to 255: Java's thunder level, which carries the
+/// rain level in it (weather.rs).
 fn thunder_amount() -> i32 {
     if FORCE_TIME >= 0 {
         return 0;
     }
-    (unsafe { THUNDER_Q } * 255 / RAIN_RAMP) as i32
+    weather::thunder()
 }
 
 /// Rain strength, 0 (clear) to 255 (full shower).
@@ -4669,9 +4601,24 @@ fn rain_amount() -> i32 {
     if FORCE_TIME >= 0 {
         return 0; // deterministic captures stay dry
     }
-    (unsafe { RAIN_Q } * 255 / RAIN_RAMP) as i32
+    weather::rain()
 }
 
+/// Java's Level.isRaining (the rain level above 0.2), what rain-dependent
+/// rules read: wet farmland, doused fire, undead kept from burning.
+fn is_raining() -> bool {
+    FORCE_TIME < 0 && weather::raining()
+}
+
+/// Java's Level.isThundering (the thunder level above 0.9).
+fn is_thundering() -> bool {
+    FORCE_TIME < 0 && weather::thundering()
+}
+
+/// Time of day, weather, terrain light and horizon colour for this frame.
+///
+/// Pulled out of the gameplay loop rather than left inline: the loop is one
+/// enormous function and MIPS branches only reach +/-128KB, so every block that
 /// can live behind a call has to.
 #[inline(never)]
 /// Time of day, rain, terrain light and sky colour from the world clock.
@@ -4723,6 +4670,23 @@ fn world_lighting(day: u32) -> (u32, i32, u8, (u8, u8, u8)) {
         );
     }
     sky = apply_sunset(sky, tod, rain > 128);
+    // A lightning flash. Java blends the sky 45% toward (0.8, 0.8, 1.0)
+    // while skyFlashTime is up (Level.getSkyColor), and lights the world as
+    // full daylight (LightTexture takes a sky brightness of 1), which the
+    // wiki puts as "slightly greater than full daylight". Where no sky light
+    // reaches, underground, the flash fades with the cave amount.
+    let f = weather::flash();
+    if f > 0 {
+        sky = (
+            lerp_u8(sky.0 as i32, 204, f, 255),
+            lerp_u8(sky.1 as i32, 204, f, 255),
+            lerp_u8(sky.2 as i32, 255, f, 255),
+        );
+        if weather::flashing() {
+            let open = 255 - unsafe { CAVE } as i32;
+            light = (light as i32 + (128 - light as i32) * open / 255) as u8;
+        }
+    }
     // The Inferno has no sky: it is a closed cavern lit by its own lava and
     // lumistone. Java fogs it dark red, and without this the roof reads as an
     // overcast afternoon.
@@ -4864,7 +4828,8 @@ fn world_tick(player: &mut Player, dwell: &mut u16, n: u32) -> bool {
         tnt_tick(player); // burn lit fuses; explode on zero
         crop_tick(); // age planted crops; ripen the mature ones
         sap_tick(); // grow planted saplings into trees
-        weather_tick();
+        weather::tick();
+        weather::lightning_tick(player);
         if t % REDSTONE_PERIOD == 0 {
             redstone_tick(); // budgeted: amortized, only over player-edited blocks
         }
@@ -5142,7 +5107,7 @@ fn update_survival(player: &mut Player) {
         player.air = MAX_AIR;
         // Rain puts out a burning player under the open sky
         // (minecraft.wiki/w/Fire).
-        if player.burn > 0 && rain_amount() > 0 && under_open_sky(player) {
+        if player.burn > 0 && is_raining() && under_open_sky(player) {
             player.burn = 0;
         }
     }
@@ -6578,6 +6543,10 @@ fn render_mob(cam: &Camera, m: mob::MobView, count: &mut usize) {
     } else if m.hurt {
         let c = mob_color(m.kind);
         ((c.0 / 2).saturating_add(128), c.1 / 2, c.2 / 2)
+    } else if m.charged {
+        // Java's charged creeper wears a shimmering blue aura; this blinks
+        // the body to it.
+        (110, 190, 255)
     } else {
         mob_color(m.kind)
     };
@@ -6632,7 +6601,7 @@ fn render_mob(cam: &Camera, m: mob::MobView, count: &mut usize) {
         }
         let body_y0 = if legs { y + leg_h } else { y };
         let body_y1 = y + h * 13 / 16;
-        if m.priming || m.hurt || !mob_body_textured(m.kind) {
+        if m.priming || m.hurt || m.charged || !mob_body_textured(m.kind) {
             emit_box(
                 cam,
                 x - hw,
@@ -6802,7 +6771,7 @@ fn emit_face_box(
     m: mob::MobView,
     count: &mut usize,
 ) {
-    if m.priming || m.hurt {
+    if m.priming || m.hurt || m.charged {
         emit_box(cam, x0, y0, z0, x1, y1, z1, base, count);
         return;
     }
@@ -7273,6 +7242,30 @@ fn give_drop(wx: i32, wy: i32, wz: i32, item: u8, seed: u32) {
     }
 }
 
+/// Lightning burns up dropped items in its strike box, 3 blocks around the
+/// bolt and from 3 below to 9 above (an item entity has 5 health and the bolt
+/// deals 5). Items already flying to the player are in the inventory.
+fn burn_drops(x: i32, y: i32, z: i32) {
+    let r = 3 * BLOCK;
+    let mut i = 0usize;
+    while i < MAX_DROPS {
+        unsafe {
+            if DROP_ITEM[i] != AIR && DROP_FLY[i] == 0 {
+                let (dx, dy, dz) = (
+                    (DROP_X[i] >> 2) - x,
+                    (DROP_Y[i] >> 2) - y,
+                    (DROP_Z[i] >> 2) - z,
+                );
+                if dx.abs() <= r && dz.abs() <= r && dy >= -r && dy <= 9 * BLOCK {
+                    spawn_particles(x + dx, y + dy, z + dz, (60, 60, 60), 4, i as u32, 12);
+                    DROP_ITEM[i] = AIR;
+                }
+            }
+        }
+        i += 1;
+    }
+}
+
 fn tick_drops(player: &Player) {
     let mut i = 0usize;
     while i < MAX_DROPS {
@@ -7401,6 +7394,9 @@ fn project_point_gte(cam: &Camera, p: (i32, i32, i32)) -> Proj {
 
 #[inline(never)]
 fn render_particles(cam: &Camera) {
+    // Lightning first: its ribbons link straight into world depth slots, so
+    // no tail packet may be pending yet.
+    weather::render_bolts(cam);
     // Runs after render_mobs, so the GTE translation is already 0
     // (camera-relative); each particle is one hardware RTPS.
     let mut i = 0usize;
@@ -9386,12 +9382,7 @@ fn draw_sky(cam: &Camera, day: u32, tod: u32, light: u8, horizon: (u8, u8, u8), 
     // A drifting band of white puffs high in the sky, dimmed by skylight. Drawn
     // OPAQUE (Java clouds read as solid white) -- the old Average blend washed
     // them to pale sky-blue. Widths vary a little for a fluffier band.
-    let lit = light as u32;
-    let cloud = (
-        (0xF0 * lit / 128).min(255) as u8,
-        (0xF2 * lit / 128).min(255) as u8,
-        (0xF8 * lit / 128).min(255) as u8,
-    );
+    let cloud = cloud_color(tod, light);
     // Clouds sit on a flat layer overhead, so their screen size has to fall off
     // with distance: half-width scales with sin(elevation) over camera depth.
     // The old code drew a FIXED 22..40px half-width in every direction, which is
@@ -9441,6 +9432,41 @@ fn draw_sky(cam: &Camera, day: u32, tod: u32, light: u8, horizon: (u8, u8, u8), 
         }
         i += 1;
     }
+}
+
+/// Cloud colour. In clear weather the deck is white dimmed by the skylight,
+/// as before. Weather greys it Java's way (ClientLevel.getCloudColor): rain
+/// blends it 95% toward 0.6 of its own grey and thunder a further 95% toward
+/// 0.2 of it, both by their levels, under the time of day's brightness. Under
+/// a full thunderstorm the deck goes from white to a dark slate.
+#[inline(never)]
+fn cloud_color(tod: u32, light: u8) -> (u8, u8, u8) {
+    let rain = rain_amount();
+    let thunder = thunder_amount();
+    let lit = light as i32;
+    let mut c = (
+        (0xF0 * lit / 128).min(255),
+        (0xF2 * lit / 128).min(255),
+        (0xF8 * lit / 128).min(255),
+    );
+    if rain > 0 || thunder > 0 {
+        // Java's base is white scaled by the clear-sky brightness; take it
+        // from the weather-free curve so the rain is not dimmed twice.
+        let day = day_light(tod, 0, 0) as i32;
+        c = (0xF0 * day / 128, 0xF2 * day / 128, 0xF8 * day / 128);
+        let grey = |c: (i32, i32, i32), k: i32, lvl: i32| {
+            let g = (c.0 * 30 + c.1 * 59 + c.2 * 11) / 100 * k / 10;
+            let w = lvl * 95 / 100; // 0..242 of 255
+            (
+                c.0 + (g - c.0) * w / 255,
+                c.1 + (g - c.1) * w / 255,
+                c.2 + (g - c.2) * w / 255,
+            )
+        };
+        c = grey(c, 6, rain);
+        c = grey(c, 2, thunder);
+    }
+    (c.0 as u8, c.1 as u8, c.2 as u8)
 }
 
 /// Depth-to-OT-slot for world geometry. Slot 0 is reserved for the HUD -- it
@@ -10332,6 +10358,27 @@ fn ui_quad_blend_depth(v: [(i16, i16); 4], r: u8, g: u8, b: u8, slot: usize) {
     }
 }
 
+/// Additive flat quad (GP0 0x2A with the Add blend), linked into a world
+/// depth slot: lightning, which Java blends additively too.
+fn ui_quad_add_depth(v: [(i16, i16); 4], c: (u8, u8, u8), slot: usize) {
+    let p = ui_alloc(7);
+    if p.is_null() {
+        return;
+    }
+    let mat = TextureMaterial::blended(0, 0, c, BlendMode::Add);
+    unsafe {
+        *p.add(1) = mat.draw_mode_word();
+        *p.add(2) = mat.texture_window_word();
+        *p.add(3) = 0x2A00_0000 | rgb(c.0, c.1, c.2);
+        *p.add(4) = xy(v[0].0, v[0].1);
+        *p.add(5) = xy(v[1].0, v[1].1);
+        *p.add(6) = xy(v[2].0, v[2].1);
+        *p.add(7) = xy(v[3].0, v[3].1);
+        let arena = RENDER_ARENA;
+        ui_flush(&mut (*core::ptr::addr_of_mut!(OT))[arena], slot);
+    }
+}
+
 /// Monochrome line (GP0 0x40).
 fn ui_line(x0: i16, y0: i16, x1: i16, y1: i16, r: u8, g: u8, b: u8) {
     let line = LineMono::new(x0, y0, x1, y1, r, g, b);
@@ -11194,7 +11241,7 @@ fn plant_crop_in(x: i32, y: i32, z: i32, d: u8) {
 /// in for farmland here. 162 block reads, only on a random tick.
 fn hydrated(x: i32, y: i32, z: i32) -> bool {
     let sy = y - 1; // soil block under the crop
-    if rain_amount() > 0 && y >= world::surface_y(x, z) {
+    if is_raining() && y >= world::surface_y(x, z) {
         return true;
     }
     let mut dz = -4;
@@ -11586,99 +11633,19 @@ fn draw_frame_sky(cam: &Camera, day: u32, tod: u32, light: u8, sky: (u8, u8, u8)
 }
 
 /// Java's internal sky light under open sky (minecraft.wiki/w/Light#Internal
-/// sky light): a stepped table, every boundary copied from the wiki's chart,
-/// in clear weather, rain or snowfall, and a thunderstorm. Each row is the
-/// first tick of a level; the level holds until the next row.
-const SKY_CLEAR: [(i32, i32); 23] = [
-    (0, 15),
-    (12_041, 14),
-    (12_210, 13),
-    (12_377, 12),
-    (12_542, 11),
-    (12_705, 10),
-    (12_867, 9),
-    (13_027, 8),
-    (13_188, 7),
-    (13_348, 6),
-    (13_509, 5),
-    (13_670, 4),
-    (22_331, 5),
-    (22_492, 6),
-    (22_653, 7),
-    (22_813, 8),
-    (22_974, 9),
-    (23_135, 10),
-    (23_297, 11),
-    (23_460, 12),
-    (23_624, 13),
-    (23_791, 14),
-    (23_961, 15),
-];
-const SKY_RAIN: [(i32, i32); 17] = [
-    (0, 12),
-    (12_010, 11),
-    (12_256, 10),
-    (12_497, 9),
-    (12_734, 8),
-    (12_969, 7),
-    (13_203, 6),
-    (13_436, 5),
-    (13_670, 4),
-    (22_331, 5),
-    (22_566, 6),
-    (22_799, 7),
-    (23_032, 8),
-    (23_267, 9),
-    (23_505, 10),
-    (23_746, 11),
-    (23_992, 12),
-];
-const SKY_THUNDER: [(i32, i32); 13] = [
-    (0, 9),
-    (60, 10),
-    (11_941, 9),
-    (12_300, 8),
-    (12_648, 7),
-    (12_990, 6),
-    (13_330, 5),
-    (13_670, 4),
-    (22_331, 5),
-    (22_672, 6),
-    (23_011, 7),
-    (23_353, 8),
-    (23_701, 9),
-];
-
-/// The wiki's table at Java tick `j` (0..24,000) for the given weather.
-fn sky_table(j: i32, rain: bool, thunder: bool) -> i32 {
-    let t: &[(i32, i32)] = if thunder {
-        &SKY_THUNDER
-    } else if rain {
-        &SKY_RAIN
-    } else {
-        &SKY_CLEAR
-    };
-    let mut l = t[0].1;
-    let mut i = 0;
-    while i < t.len() && t[i].0 <= j {
-        l = t[i].1;
-        i += 1;
-    }
-    l
-}
-
-/// Rain and a thunderstorm as Java's table switches: once the shower has
-/// faded in halfway.
-fn weather_now() -> (bool, bool) {
-    let rain = rain_amount() > 128;
-    (rain, rain && thunder_amount() > 128)
-}
-
-/// Internal sky light under open sky now, for mob spawning, crops, beds and
-/// burning undead.
+/// sky light), computed the way Java computes it rather than read off the
+/// wiki's tables: skyDarken = (int)((1 - b x (1 - 5/16 rain) x (1 - 5/16
+/// thunder)) x 11), b the clear-sky brightness of sky_bright_q12, and the
+/// light is 15 less that. The rain and thunder terms take the weather's
+/// current levels, so a shower still arriving darkens by as much as has
+/// arrived. The tables it replaces switched from clear to rain all at once
+/// halfway through the fade. At full clear, rain and thunder this lands on
+/// the wiki's clear, rain and thunderstorm charts to within 10 game ticks of
+/// each step (121, 88 and 69 of the 24,000 ticks a step late or early, from
+/// the Q12 sun curve).
 fn sky_level(t: u32) -> i32 {
-    let (rain, thunder) = weather_now();
-    sky_table(java_time(t), rain, thunder)
+    let b = sky_bright_q12(java_time(t), rain_amount(), thunder_amount());
+    15 - (((4096 - b) * 11) >> 12)
 }
 
 /// Java's celestial angle (minecraft.wiki/w/Daylight_cycle#Sky angle), a
@@ -11768,14 +11735,14 @@ fn java_time(t: u32) -> i32 {
 /// weather, 12,010 to 23,991 in rain (minecraft.wiki/w/Daylight_cycle,
 /// /w/Light#Internal sky light).
 fn bed_time(t: u32) -> bool {
-    sky_level(t) <= 11 || weather_now().1
+    sky_level(t) <= 11 || is_thundering()
 }
 
-/// The internal sky light mob spawning reads: the table's, except that in a
+/// The internal sky light mob spawning reads: the sky light, except that in a
 /// thunderstorm hostile mobs spawn as if it were 5 (minecraft.wiki/w/Light).
 fn spawn_sky(t: u32) -> i32 {
     let l = sky_level(t);
-    if weather_now().1 {
+    if is_thundering() {
         l.min(5)
     } else {
         l
@@ -11786,7 +11753,7 @@ fn spawn_sky(t: u32) -> i32 {
 /// to 12,541 in clear weather, minecraft.wiki/w/Daylight_cycle) and not in
 /// rain, which wets them.
 fn undead_burn_time(t: u32) -> bool {
-    sky_level(t) >= 12 && rain_amount() <= 128
+    sky_level(t) >= 12 && !is_raining()
 }
 
 #[inline]
