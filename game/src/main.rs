@@ -2675,6 +2675,9 @@ fn main() {
         let mut pad = state.buttons;
         let mut lstick = state.sticks.left_centered();
         let mut rstick = state.sticks.right_centered();
+        if save::busy() {
+            save_step(&mut pad, previous);
+        }
         // Safety net for a controller that wasn't ready at the boot handshake
         // (or gets re-plugged): re-assert analog while the pad still reports
         // non-analog. In the normal case the pre-interrupt boot enable already
@@ -2814,16 +2817,8 @@ fn main() {
                             unsafe { OPT_MSG = "" };
                         }
                         OPT_SAVE => {
-                            let ok = save::save(&player, day);
-                            unsafe {
-                                OPT_MSG = if ok {
-                                    "SAVED"
-                                } else if save::selftest() {
-                                    "CARD FULL OR WRITE-PROTECTED"
-                                } else {
-                                    "NO MEMORY CARD IN SLOT 1"
-                                };
-                            }
+                            save::begin(&player, day);
+                            unsafe { OPT_MSG = "SAVING - DO NOT REMOVE THE CARD" };
                         }
                         OPT_TUTORIAL => {
                             unsafe { TUT_ENABLED = !TUT_ENABLED };
@@ -4626,6 +4621,18 @@ fn is_thundering() -> bool {
 /// `day`, not a frame count: sleeping skips this forward, and the weather and
 /// the sun are meant to move with it.
 fn world_lighting(day: u32) -> (u32, i32, u8, (u8, u8, u8)) {
+    #[cfg(feature = "save-lab")]
+    unsafe {
+        #[no_mangle]
+        static mut VOXIDE_LAB_DAY: u32 = 0;
+        static mut LAB_BED: bool = false;
+        VOXIDE_LAB_DAY = day;
+        if !LAB_BED {
+            LAB_BED = true;
+            RESPAWN_BX = WORLD_BX + 7;
+            RESPAWN_BZ = WORLD_BZ - 5;
+        }
+    }
     let tod = if FORCE_TIME >= 0 {
         FORCE_TIME as u32
     } else {
@@ -4732,6 +4739,26 @@ fn enchant_next(p: &Player) -> u8 {
     }
 }
 
+/// One frame of a save in progress (save.rs writes a card frame a game frame
+/// so the menu keeps drawing). The menu takes no new presses until it ends,
+/// so it cannot be closed, or a load started, under a half-written card.
+#[inline(never)]
+#[optimize(size)]
+fn save_step(pad: &mut ButtonState, previous: ButtonState) {
+    *pad = previous;
+    if let Some(o) = save::pump() {
+        unsafe {
+            OPT_MSG = match o {
+                save::Outcome::Saved => "SAVED",
+                save::Outcome::NoCard => "NO MEMORY CARD IN SLOT 1",
+                save::Outcome::Full => "MEMORY CARD FULL",
+                save::Outcome::Removed => "CARD REMOVED - NOT SAVED",
+                save::Outcome::Failed => "SAVE FAILED - CHECK THE CARD",
+            };
+        }
+    }
+}
+
 /// Load the card save and put the world in the state it describes: the
 /// dimension it was saved in (a loading screen when that differs from this
 /// one), then its edits, raw-set with the touched chunks remeshed, then the
@@ -4752,15 +4779,24 @@ fn load_game(player: &mut Player, day: &mut u32, fb: &mut FrameBuffer, font: &Fo
         draw_loading(fb, font, done, total)
     });
     finish_loading(fb, font);
-    if let Some((rx, rz)) = meta.respawn {
-        unsafe {
-            RESPAWN_BX = rx;
-            RESPAWN_BZ = rz;
-        }
+    // The world spawn follows the seed (it is picked from the terrain noise
+    // alone), so a save made on another seed than this session's gets its
+    // own. A save from before respawn points were kept respawns there, as a
+    // Java world with no bed set does.
+    let (wbx, wbz) = if SPAWN_GREEN {
+        world::pick_spawn(SPAWN_BX, SPAWN_BZ)
+    } else {
+        (SPAWN_BX, SPAWN_BZ)
+    };
+    let (rx, rz) = meta.respawn.unwrap_or((wbx, wbz));
+    unsafe {
+        WORLD_BX = wbx;
+        WORLD_BZ = wbz;
+        RESPAWN_BX = rx;
+        RESPAWN_BZ = rz;
     }
-    if let Some(d) = meta.day {
-        *day = d;
-    }
+    *day = meta.day;
+    weather::restore(meta.weather);
     save::apply_edits();
     regrow_from_edits();
     world::recenter(bx, bz);
@@ -10635,6 +10671,11 @@ fn draw_options(font: &FontAtlas, sel: usize, player: Player) {
     let msg = unsafe { OPT_MSG };
     if !msg.is_empty() {
         draw_centered(font, 170, msg, (0xF0, 0xE0, 0x80));
+    }
+    if save::busy() {
+        // The save runs a card frame per game frame: show it moving.
+        rect(60, 182, 200, 4, 40, 40, 40);
+        rect(60, 182, (200 * save::progress() / 256) as i16, 4, 0x70, 0xE0, 0x70);
     }
 }
 

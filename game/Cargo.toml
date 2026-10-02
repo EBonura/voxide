@@ -38,6 +38,13 @@ mob-lab = []
 # Headless tuning measurements only (src/tunelab.rs): a scripted arena and
 # timeline of movement and survival scenarios. Never ship.
 tune-lab = []
+# Headless save tests only (main.rs world_lighting): publishes the world
+# clock as VOXIDE_LAB_DAY and moves the respawn point 7 blocks east and 5
+# north of the world spawn once, as sleeping in a bed would. Never ship.
+save-lab = []
+# save-lab plus a pulled card: the first save stops after its third card
+# frame as if the card were removed there. Never ship.
+save-pull = ["save-lab"]
 # Headless storm captures and gates only (weather.rs): a full thunderstorm
 # from the first tick and a bolt 12 blocks ahead every 4 s. Never ship.
 storm-lab = []
