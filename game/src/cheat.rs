@@ -1,17 +1,14 @@
-//! Hidden cheat menu, for testing on hardware. Opened from the in-game
-//! OPTIONS menu (START) by holding L1 + R1 and pressing SELECT; nothing on
-//! screen advertises it. Menu code, so it is built for size and kept out of
-//! the gameplay loop (MIPS branches reach +/-128 KB and the loop is at the
-//! edge).
-//!
-//! Using any cheat but the XYZ/FPS readout marks the world: the save's world
-//! flags carry bit 1 from then on (save.rs), and a world that never used one
-//! saves exactly as before.
+//! The CHEATS page, opened from the in-game OPTIONS menu: flight, god mode,
+//! the coordinates readout, a full kit, the time of day, the weather and
+//! lightning, mob spawning and travel. Java's equivalents are commands
+//! (/time, /weather, /summon, /gamemode, /tp), and Java does not mark a
+//! world for using them, so neither does VoXide (0.3.0 marked it in the
+//! save's world flags; that bit is now written 0 and ignored). Menu code,
+//! so it is built for size and kept out of the gameplay loop (MIPS branches
+//! reach +/-128 KB and the loop is at the edge).
 
 use crate::*;
 
-/// A cheat changed this world (saved in the world flags).
-static mut USED: bool = false;
 /// Health, hunger and breath held full; nothing can kill you.
 static mut GOD: bool = false;
 /// Block coordinates and frame rate in the top-left corner.
@@ -116,21 +113,6 @@ pub enum Act {
     Home,
 }
 
-/// The hidden combo: SELECT pressed while L1 and R1 are held.
-pub fn combo(pad: ButtonState, prev: ButtonState) -> bool {
-    pad.is_held(button::L1) && pad.is_held(button::R1) && pad.pressed_since(prev, button::SELECT)
-}
-
-pub fn used() -> bool {
-    unsafe { USED }
-}
-
-/// A load sets the flag from the save. God mode still on from before the
-/// load marks the loaded world as soon as it is saved.
-pub fn set_used(on: bool) {
-    unsafe { USED = on || GOD };
-}
-
 pub fn god() -> bool {
     unsafe { GOD }
 }
@@ -142,7 +124,6 @@ pub fn hud() -> bool {
 /// Everything back to a clean game (a fresh world).
 pub fn reset() {
     unsafe {
-        USED = false;
         GOD = false;
         MSG = "";
     }
@@ -157,10 +138,7 @@ pub fn hold_god(p: &mut Player) {
 }
 
 fn mark(msg: &'static str) {
-    unsafe {
-        USED = true;
-        MSG = msg;
-    }
+    unsafe { MSG = msg };
 }
 
 /// D-pad LEFT/RIGHT step a choice row, CROSS acts on the selected row.
@@ -347,10 +325,10 @@ fn put_int(buf: &mut [u8], mut n: usize, v: i32) -> usize {
 #[inline(never)]
 #[optimize(size)]
 pub fn draw(font: &FontAtlas, sel: usize, player: &Player) {
-    menu_frame(font, if used() { "CHEATS - WORLD MARKED" } else { "CHEATS" });
+    menu_frame(font, "CHEATS");
     let mut hx = hint_item(font, MENU_TEXT_X, MENU_HINT_Y, "X", PS_CROSS, "DO");
     hx = hint_item(font, hx, MENU_HINT_Y, "< >", PS_KEY, "CHOOSE");
-    hint_item(font, hx, MENU_HINT_Y, "O", PS_CIRCLE, "CLOSE");
+    hint_item(font, hx, MENU_HINT_Y, "O", PS_CIRCLE, "BACK");
     let n = ROWS.len();
     let vis = 8;
     let start = list_window(n, vis, sel);
