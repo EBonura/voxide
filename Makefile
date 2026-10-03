@@ -4,10 +4,10 @@
 ROOT     := $(CURDIR)
 GAME     := $(ROOT)/game
 # The locked PSoXide components are imported into .psoxide by
-# tools/bootstrap-components.py. The crate paths in game/Cargo.toml point
-# there, so this builds from a clean clone with no sibling checkout: Cargo
-# resolves path dependencies relative to the manifest and no variable could
-# move them.
+# psoxide-components (the SDK's tools/psoxide-link). The crate paths in
+# game/Cargo.toml point there, so this builds from a clean clone with no
+# sibling checkout: Cargo resolves path dependencies relative to the manifest
+# and no variable could move them.
 PSOXIDE  ?= $(ROOT)/.psoxide
 MKISOPSX := $(PSOXIDE)/tools/mkisopsx
 TARGET   := mipsel-sony-psx
@@ -42,19 +42,25 @@ help:
 
 # Which PSoXide this is built against. components.lock.json pins the SDK,
 # editor/engine and emulator-library revisions separately, the same lock the
-# rest of the game fleet uses, and tools/bootstrap-components.py imports them
+# rest of the game fleet uses, and psoxide-components imports them
 # into .psoxide so the crate paths and the linker script resolve. An unchanged
 # lock is verified against its receipt and not fetched again.
 #
 # PSOXIDE_FROM=/path/to/tree overrides the lock with a working tree, which is
 # how the demo disc puts every program it presses on one SDK.
+# psoxide-components is installed once per SDK revision, from the revision the
+# lock pins, under target/.
+SDK_REV    := $(shell sed -n '/"sdk": *{/,/"revision"/s/.*"revision": *"\([0-9a-f]*\)".*/\1/p' "$(ROOT)/components.lock.json")
+COMPONENTS := $(ROOT)/target/psoxide-components/$(SDK_REV)
 PSOXIDE_FROM ?=
 psoxide:
 	@if [ -n "$(PSOXIDE_FROM)" ]; then \
 		cargo run -q --manifest-path "$(PSOXIDE_FROM)/tools/psoxide-link/Cargo.toml" -- \
 			--from "$(PSOXIDE_FROM)" --into "$(PSOXIDE)"; \
 	else \
-		python3 "$(ROOT)/tools/bootstrap-components.py" --root "$(PSOXIDE)" --lock "$(ROOT)/components.lock.json"; \
+		[ -x "$(COMPONENTS)/bin/psoxide-components" ] || cargo install -q --locked \
+			--git https://github.com/EBonura/PSoXide --rev $(SDK_REV) --root "$(COMPONENTS)" psoxide-link; \
+		"$(COMPONENTS)/bin/psoxide-components" --root "$(PSOXIDE)" --lock "$(ROOT)/components.lock.json"; \
 	fi
 
 # Profile-guided optimisation through the SDK's shared driver
