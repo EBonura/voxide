@@ -123,18 +123,18 @@ run: install
 profile:
 	@$(MAKE) --no-print-directory compile FEATURES=emulator-telemetry
 	@$(MAKE) --no-print-directory pack PACK_EXE="$(EXE)" PACK_OUT="$(DIST)/voxide.bin"
-	@mkdir -p $(CAPTURE_DIR)
+	@mkdir -p "$(CAPTURE_DIR)"
 	$(PSOXIDE_LAUNCH) \
-		--path $(DIST)/voxide.cue \
+		--path "$(DIST)/voxide.cue" \
 		--embedded-playtest \
 		--steps $(PSOXIDE_PROFILE_STEPS) \
 		--pad-pulses '$(PSOXIDE_START_PULSE)' \
-		--profile-log $(CAPTURE_DIR)/voxide-profile.csv \
-		--counter-log $(CAPTURE_DIR)/voxide-counter.csv \
+		--profile-log "$(CAPTURE_DIR)/voxide-profile.csv" \
+		--counter-log "$(CAPTURE_DIR)/voxide-counter.csv" \
 		--dump-guest-profile \
-		--dump-hw $(CAPTURE_DIR)/voxide-profile.ppm
+		--dump-hw "$(CAPTURE_DIR)/voxide-profile.ppm"
 	@echo "PROFILE -> $(CAPTURE_DIR)/voxide-profile.csv (per-frame stage cycles)"
-	@python3 tools/profile_report.py $(CAPTURE_DIR)/voxide-profile.csv
+	@python3 tools/profile_report.py "$(CAPTURE_DIR)/voxide-profile.csv"
 
 # Regenerating the profile and picking the variant need the emulator:
 #   make pgo-collect FRONTEND=/path/to/frontend   (after gameplay code changes or an SDK repin)
@@ -190,23 +190,23 @@ pgo-choose: psoxide
 	@$(MAKE) --no-print-directory compile
 
 smoke: disc
-	@mkdir -p $(CAPTURE_DIR)
+	@mkdir -p "$(CAPTURE_DIR)"
 	$(PSOXIDE_LAUNCH) \
-		--path $(DIST)/voxide.cue \
+		--path "$(DIST)/voxide.cue" \
 		--embedded-playtest \
 		--steps $(PSOXIDE_SMOKE_STEPS) \
-		--dump-hw $(CAPTURE_DIR)/voxide-hw.ppm \
-		--dump-display $(CAPTURE_DIR)/voxide-display.ppm \
+		--dump-hw "$(CAPTURE_DIR)/voxide-hw.ppm" \
+		--dump-display "$(CAPTURE_DIR)/voxide-display.ppm" \
 		--dump-hash
 	@echo "SMOKE -> $(CAPTURE_DIR)/voxide-display.ppm"
 
 # clean leaves $(CAPTURE_DIR) alone: captures/ is local run history, not build output.
 clean:
-	rm -rf $(DIST) $(GAME)/target
+	rm -rf "$(DIST)" "$(GAME)/target"
 
 # Stage the itch.io payload. CI (deploy.yml) pushes release/ via butler
 # whenever it changes on main, versioned from the VERSION file.
 release: disc
-	@mkdir -p $(ROOT)/release
-	cp $(DIST)/voxide.bin $(DIST)/voxide.cue $(ROOT)/release/
+	@mkdir -p "$(ROOT)/release"
+	cp "$(DIST)/voxide.bin" "$(DIST)/voxide.cue" "$(ROOT)/release/"
 	@echo "RELEASE -> $(ROOT)/release (commit + push to deploy)"
