@@ -19,7 +19,7 @@ lockstep = []
 # to build a table/chest/furnace at the crosshair. Never ship.
 ui-fixture = []
 # Headless portal captures only (src/fixture.rs): SELECT builds two lit
-# portals (one on each axis) by the spawn and then steps through a fixed set
+# portals (nether on X, void on Z) by the spawn and then steps through a fixed set
 # of views of them. Never ship.
 portal-views = ["ui-fixture"]
 # Headless crosshair measurements only (src/picklab.rs): a pig pinned in front
