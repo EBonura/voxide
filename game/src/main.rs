@@ -3022,7 +3022,7 @@ fn main() {
         } else {
             // Java's crosshair ray passes through water and lava; only the
             // empty bucket (and here the rod's cast) aims at a fluid.
-            let p = trace_pick(&cam, matches!(player.selected, BUCKET | FISHING_ROD));
+            let p = trace_pick(&cam, matches!(player.selected, BUCKET | FISHING_ROD), false);
             let t = mob::ray_pick(
                 cam.x,
                 cam.y,
@@ -3059,7 +3059,14 @@ fn main() {
             // the Java/Bedrock rule.
             #[cfg(feature = "ui-fixture")]
             if pad.pressed_since(previous, button::SELECT) {
-                fixture::select(&pick, &mut player);
+                // The fixture aims at portal sheet itself (stepping out of one,
+                // opening one underfoot), which the crosshair passes through.
+                let fixture_pick = if target.is_none() {
+                    trace_pick(&cam, matches!(player.selected, BUCKET | FISHING_ROD), true)
+                } else {
+                    pick
+                };
+                fixture::select(&fixture_pick, &mut player);
             }
             let use_pressed = pad.pressed_since(previous, button::L2);
             let mut used = false;
@@ -9761,8 +9768,12 @@ fn depth_slot(depth: i32) -> usize {
 /// the 4.5-block reach against 18 fixed samples, and usually far fewer -- and
 /// the reported place cell is now always face-adjacent to the hit, where the
 /// sampler could hand back a diagonal neighbour.
+///
+/// Portal sheet is not a target, as in Java: the ray goes on through it to
+/// whatever is behind, so no outline sits on the sheet and nothing is mined
+/// or placed there (`portals` is for the headless fixture only).
 #[inline(never)]
-fn trace_pick(cam: &Camera, fluids: bool) -> Pick {
+fn trace_pick(cam: &Camera, fluids: bool, portals: bool) -> Pick {
     let dir = [(cam.sy * cam.cp) >> 12, cam.sp, (cam.cy * cam.cp) >> 12];
     let pos = [cam.x, cam.y, cam.z];
     let mut cell = [
@@ -9804,7 +9815,7 @@ fn trace_pick(cam: &Camera, fluids: bool) -> Pick {
     let mut guard = 0;
     while guard <= 3 * (PICK_RANGE / BLOCK + 2) {
         let b = get_block_i32(cell[0], cell[1], cell[2]);
-        if b != AIR && (fluids || !(is_water(b) || is_lava(b))) {
+        if b != AIR && (fluids || !(is_water(b) || is_lava(b))) && (portals || !is_portal(b)) {
             return Pick {
                 hit: true,
                 dist: t_in >> T_FRAC,
