@@ -78,7 +78,31 @@ pub const T_OBSIDIAN: u8 = 42; // near-black with faint purple glints
 pub const T_CINDERSTONE: u8 = 43; // dark red, pitted
 pub const T_SINK_SAND: u8 = 44; // brown with sunken faces
 pub const T_LUMISTONE: u8 = 45; // bright yellow speckle
-pub const T_PORTAL: u8 = 46; // purple swirl, drawn as a cross-sprite
+pub const T_PORTAL: u8 = 46; // purple swirl, drawn as a blended pane (main::emit_portal)
+/// Swirl phases in the portal tile, and as many CLUT banks: bank b colours
+/// phase i with PORTAL_RAMP[(i + b) % PORTAL_FRAMES], so stepping the bank
+/// turns the swirl.
+pub const PORTAL_FRAMES: usize = 15;
+/// The portal's colours around one turn of the swirl: two bright bands, one
+/// brighter, over a deep violet. The four lighter shades are the ones the
+/// sheet always had.
+const PORTAL_RAMP: [(u8, u8, u8); PORTAL_FRAMES] = [
+    (58, 18, 96),
+    (58, 18, 96),
+    (96, 32, 150),
+    (140, 66, 200),
+    (186, 128, 236),
+    (140, 66, 200),
+    (96, 32, 150),
+    (58, 18, 96),
+    (36, 10, 66),
+    (36, 10, 66),
+    (58, 18, 96),
+    (96, 32, 150),
+    (140, 66, 200),
+    (96, 32, 150),
+    (58, 18, 96),
+];
 pub const T_VOID_STONE: u8 = 47; // pale yellow
                                  // Row 3: Inferno mob faces, and the items they drop.
 pub const T_FACE_EMBER: u8 = 48;
@@ -495,13 +519,15 @@ fn palette_for(tile: u8) -> [(u8, u8, u8); 16] {
             p[13] = (255, 248, 200); // hot speck
             p[14] = (110, 80, 36);
         }
-        // Portal: index 0 transparent, so the swirl reads as a sheet you see
-        // through, like the plants.
+        // Portal: indices 1..=15 are the phases of the swirl, coloured from
+        // the ramp. The sheet blends (main::emit_portal), so it needs no
+        // see-through texels; index 0 is never drawn.
         T_PORTAL => {
-            p[1] = (58, 18, 96);
-            p[2] = (96, 32, 150);
-            p[3] = (140, 66, 200);
-            p[4] = (186, 128, 236);
+            let mut i = 0;
+            while i < PORTAL_FRAMES {
+                p[1 + i] = PORTAL_RAMP[i];
+                i += 1;
+            }
         }
         // Near-black, with the faint purple glints the Java texture has.
         T_OBSIDIAN => {
@@ -852,23 +878,21 @@ fn fire_texel(x: i32, y: i32) -> u8 {
     best
 }
 
-/// Portal sheet: diagonal bands of the purple ramp with holes punched through,
-/// so it shimmers rather than reading as flat paint.
+/// Sine over sixteenths of a turn, amplitude 8.
+const SIN16: [i32; 16] = [0, 3, 6, 7, 8, 7, 6, 3, 0, -3, -6, -7, -8, -7, -6, -3];
+
+/// Portal sheet: each texel holds a swirl phase, index 1..=15. The phase runs
+/// once along the tile's diagonal, bent by two crossed sine waves, so the
+/// bright bands of the ramp curl through the tile; cycling the CLUT
+/// (`upload`, PORTAL_FRAMES banks) moves them, which is the animation.
+///
+/// Seamless across blocks: the diagonal term grows by exactly 15 phases over
+/// a tile's 16 texels and the waves repeat every 16, so the sheet reads as
+/// one surface rather than a grid of tiles.
 fn portal_texel(x: i32, y: i32) -> u8 {
-    let band = ((x * 3 + y * 5) & 15) as u32;
-    let n = hash(x, y, 57) % 8;
-    if n == 0 {
-        return 0; // see-through speckle
-    }
-    if band < 4 {
-        4
-    } else if band < 8 {
-        3
-    } else if band < 12 {
-        2
-    } else {
-        1
-    }
+    let warp = SIN16[(y & 15) as usize] * 6 + SIN16[((x * 2 + y) & 15) as usize] * 5;
+    let t = (x + y) * 15 + warp + 240 * 4; // the offset keeps t positive
+    (1 + (t / 16) % PORTAL_FRAMES as i32) as u8
 }
 
 fn tallgrass_texel(x: i32, y: i32) -> u8 {
@@ -3192,5 +3216,33 @@ pub fn upload() -> BlockTex {
         bt.clut_alpha[t] = Clut::new(CLUT_X, ay).uv_clut_word();
         t += 1;
     }
+    upload_portal_banks();
     bt
+}
+
+/// The portal's blended CLUT banks 1.. sit to the right of its bank 0 in the
+/// same row (x = CLUT_X + 16 * bank), in the CLUT band nothing else uses past
+/// x = CLUT_X + 16.
+fn upload_portal_banks() {
+    let ay = CLUT_Y + TILE_COUNT as u16 + T_PORTAL as u16;
+    let mut b = 1;
+    while b < PORTAL_FRAMES {
+        let mut clut = [0u8; 32];
+        let mut i = 0;
+        while i < PORTAL_FRAMES {
+            let c = PORTAL_RAMP[(i + b) % PORTAL_FRAMES];
+            let a = Color555::rgb8(c.0, c.1, c.2).with_mask_bit().as_u16();
+            clut[(i + 1) * 2] = a as u8;
+            clut[(i + 1) * 2 + 1] = (a >> 8) as u8;
+            i += 1;
+        }
+        upload_bytes(VramRect::new(CLUT_X + 16 * b as u16, ay, 16, 1), &clut);
+        b += 1;
+    }
+}
+
+/// The blended portal CLUT for animation frame `frame` (any count; wraps).
+/// A CLUT word's low six bits are x / 16, so bank b is the base word plus b.
+pub fn portal_clut(bt: &BlockTex, frame: u32) -> u16 {
+    bt.clut_alpha[T_PORTAL as usize] + (frame % PORTAL_FRAMES as u32) as u16
 }
