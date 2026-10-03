@@ -3864,8 +3864,10 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         ui_finish_sky(true);
         gte_load_camera(&cam);
         render_world(&cam);
+        // SAFETY: the title frame's packets live in the static render arena
+        // and are not rebuilt until this blocking walk returns.
         unsafe {
-            OT[RENDER_ARENA].submit();
+            gpu::submit_linked_list_raw(OT[RENDER_ARENA].submit_head());
         }
         // Drop shadow first: the mark must read over a bright sky and pale
         // terrain alike, the job the Minecraft logo's dark outline does.
@@ -10479,7 +10481,9 @@ fn ui_finish_sky(submit_now: bool) {
         }
         ui_flush(&mut (*core::ptr::addr_of_mut!(SKY_OT))[arena], 0);
         if submit_now && !PROFILE_SKIP_SUBMIT {
-            SKY_OT[arena].submit();
+            // SAFETY: the sky packets live in the static render arena and are
+            // not rebuilt until this blocking walk returns.
+            gpu::submit_linked_list_raw(SKY_OT[arena].submit_head());
         }
     }
 }
@@ -10504,7 +10508,10 @@ fn ui_submit_tail() {
 fn submit_built_frame() {
     unsafe {
         let arena = RENDER_ARENA;
-        SKY_OT[arena].submit_async();
+        // SAFETY: this arena's sky chain, world OT and packets stay untouched
+        // while it is walked: CPU building switches to the other arena below,
+        // and frame_present waits this walk out before switching back.
+        gpu::submit_linked_list_raw_async(SKY_OT[arena].submit_head());
         RENDER_ARENA ^= 1;
     }
 }
