@@ -411,6 +411,9 @@ fn portal_views(player: &mut Player) {
         }
         light_portal(ax, py, az);
         light_frame(px - 6, py, pz + 1, VOID_PORTAL);
+        // A block right behind A at eye height: the close head-on view aims
+        // through the sheet at it.
+        set_block_i32(ax + 1, py + 1, az + 1, COBBLE);
         world::remesh_loaded();
         unsafe { PORTAL_BASE = (ax * BLOCK, py * BLOCK, az * BLOCK) };
     }
