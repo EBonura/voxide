@@ -6953,6 +6953,10 @@ fn render_plants(cam: &Camera) {
             }
             return;
         }
+        if blk == PORTAL || blk == VOID_PORTAL {
+            emit_portal(cam, blk, wx, wy, wz);
+            return;
+        }
         // Cull a plant you're standing on: its near billboard edge blows up to
         // fill the screen, and a meadow of them overlaps into a coloured mess.
         let plant_d2 = cdx * cdx + cdz * cdz;
@@ -7049,6 +7053,181 @@ fn render_plants(cam: &Camera) {
             c += 1;
         }
     });
+}
+
+/// Where the sheet's two faces sit across the frame's cell, in world units.
+/// Java's portal block model is a slab from 6/16 to 10/16 of the cell with
+/// only its two broad faces drawn (models/block/nether_portal_ns.json and
+/// _ew.json in the vanilla jar), so you look through two layers of swirl.
+const PORTAL_FACES: [i32; 2] = [BLOCK * 6 / 16, BLOCK * 10 / 16];
+/// Sim ticks per swirl step: a turn of tex::PORTAL_FRAMES steps takes 1.5 s.
+const PORTAL_STEP_TICKS: u32 = ms(100) as u32;
+/// How far in front of the sheet's nearest corner it sorts, in depth units.
+/// The frame's inner faces meet the sheet along its edges, so their OT depth
+/// is never nearer than that corner; sorting the sheet just ahead of it puts
+/// it over the frame's far half, as a depth buffer would.
+const PORTAL_SORT_BIAS: i32 = 4;
+
+/// A whole portal sheet, emitted from its lower-left cell (the other cells
+/// return at once): two blended faces through the middle of the frame, each
+/// clipped to what the frame lets you see and cut at block lines so the swirl
+/// stays square on every cell.
+///
+/// Clipping is what keeps the sheet inside the obsidian. Seen from in front,
+/// a point on a face is visible exactly when the ray to it passes through the
+/// frame's near opening, so each face is cut to that opening projected from
+/// the eye onto the face's plane. The frame's inner faces then never overlap
+/// the clipped sheet except where they lie behind it, so the sheet sorts in
+/// front of them all. A camera inside the frame's slab sees the sheet only
+/// from within the opening; anywhere else in the slab the frame hides it.
+#[inline(never)]
+fn emit_portal(cam: &Camera, blk: u8, wx: i32, wy: i32, wz: i32) {
+    let (bx, by, bz) = (
+        world_to_block_x(wx),
+        world_to_block_y(wy),
+        world_to_block_z(wz),
+    );
+    // Cheapest rejections first: every block lookup walks a column's runs,
+    // and only one cell of the sheet draws.
+    if get_block_i32(bx, by - 1, bz) == blk
+        || get_block_i32(bx - 1, by, bz) == blk
+        || get_block_i32(bx, by, bz - 1) == blk
+    {
+        return;
+    }
+    let along_x = get_block_i32(bx + 1, by, bz) == blk;
+    let (ax, az) = if along_x { (1, 0) } else { (0, 1) };
+    let mut w = 1;
+    while w < 8 && get_block_i32(bx + ax * w, by, bz + az * w) == blk {
+        w += 1;
+    }
+    let mut h = 1;
+    while h < 8 && get_block_i32(bx, by + h, bz) == blk {
+        h += 1;
+    }
+    // Portal space relative to the eye: u along the sheet, y up, n through it.
+    let (eu, en) = if along_x { (cam.x, cam.z) } else { (cam.z, cam.x) };
+    let u0 = if along_x { wx } else { wz } - eu;
+    let n0 = if along_x { wz } else { wx } - en;
+    let y0 = wy - cam.y;
+    let (u1, y1, n1) = (u0 + w * BLOCK, y0 + h * BLOCK, n0 + BLOCK);
+    let inside = n0 <= 0 && n1 >= 0;
+    if inside && !(u0 < 0 && u1 > 0 && y0 < 0 && y1 > 0) {
+        return;
+    }
+    let near = if n0 > 0 { n0 } else { n1 };
+    let bt = unsafe { &BLOCK_TEX }; // by reference: this runs on the 1 KB plant stack
+    let (tux, tuy) = tex::tile_uv(tex::T_PORTAL);
+    let mat = TextureMaterial::blended(
+        tex::portal_clut(bt, unsafe { SIM_TICK } / PORTAL_STEP_TICKS),
+        bt.tpage,
+        (128, 128, 128),
+        BlendMode::Average,
+    )
+    .with_texture_window(TextureWindow::power_of_two_tile(tux, tuy, 16, 16));
+    let first = unsafe { PLANT_N };
+    let mut min_z = i32::MAX;
+    // Nearer face first: the OT prepends, so it draws last, over the other.
+    let mut f = 0;
+    while f < 2 {
+        let np = n0 + PORTAL_FACES[if n0 > 0 { f } else { 1 - f }];
+        let (mut cu0, mut cu1, mut cy0, mut cy1) = (u0, u1, y0, y1);
+        if !inside {
+            // np / near >= 1: the opening seen from the eye, on this plane.
+            cu0 = cu0.max(u0 * np / near);
+            cu1 = cu1.min(u1 * np / near);
+            cy0 = cy0.max(y0 * np / near);
+            cy1 = cy1.min(y1 * np / near);
+        }
+        let mut col = 0;
+        while col < w {
+            let pu0 = cu0.max(u0 + col * BLOCK);
+            let pu1 = cu1.min(u0 + (col + 1) * BLOCK);
+            let mut row = 0;
+            while pu0 < pu1 && row < h {
+                let py0 = cy0.max(y0 + row * BLOCK);
+                let py1 = cy1.min(y0 + (row + 1) * BLOCK);
+                if py0 < py1 && unsafe { PLANT_N } < MAX_PLANT_QUADS {
+                    // The piece's texels within its cell, v down from the top.
+                    let (cu, cy) = (u0 + col * BLOCK, y0 + (row + 1) * BLOCK);
+                    let uv = (
+                        ((pu0 - cu) / 4) as u8,
+                        ((pu1 - cu) / 4) as u8,
+                        ((cy - py1) / 4) as u8,
+                        ((cy - py0) / 4) as u8,
+                    );
+                    let rect = (pu0, pu1, py0, py1);
+                    if let Some(z) = portal_piece(cam, along_x, eu, en + np, rect, uv, mat) {
+                        min_z = min_z.min(z);
+                    }
+                }
+                row += 1;
+            }
+            col += 1;
+        }
+        f += 1;
+    }
+    if min_z == i32::MAX {
+        return;
+    }
+    let slot = depth_slot(min_z - PORTAL_SORT_BIAS);
+    let mut i = first;
+    while i < unsafe { PLANT_N } {
+        unsafe {
+            OT[RENDER_ARENA].insert(
+                slot,
+                &mut PLANT_QUADS[RENDER_ARENA][i] as *mut QuadTexturedMaterial as *mut u32,
+                QuadTexturedMaterial::WORDS,
+            );
+        }
+        i += 1;
+    }
+}
+
+/// Project one clipped piece of a portal face into the plant pool: `rect` is
+/// its u and y extent relative to the eye, `n` the face's world n. Returns
+/// its nearest corner's depth, or None when it did not project. The caller
+/// links it into the OT.
+#[inline(always)]
+fn portal_piece(
+    cam: &Camera,
+    along_x: bool,
+    eu: i32,
+    n: i32,
+    (pu0, pu1, py0, py1): (i32, i32, i32, i32),
+    (tu0, tu1, tv0, tv1): (u8, u8, u8, u8),
+    mat: TextureMaterial,
+) -> Option<i32> {
+    let corner = |u: i32, y: i32| {
+        if along_x {
+            (eu + u, cam.y + y, n)
+        } else {
+            (n, cam.y + y, eu + u)
+        }
+    };
+    let verts = [corner(pu0, py1), corner(pu1, py1), corner(pu0, py0), corner(pu1, py0)];
+    let p = project_quad_gte(cam, &verts)?;
+    let z = p[0].z.min(p[1].z).min(p[2].z).min(p[3].z);
+    // Past FAR_SIDE_Z the terrain draws no side faces, so the frame round
+    // the sheet is gone; a sheet hanging there alone reads as a glitch.
+    if z >= FAR_SIDE_Z || quad_exploded(&p) {
+        return None;
+    }
+    let packet = QuadTexturedMaterial::with_material(
+        [
+            (p[0].x, p[0].y),
+            (p[1].x, p[1].y),
+            (p[2].x, p[2].y),
+            (p[3].x, p[3].y),
+        ],
+        [(tu0, tv0), (tu1, tv0), (tu0, tv1), (tu1, tv1)],
+        mat,
+    );
+    unsafe {
+        PLANT_QUADS[RENDER_ARENA][PLANT_N] = packet;
+        PLANT_N += 1;
+    }
+    Some(z)
 }
 
 /// One textured box for a non-full-block shape, emitted into the same OT and
@@ -10814,6 +10993,10 @@ fn screen_tint(player: &Player) {
         Some((220, 90, 20))
     } else if is_water(head) {
         Some((30, 80, 190))
+    } else if is_portal(head) {
+        // Java lays the swirl over the screen while you stand in the sheet,
+        // which is right at your eye and so mostly cut away by the near plane.
+        Some((120, 40, 190))
     } else if player.hurt_tilt > HURT_TILT_FRAMES - HURT_FLASH_TICKS {
         Some((190, 30, 30))
     } else {
