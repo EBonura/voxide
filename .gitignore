@@ -1,9 +1,11 @@
 /dist/
 /captures/
 /game/target/
+# psoxide-components, installed per SDK revision by `make psoxide`.
+/target/
 .DS_Store
 
-# Imported by tools/bootstrap-components.py from components.lock.json. Never
+# Imported by psoxide-components from components.lock.json. Never
 # committed: the lock is the source of truth, this is a cache.
 .psoxide/
 
