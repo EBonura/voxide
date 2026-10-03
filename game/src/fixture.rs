@@ -89,6 +89,10 @@ pub fn spawn_pitch(p: &mut Player) {
 }
 
 pub fn select(pick: &Pick, player: &mut Player) {
+    if cfg!(feature = "portal-views") {
+        portal_views(player);
+        return;
+    }
     // SELECT while sneaking (CIRCLE held) grants the state only the enchanting
     // table and fishing give, so a save test can see it round-trip. Aimed at a
     // chest, it instead crosses to the other dimension in place and stands a
@@ -340,4 +344,100 @@ fn face_portal_pass(player: &mut Player, bx: i32, by: i32, bz: i32, other: bool)
         dx += 1;
     }
     false
+}
+
+/// One `portal-views` camera: the feet in quarter blocks from portal A's
+/// lower-left sheet cell, then yaw (4096 a turn, 0 looks along +Z) and pitch.
+type PortalView = (i32, i32, i32, u16, i16);
+
+/// Portal A runs along X at z = 0 (its sheet fills x 0..2, y 0..3); B runs
+/// along Z at x = -6 (sheet z -3..-1). The pad in front of A is obsidian, so
+/// its top merges with the sill into one plate, the case that sorted over
+/// the old sheet.
+const PORTAL_VIEWS: [PortalView; 12] = [
+    (4, 0, -14, 0, 0),         // A head-on, 3.5 blocks out
+    (-3, 0, -6, 466, -150),    // A close, from the left and above (Manny's view)
+    (12, 0, -7, 3623, -100),   // A close, from the right
+    (4, 0, -40, 0, 0),         // A head-on, 10 blocks out
+    (4, 0, -60, 0, 0),         // A head-on, 15 blocks out
+    (4, 12, -8, 0, -580),      // A from above
+    (10, 0, 16, 2312, 0),      // A from behind, oblique
+    (-10, 0, -2, 842, 0),      // A at a grazing angle
+    (4, 0, -4, 0, 0),          // A head-on, under a block out
+    (-6, 0, -8, 3072, 0),      // B head-on from +X
+    (-36, 0, 2, 1422, -100),   // B oblique from -X
+    (4, 0, 2, 0, 0),           // standing in A (travels after 4 s)
+];
+
+static mut PORTAL_VIEW_N: usize = 0;
+static mut PORTAL_BASE: (i32, i32, i32) = (0, 0, 0);
+
+/// SELECT under `portal-views`: the first press clears a yard at the feet and
+/// builds and lights both portals; every press then flies the camera to the
+/// next view, holding still there.
+fn portal_views(player: &mut Player) {
+    let n = unsafe { PORTAL_VIEW_N };
+    if n == 0 {
+        let (px, py, pz) = (
+            world_to_block_x(player.x),
+            world_to_block_y(player.y),
+            world_to_block_z(player.z),
+        );
+        let mut x = px - 10;
+        while x <= px + 10 {
+            let mut z = pz - 13;
+            while z <= pz + 11 {
+                set_block_i32(x, py - 1, z, GRASS);
+                let mut y = py;
+                while y <= py + 7 {
+                    set_block_i32(x, y, z, AIR);
+                    y += 1;
+                }
+                z += 1;
+            }
+            x += 1;
+        }
+        let (ax, az) = (px, pz + 4);
+        portal_frame(ax, py, az, 1, 0);
+        portal_frame(px - 6, py, pz + 1, 0, 1);
+        let mut x = ax - 1;
+        while x <= ax + 2 {
+            let mut z = az - 3;
+            while z < az {
+                set_block_i32(x, py - 1, z, OBSIDIAN);
+                z += 1;
+            }
+            x += 1;
+        }
+        light_portal(ax, py, az);
+        light_portal(px - 6, py, pz + 1);
+        world::remesh_loaded();
+        unsafe { PORTAL_BASE = (ax * BLOCK, py * BLOCK, az * BLOCK) };
+    }
+    let (dx, dy, dz, yaw, pitch) = PORTAL_VIEWS[n % PORTAL_VIEWS.len()];
+    let (bx, by, bz) = unsafe { PORTAL_BASE };
+    player.x = bx + dx * BLOCK / 4;
+    player.y = by + dy * BLOCK / 4;
+    player.z = bz + dz * BLOCK / 4;
+    player.fly = true;
+    player.vy = 0;
+    player.fall_peak = player.y;
+    player.yaw = yaw;
+    player.pitch = pitch;
+    unsafe { PORTAL_VIEW_N = n + 1 };
+}
+
+/// An unlit 2x3 obsidian frame whose lower-left sheet cell is (ix, iy, iz),
+/// running along (ax, az).
+fn portal_frame(ix: i32, iy: i32, iz: i32, ax: i32, az: i32) {
+    let mut w = -1;
+    while w <= 2 {
+        let mut h = -1;
+        while h <= 3 {
+            let edge = w == -1 || w == 2 || h == -1 || h == 3;
+            set_block_i32(ix + ax * w, iy + h, iz + az * w, if edge { OBSIDIAN } else { AIR });
+            h += 1;
+        }
+        w += 1;
+    }
 }
