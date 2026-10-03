@@ -350,8 +350,8 @@ fn face_portal_pass(player: &mut Player, bx: i32, by: i32, bz: i32, other: bool)
 /// lower-left sheet cell, then yaw (4096 a turn, 0 looks along +Z) and pitch.
 type PortalView = (i32, i32, i32, u16, i16);
 
-/// Portal A runs along X at z = 0 (its sheet fills x 0..2, y 0..3); B runs
-/// along Z at x = -6 (sheet z -3..-1). The pad in front of A is obsidian, so
+/// Portal A runs along X at z = 0 (its sheet fills x 0..2, y 0..3); B, a void
+/// portal, runs along Z at x = -6 (sheet z -3..-1). The pad in front of A is obsidian, so
 /// its top merges with the sill into one plate, the case that sorted over
 /// the old sheet.
 const PORTAL_VIEWS: [PortalView; 12] = [
@@ -410,7 +410,7 @@ fn portal_views(player: &mut Player) {
             x += 1;
         }
         light_portal(ax, py, az);
-        light_portal(px - 6, py, pz + 1);
+        light_frame(px - 6, py, pz + 1, VOID_PORTAL);
         world::remesh_loaded();
         unsafe { PORTAL_BASE = (ax * BLOCK, py * BLOCK, az * BLOCK) };
     }
