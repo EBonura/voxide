@@ -7080,7 +7080,13 @@ const PORTAL_SORT_BIAS: i32 = 4;
 /// the clipped sheet except where they lie behind it, so the sheet sorts in
 /// front of them all. A camera inside the frame's slab sees the sheet only
 /// from within the opening; anywhere else in the slab the frame hides it.
+///
+/// Built for size, with the lookups and the projection out of line: speed
+/// tuned and inlined it came to 6.9 KB, more than the 4 KB I-cache, for a
+/// function that runs a few hundred instructions a frame. Measured on the
+/// portal-views route the 2 KB build is no slower.
 #[inline(never)]
+#[optimize(size)]
 fn emit_portal(cam: &Camera, blk: u8, wx: i32, wy: i32, wz: i32) {
     let (bx, by, bz) = (
         world_to_block_x(wx),
@@ -7089,20 +7095,20 @@ fn emit_portal(cam: &Camera, blk: u8, wx: i32, wy: i32, wz: i32) {
     );
     // Cheapest rejections first: every block lookup walks a column's runs,
     // and only one cell of the sheet draws.
-    if get_block_i32(bx, by - 1, bz) == blk
-        || get_block_i32(bx - 1, by, bz) == blk
-        || get_block_i32(bx, by, bz - 1) == blk
+    if sheet_at(bx, by - 1, bz, blk)
+        || sheet_at(bx - 1, by, bz, blk)
+        || sheet_at(bx, by, bz - 1, blk)
     {
         return;
     }
-    let along_x = get_block_i32(bx + 1, by, bz) == blk;
+    let along_x = sheet_at(bx + 1, by, bz, blk);
     let (ax, az) = if along_x { (1, 0) } else { (0, 1) };
     let mut w = 1;
-    while w < 8 && get_block_i32(bx + ax * w, by, bz + az * w) == blk {
+    while w < 8 && sheet_at(bx + ax * w, by, bz + az * w, blk) {
         w += 1;
     }
     let mut h = 1;
-    while h < 8 && get_block_i32(bx, by + h, bz) == blk {
+    while h < 8 && sheet_at(bx, by + h, bz, blk) {
         h += 1;
     }
     // Portal space relative to the eye: u along the sheet, y up, n through it.
@@ -7184,11 +7190,20 @@ fn emit_portal(cam: &Camera, blk: u8, wx: i32, wy: i32, wz: i32) {
     }
 }
 
+/// True when cell (x, y, z) holds `blk`. Out of line: inlined, each world
+/// lookup in emit_portal is a whole column walk of code.
+#[inline(never)]
+fn sheet_at(x: i32, y: i32, z: i32, blk: u8) -> bool {
+    get_block_i32(x, y, z) == blk
+}
+
 /// Project one clipped piece of a portal face into the plant pool: `rect` is
 /// its u and y extent relative to the eye, `n` the face's world n. Returns
 /// its nearest corner's depth, or None when it did not project. The caller
 /// links it into the OT.
-#[inline(always)]
+///
+/// Out of line, like `sheet_at`, to keep emit_portal small.
+#[inline(never)]
 fn portal_piece(
     cam: &Camera,
     along_x: bool,
