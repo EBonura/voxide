@@ -14,7 +14,7 @@ use crate::{
 };
 use crate::{
     is_flammable, CINDERSTONE, EMBER_CAP, FIRE, LUMISTONE, OBSIDIAN, PORTAL, SINK_SAND, SUGAR_CANE,
-    TORCH, VOID_STONE,
+    TORCH, VOID_PORTAL, VOID_STONE,
 };
 use crate::{
     is_lava, is_small_block, is_water, lava_level, lava_of_level, water_level, water_of_level,
@@ -31,6 +31,8 @@ use rle::{rget, rset};
 /// X-billboard, never as a meshed cube. `face_here` treats these as see-through
 /// so they neither emit cube faces nor hide the block behind them; `commit_mesh`
 /// records their cells into the chunk's plant list for the render pass.
+/// Portal sheets ride the same list, walk-through and unmeshed, but draw as a
+/// blended pane (main::emit_portal).
 #[inline]
 pub fn is_cross_plant(b: u8) -> bool {
     b == WHEAT
@@ -41,6 +43,7 @@ pub fn is_cross_plant(b: u8) -> bool {
         || b == TALL_GRASS
         || b == FIRE
         || b == PORTAL
+        || b == VOID_PORTAL
         || b == EMBER_CAP
         || b == SUGAR_CANE
 }
