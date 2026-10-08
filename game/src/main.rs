@@ -5486,16 +5486,16 @@ fn update_player(
     if lx == 0 && ly == 0 {
         // D-pad as a movement fallback when the stick is idle: UP/DOWN walk,
         // LEFT/RIGHT strafe (turning stays on the right stick only).
-        if actions.held(ACT_FORWARD) {
+        if actions.is_held(ACT_FORWARD) {
             forward += 127;
         }
-        if actions.held(ACT_BACK) {
+        if actions.is_held(ACT_BACK) {
             forward -= 127;
         }
-        if actions.held(ACT_LEFT) {
+        if actions.is_held(ACT_LEFT) {
             strafe -= 127;
         }
-        if actions.held(ACT_RIGHT) {
+        if actions.is_held(ACT_RIGHT) {
             strafe += 127;
         }
         if forward != 0 && strafe != 0 {
@@ -5507,7 +5507,7 @@ fn update_player(
     // Sneak: hold CIRCLE (the Bedrock PS4/PS5 default; it doubles as fly-down
     // while flying, exactly as on console). Java walks you at ~30% speed and
     // refuses to step off a ledge; it beats sprint, so you cannot sprint-sneak.
-    let sneaking = actions.held(ACT_SNEAK) && !player.fly;
+    let sneaking = actions.is_held(ACT_SNEAK) && !player.fly;
     player.sneaking = sneaking;
     // Sprint (Bedrock): press L3, or push the stick forward twice inside the
     // double-tap window. The latch drops the moment forward input stops, so a
