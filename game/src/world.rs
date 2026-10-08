@@ -422,12 +422,17 @@ static mut COL_MASKS_EPOCH: u32 = 0;
 /// ANDs per column instead of visiting every cell. Index is lx + lz * CWU.
 static mut COL_MESH: [u64; CWU * CWU] = [0; CWU * CWU];
 static mut COL_SEE: [u64; CWU * CWU] = [0; CWU * CWU];
+/// One bit per column of the chunk in MESH_SCRATCH: it holds (or once held,
+/// after an edit) a light source. A superset is fine; build_sky_top walks the
+/// flagged columns only.
+static mut LIGHT_COLS: [u32; CWU * CWU / 32] = [0; CWU * CWU / 32];
 
 #[inline(always)]
 fn col_masks_reset() {
     unsafe {
         COL_MESH = [0; CWU * CWU];
         COL_SEE = [0; CWU * CWU];
+        LIGHT_COLS = [0; CWU * CWU / 32];
         COL_MASKS_EPOCH = COL_MASKS_EPOCH.wrapping_add(1);
     }
 }
@@ -452,6 +457,12 @@ fn col_masks_set(i: usize, b: u8) {
     let bit = 1u64 << (i >> 8);
     unsafe {
         COL_MASKS_EPOCH = COL_MASKS_EPOCH.wrapping_add(1);
+        if cls & CLS_SPECIAL != 0 {
+            rle::SPEC[i >> 8][col >> 5] |= 1 << (col & 31);
+            if is_light_source(b) {
+                LIGHT_COLS[col >> 5] |= 1 << (col & 31);
+            }
+        }
         if cls & CLS_MESH != 0 {
             COL_MESH[col] |= bit;
         } else {
@@ -549,34 +560,34 @@ fn sky_bucket(lx: usize, ly: usize, lz: usize) -> u16 {
     (steps - d.min(steps)).max(0) as u16
 }
 
-/// Rebuild SKY_TOP and TORCH_LIT from MESH_SCRATCH. One pass per column finds
-/// both the highest sky-blocking block and any light sources below it; the
-/// sources then flood.
+/// Rebuild SKY_TOP and TORCH_LIT from MESH_SCRATCH. The highest sky-blocking
+/// block of a column is the highest set bit of its COL_MESH word (bit 0, the
+/// floor layer, never counts), and only the columns LIGHT_COLS flags can hold a
+/// light source, so the 16,000-cell scan the old version made per mesh is a
+/// few hundred word reads plus a walk down the rare lit columns. The sources
+/// are collected in the old order (columns in index order, each from the top
+/// down), so which of a crowded chunk's lights flood is unchanged.
 fn build_sky_top() {
     unsafe { TORCH_LIT = [0; CHUNK_VOL / 32] };
     let mut src: [(usize, usize, usize); MAX_SOURCES] = [(0, 0, 0); MAX_SOURCES];
     let mut nsrc = 0usize;
-    let mut lz = 0usize;
-    while lz < CWU {
-        let mut lx = 0usize;
-        while lx < CWU {
+    let mut col = 0usize;
+    while col < CWU * CWU {
+        let m = unsafe { COL_MESH[col] } & !1;
+        let top = if m == 0 { 0 } else { 63 - m.leading_zeros() };
+        unsafe { SKY_TOP[col] = top as u8 };
+        if nsrc < MAX_SOURCES && unsafe { LIGHT_COLS[col >> 5] } & (1 << (col & 31)) != 0 {
+            let (lx, lz) = (col & (CWU - 1), col >> 4);
             let mut ly = CHU - 1;
-            let mut top = 0u8;
             while ly > 0 {
-                let b = unsafe { MESH_SCRATCH[lidx(lx, ly, lz)] };
-                if top == 0 && unsafe { BCLASS[b as usize] } & CLS_MESH != 0 {
-                    top = ly as u8;
-                }
-                if nsrc < MAX_SOURCES && is_light_source(b) {
+                if nsrc < MAX_SOURCES && is_light_source(unsafe { MESH_SCRATCH[lidx(lx, ly, lz)] }) {
                     src[nsrc] = (lx, ly, lz);
                     nsrc += 1;
                 }
                 ly -= 1;
             }
-            unsafe { SKY_TOP[lz * CWU + lx] = top };
-            lx += 1;
         }
-        lz += 1;
+        col += 1;
     }
     let mut k = 0;
     while k < nsrc {
@@ -3844,23 +3855,28 @@ fn commit_mesh_inner(s: usize, n: usize, scan_plants: bool) {
             // cube edits leave this list untouched; only plant/small-block edits
             // need the full scan.
             let mut np = 0usize;
+            // The SPEC bitmap (layer-major, columns ascending) lists every
+            // light, plant and small-block cell, kept in step by decodes and
+            // edits, in the order the full cell scan found them.
             let mut ly = 0usize;
             while ly < CHU && np < MAX_PLANTS {
-                let mut lz = 0usize;
-                while lz < CWU && np < MAX_PLANTS {
-                    let mut lx = 0usize;
-                    while lx < CWU && np < MAX_PLANTS {
-                        let b = MESH_SCRATCH[lidx(lx, ly, lz)];
+                let mut w = 0usize;
+                while w < 8 && np < MAX_PLANTS {
+                    let mut m = rle::SPEC[ly][w];
+                    while m != 0 && np < MAX_PLANTS {
+                        let col = w * 32 + m.trailing_zeros() as usize;
+                        m &= m - 1;
+                        let b = MESH_SCRATCH[ly * CWU * CWU + col];
                         if is_cross_plant(b) || is_small_block(b) {
+                            let (lx, lz) = (col & (CWU - 1), col >> 4);
                             POOL_PLANTS[p][np] = (lx as u32)
                                 | ((ly as u32) << 4)
                                 | ((lz as u32) << 10)
                                 | ((b as u32) << 14);
                             np += 1;
                         }
-                        lx += 1;
                     }
-                    lz += 1;
+                    w += 1;
                 }
                 ly += 1;
             }
