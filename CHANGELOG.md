@@ -20,9 +20,10 @@ Equipment, and fixes from a playtest.
   a log, sticks from two planks one above the other, a crafting table from four
   planks, torches from coal over a stick, bone meal from a bone. What is in the
   grid goes back to your inventory when the screen closes.
-- The SQUARE crafting list away from a table is the recipe book: pressing X on
-  planks, sticks, a table, torches or bone meal lays the shape in the grid for
-  you and takes you to the output. At a crafting table nothing changes.
+- The SQUARE crafting list away from a table still crafts with X. It is also
+  the recipe book: R2 on planks, sticks, a table, torches or bone meal lays the
+  shape in the grid for you and takes you to the output. At a crafting table
+  nothing changes.
 - Pick the weapon you swing at mobs: fist, sword, axe, pickaxe or shovel, each
   with Java's damage and attack speed, and each wearing as Java's does (a
   sword loses one use a hit, the other tools two).

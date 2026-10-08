@@ -260,6 +260,18 @@ pub fn craft_input(pad: ButtonState, previous: ButtonState, p: &mut Player) {
     let Some((ri, _, nt)) = current(p) else {
         return;
     };
+    // Away from a table R2 is the recipe book: it lays the recipe's shape in
+    // the player page's 2x2 grid, where the output slot does the crafting, as
+    // in Java. X still crafts straight from the inventory.
+    if pressed(button::R2) && !unsafe { AT_BENCH } && grid::pocket_craftable(RECIPES[ri].out) {
+        if makeable(ri, p) && grid::fill_recipe(RECIPES[ri].out) {
+            unsafe { TO_GRID = true };
+            sfx::confirm();
+        } else {
+            sfx::blip();
+        }
+        return;
+    }
     if nav_repeat(pad.is_held(button::UP), &mut t[2]) && unsafe { TIER } > 0 {
         unsafe { TIER -= 1 };
         sfx::blip();
@@ -290,16 +302,6 @@ pub fn craft_input(pad: ButtonState, previous: ButtonState, p: &mut Player) {
         return;
     }
     if makeable(ri, p) {
-        if !unsafe { AT_BENCH } && grid::pocket_craftable(RECIPES[ri].out) {
-            // Away from a table this list is the recipe book: it lays the
-            // shape in the player page's 2x2 grid, and the output slot there
-            // does the crafting, as in Java.
-            if *h == 1 && grid::fill_recipe(RECIPES[ri].out) {
-                unsafe { TO_GRID = true };
-                sfx::confirm();
-            }
-            return;
-        }
         craft(ri, p);
         sfx::confirm();
     } else if *h == 1 {
@@ -385,7 +387,7 @@ pub fn draw_crafting(font: &FontAtlas, p: &Player) {
     }
     let Some((ri, t, nt)) = cur else {
         ui_text(font, X0, STRIP_Y + 24, "NOTHING YOU CAN MAKE", MC_INK);
-        hints(font, false);
+        hints(font, false, false);
         draw_hotbar(hud_tool(p, AIR));
         return;
     };
@@ -476,12 +478,12 @@ pub fn draw_crafting(font: &FontAtlas, p: &Player) {
             GREY,
         );
     }
-    hints(font, nt > 1);
+    hints(font, nt > 1, !unsafe { AT_BENCH } && grid::pocket_craftable(r.out));
     draw_hotbar(hud_tool(p, AIR));
 }
 
 #[optimize(size)]
-fn hints(font: &FontAtlas, tiers: bool) {
+fn hints(font: &FontAtlas, tiers: bool, grid: bool) {
     let (y1, y2) = (176, 190);
     let x = hint_item(font, 16, y1, "X", PS_CROSS, "CRAFT");
     let x = hint_item(
@@ -499,7 +501,13 @@ fn hints(font: &FontAtlas, tiers: bool) {
     hint_item(font, x, y1, "O", PS_CIRCLE, "CLOSE");
     let x = hint_item(font, 16, y2, "L1R1", PS_KEY, "TAB");
     let x = hint_item(font, x, y2, "<>", PS_KEY, "ITEM");
-    if tiers {
-        hint_item(font, x, y2, "^v", PS_KEY, "TIER");
+    let x = if tiers {
+        hint_item(font, x, y2, "^v", PS_KEY, "TIER")
+    } else {
+        x
+    };
+    // The recipe book: lay this recipe in the player page's 2x2 grid.
+    if grid {
+        hint_item(font, x, y2, "R2", PS_KEY, "GRID");
     }
 }
