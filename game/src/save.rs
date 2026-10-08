@@ -15,7 +15,10 @@ use crate::{
     FURN_OUT, FURN_OUT_N, FURN_PROG, FURN_USED, FURN_X, FURN_Y, FURN_Z, HOTBAR, HOTBAR_SEL,
     HOTBAR_VIS, INV, MAX_CHESTS, MAX_EDITS, MAX_FURNACES, PLACEABLE,
 };
-use psx_mc::{Block, Card, Error as McError, HardwareCard, Slot, FRAME_SIZE};
+use psx_mc::{
+    queue_frames, Card, CardJob, Error as McError, HardwareCard, Slot, Staged, Step,
+    FORMAT_FRAMES,
+};
 
 /// Version 1: the original layout. No version field; counts were one byte
 /// each, and chests, furnaces and the hotbar layout were not saved at all.
@@ -425,78 +428,28 @@ fn serialize(p: &Player, day: u32) -> usize {
 
 // ---- Saving without stopping the frame ------------------------------------
 //
-// A card frame write is about 4 ms of transfer and then two video periods
-// the card needs to commit (psx-mc's POST_WRITE_SETTLE_SPINS), and a save is
-// tens of frames: written in one call, 0.3.0 held the screen still for 44
-// vblanks on a fresh world and a few seconds on a big one. So the save is
-// planned first, entirely in RAM: psx-mc runs the format, write and delete
-// against JOURNAL, a card that serves the directory from a cache read one
-// frame per game frame, and records every frame it would write. Then one
-// recorded frame goes to the card per game frame, and the menu keeps
-// drawing, polling and animating its progress bar between them.
+// A card frame write is about 4 ms of transfer and then the time the card
+// needs to commit it, and a save is tens of frames: written in one call,
+// 0.3.0 held the screen still for 44 vblanks on a fresh world and a few
+// seconds on a big one. So the save runs as a psx-mc CardJob: it reads the
+// card's directory a frame per game frame, then `plan` runs the format, write
+// and delete against the staged copy in RAM, then one planned frame goes to
+// the card per game frame, with the commit waits counted in vblanks (not
+// spun) between them. The menu keeps drawing, polling and animating its
+// progress bar throughout.
 
-/// Frames a plan may write: a format (64), the largest save (2 title + 102
-/// data frames for 13,032 bytes with its container header, + 2 directory),
-/// freeing an overwritten copy (2) and deleting the old one (2): 174.
-const JOURNAL_CAP: usize = 176;
-/// Directory frames 0..=15, read ahead one a frame.
-const DIR_FRAMES: usize = 16;
+/// Frames a plan may queue: a format (64), the largest save (`queue_frames`:
+/// title and icon, the data with its container header, a directory entry per
+/// block, and releasing a copy it replaces), and the directory entries of the
+/// other name's copy, deleted afterwards (2 blocks at most, twice over for a
+/// stray from a pulled card).
+const JOB_FRAMES: usize = FORMAT_FRAMES + queue_frames(MAX_PAYLOAD) + 4;
 
-static mut J_FRAME: [u16; JOURNAL_CAP] = [0; JOURNAL_CAP];
-static mut J_DATA: [[u8; FRAME_SIZE]; JOURNAL_CAP] = [[0; FRAME_SIZE]; JOURNAL_CAP];
-static mut J_N: usize = 0;
-static mut DIR: [[u8; FRAME_SIZE]; DIR_FRAMES] = [[0; FRAME_SIZE]; DIR_FRAMES];
-
-/// The card a save is planned on: reads come from the frames it has already
-/// recorded, then from the directory cache; writes are recorded, not sent.
-struct Journal;
-
-impl Block for Journal {
-    fn read_frame(&mut self, frame: u16, out: &mut [u8; FRAME_SIZE]) -> psx_mc::Result<()> {
-        unsafe {
-            let mut i = J_N;
-            while i > 0 {
-                i -= 1;
-                if J_FRAME[i] == frame {
-                    *out = J_DATA[i];
-                    return Ok(());
-                }
-            }
-            if (frame as usize) < DIR_FRAMES {
-                *out = DIR[frame as usize];
-                return Ok(());
-            }
-        }
-        // The plan never reads past the directory; if it did, ask the card.
-        HardwareCard::new(Slot::One).read_frame(frame, out)
-    }
-
-    fn write_frame(&mut self, frame: u16, data: &[u8; FRAME_SIZE]) -> psx_mc::Result<()> {
-        unsafe {
-            if J_N == JOURNAL_CAP {
-                return Err(McError::NoSpace);
-            }
-            J_FRAME[J_N] = frame;
-            J_DATA[J_N] = *data;
-            J_N += 1;
-        }
-        Ok(())
-    }
-}
-
-/// Where a save in progress has got to.
-#[derive(Copy, Clone, PartialEq, Eq)]
-enum Phase {
-    Idle,
-    /// Reading directory frame n into DIR.
-    Probe(usize),
-    Plan,
-    /// Sending recorded frame n.
-    Write(usize),
-}
-
-static mut PHASE: Phase = Phase::Idle;
+static mut JOB: CardJob<JOB_FRAMES> = CardJob::new();
 static mut PAYLOAD: usize = 0;
+/// The plan is made and its frames are going to the card: a card that stops
+/// answering now was pulled mid-save, not missing.
+static mut WRITING: bool = false;
 /// The save counter of the newest save this session wrote or loaded.
 static mut SAVE_SEQ: u32 = 0;
 /// Which name holds this session's save (0 = FILE_NAME, 1 = FILE_NAME_B),
@@ -522,92 +475,66 @@ pub enum Outcome {
 pub fn begin(p: &Player, day: u32) {
     unsafe {
         PAYLOAD = serialize(p, day);
-        PHASE = Phase::Probe(0);
+        WRITING = false;
+        JOB.begin();
     }
 }
 
 pub fn busy() -> bool {
-    unsafe { PHASE != Phase::Idle }
+    unsafe { JOB.is_busy() }
 }
 
 /// Progress of the save in progress, 0..=256.
 pub fn progress() -> i32 {
-    unsafe {
-        match PHASE {
-            Phase::Idle => 0,
-            Phase::Probe(n) => (n * 16 / DIR_FRAMES) as i32,
-            Phase::Plan => 16,
-            Phase::Write(n) => 16 + (n * 240 / J_N.max(1)) as i32,
-        }
-    }
+    unsafe { JOB.progress_q8() as i32 }
 }
 
 fn fail(o: Outcome) -> Option<Outcome> {
-    unsafe { PHASE = Phase::Idle };
+    unsafe {
+        JOB.abort();
+        WRITING = false;
+    }
     Some(o)
 }
 
-/// One step of the save, once a game frame: one card frame read or written.
-/// Some(outcome) when it has finished.
+/// One step of the save, once a game frame: at most one card frame read or
+/// written. Some(outcome) when it has finished.
 #[inline(never)]
 #[optimize(size)] // card I/O dominates; keep the bytes
 pub fn pump() -> Option<Outcome> {
-    let phase = unsafe { PHASE };
-    match phase {
-        Phase::Idle => None,
-        Phase::Probe(n) => {
-            let r = HardwareCard::new(Slot::One).read_frame(n as u16, unsafe { &mut DIR[n] });
-            match r {
-                Ok(()) => {}
-                Err(McError::NoCard) => return fail(Outcome::NoCard),
-                Err(_) => return fail(Outcome::Failed),
-            }
-            unsafe {
-                PHASE = if n + 1 < DIR_FRAMES {
-                    Phase::Probe(n + 1)
-                } else {
-                    Phase::Plan
-                };
-            }
-            None
-        }
-        Phase::Plan => match plan() {
+    let job = unsafe { &mut *core::ptr::addr_of_mut!(JOB) };
+    let mut card = HardwareCard::new(Slot::One);
+    match job.step(&mut card, psx_rt::interrupts::vblank_count()) {
+        Ok(Step::NeedsPlan) => match job.plan(plan) {
             Ok(()) => {
-                unsafe { PHASE = Phase::Write(0) };
+                unsafe { WRITING = true };
                 None
             }
             Err(McError::NoSpace) => fail(Outcome::Full),
             Err(McError::NotFormatted) => fail(Outcome::NeedFormat),
             Err(_) => fail(Outcome::Failed),
         },
-        Phase::Write(n) => {
+        Ok(Step::Done) => unsafe {
+            WRITING = false;
+            FORMAT_OK = false;
+            SAVE_SEQ = SAVE_SEQ.wrapping_add(1);
+            CUR_SLOT = Some(TARGET);
+            Some(Outcome::Saved)
+        },
+        Ok(_) => {
             #[cfg(feature = "save-pull")]
             {
                 static mut PULLED: bool = false;
-                if n == 3 && !unsafe { PULLED } {
+                if unsafe { WRITING && !PULLED && job.progress_q8() > 40 } {
                     unsafe { PULLED = true };
                     return fail(Outcome::Removed);
                 }
             }
-            let (frame, data) = unsafe { (J_FRAME[n], &J_DATA[n]) };
-            match HardwareCard::new(Slot::One).write_frame(frame, data) {
-                Ok(()) => {}
-                Err(McError::NoCard) => return fail(Outcome::Removed),
-                Err(_) => return fail(Outcome::Failed),
-            }
-            unsafe {
-                if n + 1 < J_N {
-                    PHASE = Phase::Write(n + 1);
-                    None
-                } else {
-                    PHASE = Phase::Idle;
-                    FORMAT_OK = false;
-                    SAVE_SEQ = SAVE_SEQ.wrapping_add(1);
-                    CUR_SLOT = Some(TARGET);
-                    Some(Outcome::Saved)
-                }
-            }
+            None
         }
+        Err(McError::NoCard) if unsafe { WRITING } => fail(Outcome::Removed),
+        Err(McError::NoCard) => fail(Outcome::NoCard),
+        Err(_) => fail(Outcome::Failed),
     }
 }
 
@@ -619,9 +546,7 @@ const NAMES: [&str; 2] = [FILE_NAME, FILE_NAME_B];
 /// against pulling the card, but it still saves on a nearly full card.
 #[inline(never)]
 #[optimize(size)]
-fn plan() -> psx_mc::Result<()> {
-    unsafe { J_N = 0 };
-    let mut card = Card::new(Journal);
+fn plan(card: &mut Card<Staged<'_, JOB_FRAMES>>) -> psx_mc::Result<()> {
     if !card.is_formatted()? {
         // A card with no directory may be blank or may hold something this
         // game cannot read; formatting erases it, so ask first, as the BIOS does.
@@ -632,7 +557,7 @@ fn plan() -> psx_mc::Result<()> {
         card.format()?;
     }
     let mut list = [psx_mc::Entry {
-        name: [0; psx_mc::MAX_NAME + 1],
+        name: [0; psx_mc::MAX_NAME_LEN + 1],
         name_len: 0,
         blocks: 0,
     }; psx_mc::DATA_BLOCKS];
@@ -659,7 +584,6 @@ fn plan() -> psx_mc::Result<()> {
     };
     let mut target = cur.map_or(0, |c| c ^ 1);
     let payload = unsafe { &BUF[..PAYLOAD] };
-    let mark = unsafe { J_N };
     match card.write(NAMES[target as usize], FILE_TITLE, payload) {
         Ok(()) => {
             // Both old copies go once the new one is down, the stray one a
@@ -672,8 +596,9 @@ fn plan() -> psx_mc::Result<()> {
                 s += 1;
             }
         }
+        // A write with no room queues nothing, so the in-place write starts
+        // from the same plan.
         Err(McError::NoSpace) if cur.is_some() => {
-            unsafe { J_N = mark };
             target = cur.unwrap_or(0);
             card.write(NAMES[target as usize], FILE_TITLE, payload)?;
         }
