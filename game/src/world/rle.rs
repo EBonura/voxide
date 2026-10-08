@@ -38,7 +38,7 @@ pub(super) static mut BLK_ROTATES: u32 = 0;
 /// Layer-major bitmap of the CLS_SPECIAL cells found by a FULL decode (bit col
 /// of word col / 32 in row ly), so light sources and plants are recorded in
 /// the same ascending index order the per-cell decode used.
-static mut SPEC: [[u32; 8]; CHU] = [[0; 8]; CHU];
+pub(super) static mut SPEC: [[u32; 8]; CHU] = [[0; 8]; CHU];
 
 /// Block at chunk-local index `i` of resident slot `s`.
 #[inline(always)]
@@ -382,7 +382,7 @@ pub(super) fn col_span(s: usize, col: usize, y0: i32, out: &mut [u8]) {
 #[inline(never)]
 pub(super) fn decode_cols<const FULL: bool>(s: usize, c0: usize, c1: usize, top: &mut usize) {
     unsafe {
-        if FULL && c0 == 0 {
+        if c0 == 0 {
             SPEC = [[0; 8]; CHU];
         }
         let region = RBASE[s] as usize;
@@ -422,7 +422,10 @@ pub(super) fn decode_cols<const FULL: bool>(s: usize, c0: usize, c1: usize, top:
                     if cls & CLS_SEE != 0 {
                         see |= bits;
                     }
-                    if FULL && cls & CLS_SPECIAL != 0 {
+                    if cls & CLS_SPECIAL != 0 && is_light_source(b) {
+                        LIGHT_COLS[col >> 5] |= 1 << (col & 31);
+                    }
+                    if cls & CLS_SPECIAL != 0 {
                         let mut y = y0;
                         while y < y1 {
                             SPEC[y][col >> 5] |= 1 << (col & 31);
