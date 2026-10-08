@@ -152,7 +152,7 @@ version = "0.1.0"
 
 [[package]]
 name = "voxide"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "psx-font",
  "psx-fx",
