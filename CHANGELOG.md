@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+Equipment, and fixes from a playtest.
+
+- The inventory opens on a player page, as Java's survival screen does: the
+  four armour slots down the left, the player in the middle wearing what you
+  put on, the off hand, your armour and defense, the weapon you swing, the
+  armour you carry and the hotbar. L1 and R1 page between it and the item tabs.
+- Armour is made a piece at a time at a crafting table (helmet, chestplate,
+  leggings, boots, in iron or diamond) for Java's 5, 8, 7 and 4 ingots, and
+  worn from the player page. Each piece keeps its own wear and takes it off
+  with you, a worn piece that runs out is gone, and defense, toughness and the
+  armour bar are Java's. Before, one recipe equipped a whole set at once.
+- Pick the weapon you swing at mobs: fist, sword, axe, pickaxe or shovel, each
+  with Java's damage and attack speed, and each wearing as Java's does (a
+  sword loses one use a hit, the other tools two).
+- L1 and R1 together swap the item in your hand with the off hand, as Java's
+  swap-hands key does. Put an item in the off hand from the player page.
+- Coal, iron, gold, diamond, sticks and the rest of what you collect now go
+  on the hotbar like any other item, so a mined ore shows up where you look.
+  Nothing is placed from them. Ore still drops only to the pickaxe Java asks
+  for: nothing from coal by hand, nothing from iron below stone, nothing from
+  gold or diamond below iron.
+- The short bar under the crosshair when you started mining a block was the
+  attack cooldown. Java only restarts it when a swing hits a mob or finds
+  nothing, so mining no longer shows it.
+- Glowstone breaks at the same speed with any tool, as in Java.
+- Saves are version 12 and keep what you wear, the off hand and the weapon.
+  Saves from before load wearing the armour tier they had.
+
 ## 0.3.2 | 2026-10-08
 
 Portals, controls and world speed fixes, on top of 0.3.1.

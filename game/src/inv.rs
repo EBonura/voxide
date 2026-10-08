@@ -649,7 +649,7 @@ const TAB_BLOCKS: [u8; 33] = [
     PISTON,
     TNT,
 ];
-const TAB_ITEMS: [u8; 13] = [
+const TAB_ITEMS: [u8; 21] = [
     BOW,
     FISHING_ROD,
     BUCKET,
@@ -663,8 +663,20 @@ const TAB_ITEMS: [u8; 13] = [
     POTION_STRENGTH,
     POTION_REGEN,
     POTION_FIRE,
+    ARMOR0,
+    ARMOR0 + 1,
+    ARMOR0 + 2,
+    ARMOR0 + 3,
+    ARMOR0 + 4,
+    ARMOR0 + 5,
+    ARMOR0 + 6,
+    ARMOR0 + 7,
 ];
 const TAB_FOOD: [u8; 5] = [BREAD, COOKED_MEAT, RAW_MEAT, WHEAT_ITEM, SEEDS];
+/// True for the crafting materials the inventory lists under MATERIALS.
+pub fn is_material(item: u8) -> bool {
+    TAB_MATERIALS.contains(&item)
+}
 const TAB_MATERIALS: [u8; 18] = [
     COAL_ORE,
     IRON_ORE,
@@ -803,6 +815,9 @@ pub fn inventory_open(selected: u8) {
         SHOW_ALL = false;
         CARRY = AIR;
         NOTE_T = 0;
+        ON_PLAYER = true;
+        PZ = Z_ARMOR;
+        PI = 0;
         TAB = 0;
         PAGE = 0;
         CUR_X = 0;
@@ -850,21 +865,28 @@ fn cursor_item(list: &[u8; BLOCK_KINDS], n: usize) -> u8 {
 }
 
 /// Put the carried kind on hotbar slot `j`. A kind lives in one slot, so it
-/// leaves its old one. An occupant swaps into that old slot when the carry
-/// came off the hotbar, and otherwise is picked up in turn.
+/// leaves its old one, or the off hand. An occupant swaps into that old place
+/// when the carry came off the hotbar or the off hand, and otherwise is picked
+/// up in turn.
 #[inline(never)]
 #[optimize(size)]
-fn drop_on_hotbar(j: usize) {
+fn drop_on_hotbar(j: usize, p: &mut Player) {
     unsafe {
         let item = CARRY;
         let occupant = HOTBAR[j];
+        let from_off = p.offhand == item;
         if let Some(k) = hotbar_slot_of(item) {
             HOTBAR[k] = AIR;
+        }
+        if from_off {
+            p.offhand = AIR;
         }
         HOTBAR[j] = item;
         CARRY = AIR;
         if occupant != AIR && occupant != item {
-            if CARRY_FROM >= 0 {
+            if from_off {
+                p.offhand = occupant;
+            } else if CARRY_FROM >= 0 {
                 HOTBAR[CARRY_FROM as usize] = occupant;
             } else {
                 CARRY = occupant;
@@ -877,7 +899,7 @@ fn drop_on_hotbar(j: usize) {
 /// One frame of inventory input. Returns true when the menu should close.
 #[inline(never)]
 #[optimize(size)]
-pub fn inventory_input(pad: ButtonState, previous: ButtonState) -> bool {
+pub fn inventory_input(pad: ButtonState, previous: ButtonState, player: &mut Player) -> bool {
     let pressed = |b: u16| pad.pressed_since(previous, b);
     unsafe {
         if NOTE_T > 0 {
@@ -900,12 +922,18 @@ pub fn inventory_input(pad: ButtonState, previous: ButtonState) -> bool {
     let all = unsafe { SHOW_ALL };
     let mut n = tab_list(unsafe { TAB }, all, &mut list);
     if pressed(button::L1) || pressed(button::R1) {
+        // The pages in display order: the player, then the four item tabs.
         unsafe {
-            TAB = if pressed(button::R1) {
-                (TAB + 1) % TABS
+            let d = if ON_PLAYER { 0 } else { TAB + 1 };
+            let nd = if pressed(button::R1) {
+                (d + 1) % PAGES
             } else {
-                (TAB + TABS - 1) % TABS
+                (d + PAGES - 1) % PAGES
             };
+            ON_PLAYER = nd == 0;
+            if nd > 0 {
+                TAB = nd - 1;
+            }
             PAGE = 0;
             CUR_X = 0;
             CUR_Y = if CUR_Y == HOT_ROW { HOT_ROW } else { 0 };
@@ -913,6 +941,10 @@ pub fn inventory_input(pad: ButtonState, previous: ButtonState) -> bool {
         }
         n = tab_list(unsafe { TAB }, all, &mut list);
         sfx::blip();
+    }
+    if unsafe { ON_PLAYER } {
+        player_input(pad, previous, player);
+        return false;
     }
     if pressed(button::SELECT) {
         unsafe {
@@ -965,7 +997,7 @@ pub fn inventory_input(pad: ButtonState, previous: ButtonState) -> bool {
             NOTE_T = 0; // a new action replaces the last note
             if cy == HOT_ROW {
                 if CARRY != AIR {
-                    drop_on_hotbar(cx);
+                    drop_on_hotbar(cx, player);
                 } else if HOTBAR[cx] != AIR {
                     CARRY = HOTBAR[cx];
                     CARRY_FROM = cx as i8;
@@ -980,7 +1012,7 @@ pub fn inventory_input(pad: ButtonState, previous: ButtonState) -> bool {
             } else if item != AIR {
                 if INV[item as usize] == 0 {
                     note("YOU HAVE NONE YET");
-                } else if !in_placeable(item) {
+                } else if !holdable(item) {
                     note("CAN'T BE HELD: USE IT IN RECIPES");
                 } else {
                     CARRY = item;
@@ -1009,7 +1041,7 @@ pub fn inventory_input(pad: ButtonState, previous: ButtonState) -> bool {
     if pressed(button::TRIANGLE) && cy < HOT_ROW && item != AIR {
         if unsafe { INV[item as usize] } == 0 {
             note("YOU HAVE NONE YET");
-        } else if !in_placeable(item) {
+        } else if !holdable(item) {
             note("CAN'T BE HELD: USE IT IN RECIPES");
         } else if hotbar_slot_of(item).is_some() {
             note("ALREADY ON THE HOTBAR");
@@ -1108,6 +1140,7 @@ fn purpose(item: u8) -> &'static str {
         WHEAT_ITEM => "ANIMALS FOLLOW IT. MAKES BREAD",
         _ if fuel_smelts(item) > 0 && !in_placeable(item) => "BURNS AS FURNACE FUEL",
         _ if smelt_result(item) != AIR && !in_placeable(item) => "SMELTS IN A FURNACE",
+        _ if armor_piece(item).is_some() => "WEAR IT ON THE PLAYER PAGE",
         _ if !in_placeable(item) => "A CRAFTING MATERIAL",
         _ if unsafe { TAB } == 1 => "L2 USES IT.",
         _ => "L2 PLACES IT.",
@@ -1134,7 +1167,12 @@ pub fn draw_inventory(font: &FontAtlas, player: &Player) {
     dim_screen();
     panel(8, 3, 304, 207);
     draw_centered(font, 8, "INVENTORY", MC_INK);
-    tabs(font, 20, &TAB_TILES, tab);
+    if unsafe { ON_PLAYER } {
+        tabs(font, 20, &PAGE_TILES, 0);
+        draw_player_page(font, player);
+        return;
+    }
+    tabs(font, 20, &PAGE_TILES, tab + 1);
     ui_text(font, GRID_X, 43, TAB_NAME[tab], MC_INK);
     let mut pb = [0u8; 5];
     let mut pc = [0u8; 5];
@@ -1153,7 +1191,6 @@ pub fn draw_inventory(font: &FontAtlas, player: &Player) {
         (tex::T_AXE, player.axe),
         (tex::T_SHOVEL, player.shovel),
         (tex::T_SWORD, player.sword),
-        (tex::T_I_ARMOR, player.armor),
     ];
     let mut g = 0;
     while g < gear.len() {
@@ -1161,16 +1198,7 @@ pub fn draw_inventory(font: &FontAtlas, player: &Player) {
         slot(x, y);
         let (tile, tier) = gear[g];
         if tier > 0 {
-            let tint = if tile == tex::T_I_ARMOR {
-                if tier >= 2 {
-                    (90, 220, 220)
-                } else {
-                    (128, 128, 128)
-                }
-            } else {
-                tool_tint(tier)
-            };
-            draw_tile(x + 1, y + 1, tile, tint);
+            draw_tile(x + 1, y + 1, tile, tool_tint(tier));
         }
         g += 1;
     }
@@ -1238,7 +1266,7 @@ pub fn draw_inventory(font: &FontAtlas, player: &Player) {
     } else if shown != AIR {
         let p = purpose(shown);
         ui_text(font, 42, 148, p, GREY);
-        if in_placeable(shown) && unsafe { INV[shown as usize] } > 0 {
+        if holdable(shown) && unsafe { INV[shown as usize] } > 0 {
             let x = 42 + (p.len() as i16 + 1) * 8;
             match hotbar_slot_of(shown) {
                 Some(j) => {
@@ -1307,5 +1335,428 @@ pub fn draw_inventory(font: &FontAtlas, player: &Player) {
         if c > 1 {
             draw_count(sx + 6, sy - 11, c);
         }
+    }
+}
+
+// -- the player page -----------------------------------------------------------
+//
+// Minecraft's survival inventory, as the first page of this screen: the four
+// armour slots down the left, the player between them and the stats, the off
+// hand, the weapon you swing, and the armour you carry. The hotbar is the
+// bottom row, as on the item pages. Crafting by hand is SQUARE's pocket menu,
+// which already offers just what a 2x2 grid can shape.
+
+/// True while the player page, not an item tab, is showing.
+static mut ON_PLAYER: bool = true;
+/// The player page's cursor: zone and index within it.
+static mut PZ: usize = 0;
+static mut PI: usize = 0;
+const Z_ARMOR: usize = 0;
+const Z_OFF: usize = 1;
+const Z_WEAP: usize = 2;
+const Z_STOCK: usize = 3;
+const Z_HOT: usize = 4;
+const AX: i16 = 16;
+const AY: i16 = 42;
+const OFF_SX: i16 = 98;
+const OFF_SY: i16 = 96;
+const WX: i16 = 124;
+const WY: i16 = 92;
+const SX0: i16 = 16;
+const SY0: i16 = 136;
+const STOCK_N: usize = 8;
+const SLOT_NAME: [&str; 4] = ["HELMET", "CHESTPLATE", "LEGGINGS", "BOOTS"];
+
+/// Display order of the pages: the player first, then the item tabs.
+const PAGES: usize = TABS + 1;
+const PAGE_TILES: [u8; PAGES] = [
+    tex::T_I_ARMOR,
+    tex::T_GRASS_SIDE,
+    tex::T_I_BOW,
+    tex::T_I_BREAD,
+    tex::T_I_COAL,
+];
+
+/// The armour kinds you carry, in kind order, up to STOCK_N.
+#[optimize(size)]
+fn stock(out: &mut [u8; STOCK_N]) -> usize {
+    let mut n = 0;
+    let mut k = ARMOR0;
+    while k < ARMOR0 + ARMOR_KINDS && n < STOCK_N {
+        if unsafe { INV[k as usize] } > 0 {
+            out[n] = k;
+            n += 1;
+        }
+        k += 1;
+    }
+    n
+}
+
+/// Where the cursor goes for a D-pad direction (0 up, 1 down, 2 left, 3
+/// right), as (zone, index).
+#[optimize(size)]
+fn pmove(z: usize, i: usize, d: usize, ns: usize) -> (usize, usize) {
+    let last = ns.max(1) - 1;
+    match (z, d) {
+        (Z_ARMOR, 0) => if i > 0 { (Z_ARMOR, i - 1) } else { (Z_HOT, 0) },
+        (Z_ARMOR, 1) => if i < 3 { (Z_ARMOR, i + 1) } else { (Z_STOCK, 0) },
+        (Z_ARMOR, 3) => if i == 3 { (Z_OFF, 0) } else { (Z_WEAP, 0) },
+        (Z_OFF, 0) => (Z_ARMOR, 1),
+        (Z_OFF, 1) => (Z_STOCK, 0),
+        (Z_OFF, 2) => (Z_ARMOR, 3),
+        (Z_OFF, 3) => (Z_WEAP, 0),
+        (Z_WEAP, 0) => (Z_ARMOR, 0),
+        (Z_WEAP, 1) => (Z_STOCK, i.min(last)),
+        (Z_WEAP, 2) => if i > 0 { (Z_WEAP, i - 1) } else { (Z_OFF, 0) },
+        (Z_WEAP, 3) => (Z_WEAP, (i + 1) % 5),
+        (Z_STOCK, 0) => if i < 2 { (Z_ARMOR, 3) } else { (Z_WEAP, (i - 2).min(4)) },
+        (Z_STOCK, 1) => (Z_HOT, i),
+        (Z_STOCK, 2) => (Z_STOCK, (i + STOCK_N - 1) % STOCK_N),
+        (Z_STOCK, 3) => (Z_STOCK, (i + 1) % STOCK_N),
+        (Z_HOT, 0) => (Z_STOCK, i.min(STOCK_N - 1)),
+        (Z_HOT, 1) => (Z_ARMOR, 0),
+        (Z_HOT, 2) => (Z_HOT, (i + HOTBAR_VIS - 1) % HOTBAR_VIS),
+        (Z_HOT, 3) => (Z_HOT, (i + 1) % HOTBAR_VIS),
+        _ => (z, i),
+    }
+}
+
+/// Put the carried kind in the off hand. A kind lives in one place, so the
+/// slot it came from takes the old off-hand item in exchange.
+#[inline(never)]
+#[optimize(size)]
+fn put_in_offhand(p: &mut Player) {
+    unsafe {
+        let item = CARRY;
+        let old = p.offhand;
+        if let Some(k) = hotbar_slot_of(item) {
+            HOTBAR[k] = if old != item { old } else { AIR };
+        }
+        p.offhand = item;
+        CARRY = AIR;
+    }
+}
+
+/// One frame of the player page.
+#[inline(never)]
+#[optimize(size)]
+fn player_input(pad: ButtonState, previous: ButtonState, p: &mut Player) {
+    let pressed = |b: u16| pad.pressed_since(previous, b);
+    let mut st = [0u8; STOCK_N];
+    let ns = stock(&mut st);
+    let t = unsafe { &mut NAV_T };
+    let dirs = [button::UP, button::DOWN, button::LEFT, button::RIGHT];
+    let mut d = 0;
+    while d < 4 {
+        if nav_repeat(pad.is_held(dirs[d]), &mut t[d]) {
+            unsafe {
+                let (z, i) = pmove(PZ, PI, d, ns);
+                PZ = z;
+                PI = i;
+                NOTE_T = 0;
+            }
+            sfx::blip();
+        }
+        d += 1;
+    }
+    let (z, i) = unsafe { (PZ, PI) };
+    if pressed(button::CROSS) {
+        unsafe { NOTE_T = 0 };
+        match z {
+            Z_ARMOR => {
+                if p.worn[i] == AIR {
+                    note("NOTHING WORN HERE");
+                } else {
+                    match equip::take_off(p, i) {
+                        Ok(()) => note("TAKEN OFF"),
+                        Err(m) => note(m),
+                    }
+                }
+            }
+            Z_STOCK => {
+                if i < ns {
+                    match equip::wear(p, st[i]) {
+                        Ok(()) => {
+                            note("WORN");
+                            sfx::confirm();
+                        }
+                        Err(m) => note(m),
+                    }
+                }
+            }
+            Z_WEAP => {
+                let class = equip::WEAPONS[i];
+                if class == TOOL_NONE || tool_tier(p, class) > 0 {
+                    p.weapon = class;
+                    note("WEAPON EQUIPPED");
+                    sfx::confirm();
+                } else {
+                    note("YOU HAVE NONE OF THOSE");
+                }
+            }
+            Z_OFF => unsafe {
+                if CARRY != AIR {
+                    put_in_offhand(p);
+                } else if p.offhand != AIR {
+                    CARRY = p.offhand;
+                    CARRY_FROM = -2;
+                }
+            },
+            _ => unsafe {
+                // The hotbar, as on the item pages.
+                if CARRY != AIR {
+                    drop_on_hotbar(i, p);
+                } else if HOTBAR[i] != AIR {
+                    CARRY = HOTBAR[i];
+                    CARRY_FROM = i as i8;
+                }
+            },
+        }
+        sfx::blip();
+    }
+    if pressed(button::SQUARE) {
+        unsafe {
+            if z == Z_HOT && HOTBAR[i] != AIR {
+                HOTBAR[i] = AIR;
+                note("HOTBAR SLOT CLEARED");
+            } else if z == Z_OFF && p.offhand != AIR {
+                p.offhand = AIR;
+                note("OFF HAND CLEARED");
+            }
+        }
+    }
+}
+
+/// Unpadded `v` as whole.tenths.
+#[optimize(size)]
+fn tenths(v: i32, buf: &mut [u8; 8]) -> &str {
+    let mut n = [0u8; 5];
+    let whole = number((v / 10) as u16, &mut n);
+    let w = whole.len();
+    buf[..w].copy_from_slice(whole.as_bytes());
+    buf[w] = b'.';
+    buf[w + 1] = b'0' + (v % 10) as u8;
+    unsafe { core::str::from_utf8_unchecked(&buf[..w + 2]) }
+}
+
+/// A durability bar under an item icon (green to red), when worn.
+#[optimize(size)]
+fn wear_bar(x: i16, y: i16, left: i32, max: i32) {
+    if left > 0 && left < max {
+        let w = (14 * left / max).max(1) as i16;
+        let g = (255 * left / max) as u8;
+        rect(x + 1, y + 13, 14, 2, 0, 0, 0);
+        rect(x + 1, y + 13, w, 1, 255 - g, g, 0);
+    }
+}
+
+/// The player page: everything on it, then the cursor.
+#[inline(never)]
+#[optimize(size)]
+fn draw_player_page(font: &FontAtlas, p: &Player) {
+    let (z, i, carry) = unsafe { (PZ, PI, CARRY) };
+    let mut st = [0u8; STOCK_N];
+    let ns = stock(&mut st);
+
+    // Armour slots, a ghost of the missing piece when bare.
+    let mut s = 0;
+    while s < 4 {
+        let y = AY + s as i16 * SLOT;
+        slot(AX, y);
+        match armor_piece(p.worn[s]) {
+            Some((t, _)) => {
+                draw_icon(AX + 1, y + 1, p.worn[s], 128);
+                wear_bar(AX, y, p.armor_dur[s] as i32, ARMOR_DUR[t][s] as i32);
+            }
+            None => draw_tile(AX + 1, y + 1, armor_tile(s), (30, 30, 36)),
+        }
+        s += 1;
+    }
+
+    // The figure, in a dark box, with the off hand beside it.
+    mc_slot(AX + 22, AY, 52, 4 * SLOT - 2);
+    equip::draw_figure(AX + 32, AY + 4, p);
+    slot(OFF_SX, OFF_SY);
+    if p.offhand != AIR {
+        draw_icon(OFF_SX + 1, OFF_SY + 1, p.offhand, 128);
+        let c = unsafe { INV[p.offhand as usize] };
+        if c > 1 {
+            draw_count(OFF_SX, OFF_SY, c);
+        }
+    }
+
+    // Armour: Java's pips (two defense points each), defense and toughness,
+    // and what a ten point hit costs through it.
+    let (pts, tough) = armor_points(p);
+    ui_text(font, WX, AY, "ARMOR", MC_INK);
+    let mut diamond = false;
+    let mut k = 0;
+    while k < 4 {
+        diamond |= matches!(armor_piece(p.worn[k]), Some((1, _)));
+        k += 1;
+    }
+    let fill = if diamond { (28, 150, 160) } else { (84, 88, 104) };
+    let mut j = 0i16;
+    while j < 10 {
+        let x = WX + 48 + j * 9;
+        rect(x, AY, 7, 7, 150, 150, 158);
+        let full = (j as i32 + 1) * 2 <= pts;
+        let half = !full && (j as i32) * 2 < pts;
+        if full || half {
+            rect(x, AY, if full { 7 } else { 3 }, 7, fill.0, fill.1, fill.2);
+        }
+        j += 1;
+    }
+    let mut nb = [0u8; 5];
+    let mut nc = [0u8; 5];
+    let mut nd = [0u8; 5];
+    ui_text(font, WX, AY + 12, "DEFENSE", MC_INK);
+    ui_text(font, WX + 64, AY + 12, number(pts as u16, &mut nb), MC_INK);
+    ui_text(font, WX + 88, AY + 12, "TOUGH", MC_INK);
+    ui_text(font, WX + 136, AY + 12, number(tough as u16, &mut nc), MC_INK);
+    ui_text(font, WX, AY + 24, "A 10 HIT DEALS", MC_INK);
+    ui_text(font, WX + 120, AY + 24, number(armored(10, p) as u16, &mut nd), MC_INK);
+
+    // Weapon: the five you can swing, the one in hand framed, its numbers.
+    let (wc, wt) = equip::weapon_of(p);
+    ui_text(font, WX, WY - 10, "WEAPON", MC_INK);
+    let mut w = 0;
+    while w < 5 {
+        let x = WX + w as i16 * SLOT;
+        slot(x, WY);
+        let class = equip::WEAPONS[w];
+        let tier = tool_tier(p, class);
+        if class == TOOL_NONE {
+            rect(x + 6, WY + 6, 5, 5, 200, 150, 110); // a fist
+        } else {
+            let lum = if tier > 0 { 1 } else { 0 };
+            let tt = tool_tint(tier.max(1));
+            let c = if lum == 1 { tt } else { (40, 40, 44) };
+            draw_tile(x + 1, WY + 1, tool_tile(class), c);
+        }
+        if class == wc {
+            rect(x - 1, WY + 17, 19, 2, 0xFF, 0xE0, 0x40);
+        }
+        w += 1;
+    }
+    let (dmg, spd) = equip::stats(wc, wt);
+    let mut b1 = [0u8; 8];
+    let mut b2 = [0u8; 8];
+    ui_text(font, WX, WY + 22, "DMG", MC_INK);
+    ui_text(font, WX + 32, WY + 22, tenths((dmg + 5) / 10, &mut b1), MC_INK);
+    ui_text(font, WX + 72, WY + 22, "SPEED", MC_INK);
+    ui_text(font, WX + 120, WY + 22, tenths(spd, &mut b2), MC_INK);
+
+    // The armour you carry.
+    let mut n = 0;
+    while n < STOCK_N {
+        let x = SX0 + n as i16 * SLOT;
+        slot(x, SY0);
+        if n < ns {
+            draw_icon(x + 1, SY0 + 1, st[n], 128);
+            let c = unsafe { INV[st[n] as usize] };
+            if c > 1 {
+                draw_count(x, SY0, c);
+            }
+        }
+        n += 1;
+    }
+    ui_text(font, SX0 + 8 * SLOT + 6, SY0 + 5, "IN YOUR PACK", MC_INK);
+
+    // Info strip: the thing under the cursor and what X does there.
+    mc_slot(16, 158, 288, 26);
+    let mut l1: &str = "";
+    let l2: &str;
+    let mut nm = [0u8; 5];
+    let mut nm2 = [0u8; 5];
+    let mut shown = AIR;
+    match z {
+        Z_ARMOR => {
+            if armor_piece(p.worn[i]).is_some() {
+                shown = p.worn[i];
+                l2 = "X TAKES IT OFF";
+            } else {
+                l1 = SLOT_NAME[i];
+                l2 = "EMPTY. WEAR ONE FROM YOUR PACK";
+            }
+        }
+        Z_OFF => {
+            shown = p.offhand;
+            if shown == AIR {
+                l1 = "OFF HAND";
+            }
+            l2 = "X MOVES AN ITEM HERE. L1+R1 SWAPS";
+        }
+        Z_WEAP => {
+            let class = equip::WEAPONS[i];
+            l1 = match class {
+                TOOL_SWORD => "SWORD",
+                TOOL_AXE => "AXE",
+                TOOL_PICK => "PICKAXE",
+                TOOL_SHOVEL => "SHOVEL",
+                _ => "FIST",
+            };
+            l2 = if class == TOOL_NONE || tool_tier(p, class) > 0 {
+                "X SWINGS THIS AT MOBS"
+            } else {
+                "YOU HAVE NONE. CRAFT ONE"
+            };
+        }
+        Z_STOCK => {
+            if i < ns {
+                shown = st[i];
+                l2 = "X WEARS IT";
+            } else {
+                l1 = "NO ARMOR HERE";
+                l2 = "CRAFT IT AT A TABLE";
+            }
+        }
+        _ => {
+            shown = if carry != AIR { carry } else { unsafe { HOTBAR[i] } };
+            l2 = if carry != AIR { "X PUTS IT HERE" } else { "X MOVES IT" };
+        }
+    }
+    if shown != AIR {
+        draw_icon(20, 160, shown, 128);
+        ui_text(font, 40, 161, block_name(shown), LABEL);
+        if let Some((t, sl)) = armor_piece(shown) {
+            let worn = z == Z_ARMOR;
+            let mut x = 40 + (block_name(shown).len() as i16 + 1) * 8;
+            let pts = ARMOR_POINTS[t][sl];
+            ui_text(font, x, 161, "DEF", GREY);
+            x += 32;
+            ui_text(font, x, 161, number(pts as u16, &mut nm), GREY);
+            if worn {
+                x += 16;
+                ui_text(font, x, 161, "USES", GREY);
+                ui_text(font, x + 40, 161, number(p.armor_dur[i], &mut nm2), GREY);
+            }
+        }
+    } else {
+        ui_text(font, 20, 161, l1, LABEL);
+    }
+    let (note_t, note_s) = unsafe { (NOTE_T, NOTE) };
+    ui_text(font, 40, 172, if note_t > 0 { note_s } else { l2 }, if note_t > 0 { (0xF0, 0xE0, 0x80) } else { GREY });
+
+    // Controls.
+    let (y1, y2) = (188, 199);
+    let x = hint_item(font, 16, y1, "X", PS_CROSS, if carry != AIR { "PUT" } else { "USE" });
+    let x = hint_item(font, x, y1, "[]", PS_SQUARE, "CLEAR");
+    hint_item(font, x, y1, "O", PS_CIRCLE, if carry != AIR { "CANCEL" } else { "CLOSE" });
+    hint_item(font, 16, y2, "L1R1", PS_KEY, "PAGE");
+
+    // The hotbar row and the cursor.
+    unsafe { OFFHAND_SHOWN = p.offhand };
+    draw_hotbar(hud_tool(p, AIR));
+    let (sx, sy) = match z {
+        Z_ARMOR => (AX, AY + i as i16 * SLOT),
+        Z_OFF => (OFF_SX, OFF_SY),
+        Z_WEAP => (WX + i as i16 * SLOT, WY),
+        Z_STOCK => (SX0 + i as i16 * SLOT, SY0),
+        _ => (HOTBAR_X0 + i as i16 * SLOT, HUD_HOTBAR_Y),
+    };
+    frame(sx, sy, CURSOR);
+    if carry != AIR {
+        draw_icon(sx + 6, sy - 10, carry, 128);
     }
 }

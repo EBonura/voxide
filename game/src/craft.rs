@@ -32,7 +32,7 @@ static mut NAV_T: [u16; 4] = [0; 4];
 
 #[optimize(size)]
 fn tiered(out: u8) -> bool {
-    is_tool_recipe(out) || out == CRAFT_ARMOR
+    is_tool_recipe(out) || armor_recipe_slot(out).is_some()
 }
 
 #[optimize(size)]
@@ -48,7 +48,7 @@ fn have_tier(p: &Player, out: u8) -> u8 {
         CRAFT_AXE => p.axe,
         CRAFT_SHOVEL => p.shovel,
         CRAFT_SWORD => p.sword,
-        _ => p.armor,
+        _ => 0, // armour pieces are items: any number, never a tier to beat
     }
 }
 
@@ -296,14 +296,10 @@ fn draw_output(x: i16, y: i16, i: usize, lum: u8) {
             CRAFT_SHOVEL => tex::T_SHOVEL,
             CRAFT_SWORD => tex::T_SWORD,
             CRAFT_PICK => tex::T_PICK,
-            _ => tex::T_I_ARMOR,
+            _ => armor_tile(armor_recipe_slot(r.out).unwrap_or(1)),
         };
-        let tint = if r.out == CRAFT_ARMOR {
-            if r.out_qty >= 2 {
-                (90, 220, 220)
-            } else {
-                (128, 128, 128)
-            }
+        let tint = if armor_recipe_slot(r.out).is_some() {
+            armor_tint(r.out_qty as usize - 1)
         } else {
             tool_tint(r.out_qty as u8)
         };
@@ -315,7 +311,6 @@ fn draw_output(x: i16, y: i16, i: usize, lum: u8) {
 }
 
 const TIER_WORD: [&str; 5] = ["NONE", "WOOD", "STONE", "IRON", "DIAMOND"];
-const ARMOR_WORD: [&str; 3] = ["NONE", "IRON", "DIAMOND"];
 
 #[inline(never)]
 #[optimize(size)]
@@ -421,27 +416,29 @@ pub fn draw_crafting(font: &FontAtlas, p: &Player) {
     draw_output(166, 132, ri, 128);
     ui_text(font, 186, 132, r.label, LABEL);
     if tiered(r.out) {
-        let armor = r.out == CRAFT_ARMOR;
         let mut tb = [0u8; 5];
         ui_text(font, 186, 144, "TIER", GREY);
         ui_text(font, 226, 144, number(r.out_qty, &mut tb), GREY);
-        let have = have_tier(p, r.out) as usize;
-        let word = if armor {
-            ARMOR_WORD[have.min(2)]
+        if let Some(slot) = armor_recipe_slot(r.out) {
+            // A piece, not a tier: how many you hold, worn or not.
+            let mut hb = [0u8; 5];
+            let kind = armor_item(r.out_qty as usize - 1, slot);
+            ui_text(font, 166, 156, "YOU HAVE", GREY);
+            ui_text(font, 238, 156, number(unsafe { INV[kind as usize] }, &mut hb), GREY);
         } else {
-            TIER_WORD[have.min(4)]
-        };
-        let what = match r.out {
-            CRAFT_AXE => "AXE",
-            CRAFT_SHOVEL => "SHOVEL",
-            CRAFT_SWORD => "SWORD",
-            CRAFT_PICK => "PICK",
-            _ => "ARMOR",
-        };
-        ui_text(font, 166, 156, "HAVE:", GREY);
-        ui_text(font, 214, 156, word, GREY);
-        if have > 0 {
-            ui_text(font, 222 + word.len() as i16 * 8, 156, what, GREY);
+            let have = have_tier(p, r.out) as usize;
+            let word = TIER_WORD[have.min(4)];
+            let what = match r.out {
+                CRAFT_AXE => "AXE",
+                CRAFT_SHOVEL => "SHOVEL",
+                CRAFT_SWORD => "SWORD",
+                _ => "PICK",
+            };
+            ui_text(font, 166, 156, "HAVE:", GREY);
+            ui_text(font, 214, 156, word, GREY);
+            if have > 0 {
+                ui_text(font, 222 + word.len() as i16 * 8, 156, what, GREY);
+            }
         }
     } else {
         let mut mb = [0u8; 5];

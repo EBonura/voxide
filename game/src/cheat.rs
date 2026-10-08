@@ -252,7 +252,9 @@ fn give_all(p: &mut Player) {
     p.axe = 4;
     p.shovel = 4;
     p.sword = 4;
-    p.armor = 2;
+    p.worn = [ARMOR0 + 4, ARMOR0 + 5, ARMOR0 + 6, ARMOR0 + 7];
+    p.weapon = TOOL_SWORD;
+    full_durability(p);
     hotbar_sync(p);
 }
 
