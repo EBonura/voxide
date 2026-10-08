@@ -2802,6 +2802,16 @@ fn main() {
                 if pad.pressed_since(previous, button::CROSS) {
                     // Java's world carries on through a death: the mobs stay
                     // where they are (they used to be wiped, tamed wolves too).
+                    // A death in the Inferno or the Void respawns in the
+                    // overworld, as Java's does, not at the overworld spawn's
+                    // coordinates inside the other dimension.
+                    if world::dimension() != world::DIM_OVERWORLD {
+                        let (rbx, rbz) = unsafe { (RESPAWN_BX, RESPAWN_BZ) };
+                        mob::leave_dimension();
+                        enter_dimension(world::DIM_OVERWORLD, rbx, rbz, &mut fb, &font);
+                        save::apply_edits();
+                        mob::settle_dragon(false, 0, 0);
+                    }
                     player = spawn_player();
                     menu = 0;
                 }
