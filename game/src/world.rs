@@ -2163,27 +2163,14 @@ impl Touched {
     }
 }
 
-fn fluid_put(t: &mut Touched, x: i32, y: i32, z: i32, b: u8) {
-    raw_set(x, y, z, b);
-    // Same border rule `set` uses: a block on a chunk edge shows faces in the
-    // neighbour's mesh too.
-    let cx = floor_div(x, CW);
-    let cz = floor_div(z, CW);
-    t.mark(cx, cz);
-    let lx = x - cx * CW;
-    let lz = z - cz * CW;
-    if lx == 0 {
-        t.mark(cx - 1, cz);
-    }
-    if lx == CW - 1 {
-        t.mark(cx + 1, cz);
-    }
-    if lz == 0 {
-        t.mark(cx, cz - 1);
-    }
-    if lz == CW - 1 {
-        t.mark(cx, cz + 1);
-    }
+fn fluid_put(_t: &mut Touched, x: i32, y: i32, z: i32, b: u8) {
+    // Through `set`, the bounded partial rebuild a player edit gets: only the
+    // planes touching the cell are re-meshed and the rest are copied from the
+    // committed mesh. The whole-chunk remesh this used to queue per chunk per
+    // fluid step cost ~8.6M cycles (see `set`), so a spreading flow held the
+    // frame rate at 5 fps. `set` also dirties a neighbour chunk when the cell
+    // sits on a border.
+    set(x, y, z, b);
     // Only the cell that CHANGED wakes its neighbours; scheduling the whole
     // evaluated cell's surroundings every step floods the queue.
     wake_fluid(x, y, z);
