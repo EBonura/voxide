@@ -2434,7 +2434,8 @@ fn draw_tutorial(font: &FontAtlas) {
     };
     let w = bw + text.len() as i16 * 8 + 12;
     let x = SCREEN_W as i16 - 6 - w;
-    let y = 6i16;
+    // Below the dragon's boss bar (text at 4, bar to 21) when there is one.
+    let y = if mob::dragon_status().is_some() { 26i16 } else { 6i16 };
     rect(x - 2, y - 2, w + 4, 18, 0, 0, 0);
     rect(x, y, w, 14, 0xC6, 0xC6, 0xC6);
     let mut tx = x + 6;
