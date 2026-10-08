@@ -1,9 +1,16 @@
-VoXide (PSX)  -  v0.3.1
+VoXide (PSX)  -  v0.3.2
 ======================
 
 A Minecraft-style survival sandbox for the PlayStation 1, written in Rust.
 This is an early playable build: world generation, mining, crafting and
 survival work, but much of the game is still unfinished.
+
+New in v0.3.2: portals drawn as Java's blended sheets, and the Void portal
+walks through like the Nether one; dying in the Inferno or the Void respawns
+you in the overworld; holding L2 keeps placing blocks and holding Cross keeps
+hopping; saving to a memory card with no directory asks before formatting it;
+and a faster world, so a flowing lake or lava stream no longer drags the frame
+rate down.
 
 New in v0.3.1: thunderstorms like Minecraft Java Edition's, with lightning,
 thunder and dark storm clouds; rain, snow or nothing depending on the biome,
