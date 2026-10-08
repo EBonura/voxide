@@ -21,6 +21,18 @@ const RED: (u8, u8, u8) = (0xE0, 0x60, 0x60);
 const TAB_NAME: [&str; CRAFT_TABS] = ["BLOCKS", "GEAR", "ITEMS", "FOOD"];
 const TAB_TILES: [u8; CRAFT_TABS] = [tex::T_PLANK, tex::T_PICK, tex::T_I_STICK, tex::T_I_BREAD];
 
+/// Set when a recipe was laid in the grid: the caller opens the player page.
+static mut TO_GRID: bool = false;
+
+/// True once after the list filled the grid.
+pub fn take_to_grid() -> bool {
+    unsafe {
+        let t = TO_GRID;
+        TO_GRID = false;
+        t
+    }
+}
+
 /// Column and tier under the cursor.
 static mut COL: usize = 0;
 static mut TIER: usize = 0;
@@ -278,6 +290,16 @@ pub fn craft_input(pad: ButtonState, previous: ButtonState, p: &mut Player) {
         return;
     }
     if makeable(ri, p) {
+        if !unsafe { AT_BENCH } && grid::pocket_craftable(RECIPES[ri].out) {
+            // Away from a table this list is the recipe book: it lays the
+            // shape in the player page's 2x2 grid, and the output slot there
+            // does the crafting, as in Java.
+            if *h == 1 && grid::fill_recipe(RECIPES[ri].out) {
+                unsafe { TO_GRID = true };
+                sfx::confirm();
+            }
+            return;
+        }
         craft(ri, p);
         sfx::confirm();
     } else if *h == 1 {

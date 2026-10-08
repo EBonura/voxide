@@ -17,6 +17,7 @@ mod bonnie;
 mod cheat;
 mod craft;
 mod equip;
+mod grid;
 #[cfg(feature = "ui-fixture")]
 mod fixture;
 mod inv;
@@ -2435,7 +2436,7 @@ static mut EQUIP_T: u16 = 0;
 /// Recipes the 2x2 pocket grid cannot make -- everything beyond planks,
 /// sticks, torches and the table itself wants the 3x3 bench, as in Java.
 fn needs_bench(i: usize) -> bool {
-    !matches!(RECIPES[i].out, PLANK | STICK | TORCH | CRAFT_TABLE)
+    !matches!(RECIPES[i].out, PLANK | STICK | TORCH | CRAFT_TABLE | BONEMEAL)
 }
 
 /// A recipe the menu should show as makeable right now.
@@ -3043,6 +3044,10 @@ fn main() {
                 }
             } else if menu == 1 {
                 craft::craft_input(pad, previous, &mut player);
+                if craft::take_to_grid() {
+                    menu = MENU_INV;
+                    inv::inventory_open_grid();
+                }
             } else if menu == 2 {
                 inv::chest_input(chest_idx, pad, previous);
             } else {
@@ -3056,6 +3061,7 @@ fn main() {
             // equips it and better never hurts (no durability here).
             hotbar_sync(&mut player);
             equip::sync(&mut player);
+            grid::return_all(); // whatever the 2x2 grid held goes back when its screen closes
             if pad.pressed_since(previous, button::R1) || pad.pressed_since(previous, button::L1) {
                 player.attack_t = 0; // switching items restarts the attack cooldown
             }
