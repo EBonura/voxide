@@ -3223,7 +3223,10 @@ fn main() {
             // (melee_damage).
             let swung = pad.pressed_since(previous, button::R2);
             let dmg = melee_damage(&player); // on the charge before this swing
-            if swung {
+            // Java resets the cooldown when a swing hits a mob or finds
+            // nothing, not when it starts breaking a block, so mining no
+            // longer flashes the attack indicator under the crosshair.
+            if swung && (target.is_some() || !pick.hit) {
                 player.attack_t = 0;
             }
             if let (true, Some(t)) = (swung, target) {
@@ -12764,7 +12767,7 @@ const TOOL_SWORD: u8 = 4;
 fn tool_for(block: u8) -> u8 {
     match block {
         STONE | COBBLE | BRICK | OBSIDIAN | FURNACE | ENCHANT | SLAB | STAIRS_N | STAIRS_E
-        | STAIRS_S | STAIRS_W | PISTON | CINDERSTONE | VOID_STONE | LUMISTONE | COAL_ORE
+        | STAIRS_S | STAIRS_W | PISTON | CINDERSTONE | VOID_STONE | COAL_ORE
         | IRON_ORE | GOLD_ORE | DIAMOND_ORE => TOOL_PICK,
         WOOD | PLANK | FENCE | CHEST | CRAFT_TABLE | DOOR_C | DOOR_O | LADDER | BED => TOOL_AXE,
         GRASS | DIRT | SAND | SINK_SAND | SNOW | CLAY => TOOL_SHOVEL,
