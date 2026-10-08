@@ -3652,7 +3652,9 @@ fn main() {
         // register state such as dithering belongs in this frame's list.
         ui_frame_begin();
         queue_dither();
-        draw_frame_sky(&cam, day, tod, light, sky, rain > 128);
+        // SAFETY: nothing else is live in the scratchpad between phases, and
+        // the SDK's stack-guard proves each tree fits (see FullStack).
+        unsafe { FullStack::run(|| draw_frame_sky(&cam, day, tod, light, sky, rain > 128)) };
         ui_finish_sky(false);
         telemetry::stage_end(ST_R_SKY);
         telemetry::stage_begin(ST_RENDER);
@@ -3662,10 +3664,10 @@ fn main() {
         // Cross-sprite plants, depth-sorted into the same OT; on a scratchpad
         // stack for the same reason as the face pass (see world::FaceStack).
         // The face batch is dead by now, so this one takes the whole 1 KB.
-        unsafe { PlantStack::run(|| render_plants(&cam)) };
+        unsafe { FullStack::run(|| render_plants(&cam)) };
         telemetry::stage_end(ST_R_WORLD);
         telemetry::stage_begin(ST_R_MOBS);
-        render_mobs(&cam, unsafe { SIM_TICK });
+        unsafe { FullStack::run(|| render_mobs(&cam, SIM_TICK)) };
         telemetry::stage_end(ST_R_MOBS);
         // Spend streaming work only from the headroom left by the current world
         // pass. Heavy terrain gets no extra work this frame; moderate terrain
@@ -3676,7 +3678,7 @@ fn main() {
         telemetry::stage_end(ST_MESH);
         telemetry::stage_end(ST_RENDER);
         telemetry::stage_begin(ST_R_TAIL);
-        render_particles(&cam);
+        unsafe { FullStack::run(|| render_particles(&cam)) };
         #[cfg(feature = "look-lab")]
         picklab::look(&player);
         #[cfg(feature = "pick-lab")]
@@ -3685,7 +3687,7 @@ fn main() {
         // Minecraft puts the destroy stage ON the block you are hitting. Ours
         // only had an 18px bar under the crosshair, which is nearly subliminal at
         // 320x240 and keeps your eye off the block.
-        draw_break_overlay(&cam, pick, mine_progress, mine_den);
+        unsafe { FullStack::run(|| draw_break_overlay(&cam, pick, mine_progress, mine_den)) };
         swing = swing.saturating_sub(sim_n);
         if menu == 0 {
             draw_held_item(
@@ -3705,7 +3707,8 @@ fn main() {
         // headroom -- the one place left to buy feel without spending CPU.
         screen_tint(&player);
         tut_tick(&player);
-        draw_all_hud(&font, player, menu, hud_tool(&player, aimed_block));
+        let hud_tool_now = hud_tool(&player, aimed_block);
+        unsafe { FullStack::run(|| draw_all_hud(&font, player, menu, hud_tool_now)) };
         if SHOW_FPS {
             ui_text(&font, 276, 6, &decimal3(fps as u16), (0xE0, 0xE0, 0x60));
         }
@@ -7799,9 +7802,12 @@ const CLIP_BYTES: usize = 2 * CLIP_VERT_CAP * core::mem::size_of::<ClipVert>()
     + CLIP_VERT_CAP * core::mem::size_of::<Proj>();
 const _: () = assert!(CLIP_BYTES % 4 == 0 && core::mem::align_of::<ClipVert>() <= 4);
 static mut CLIP_BUF: [u32; CLIP_BYTES / 4] = [0; CLIP_BYTES / 4];
-/// The plant pass's stack: the whole scratchpad (it runs after the face pass,
-/// whose batch and stack are dead by then).
-type PlantStack = psx_rt::scratchpad::ScratchpadStack<0, 1024>;
+/// The stack of every render phase that runs after the face pass, whose batch
+/// and stack are dead by then: the whole scratchpad. The plant, mob, particle,
+/// sky and HUD passes keep more live values than there are callee-saved
+/// registers, and a spill reload from main RAM stalls about six cycles where
+/// the scratchpad answers in one.
+type FullStack = psx_rt::scratchpad::ScratchpadStack<0, 1024>;
 #[inline(always)]
 fn clip_a() -> usize {
     unsafe { core::ptr::addr_of_mut!(CLIP_BUF) as usize }
