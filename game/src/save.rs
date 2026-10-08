@@ -480,10 +480,14 @@ static mut SAVE_SEQ: u32 = 0;
 /// once known; the next save goes under the other.
 static mut CUR_SLOT: Option<u8> = None;
 static mut TARGET: u8 = 0;
+/// The player has been told the card is blank and saved again anyway.
+static mut FORMAT_OK: bool = false;
 
 /// What a finished save reports.
 pub enum Outcome {
     Saved,
+    /// The card has no directory: the next save, asked again, formats it.
+    NeedFormat,
     NoCard,
     Full,
     Removed,
@@ -550,6 +554,7 @@ pub fn pump() -> Option<Outcome> {
                 None
             }
             Err(McError::NoSpace) => fail(Outcome::Full),
+            Err(McError::NotFormatted) => fail(Outcome::NeedFormat),
             Err(_) => fail(Outcome::Failed),
         },
         Phase::Write(n) => {
@@ -573,6 +578,7 @@ pub fn pump() -> Option<Outcome> {
                     None
                 } else {
                     PHASE = Phase::Idle;
+                    FORMAT_OK = false;
                     SAVE_SEQ = SAVE_SEQ.wrapping_add(1);
                     CUR_SLOT = Some(TARGET);
                     Some(Outcome::Saved)
@@ -594,6 +600,12 @@ fn plan() -> psx_mc::Result<()> {
     unsafe { J_N = 0 };
     let mut card = Card::new(Journal);
     if !card.is_formatted()? {
+        // A card with no directory may be blank or may hold something this
+        // game cannot read; formatting erases it, so ask first, as the BIOS does.
+        if !unsafe { FORMAT_OK } {
+            unsafe { FORMAT_OK = true };
+            return Err(McError::NotFormatted);
+        }
         card.format()?;
     }
     let mut list = [psx_mc::Entry {

@@ -4841,6 +4841,7 @@ fn save_step(pad: &mut ButtonState, previous: ButtonState) {
         unsafe {
             OPT_MSG = match o {
                 save::Outcome::Saved => "SAVED",
+                save::Outcome::NeedFormat => "BLANK CARD: SAVE AGAIN TO FORMAT",
                 save::Outcome::NoCard => "NO MEMORY CARD IN SLOT 1",
                 save::Outcome::Full => "MEMORY CARD FULL",
                 save::Outcome::Removed => "CARD REMOVED - NOT SAVED",
