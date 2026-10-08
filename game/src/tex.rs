@@ -11,13 +11,13 @@ use psx_vram::{upload_bytes, Clut, Color555, TexDepth, Tpage, VramRect};
 
 pub const TILE: usize = 16;
 const TILES_PER_ROW: usize = 16;
-// Seven rows of 16 (five until the second icon set). The atlas sits at VRAM
+// Eight rows of 16 (seven until the armour icons, five before the second icon set). The atlas sits at VRAM
 // (384,0); a 4bpp page is 256x256 texels, so the page could hold SIXTEEN rows
 // (256 tiles). The binding limit is the CLUT band below at y=256: two CLUTs
 // per tile stack one row apart, so 112 tiles reach y=479 and 128 would reach
 // y=511, the floor of VRAM. Everything here stays clear of the framebuffers
 // (x<320) and the font page (x=320).
-pub const TILE_COUNT: usize = 112;
+pub const TILE_COUNT: usize = 116;
 const ATLAS_W: usize = TILE * TILES_PER_ROW; // 256 texels wide
 
 // Tile indices into the shared page. Row 0 = tiles 0..15, row 1 = 16..31.
@@ -191,7 +191,11 @@ pub const T_I_FENCE: u8 = 106;
 pub const T_I_GLASS: u8 = 107;
 pub const T_I_SLAB: u8 = 108;
 pub const T_I_STAIRS: u8 = 109;
-const ICON2_LAST: u8 = T_I_STAIRS;
+/// The armour pieces' icons (the chestplate is T_I_ARMOR, in the first set).
+pub const T_I_HELMET: u8 = 110;
+pub const T_I_LEGGINGS: u8 = 111;
+pub const T_I_BOOTS: u8 = 112;
+const ICON2_LAST: u8 = T_I_BOOTS;
 
 // VRAM placement: framebuffers own x<320, the font page sits at x=320, so the
 // next free 4-bit page column is x=384. CLUTs live in the band at y=256.
@@ -3049,7 +3053,97 @@ const I_STAIRS: Icon = icon(
         b"1111111111111111",
     ],
 );
-const ICONS: [&Icon; 43] = [
+const I_HELMET: Icon = icon(
+    [
+        (40, 40, 48),
+        (120, 120, 132),
+        (184, 184, 196),
+        (226, 226, 236),
+        (0, 0, 0),
+        (0, 0, 0),
+        (0, 0, 0),
+        (0, 0, 0),
+    ],
+    [
+        b"................",
+        b"................",
+        b".....111111.....",
+        b"...1133333311...",
+        b"..133333333331..",
+        b"..132222222231..",
+        b"..132222222231..",
+        b"..132222222231..",
+        b"..132222222231..",
+        b"..13211..11231..",
+        b"..1321....1231..",
+        b"..1321....1231..",
+        b"..1111....1111..",
+        b"................",
+        b"................",
+        b"................",
+    ],
+);
+const I_LEGGINGS: Icon = icon(
+    [
+        (40, 40, 48),
+        (120, 120, 132),
+        (184, 184, 196),
+        (226, 226, 236),
+        (0, 0, 0),
+        (0, 0, 0),
+        (0, 0, 0),
+        (0, 0, 0),
+    ],
+    [
+        b"................",
+        b"..111111111111..",
+        b"..133333333331..",
+        b"..132222222231..",
+        b"..132222222231..",
+        b"..132222222231..",
+        b"..132222222231..",
+        b"..132221122231..",
+        b"..13221..12231..",
+        b"..13221..12231..",
+        b"..13221..12231..",
+        b"..13221..12231..",
+        b"..11111..11111..",
+        b"................",
+        b"................",
+        b"................",
+    ],
+);
+const I_BOOTS: Icon = icon(
+    [
+        (40, 40, 48),
+        (120, 120, 132),
+        (184, 184, 196),
+        (226, 226, 236),
+        (0, 0, 0),
+        (0, 0, 0),
+        (0, 0, 0),
+        (0, 0, 0),
+    ],
+    [
+        b"................",
+        b"................",
+        b"................",
+        b"..1111....1111..",
+        b"..1331....1331..",
+        b"..1321....1231..",
+        b"..1321....1231..",
+        b"..1321....1231..",
+        b"..1321....1231..",
+        b".13321....12331.",
+        b".132221..122231.",
+        b".111111..111111.",
+        b"................",
+        b"................",
+        b"................",
+        b"................",
+    ],
+);
+const ICONS: [&Icon; 46] = [
     &I_COAL,
     &I_INGOT,
     &I_STICK,
@@ -3093,6 +3187,9 @@ const ICONS: [&Icon; 43] = [
     &I_GLASS,
     &I_SLAB,
     &I_STAIRS,
+    &I_HELMET,
+    &I_LEGGINGS,
+    &I_BOOTS,
 ];
 
 /// The 3x5 digits, one bit per pixel, rows top to bottom, 3 bits each.
@@ -3158,7 +3255,7 @@ pub fn upload() -> BlockTex {
     let row_bytes = ATLAS_W / 2;
     let mut row = [0u8; ATLAS_W * TILE / 2];
     let mut ty = 0;
-    while ty < TILE_COUNT / TILES_PER_ROW {
+    while ty < (TILE_COUNT + TILES_PER_ROW - 1) / TILES_PER_ROW {
         let mut i = 0;
         while i < row.len() {
             row[i] = 0;

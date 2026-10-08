@@ -18,7 +18,7 @@ use crate::*;
 /// Starting stock: a spread of blocks and materials, one count past what a
 /// byte holds (the old save clamped at 255), and the ingredients for the
 /// stone pickaxe short a stick.
-const STOCK: [(u8, u16); 50] = [
+const STOCK: [(u8, u16); 59] = [
     (GRASS, 4),
     (STONE, 21),
     (COBBLE, 300),
@@ -70,6 +70,16 @@ const STOCK: [(u8, u16); 50] = [
     (SLAB, 12),
     (STAIRS_N, 4),
     (SAPLING, 3),
+    // Armour to wear, one set of iron and some diamond, and the materials for more.
+    (ARMOR0, 1),
+    (ARMOR0 + 1, 1),
+    (ARMOR0 + 2, 1),
+    (ARMOR0 + 3, 1),
+    (ARMOR0 + 4, 1),
+    (ARMOR0 + 5, 1),
+    (IRON_INGOT, 30),
+    (DIAMOND_ORE, 12),
+    (GOLD_ORE, 3),
 ];
 
 pub fn seed() {
@@ -84,8 +94,12 @@ pub fn seed() {
 /// reach, where SELECT can build; and start with some gear.
 pub fn spawn_pitch(p: &mut Player) {
     p.pitch = -300;
-    p.pick = 1; // a wood pickaxe and iron armour, so the gear column shows
-    p.armor = 1;
+    p.pick = 1; // a wood pickaxe and a stone sword, so the gear shows
+    p.sword = 2;
+    p.axe = 3;
+    p.shovel = 1;
+    p.weapon = TOOL_SWORD;
+    full_durability(p);
 }
 
 pub fn select(pick: &Pick, player: &mut Player) {

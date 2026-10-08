@@ -16,6 +16,7 @@ extern crate psx_rt;
 mod bonnie;
 mod cheat;
 mod craft;
+mod equip;
 #[cfg(feature = "ui-fixture")]
 mod fixture;
 mod inv;
@@ -29,6 +30,8 @@ mod texdata;
 mod units;
 #[cfg(feature = "tune-lab")]
 mod tunelab;
+#[cfg(feature = "tool-lab")]
+mod toollab;
 #[cfg(any(feature = "pick-lab", feature = "look-lab"))]
 mod picklab;
 mod weather;
@@ -265,6 +268,10 @@ const VOID_PEARL: u8 = 89; // item: wraiths drop it; 4 + coal = a void eye
 const EMBER_ROD: u8 = 90;
 const WAILER_TEAR: u8 = 91;
 const MAGMA_PASTE: u8 = 92;
+/// The eight armour pieces, items only: kind ARMOR0 + 4 x tier + slot, tier 0
+/// iron and 1 diamond, slot 0 helmet, 1 chestplate, 2 leggings, 3 boots.
+const ARMOR0: u8 = 94;
+const ARMOR_KINDS: u8 = 8;
 
 #[inline]
 fn is_portal(b: u8) -> bool {
@@ -465,7 +472,22 @@ const CRAFT_PICK: u8 = 255;
 const CRAFT_AXE: u8 = 253;
 const CRAFT_SHOVEL: u8 = 252;
 const CRAFT_SWORD: u8 = 251;
-const CRAFT_ARMOR: u8 = 254; // recipe output sentinel: upgrade the armour tier
+// Recipe output sentinels for the armour pieces: out_qty is the tier (1 iron,
+// 2 diamond), and the piece is an ordinary item (armor_item), worn from the
+// inventory screen.
+const CRAFT_HELMET: u8 = 247;
+const CRAFT_CHEST: u8 = 248;
+const CRAFT_LEGS: u8 = 249;
+const CRAFT_BOOTS: u8 = 250;
+
+/// The armour slot a recipe output sentinel makes a piece for.
+fn armor_recipe_slot(out: u8) -> Option<usize> {
+    if (CRAFT_HELMET..=CRAFT_BOOTS).contains(&out) {
+        Some((out - CRAFT_HELMET) as usize)
+    } else {
+        None
+    }
+}
 /// Inventory slots. INV and CHEST_INV are indexed BY BLOCK ID, so this must
 /// cover the whole id space, not just the ids that happen to be items today --
 /// it was 54 while ids ran to 53, and every id added since (slab 61, obsidian
@@ -490,18 +512,51 @@ const TOOL_DUR: [u16; 5] = [0, 59, 131, 250, 1561];
 /// Fishing_Rod, Flint_and_Steel).
 const ITEM_DUR: [(u8, u16); 3] = [(BOW, 384), (FISHING_ROD, 64), (FLINT_STEEL, 64)];
 
+/// The tier (0 iron, 1 diamond) and slot (0 helmet .. 3 boots) of an armour
+/// piece kind, None for anything else.
+fn armor_piece(item: u8) -> Option<(usize, usize)> {
+    if item >= ARMOR0 && item < ARMOR0 + ARMOR_KINDS {
+        let k = (item - ARMOR0) as usize;
+        Some((k / 4, k % 4))
+    } else {
+        None
+    }
+}
+
+/// The kind of the armour piece of `tier` (0 iron, 1 diamond) for `slot`.
+fn armor_item(tier: usize, slot: usize) -> u8 {
+    ARMOR0 + (tier * 4 + slot) as u8
+}
+
+/// The atlas tile of the armour piece for `slot`, drawn in neutral greys.
+fn armor_tile(slot: usize) -> u8 {
+    match slot {
+        0 => tex::T_I_HELMET,
+        1 => tex::T_I_ARMOR,
+        2 => tex::T_I_LEGGINGS,
+        _ => tex::T_I_BOOTS,
+    }
+}
+
+/// The tint of a tier's armour, iron grey or diamond cyan.
+fn armor_tint(tier: usize) -> (u8, u8, u8) {
+    if tier == 0 {
+        (146, 146, 152)
+    } else {
+        (90, 220, 220)
+    }
+}
+
 /// Defense points and toughness of the pieces still worn.
 fn armor_points(p: &Player) -> (i32, i32) {
-    if p.armor == 0 {
-        return (0, 0);
-    }
-    let t = (p.armor as usize - 1).min(1);
     let (mut pts, mut tough) = (0, 0);
     let mut k = 0;
     while k < 4 {
-        if p.armor_dur[k] > 0 {
-            pts += ARMOR_POINTS[t][k];
-            tough += ARMOR_TOUGH[t];
+        if let Some((t, _)) = armor_piece(p.worn[k]) {
+            if p.armor_dur[k] > 0 {
+                pts += ARMOR_POINTS[t][k];
+                tough += ARMOR_TOUGH[t];
+            }
         }
         k += 1;
     }
@@ -509,29 +564,23 @@ fn armor_points(p: &Player) -> (i32, i32) {
 }
 
 /// Armour takes a hit of `raw` damage: each worn piece loses max(1, raw / 4)
-/// uses (minecraft.wiki/w/Durability#Armor durability). A piece at 0 breaks;
-/// with all four gone the set is gone.
+/// uses (minecraft.wiki/w/Durability#Armor durability). A piece at 0 breaks
+/// and is gone.
 fn wear_armor(p: &mut Player, raw: i32) {
-    if p.armor == 0 || raw <= 0 {
+    if raw <= 0 {
         return;
     }
     let loss = (raw / 4).max(1) as u16;
-    let mut left = 0;
     let mut k = 0;
     while k < 4 {
-        if p.armor_dur[k] > 0 {
+        if p.worn[k] != AIR {
             p.armor_dur[k] = p.armor_dur[k].saturating_sub(loss);
             if p.armor_dur[k] == 0 {
+                p.worn[k] = AIR;
                 sfx::break_block();
             }
         }
-        if p.armor_dur[k] > 0 {
-            left += 1;
-        }
         k += 1;
-    }
-    if left == 0 {
-        p.armor = 0;
     }
 }
 
@@ -605,24 +654,20 @@ pub(crate) fn full_durability(p: &mut Player) {
         p.tool_dur[k] = TOOL_DUR[(tiers[k] as usize).min(4)];
         k += 1;
     }
-    p.armor_dur = if p.armor == 0 { [0; 4] } else { ARMOR_DUR[(p.armor as usize - 1).min(1)] };
+    let mut k = 0;
+    while k < 4 {
+        p.armor_dur[k] = match armor_piece(p.worn[k]) {
+            Some((t, _)) => ARMOR_DUR[t][k],
+            None => 0,
+        };
+        k += 1;
+    }
     p.item_dur = [0; 3];
 }
 
 /// Whether a tiered recipe's output is already owned at that tier and
 /// undamaged (so crafting it again would waste the ingredients).
 pub(crate) fn tier_full(p: &Player, out: u8, tier: u8) -> bool {
-    if out == CRAFT_ARMOR {
-        let t = (tier as usize).max(1).min(2) - 1;
-        let mut k = 0;
-        while k < 4 {
-            if p.armor_dur[k] < ARMOR_DUR[t][k] {
-                return false;
-            }
-            k += 1;
-        }
-        return true;
-    }
     let class = match out {
         CRAFT_AXE => TOOL_AXE,
         CRAFT_SHOVEL => TOOL_SHOVEL,
@@ -1604,7 +1649,9 @@ struct Player {
     axe: u8,
     shovel: u8,
     sword: u8,
-    armor: u8, // 0 none, 1 iron, 2 diamond (scales combat damage taken)
+    worn: [u8; 4], // the armour piece kind in each slot (helmet, chest, legs, boots), AIR = bare
+    offhand: u8,   // the off-hand kind (a reference into INV, like a hotbar slot), AIR = empty
+    weapon: u8,    // the tool class swung at mobs: TOOL_SWORD, TOOL_AXE, TOOL_PICK, TOOL_SHOVEL, or TOOL_NONE (fist)
     // Uses left, Java's durability: the tool tiers (pick, axe, shovel, sword),
     // the four armour pieces (helmet, chest, legs, boots; 0 = broken), and the
     // current bow, fishing rod and flint and steel (0 = a fresh one).
@@ -1693,23 +1740,22 @@ const MAX_EFFICIENCY: u8 = 3;
 /// this is (t + 0.5) / T with t the game ticks since the last swing or item
 /// switch, capped at 1.
 fn attack_charge(p: &Player) -> i32 {
-    // 6T in sim ticks: T = 12.5 game ticks (sword) or 5 (fist); t + 0.5 game
-    // ticks is (2 x attack_t + 3) / 6 of them.
-    let six_t = if p.sword > 0 { 75 } else { 30 };
-    ((2 * p.attack_t as i32 + 3) * 256 / six_t).min(256)
+    // 6T in sim ticks, T the cooldown in game ticks: 20 / the weapon's attack
+    // speed (equip.rs); t + 0.5 game ticks is (2 x attack_t + 3) / 6 of them.
+    ((2 * p.attack_t as i32 + 3) * 256 / equip::six_t(p)).min(256)
 }
 
-/// Melee damage now, Java's formula (minecraft.wiki/w/Damage): base (fist 1,
-/// swords 4/5/6/7, Sword) plus Strength (+3, Strength) times the cooldown
-/// multiplier 0.2 + 0.8 x charge^2; x 1.5 rounded down for a critical hit
-/// (falling, charge 0.9 or more); plus Sharpness (0.5 x level + 0.5,
-/// Sharpness) times the unsquared 0.2 + 0.8 x charge. Health is whole
-/// points, so the total rounds to the nearest; a weak hit can round to 0.
+/// Melee damage now, Java's formula (minecraft.wiki/w/Damage): the weapon's
+/// base (fist 1, swords 4 to 7, axes 7 to 9, pickaxes 2 to 5, shovels 2.5 to
+/// 5.5, equip.rs) plus Strength (+3, Strength) times the cooldown multiplier
+/// 0.2 + 0.8 x charge^2; x 1.5 rounded down for a critical hit (falling,
+/// charge 0.9 or more); plus Sharpness (0.5 x level + 0.5, Sharpness) times
+/// the unsquared 0.2 + 0.8 x charge. Health is whole points, so the total
+/// rounds to the nearest; a weak hit can round to 0.
 fn melee_damage(p: &Player) -> i16 {
-    let base = if p.sword == 0 { 1 } else { 3 + p.sword as i32 }
-        + if p.eff_strength > 0 { 3 } else { 0 };
+    let base100 = equip::damage100(p) + if p.eff_strength > 0 { 300 } else { 0 };
     let r = attack_charge(p);
-    let mut d100 = base * (5120 + 20480 * r * r / 65536) / 256; // hundredths
+    let mut d100 = base100 * (5120 + 20480 * r * r / 65536) / 25600; // hundredths
     let falling = !p.on_ground && p.vy < 0 && !p.fly;
     if falling && r >= 230 {
         d100 = d100 * 3 / 2 / 100 * 100; // critical, rounded down to whole hp
@@ -1874,7 +1920,7 @@ struct Recipe {
     label: &'static str,
 }
 
-const RECIPES: [Recipe; 50] = [
+const RECIPES: [Recipe; 56] = [
     Recipe {
         in_item: [PLANK, 0],
         in_qty: [4, 0],
@@ -2214,21 +2260,70 @@ const RECIPES: [Recipe; 50] = [
         out_qty: 1,
         label: "BREAD",
     },
+    // Armour, Java's costs (minecraft.wiki/w/Armor): 5, 8, 7 and 4 of the material.
     Recipe {
         in_item: [IRON_INGOT, 0],
         in_qty: [5, 0],
         n_in: 1,
-        out: CRAFT_ARMOR,
+        out: CRAFT_HELMET,
         out_qty: 1,
-        label: "IRON ARMOR",
+        label: "IRON HELMET",
+    },
+    Recipe {
+        in_item: [IRON_INGOT, 0],
+        in_qty: [8, 0],
+        n_in: 1,
+        out: CRAFT_CHEST,
+        out_qty: 1,
+        label: "IRON CHEST",
+    },
+    Recipe {
+        in_item: [IRON_INGOT, 0],
+        in_qty: [7, 0],
+        n_in: 1,
+        out: CRAFT_LEGS,
+        out_qty: 1,
+        label: "IRON LEGGINGS",
+    },
+    Recipe {
+        in_item: [IRON_INGOT, 0],
+        in_qty: [4, 0],
+        n_in: 1,
+        out: CRAFT_BOOTS,
+        out_qty: 1,
+        label: "IRON BOOTS",
     },
     Recipe {
         in_item: [DIAMOND_ORE, 0],
         in_qty: [5, 0],
         n_in: 1,
-        out: CRAFT_ARMOR,
+        out: CRAFT_HELMET,
         out_qty: 2,
-        label: "DIAMOND ARMOR",
+        label: "DIA HELMET",
+    },
+    Recipe {
+        in_item: [DIAMOND_ORE, 0],
+        in_qty: [8, 0],
+        n_in: 1,
+        out: CRAFT_CHEST,
+        out_qty: 2,
+        label: "DIAMOND CHEST",
+    },
+    Recipe {
+        in_item: [DIAMOND_ORE, 0],
+        in_qty: [7, 0],
+        n_in: 1,
+        out: CRAFT_LEGS,
+        out_qty: 2,
+        label: "DIA LEGGINGS",
+    },
+    Recipe {
+        in_item: [DIAMOND_ORE, 0],
+        in_qty: [4, 0],
+        n_in: 1,
+        out: CRAFT_BOOTS,
+        out_qty: 2,
+        label: "DIA BOOTS",
     },
     Recipe {
         in_item: [STICK, STRING],
@@ -2491,7 +2586,7 @@ fn draw_sleep_prompt(font: &FontAtlas) {
 /// under blocks.
 fn recipe_tab(i: usize) -> usize {
     match RECIPES[i].out {
-        CRAFT_PICK | CRAFT_AXE | CRAFT_SHOVEL | CRAFT_SWORD | CRAFT_ARMOR | BOW | ARROW
+        CRAFT_PICK | CRAFT_AXE | CRAFT_SHOVEL | CRAFT_SWORD | CRAFT_HELMET..=CRAFT_BOOTS | BOW | ARROW
         | FLINT_STEEL | BUCKET | FISHING_ROD => 1,
         STICK | WIRE | TORCH | BONEMEAL | VOID_EYE | MAGMA_PASTE => 2,
         BREAD | BOTTLE | POTION_AWKWARD | POTION_SPEED | POTION_STRENGTH | POTION_REGEN
@@ -2537,6 +2632,9 @@ fn craft(i: usize, player: &mut Player) {
         };
         if tier >= *slot {
             *slot = tier;
+            if r.out == CRAFT_SWORD && player.weapon == TOOL_NONE {
+                player.weapon = TOOL_SWORD; // the first sword you make is the one in hand
+            }
             player.tool_dur[match r.out {
                 CRAFT_AXE => 1,
                 CRAFT_SHOVEL => 2,
@@ -2553,19 +2651,9 @@ fn craft(i: usize, player: &mut Player) {
                 EQUIP_T = 100;
             }
         }
-    } else if r.out == CRAFT_ARMOR {
-        if r.out_qty as u8 >= player.armor {
-            player.armor = r.out_qty as u8;
-            player.armor_dur = ARMOR_DUR[(player.armor as usize - 1).min(1)];
-            unsafe {
-                EQUIP_MSG = if player.armor == 1 {
-                    "IRON ARMOR EQUIPPED"
-                } else {
-                    "DIAMOND ARMOR EQUIPPED"
-                };
-                EQUIP_T = 100;
-            }
-        }
+    } else if let Some(slot) = armor_recipe_slot(r.out) {
+        // A piece goes to the inventory; the inventory screen wears it.
+        inv_give(armor_item(r.out_qty as usize - 1, slot), 1);
     } else {
         inv_give(r.out, r.out_qty);
     }
@@ -2748,6 +2836,8 @@ fn main() {
         }
         #[cfg(feature = "pick-lab")]
         picklab::frame(frame, &mut player, &mut lstick, &mut rstick);
+        #[cfg(feature = "tool-lab")]
+        toollab::frame(frame, &mut player, &mut lstick, &mut rstick);
         if POSE_TEST {
             // Freeze all input and pin the exact pose; two ordinary edits
             // build the trigger tower ahead of the player, then nothing else
@@ -2839,11 +2929,16 @@ fn main() {
                         save::apply_edits();
                         mob::settle_dragon(false, 0, 0);
                     }
+                    // The inventory survives a death, so the armour on your
+                    // back goes into it, and the off hand stays.
+                    equip::take_all_off(&mut player);
+                    let off = player.offhand;
                     player = spawn_player();
+                    player.offhand = off;
                     menu = 0;
                 }
             } else if menu == MENU_INV {
-                if inv::inventory_input(pad, previous) {
+                if inv::inventory_input(pad, previous, &mut player) {
                     menu = 0;
                 }
             } else if pad.pressed_since(previous, button::CIRCLE) {
@@ -2960,6 +3055,7 @@ fn main() {
             // straight to an item. Tools are not cycled: crafting a tier
             // equips it and better never hurts (no durability here).
             hotbar_sync(&mut player);
+            equip::sync(&mut player);
             if pad.pressed_since(previous, button::R1) || pad.pressed_since(previous, button::L1) {
                 player.attack_t = 0; // switching items restarts the attack cooldown
             }
@@ -2972,6 +3068,15 @@ fn main() {
                 unsafe { HOTBAR_SEL = (HOTBAR_SEL + HOTBAR_VIS - 1) % HOTBAR_VIS };
                 player.selected = unsafe { HOTBAR[HOTBAR_SEL] };
                 sfx::blip();
+            }
+            // L1 and R1 together (one pressed with the other held) swap the
+            // hands, Java's swap-hands key. The two steps above cancel, so the
+            // selection is back where it was.
+            let (l, r) = (button::L1, button::R1);
+            if (pad.pressed_since(previous, l) && pad.is_held(r))
+                || (pad.pressed_since(previous, r) && pad.is_held(l))
+            {
+                equip::swap_hands(&mut player);
             }
         }
         // Java pauses a single-player world only for the pause menu (OPTIONS
@@ -3234,7 +3339,8 @@ fn main() {
                     player.sprint_latch = false; // a hit ends a sprint (Sprinting)
                     sfx::hit_mob();
                     player.exhaustion += EXH_ATTACK;
-                    wear_tool(&mut player, TOOL_SWORD, 1);
+                    let (wc, _) = equip::weapon_of(&player);
+                    wear_tool(&mut player, wc, equip::wear_per_hit(wc));
                 }
             }
 
@@ -3481,7 +3587,8 @@ fn main() {
                         inv_add(BUCKET);
                         sfx::splash();
                     }
-                } else if replaceable(get_block_i32(pick.px, pick.py, pick.pz))
+                } else if in_placeable(player.selected)
+                    && replaceable(get_block_i32(pick.px, pick.py, pick.pz))
                     && !place_intersects_player(&player, pick.px, pick.py, pick.pz, player.selected)
                     && container_room(player.selected)
                     && inv_take(player.selected)
@@ -4648,7 +4755,9 @@ fn spawn_player() -> Player {
         axe: 0,
         shovel: 0,
         sword: 0,
-        armor: 0,
+        worn: [AIR; 4],
+        offhand: AIR,
+        weapon: TOOL_NONE,
         tool_dur: [0; 4],
         armor_dur: [0; 4],
         item_dur: [0; 3],
@@ -10166,6 +10275,7 @@ fn icon_tile(item: u8) -> u8 {
         SLAB => tex::T_I_SLAB,
         STAIRS_N => tex::T_I_STAIRS,
         SAPLING => tex::T_SAPLING_CROSS,
+        _ if armor_piece(item).is_some() => armor_tile(armor_piece(item).map_or(1, |a| a.1)),
         _ => face_tile(item, 0),
     }
 }
@@ -10180,7 +10290,13 @@ fn draw_tile(x: i16, y: i16, tile: u8, tint: (u8, u8, u8)) {
 
 #[inline(never)]
 fn draw_icon(x: i16, y: i16, item: u8, lum: u8) {
-    draw_tile(x, y, icon_tile(item), (lum, lum, lum));
+    let mut tint = (lum, lum, lum);
+    if let Some((t, _)) = armor_piece(item) {
+        let c = armor_tint(t);
+        let s = |v: u8| (v as u16 * lum as u16 / 128).min(255) as u8;
+        tint = (s(c.0), s(c.1), s(c.2));
+    }
+    draw_tile(x, y, icon_tile(item), tint);
 }
 
 /// Stack count in the bottom-right of the 17px slot at (x, y), in the 3x5
@@ -10287,7 +10403,22 @@ fn draw_hotbar(tool: (u8, u8)) {
             rect(tx + 2, y0 + 13, w, 1, 255 - g, g, 0);
         }
     }
+    // The off hand, left of the tool slot, only while it holds something.
+    let off = unsafe { OFFHAND_SHOWN };
+    if off != AIR {
+        let ox = tx - 22;
+        rect(ox - 2, y0 - 2, 21, 21, 24, 24, 30);
+        rect(ox, y0, 17, 17, 54, 54, 62);
+        draw_icon(ox + 1, y0 + 1, off, 128);
+        let cnt = unsafe { INV[off as usize] };
+        if cnt != 1 {
+            draw_count(ox, y0, cnt);
+        }
+    }
 }
+
+/// The off-hand kind to draw, set by draw_all_hud for draw_hotbar.
+static mut OFFHAND_SHOWN: u8 = AIR;
 
 /// The shown tool's uses left, set by draw_all_hud for draw_hotbar.
 static mut TOOL_DUR_SHOWN: u16 = 0;
@@ -10308,22 +10439,33 @@ fn draw_xp(xp: i32) {
     }
 }
 
-/// Armour pips one row above the hearts: more pips + a brighter colour at higher
-/// tiers (iron grey, diamond cyan). Hidden when unarmoured.
+/// Armour pips one row above the hearts, Java's bar: ten pips of two defense
+/// points each (minecraft.wiki/w/Armor), a half pip for an odd point, so a full
+/// diamond set fills it and a lone helmet is one pip. Grey for iron, cyan once
+/// a diamond piece is worn; hidden when bare.
 fn draw_armor(p: &Player) {
-    // Java's armour bar: one pip per 2 defense points of the pieces still
-    // worn (minecraft.wiki/w/Armor), so it shrinks as pieces break.
     let (points, _) = armor_points(p);
     if points == 0 {
         return;
     }
-    let col = if p.armor >= 2 { (120, 200, 220) } else { (184, 184, 196) };
-    let pips = ((points + 1) / 2) as i16;
+    let mut diamond = false;
+    let mut k = 0;
+    while k < 4 {
+        if let Some((1, _)) = armor_piece(p.worn[k]) {
+            diamond = true;
+        }
+        k += 1;
+    }
+    let col = if diamond { (120, 200, 220) } else { (184, 184, 196) };
     let x0 = 8i16;
     let y = HUD_ROW2_Y;
     let mut i = 0i16;
-    while i < pips {
-        rect(x0 + i * 9, y, 7, 7, col.0, col.1, col.2);
+    while i < 10 {
+        let full = (i as i32 + 1) * 2 <= points;
+        let half = !full && (i as i32) * 2 < points;
+        if full || half {
+            rect(x0 + i * 9, y, if full { 7 } else { 3 }, 7, col.0, col.1, col.2);
+        }
         i += 1;
     }
 }
@@ -11127,7 +11269,10 @@ fn draw_all_hud(font: &FontAtlas, player: Player, menu: u8, tool: (u8, u8)) {
         draw_sleep_prompt(font);
     }
     if menu != MENU_INV && !(1..=3).contains(&menu) {
-        unsafe { TOOL_DUR_SHOWN = player.tool_dur[tool_slot(tool.0)] };
+        unsafe {
+            TOOL_DUR_SHOWN = player.tool_dur[tool_slot(tool.0)];
+            OFFHAND_SHOWN = player.offhand;
+        };
         draw_hotbar(tool); // these menus draw it over their dimming
     }
     draw_xp(player.xp);
@@ -12201,6 +12346,17 @@ fn apply_sunset(sky: (u8, u8, u8), tod: u32, raining: bool) -> (u8, u8, u8) {
     )
 }
 
+const ARMOR_NAMES: [&str; 8] = [
+    "IRON HELMET",
+    "IRON CHEST",
+    "IRON LEGGINGS",
+    "IRON BOOTS",
+    "DIAMOND HELMET",
+    "DIAMOND CHEST",
+    "DIAMOND LEGGINGS",
+    "DIAMOND BOOTS",
+];
+
 fn block_name(block: u8) -> &'static str {
     match block {
         GRASS => "GRASS",
@@ -12279,6 +12435,7 @@ fn block_name(block: u8) -> &'static str {
         BRICK => "BRICK",
         FLOWER_R | FLOWER_Y => "FLOWER",
         TALL_GRASS => "TALLGRASS",
+        94..=101 => ARMOR_NAMES[(block - ARMOR0) as usize],
         _ => "BLOCK",
     }
 }
@@ -12335,10 +12492,18 @@ fn in_placeable(item: u8) -> bool {
     false
 }
 
-/// First free slot, unless the item already holds one. Non-selectable items
-/// (ammo, drops with no use) never occupy a slot.
+/// What a hotbar slot may hold: anything Java would, which is every item you
+/// own. The blocks and items with a use of their own are in PLACEABLE; the
+/// crafting materials (ores, ingots, sticks, drops) and the armour pieces are
+/// held too, doing nothing in the hand, so what you mine shows on the bar.
+fn holdable(item: u8) -> bool {
+    in_placeable(item) || inv::is_material(item) || armor_piece(item).is_some()
+}
+
+/// First free slot, unless the item already holds one. Only the items with no
+/// holdable form (world-only block kinds) stay off the bar.
 fn hotbar_add(item: u8) {
-    if !in_placeable(item) {
+    if !holdable(item) {
         return;
     }
     unsafe {
@@ -12701,15 +12866,16 @@ fn mine_min_tier(block: u8) -> u8 {
 }
 
 /// The tool the HUD and the hand should show: whatever suits the block under
-/// the crosshair, falling back to the sword (what you would swing at a mob)
+/// the crosshair, falling back to the equipped weapon (what you would swing at a mob)
 /// and finally to the best tool owned, so the slot is never blank for nothing.
 fn hud_tool(p: &Player, target: u8) -> (u8, u8) {
     let class = tool_for(target);
     if class != TOOL_NONE && tool_tier(p, class) > 0 {
         return (class, tool_tier(p, class));
     }
-    if p.sword > 0 {
-        return (TOOL_SWORD, p.sword);
+    let w = equip::weapon_of(p);
+    if w.1 > 0 {
+        return w;
     }
     let best = [TOOL_PICK, TOOL_AXE, TOOL_SHOVEL];
     let mut i = 0;

@@ -25,7 +25,7 @@ const MAGIC_V1: [u8; 4] = *b"MCPX";
 /// VERSION and teaches `layout` where its sections moved; every older version
 /// still loads.
 const MAGIC: [u8; 4] = *b"VOXS";
-const VERSION: u16 = 11;
+const VERSION: u16 = 12;
 /// BIOS file names: region+product code + label, 20 ASCII chars max. A save
 /// is written under the name the card does not hold yet and the old one is
 /// deleted after it, so pulling the card mid-save leaves the last save
@@ -82,6 +82,12 @@ const V1_HDR: usize = V1_PROGRESS + 9; // armor u8, efficiency u8, xp i32, 3 too
 // save counter u32, which picks the newer file when both names are on the
 // card. Older saves load in clear weather, as a level.dat without those
 // fields does.
+// Version 12 appends the equipment after the weather: the armour kind in each
+// of the four slots [u8; 4], the off-hand kind u8, the weapon class u8, pad
+// u16, and the worn uses of a taken-off armour piece per kind [u16; 8]. Byte
+// 32 (the old whole-set armour tier) is written 0 from here on. A save from
+// before it loads wearing the pieces of the tier it had, its wear kept, and
+// swinging the sword if it owns one.
 const OFF_HOTBAR_SEL: usize = 41;
 const OFF_HOTBAR: usize = 42;
 const OFF_INV: usize = 52;
@@ -109,6 +115,8 @@ struct Layout {
     world: bool,
     /// The weather and the save counter follow the wolves.
     weather: bool,
+    /// The equipment follows the weather.
+    equip: bool,
 }
 
 const fn layout(version: u16) -> Layout {
@@ -117,12 +125,14 @@ const fn layout(version: u16) -> Layout {
     let durability = version >= 9;
     let world = version >= 10;
     let weather = version >= 11;
+    let equip = version >= 12;
     let counts = OFF_EXTRA
         + if extras { 8 } else { 0 }
         + if hunger { 8 } else { 0 }
         + if durability { 24 } else { 0 }
         + if world { WORLD_BYTES } else { 0 }
-        + if weather { WEATHER_BYTES } else { 0 };
+        + if weather { WEATHER_BYTES } else { 0 }
+        + if equip { EQUIP_BYTES } else { 0 };
     Layout {
         extras,
         dim: version >= 5,
@@ -135,6 +145,7 @@ const fn layout(version: u16) -> Layout {
         durability,
         world,
         weather,
+        equip,
     }
 }
 
@@ -144,6 +155,8 @@ const WOLF_REC: usize = 16;
 const WORLD_BYTES: usize = 20 + crate::mob::TAMED_CAP * WOLF_REC;
 const OFF_WEATHER: usize = OFF_WORLD + WORLD_BYTES;
 const WEATHER_BYTES: usize = 20;
+const OFF_EQUIP: usize = OFF_WEATHER + WEATHER_BYTES;
+const EQUIP_BYTES: usize = 24;
 
 /// What a save says about the world itself, for the caller to rebuild it.
 pub struct WorldMeta {
@@ -263,7 +276,7 @@ fn serialize(p: &Player, day: u32) -> usize {
     buf[23] = p.selected;
     put_i32(buf, 24, p.health);
     put_i32(buf, 28, p.food);
-    buf[32] = p.armor;
+    buf[32] = 0;
     buf[33] = p.efficiency;
     put_i32(buf, 34, p.xp);
     buf[38] = p.axe;
@@ -334,6 +347,16 @@ fn serialize(p: &Player, day: u32) -> usize {
         OFF_WEATHER + 16,
         unsafe { SAVE_SEQ }.wrapping_add(1) as i32,
     );
+    buf[OFF_EQUIP..OFF_EQUIP + 4].copy_from_slice(&p.worn);
+    buf[OFF_EQUIP + 4] = p.offhand;
+    buf[OFF_EQUIP + 5] = p.weapon;
+    put_u16(buf, OFF_EQUIP + 6, 0);
+    let spare = crate::equip::spare_get();
+    let mut k = 0;
+    while k < spare.len() {
+        put_u16(buf, OFF_EQUIP + 8 + k * 2, spare[k]);
+        k += 1;
+    }
 
     let mut off = CUR.hdr;
     let mut chests = 0u8;
@@ -776,6 +799,49 @@ pub fn load(p: &mut Player) -> Option<(u8, WorldMeta)> {
     out
 }
 
+/// Before version 12 the armour was one tier (1 iron, 2 diamond) of four
+/// pieces. Wear the four pieces of that tier.
+#[optimize(size)]
+fn legacy_armor(p: &mut Player, tier: u8) {
+    let mut k = 0;
+    while k < 4 {
+        p.worn[k] = if tier == 0 {
+            AIR
+        } else {
+            crate::armor_item(tier.min(2) as usize - 1, k)
+        };
+        k += 1;
+    }
+}
+
+/// The equipment block of a version 12 save, every id checked against its slot.
+#[optimize(size)]
+fn read_equip(p: &mut Player, buf: &[u8]) {
+    let mut k = 0;
+    while k < 4 {
+        let w = buf[OFF_EQUIP + k];
+        p.worn[k] = match crate::armor_piece(w) {
+            Some((_, slot)) if slot == k => w,
+            _ => AIR,
+        };
+        if p.worn[k] == AIR || p.armor_dur[k] == 0 {
+            p.worn[k] = AIR;
+            p.armor_dur[k] = 0;
+        }
+        k += 1;
+    }
+    p.offhand = kind(buf[OFF_EQUIP + 4]);
+    let w = buf[OFF_EQUIP + 5];
+    p.weapon = if crate::equip::WEAPONS.contains(&w) { w } else { crate::TOOL_NONE };
+    let mut spare = [0u16; crate::ARMOR_KINDS as usize];
+    k = 0;
+    while k < spare.len() {
+        spare[k] = get_u16(buf, OFF_EQUIP + 8 + k * 2);
+        k += 1;
+    }
+    crate::equip::spare_set(spare);
+}
+
 #[inline(never)]
 #[optimize(size)] // card I/O dominates; keep the bytes
 fn load_v1(p: &mut Player, buf: &[u8]) {
@@ -792,12 +858,15 @@ fn load_v1(p: &mut Player, buf: &[u8]) {
         unsafe { INV[k] = buf[28 + k] as u16 };
         k += 1;
     }
-    p.armor = buf[V1_PROGRESS];
+    legacy_armor(p, buf[V1_PROGRESS]);
     p.efficiency = buf[V1_PROGRESS + 1];
     p.xp = get_i32(buf, V1_PROGRESS + 2);
     p.axe = buf[V1_PROGRESS + 6];
     p.shovel = buf[V1_PROGRESS + 7];
     p.sword = buf[V1_PROGRESS + 8];
+    p.weapon = if p.sword > 0 { crate::TOOL_SWORD } else { crate::TOOL_NONE };
+    p.offhand = AIR;
+    crate::full_durability(p);
     let n = (get_u16(buf, V1_EDIT_COUNT) as usize)
         .min(MAX_EDITS)
         .min((buf.len() - V1_HDR) / EDIT_STRIDE);
@@ -864,7 +933,7 @@ fn load_versioned(p: &mut Player, buf: &[u8], l: Layout) -> bool {
     p.selected = kind(buf[23]);
     p.health = get_i32(buf, 24);
     p.food = get_i32(buf, 28).clamp(0, crate::MAX_FOOD);
-    p.armor = buf[32];
+    legacy_armor(p, buf[32]);
     p.efficiency = buf[33];
     p.xp = get_i32(buf, 34);
     p.axe = buf[38];
@@ -897,6 +966,21 @@ fn load_versioned(p: &mut Player, buf: &[u8], l: Layout) -> bool {
         }
     } else {
         crate::full_durability(p);
+    }
+    if l.equip {
+        read_equip(p, buf);
+    } else {
+        // A broken piece of the old whole set had 0 uses left.
+        let mut k = 0;
+        while k < 4 {
+            if l.durability && p.armor_dur[k] == 0 {
+                p.worn[k] = AIR;
+            }
+            k += 1;
+        }
+        p.weapon = if p.sword > 0 { crate::TOOL_SWORD } else { crate::TOOL_NONE };
+        p.offhand = AIR;
+        crate::equip::spare_set([0; crate::ARMOR_KINDS as usize]);
     }
     unsafe {
         HOTBAR_SEL = (buf[OFF_HOTBAR_SEL] as usize).min(HOTBAR_VIS - 1);
