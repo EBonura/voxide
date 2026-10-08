@@ -2299,6 +2299,9 @@ static mut NAV_DOWN_T: u16 = 0;
 /// every 4 game ticks (rightClickDelay), which is what builds a row or a
 /// pillar with the button held.
 static mut USE_HELD_T: u32 = 0;
+/// Sim ticks until a held jump may hop again.
+static mut JUMP_DELAY: u32 = 0;
+const JUMP_REPEAT: u32 = units::java_ticks(10) as u32;
 const USE_REPEAT: u32 = units::java_ticks(4) as u32;
 
 /// Blocks a held L2 keeps placing: everything but the items with a use of
@@ -5801,11 +5804,20 @@ fn update_player(
         // lifts a swimmer who pushes against a block). In open water CROSS
         // only strokes up.
         let shore = blocked && in_water_body(player.x, player.y, player.z);
-        if (player.on_ground || shore) && pad.pressed_since(previous, button::CROSS) {
+        // A held jump hops again on landing, 10 game ticks after the last
+        // jump, as Java's does (noJumpDelay); a fresh press always jumps.
+        let held_jump = unsafe {
+            JUMP_DELAY = JUMP_DELAY.saturating_sub(1);
+            JUMP_DELAY == 0 && pad.is_held(button::CROSS)
+        };
+        if (player.on_ground || shore) && (pad.pressed_since(previous, button::CROSS) || held_jump) {
             player.exhaustion += if sprinting { EXH_SPRINT_JUMP } else { EXH_JUMP };
             player.vy = JUMP_VY;
             player.on_ground = false;
-            unsafe { TUT_JUMPED = true };
+            unsafe {
+                TUT_JUMPED = true;
+                JUMP_DELAY = JUMP_REPEAT;
+            }
         }
     }
 
