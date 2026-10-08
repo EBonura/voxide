@@ -13,6 +13,16 @@ Equipment, and fixes from a playtest.
   worn from the player page. Each piece keeps its own wear and takes it off
   with you, a worn piece that runs out is gone, and defense, toughness and the
   armour bar are Java's. Before, one recipe equipped a whole set at once.
+- The player page has Java's 2x2 crafting grid and an output slot. Lift a
+  stack with X, put it down with X, put one down or lift half with SQUARE,
+  send a cell back with TRIANGLE; X on the output crafts once, TRIANGLE crafts
+  as many as the cells allow. Shapes are matched wherever they sit: planks from
+  a log, sticks from two planks one above the other, a crafting table from four
+  planks, torches from coal over a stick, bone meal from a bone. What is in the
+  grid goes back to your inventory when the screen closes.
+- The SQUARE crafting list away from a table is the recipe book: pressing X on
+  planks, sticks, a table, torches or bone meal lays the shape in the grid for
+  you and takes you to the output. At a crafting table nothing changes.
 - Pick the weapon you swing at mobs: fist, sword, axe, pickaxe or shovel, each
   with Java's damage and attack speed, and each wearing as Java's does (a
   sword loses one use a hit, the other tools two).

@@ -769,6 +769,9 @@ static mut SHOW_ALL: bool = false;
 /// from (-1 = from the grid).
 static mut CARRY: u8 = AIR;
 static mut CARRY_FROM: i8 = -1;
+/// How many the carried kind stands for: the whole stack it was lifted from.
+/// A grid cell takes up to this many from the inventory when it is put down.
+static mut CARRY_N: u16 = 0;
 /// A one-line note in the info strip after an action, for NOTE_T frames.
 static mut NOTE: &str = "";
 static mut NOTE_T: u8 = 0;
@@ -1001,6 +1004,7 @@ pub fn inventory_input(pad: ButtonState, previous: ButtonState, player: &mut Pla
                 } else if HOTBAR[cx] != AIR {
                     CARRY = HOTBAR[cx];
                     CARRY_FROM = cx as i8;
+                    CARRY_N = INV[CARRY as usize];
                 }
             } else if CARRY != AIR {
                 // Back into the inventory: off the hotbar if it came from it.
@@ -1017,6 +1021,7 @@ pub fn inventory_input(pad: ButtonState, previous: ButtonState, player: &mut Pla
                 } else {
                     CARRY = item;
                     CARRY_FROM = -1;
+                    CARRY_N = INV[item as usize];
                 }
             }
         }
@@ -1356,6 +1361,8 @@ const Z_OFF: usize = 1;
 const Z_WEAP: usize = 2;
 const Z_STOCK: usize = 3;
 const Z_HOT: usize = 4;
+const Z_GRID: usize = 5;
+const Z_OUT: usize = 6;
 const AX: i16 = 16;
 const AY: i16 = 42;
 const OFF_SX: i16 = 98;
@@ -1365,6 +1372,11 @@ const WY: i16 = 92;
 const SX0: i16 = 16;
 const SY0: i16 = 136;
 const STOCK_N: usize = 8;
+/// The 2x2 grid's top-left cell and its output slot.
+const GX: i16 = 208;
+const GY: i16 = 46;
+const OUT_X: i16 = 264;
+const OUT_Y: i16 = 55;
 const SLOT_NAME: [&str; 4] = ["HELMET", "CHESTPLATE", "LEGGINGS", "BOOTS"];
 
 /// Display order of the pages: the player first, then the item tabs.
@@ -1405,11 +1417,18 @@ fn pmove(z: usize, i: usize, d: usize, ns: usize) -> (usize, usize) {
         (Z_OFF, 1) => (Z_STOCK, 0),
         (Z_OFF, 2) => (Z_ARMOR, 3),
         (Z_OFF, 3) => (Z_WEAP, 0),
-        (Z_WEAP, 0) => (Z_ARMOR, 0),
+        (Z_WEAP, 0) => if i >= 3 { (Z_GRID, 2) } else { (Z_ARMOR, 0) },
         (Z_WEAP, 1) => (Z_STOCK, i.min(last)),
         (Z_WEAP, 2) => if i > 0 { (Z_WEAP, i - 1) } else { (Z_OFF, 0) },
-        (Z_WEAP, 3) => (Z_WEAP, (i + 1) % 5),
-        (Z_STOCK, 0) => if i < 2 { (Z_ARMOR, 3) } else { (Z_WEAP, (i - 2).min(4)) },
+        (Z_WEAP, 3) => if i < 4 { (Z_WEAP, i + 1) } else { (Z_GRID, 2) },
+        (Z_GRID, 0) => if i >= 2 { (Z_GRID, i - 2) } else { (Z_HOT, 4) },
+        (Z_GRID, 1) => if i < 2 { (Z_HOT, 5) } else { (Z_STOCK, 5 + i - 2) },
+        (Z_GRID, 2) => if i % 2 == 1 { (Z_GRID, i - 1) } else { (Z_WEAP, 4) },
+        (Z_GRID, 3) => if i % 2 == 0 { (Z_GRID, i + 1) } else { (Z_OUT, 0) },
+        (Z_OUT, 0) => (Z_HOT, 7),
+        (Z_OUT, 1) => (Z_STOCK, 7),
+        (Z_OUT, 2) => (Z_GRID, 1),
+        (Z_STOCK, 0) => if i < 2 { (Z_ARMOR, 3) } else if i >= 5 { (Z_GRID, 2 + (i >= 7) as usize) } else { (Z_WEAP, (i - 2).min(4)) },
         (Z_STOCK, 1) => (Z_HOT, i),
         (Z_STOCK, 2) => (Z_STOCK, (i + STOCK_N - 1) % STOCK_N),
         (Z_STOCK, 3) => (Z_STOCK, (i + 1) % STOCK_N),
@@ -1500,8 +1519,34 @@ fn player_input(pad: ButtonState, previous: ButtonState, p: &mut Player) {
                 } else if p.offhand != AIR {
                     CARRY = p.offhand;
                     CARRY_FROM = -2;
+                    CARRY_N = INV[CARRY as usize];
                 }
             },
+            Z_GRID => unsafe {
+                // Java's left click: with nothing held pick the stack up, with
+                // a stack held put all of it down (a different kind swaps).
+                if CARRY != AIR {
+                    let m = grid::put(i, CARRY, CARRY_N);
+                    CARRY_N -= m;
+                    if m == 0 {
+                        note("NONE LEFT OR THE CELL IS FULL");
+                    } else if CARRY_N == 0 {
+                        CARRY = AIR;
+                    }
+                } else if grid::kind(i) != AIR {
+                    let (k, n) = grid::take_all(i);
+                    CARRY = k;
+                    CARRY_N = n;
+                    CARRY_FROM = -3;
+                }
+            },
+            Z_OUT => {
+                if grid::craft_once() {
+                    sfx::confirm();
+                } else {
+                    note("PUT THE INGREDIENTS IN THE GRID");
+                }
+            }
             _ => unsafe {
                 // The hotbar, as on the item pages.
                 if CARRY != AIR {
@@ -1509,6 +1554,7 @@ fn player_input(pad: ButtonState, previous: ButtonState, p: &mut Player) {
                 } else if HOTBAR[i] != AIR {
                     CARRY = HOTBAR[i];
                     CARRY_FROM = i as i8;
+                    CARRY_N = INV[CARRY as usize];
                 }
             },
         }
@@ -1516,7 +1562,23 @@ fn player_input(pad: ButtonState, previous: ButtonState, p: &mut Player) {
     }
     if pressed(button::SQUARE) {
         unsafe {
-            if z == Z_HOT && HOTBAR[i] != AIR {
+            if z == Z_GRID {
+                // Java's right click: put one down while holding a stack,
+                // else pick up half of what is there.
+                if CARRY != AIR {
+                    if grid::put(i, CARRY, 1) > 0 {
+                        CARRY_N -= 1;
+                        if CARRY_N == 0 {
+                            CARRY = AIR;
+                        }
+                    }
+                } else if grid::kind(i) != AIR {
+                    let (k, n) = grid::take_half(i);
+                    CARRY = k;
+                    CARRY_N = n;
+                    CARRY_FROM = -3;
+                }
+            } else if z == Z_HOT && HOTBAR[i] != AIR {
                 HOTBAR[i] = AIR;
                 note("HOTBAR SLOT CLEARED");
             } else if z == Z_OFF && p.offhand != AIR {
@@ -1524,6 +1586,61 @@ fn player_input(pad: ButtonState, previous: ButtonState, p: &mut Player) {
                 note("OFF HAND CLEARED");
             }
         }
+    }
+    if pressed(button::TRIANGLE) {
+        // Java's shift-click: a cell back to the inventory, the output
+        // crafted as many times as the cells allow.
+        if z == Z_GRID && grid::kind(i) != AIR {
+            grid::clear_cell(i);
+            note("PUT BACK");
+        } else if z == Z_OUT {
+            let n = grid::craft_all();
+            if n > 0 {
+                sfx::confirm();
+            }
+        }
+    }
+    // A held CROSS on the output keeps crafting, after a short delay. Only a
+    // press made on the output arms it: the press that laid a recipe in the
+    // grid is still down when this screen opens, and must not craft it.
+    unsafe {
+        if z == Z_OUT && pressed(button::CROSS) {
+            OUT_ARMED = true;
+        }
+        if !pad.is_held(button::CROSS) || z != Z_OUT {
+            OUT_ARMED = false;
+        }
+        if OUT_ARMED {
+            let m = hold_step(true);
+            if m > 1 || (m == 1 && !pressed(button::CROSS)) {
+                let mut k = 0;
+                while k < m && grid::craft_once() {
+                    k += 1;
+                }
+            }
+        } else {
+            hold_step(false);
+        }
+    }
+}
+
+/// True while a CROSS pressed on the crafting output is still held.
+static mut OUT_ARMED: bool = false;
+
+/// Open on the player page with the cursor on the crafting output, as the
+/// recipe book does after it lays a shape in the grid.
+#[inline(never)]
+#[optimize(size)]
+pub fn inventory_open_grid() {
+    unsafe {
+        ON_PLAYER = true;
+        PZ = Z_OUT;
+        PI = 0;
+        CARRY = AIR;
+        NOTE_T = 0;
+        NAV_T = [0; 4];
+        FRESH = true;
+        OUT_ARMED = false;
     }
 }
 
@@ -1588,7 +1705,6 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
     // Armour: Java's pips (two defense points each), defense and toughness,
     // and what a ten point hit costs through it.
     let (pts, tough) = armor_points(p);
-    ui_text(font, WX, AY, "ARMOR", MC_INK);
     let mut diamond = false;
     let mut k = 0;
     while k < 4 {
@@ -1598,24 +1714,46 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
     let fill = if diamond { (28, 150, 160) } else { (84, 88, 104) };
     let mut j = 0i16;
     while j < 10 {
-        let x = WX + 48 + j * 9;
-        rect(x, AY, 7, 7, 150, 150, 158);
+        let x = WX + j * 8;
+        rect(x, AY, 6, 7, 150, 150, 158);
         let full = (j as i32 + 1) * 2 <= pts;
         let half = !full && (j as i32) * 2 < pts;
         if full || half {
-            rect(x, AY, if full { 7 } else { 3 }, 7, fill.0, fill.1, fill.2);
+            rect(x, AY, if full { 6 } else { 3 }, 7, fill.0, fill.1, fill.2);
         }
         j += 1;
     }
     let mut nb = [0u8; 5];
     let mut nc = [0u8; 5];
     let mut nd = [0u8; 5];
-    ui_text(font, WX, AY + 12, "DEFENSE", MC_INK);
-    ui_text(font, WX + 64, AY + 12, number(pts as u16, &mut nb), MC_INK);
-    ui_text(font, WX + 88, AY + 12, "TOUGH", MC_INK);
-    ui_text(font, WX + 136, AY + 12, number(tough as u16, &mut nc), MC_INK);
-    ui_text(font, WX, AY + 24, "A 10 HIT DEALS", MC_INK);
-    ui_text(font, WX + 120, AY + 24, number(armored(10, p) as u16, &mut nd), MC_INK);
+    ui_text(font, WX, AY + 10, "DEFENSE", MC_INK);
+    ui_text(font, WX + 64, AY + 10, number(pts as u16, &mut nb), MC_INK);
+    ui_text(font, WX, AY + 20, "TOUGH", MC_INK);
+    ui_text(font, WX + 64, AY + 20, number(tough as u16, &mut nc), MC_INK);
+    ui_text(font, WX, AY + 30, "10 HIT", MC_INK);
+    ui_text(font, WX + 64, AY + 30, number(armored(10, p) as u16, &mut nd), MC_INK);
+
+    // The 2x2 crafting grid, its arrow and the output slot.
+    let mut c = 0;
+    while c < 4 {
+        let (x, y) = (GX + (c % 2) as i16 * SLOT, GY + (c / 2) as i16 * SLOT);
+        slot(x, y);
+        if grid::kind(c) != AIR {
+            draw_icon(x + 1, y + 1, grid::kind(c), 128);
+            if grid::count(c) > 1 {
+                draw_count(x, y, grid::count(c));
+            }
+        }
+        c += 1;
+    }
+    ui_text(font, OUT_X - 18, OUT_Y + 4, ">", MC_INK);
+    slot(OUT_X, OUT_Y);
+    if let Some((out, qty)) = grid::output() {
+        draw_icon(OUT_X + 1, OUT_Y + 1, out, 128);
+        if qty > 1 {
+            draw_count(OUT_X, OUT_Y, qty);
+        }
+    }
 
     // Weapon: the five you can swing, the one in hand framed, its numbers.
     let (wc, wt) = equip::weapon_of(p);
@@ -1702,6 +1840,24 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
                 "YOU HAVE NONE. CRAFT ONE"
             };
         }
+        Z_GRID => {
+            shown = grid::kind(i);
+            if shown == AIR {
+                l1 = "CRAFTING GRID";
+                l2 = "X PUTS THE HELD STACK HERE";
+            } else {
+                l2 = "X LIFTS THE STACK. []: HALF";
+            }
+        }
+        Z_OUT => {
+            if let Some((out, _)) = grid::output() {
+                shown = out;
+                l2 = "X CRAFTS. T: ALL OF THEM";
+            } else {
+                l1 = "CRAFTING RESULT";
+                l2 = "FILL THE GRID, OR USE THE [] LIST";
+            }
+        }
         Z_STOCK => {
             if i < ns {
                 shown = st[i];
@@ -1740,8 +1896,42 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
 
     // Controls.
     let (y1, y2) = (188, 199);
-    let x = hint_item(font, 16, y1, "X", PS_CROSS, if carry != AIR { "PUT" } else { "USE" });
-    let x = hint_item(font, x, y1, "[]", PS_SQUARE, "CLEAR");
+    let grid_z = z == Z_GRID;
+    let x = hint_item(
+        font,
+        16,
+        y1,
+        "X",
+        PS_CROSS,
+        if z == Z_OUT {
+            "CRAFT"
+        } else if carry != AIR {
+            "PUT"
+        } else if grid_z {
+            "LIFT"
+        } else {
+            "USE"
+        },
+    );
+    let x = hint_item(
+        font,
+        x,
+        y1,
+        "[]",
+        PS_SQUARE,
+        if grid_z && carry != AIR {
+            "ONE"
+        } else if grid_z {
+            "HALF"
+        } else {
+            "CLEAR"
+        },
+    );
+    let x = if grid_z || z == Z_OUT {
+        hint_item(font, x, y1, "T", PS_TRIANGLE, if grid_z { "BACK" } else { "ALL" })
+    } else {
+        x
+    };
     hint_item(font, x, y1, "O", PS_CIRCLE, if carry != AIR { "CANCEL" } else { "CLOSE" });
     hint_item(font, 16, y2, "L1R1", PS_KEY, "PAGE");
 
@@ -1752,11 +1942,17 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
         Z_ARMOR => (AX, AY + i as i16 * SLOT),
         Z_OFF => (OFF_SX, OFF_SY),
         Z_WEAP => (WX + i as i16 * SLOT, WY),
+        Z_GRID => (GX + (i % 2) as i16 * SLOT, GY + (i / 2) as i16 * SLOT),
+        Z_OUT => (OUT_X, OUT_Y),
         Z_STOCK => (SX0 + i as i16 * SLOT, SY0),
         _ => (HOTBAR_X0 + i as i16 * SLOT, HUD_HOTBAR_Y),
     };
     frame(sx, sy, CURSOR);
     if carry != AIR {
         draw_icon(sx + 6, sy - 10, carry, 128);
+        let n = unsafe { CARRY_N }.min(unsafe { INV[carry as usize] } + 64);
+        if n > 1 {
+            draw_count(sx + 6, sy - 11, n);
+        }
     }
 }
