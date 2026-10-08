@@ -2295,6 +2295,29 @@ static mut AT_BENCH: bool = false;
 // Menu hold-to-scroll: frames each nav direction has been held.
 static mut NAV_UP_T: u16 = 0;
 static mut NAV_DOWN_T: u16 = 0;
+/// Sim ticks L2 has been held since the last use. Java repeats a held use
+/// every 4 game ticks (rightClickDelay), which is what builds a row or a
+/// pillar with the button held.
+static mut USE_HELD_T: u32 = 0;
+const USE_REPEAT: u32 = units::java_ticks(4) as u32;
+
+/// Blocks a held L2 keeps placing: everything but the items with a use of
+/// their own (bow, seeds, buckets, potions, flint, bone meal, rod, eyes).
+fn repeats_when_held(sel: u8) -> bool {
+    !matches!(
+        sel,
+        BOW | WHEAT_ITEM
+            | SEEDS
+            | SAPLING
+            | FISHING_ROD
+            | VOID_EYE
+            | FLINT_STEEL
+            | BONEMEAL
+            | BUCKET
+            | WATER_BUCKET
+            | LAVA_BUCKET
+    ) && !is_potion(sel)
+}
 
 /// Step-once-then-autorepeat: fires on the first held frame, then every 4
 /// frames once past an 18-frame delay.
@@ -3080,6 +3103,21 @@ fn main() {
                 fixture::select(&fixture_pick, &mut player);
             }
             let use_pressed = pad.pressed_since(previous, button::L2);
+            // Held L2 repeats a block placement every USE_REPEAT sim ticks.
+            let use_repeat = unsafe {
+                if pad.is_held(button::L2) && !use_pressed {
+                    USE_HELD_T += sim_n;
+                    if USE_HELD_T >= USE_REPEAT {
+                        USE_HELD_T = 0;
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    USE_HELD_T = 0;
+                    false
+                }
+            } && repeats_when_held(player.selected);
             let mut used = false;
             if use_pressed {
                 used = mob_interact(target);
@@ -3336,7 +3374,7 @@ fn main() {
                 && player.selected != BOW
                 && player.selected != WHEAT_ITEM
                 && pick.hit
-                && use_pressed
+                && (use_pressed || use_repeat)
             {
                 if player.selected == SEEDS {
                     let below = get_block_i32(pick.px, pick.py - 1, pick.pz);
