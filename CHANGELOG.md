@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.3.2 | 2026-10-08
+
+Portals, controls and world speed fixes, on top of 0.3.1.
+
+- Dying in the Inferno or the Void now sends you back to the overworld, as in
+  Java. Before, you came back at the overworld spawn's coordinates inside the
+  dimension you died in.
+- Holding L2 keeps placing blocks, one every four game ticks, so a row or a
+  pillar goes up with the button held, as with Java's use button.
+- Holding Cross jumps again as soon as you land, ten game ticks apart, as in
+  Java. Before, each jump needed a fresh press.
+- Saving to a memory card with no directory asks first: the first save says
+  the card will be formatted and the second does it. Before, it erased
+  whatever the card held at once.
+- The tutorial hint box in the Void is drawn below the dragon's boss bar
+  instead of over its title.
+- Portals: each sheet is drawn as the two blended faces of Java's portal model,
+  cut to the frame and animated, instead of two opaque quads that poked
+  through the obsidian and vanished up close and far away. The Void portal is
+  a sheet you can walk through, like the Nether portal. Standing in a portal
+  tints the screen purple, and the crosshair reaches the block behind a sheet.
+- Faster world: meshing a chunk no longer scans every cell for skylight,
+  lights and plants, and a spreading fluid rebuilds only the planes it
+  touches, so a flowing lake or lava stream no longer drags the frame rate
+  down.
+- Newer PSoXide SDK, engine and emulator components, with the build profile
+  collected again for them.
+
 ## 0.3.1 | 2026-10-02
 
 Standalone disc published on itch.io.

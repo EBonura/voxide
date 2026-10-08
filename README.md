@@ -195,6 +195,12 @@ with Mojang Studios or Microsoft. Minecraft is a trademark of Mojang Studios.
 
 ## Recent changes
 
+**0.3.2**: dying in the Inferno or the Void respawns you in the overworld,
+holding L2 keeps placing blocks and holding Cross keeps hopping, saving to a
+blank memory card asks before formatting it, portals draw as Java's blended
+sheets, and the world builds faster, so a flowing lake no longer drags the
+frame rate down.
+
 **0.3.1**: Java's thunderstorms (lightning, thunder, storm clouds, rain,
 snow or nothing by biome, a rain sound); saves keep the weather, no longer
 freeze the screen and survive a card pulled mid-save; the cheats are in
