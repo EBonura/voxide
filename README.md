@@ -2,6 +2,8 @@
 
 **[Download the latest version on itch.io](https://bonnie-studios.itch.io/voxide)**
 
+> **Built with agentic coding.** AI coding agents write most of the code in PSoXide and in this game. I direct them, review what they produce, and test the results in the emulator and on a real PlayStation.
+
 It's also on the [PSoXide Demo Disc](https://bonnie-studios.itch.io/psoxide-demo-disc) with the other Bonnie Studios PlayStation games, and you can [play it in your browser](https://bonnie-studios.itch.io/psoxide).
 
 A Minecraft-style survival sandbox for the PlayStation 1, written in Rust on
