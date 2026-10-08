@@ -55,7 +55,7 @@ COMPONENTS := $(ROOT)/target/psoxide-components/$(SDK_REV)
 PSOXIDE_FROM ?=
 psoxide:
 	@if [ -n "$(PSOXIDE_FROM)" ]; then \
-		cargo run -q --manifest-path "$(PSOXIDE_FROM)/tools/psoxide-link/Cargo.toml" -- \
+		cargo run -q --manifest-path "$(PSOXIDE_FROM)/tools/psoxide-link/Cargo.toml" --bin psoxide-link -- \
 			--from "$(PSOXIDE_FROM)" --into "$(PSOXIDE)"; \
 	else \
 		[ -x "$(COMPONENTS)/bin/psoxide-components" ] || cargo install -q --locked \
