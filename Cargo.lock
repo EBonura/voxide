@@ -13,6 +13,7 @@ name = "psx-asset"
 version = "0.1.0"
 dependencies = [
  "psx-gte",
+ "psx-hw",
  "psxed-format",
 ]
 
@@ -38,6 +39,7 @@ dependencies = [
 name = "psx-gpu"
 version = "0.1.0"
 dependencies = [
+ "bitflags",
  "psx-hw",
  "psx-io",
 ]
@@ -47,6 +49,7 @@ name = "psx-gte"
 version = "0.1.0"
 dependencies = [
  "psx-gte-core",
+ "psx-hw",
 ]
 
 [[package]]
@@ -133,6 +136,9 @@ dependencies = [
 [[package]]
 name = "psx-telemetry"
 version = "0.1.0"
+dependencies = [
+ "psx-hw",
+]
 
 [[package]]
 name = "psx-tick"
