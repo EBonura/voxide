@@ -40,6 +40,13 @@ Equipment, and fixes from a playtest.
 - Glowstone breaks at the same speed with any tool, as in Java.
 - Saves are version 12 and keep what you wear, the off hand and the weapon.
   Saves from before load wearing the armour tier they had.
+- BRIGHTNESS and SCREEN X / SCREEN Y join the settings, on the main menu's
+  SETTINGS page and in OPTIONS. BRIGHTNESS runs from DARKER 5 through DEFAULT to
+  BRIGHTER 5 and covers the intro, the loading bars, the HUD and menus; DEFAULT
+  draws exactly what it did before. SCREEN X / Y move the picture up to 16
+  pixels for a television that crops the edge. All three are saved with the
+  stick and volume settings; settings saved by an earlier version load with
+  them at their defaults.
 
 ## 0.3.2 | 2026-10-08
 

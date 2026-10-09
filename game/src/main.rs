@@ -56,6 +56,7 @@ use core::cmp::{max, min};
 use psx_font::{fonts::BASIC, FontAtlas};
 use psx_gpu::{
     self as gpu,
+    display::{DisplayConfig, Resolution, VideoMode},
     framebuf::FrameBuffer,
     material::{BlendMode, TextureMaterial, TextureWindow},
     ot::OrderingTable,
@@ -63,10 +64,11 @@ use psx_gpu::{
         LineMono, QuadFlat, QuadTexturedGouraud, QuadTexturedMaterial, Sprite, TriGouraud,
         TriTexturedGouraud,
     },
-    Resolution, VideoMode,
+    Gpu,
 };
 use psx_gte::math::{Mat3I16, Vec3I16, Vec3I32};
 use psx_gte::scene;
+use psx_io::periph::GpuDma;
 use psx_math::attributed_clip::{clip_convex_plane, AttributedClipPlane, ClipTraversal};
 use psx_math::sincos;
 use psx_pad::{
@@ -3839,6 +3841,7 @@ fn main() {
             draw_demo_hud(&font, frame, &player);
         }
         draw_menu(&font, menu, menu_sel, chest_idx, player);
+        ui_brightness();
         // Particles, the pick outline, the held item, rain, tints, the HUD and
         // any open menu all live in OT slot 0 -- the slot the DMA walker
         // reaches last, so they paint over the world.
@@ -4058,6 +4061,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             draw_splash_now(font, t);
             font.draw_text(6, SCREEN_H as i16 - 12, VERSION, (0xC8, 0xC8, 0xD0));
         }
+        draw_brightness_now();
         gpu::draw_sync();
         wait_vblank();
         fb.swap();
@@ -4142,14 +4146,56 @@ fn draw_splash_now(font: &FontAtlas, t: u32) {
     }
 }
 
-const SETTING_ROWS: usize = 5;
+const SETTING_ROWS: usize = 8;
 const SETTING_NAMES: [&str; SETTING_ROWS] = [
     "MOVE DEADZONE",
     "LOOK DEADZONE",
     "LOOK SPEED",
     "INVERT LOOK Y",
     "SFX VOLUME",
+    "BRIGHTNESS",
+    "SCREEN X",
+    "SCREEN Y",
 ];
+
+/// Move the picture on the television to the saved SCREEN X / Y. A video
+/// signal change (GP1 08h/06h/07h), nothing per frame; `gpu::init` already
+/// left it centred, so a centred profile skips the write at boot.
+fn apply_screen_offset() {
+    let display = unsafe { SETTINGS_PROFILE.screen_offset }.apply_to(DisplayConfig::new(
+        VideoMode::Ntsc,
+        Resolution::R320X240,
+    ));
+    // SAFETY: a token is a logic guard, not a memory-safety one (see
+    // `psx_io::periph`); nothing else drives the display setters while the
+    // options page is open.
+    let mut dma = unsafe { GpuDma::steal() };
+    Gpu::from_dma_mut(&mut dma).set_display(display);
+}
+
+/// The BRIGHTNESS packet drawn over the finished immediate-mode frame (the
+/// main menu). None at DEFAULT, so DEFAULT draws exactly what it always did.
+fn draw_brightness_now() {
+    if let Some(overlay) =
+        unsafe { SETTINGS_PROFILE.brightness }.overlay(Resolution::R320X240)
+    {
+        // SAFETY: as in `apply_screen_offset`.
+        let mut dma = unsafe { GpuDma::steal() };
+        Gpu::from_dma_mut(&mut dma).draw(&overlay);
+    }
+}
+
+/// The BRIGHTNESS packet appended to the frame's UI list. It is the last
+/// packet built, so the tail flush (which keeps build order) walks it last,
+/// over the HUD and any open menu. No packet at DEFAULT.
+#[inline(never)]
+fn ui_brightness() {
+    if let Some(overlay) =
+        unsafe { SETTINGS_PROFILE.brightness }.overlay(Resolution::R320X240)
+    {
+        ui_packet(&overlay.words());
+    }
+}
 
 fn load_shared_settings() {
     let Ok(profile) = psx_settings::load_slot_one(SETTINGS_FILE) else {
@@ -4163,6 +4209,9 @@ fn load_shared_settings() {
         SET_INVERT_Y = SETTINGS_PROFILE.invert_y();
         sfx::set_volume_pct(SETTINGS_PROFILE.sfx_volume as i32);
         SETTINGS_DIRTY = false;
+    }
+    if unsafe { !SETTINGS_PROFILE.screen_offset.is_centre() } {
+        apply_screen_offset();
     }
 }
 
@@ -4190,16 +4239,31 @@ fn setting_adjust(row: usize, dir: i32) {
             1 => SET_LOOK_DZ = (SET_LOOK_DZ + dir as i16 * 2).clamp(4, 40),
             2 => SET_LOOK_PCT = (SET_LOOK_PCT + dir * 20).clamp(60, 160),
             3 => SET_INVERT_Y = !SET_INVERT_Y,
-            _ => sfx::set_volume_pct(sfx::volume_pct() + dir * 25),
+            4 => sfx::set_volume_pct(sfx::volume_pct() + dir * 25),
+            5 => SETTINGS_PROFILE.brightness = SETTINGS_PROFILE.brightness.stepped(dir as i8),
+            6 => {
+                SETTINGS_PROFILE.screen_offset =
+                    SETTINGS_PROFILE.screen_offset.stepped_x(dir as i8);
+                apply_screen_offset();
+            }
+            _ => {
+                SETTINGS_PROFILE.screen_offset =
+                    SETTINGS_PROFILE.screen_offset.stepped_y(dir as i8);
+                apply_screen_offset();
+            }
         }
         SETTINGS_DIRTY = true;
     }
 }
 
-/// A setting's display value into a tiny buffer ("18", "120%", "ON").
-fn setting_value(row: usize, buf: &mut [u8; 4]) -> usize {
+/// A setting's display value into a small buffer ("18", "120%", "ON",
+/// "BRIGHTER 3"); the buffer is the longest label psx-display writes.
+fn setting_value(row: usize, buf: &mut [u8; 12]) -> usize {
     let (v, pct) = unsafe {
         match row {
+            5 => return SETTINGS_PROFILE.brightness.label().copy_into(buf),
+            6 => return SETTINGS_PROFILE.screen_offset.label_x().copy_into(buf),
+            7 => return SETTINGS_PROFILE.screen_offset.label_y().copy_into(buf),
             0 => (SET_MOVE_DZ as i32, false),
             1 => (SET_LOOK_DZ as i32, false),
             2 => (SET_LOOK_PCT, true),
@@ -4305,7 +4369,7 @@ fn draw_settings_now(font: &FontAtlas, sel: usize) {
         row_button_now(y - 3, i == sel);
         let color = if i == sel { MC_LABEL_SEL } else { MC_LABEL };
         font.draw_text(MENU_TEXT_X, y, SETTING_NAMES[i], color);
-        let mut buf = [0u8; 4];
+        let mut buf = [0u8; 12];
         let n = setting_value(i, &mut buf);
         let txt = unsafe { core::str::from_utf8_unchecked(&buf[..n]) };
         font.draw_text(278 - n as i16 * 8, y, txt, (0x70, 0xE0, 0x70));
@@ -4313,7 +4377,7 @@ fn draw_settings_now(font: &FontAtlas, sel: usize) {
     }
     font.draw_text(
         MENU_TEXT_X,
-        MENU_ROWS_Y + 5 * MENU_ROW_H as i16 + 8,
+        MENU_ROWS_Y + SETTING_ROWS as i16 * MENU_ROW_H as i16,
         "TAKES EFFECT IMMEDIATELY",
         (0x6A, 0x6A, 0x74),
     );
@@ -4558,6 +4622,7 @@ fn show_intro(fb: &mut FrameBuffer, font: &FontAtlas) {
             );
             x += font.text_width(glyph) as i16;
         }
+        draw_brightness_now();
         gpu::draw_sync();
         wait_vblank();
         fb.swap();
@@ -4603,6 +4668,7 @@ fn present_loading(fb: &mut FrameBuffer, font: &FontAtlas, done: usize, total: u
     gpu::draw_rect_flat(80, 124, 160, 10, 40, 40, 52);
     let w = (done * 156 / total.max(1)) as i16;
     gpu::draw_rect_flat(82, 126, w.max(2) as u16, 6, 120, 220, 120);
+    draw_brightness_now();
     gpu::draw_sync();
     // Flip on a true vblank edge like every other screen: a swap mid-scanout
     // shows a stable tear line on silicon, which emulators do not reproduce.
@@ -11091,6 +11157,9 @@ const OPTIONS: [&str; OPT_SETTINGS + SETTING_ROWS] = [
     SETTING_NAMES[2],
     SETTING_NAMES[3],
     SETTING_NAMES[4],
+    SETTING_NAMES[5],
+    SETTING_NAMES[6],
+    SETTING_NAMES[7],
 ];
 /// Result of the last card operation, shown under the list.
 static mut OPT_MSG: &str = "";
@@ -11126,7 +11195,7 @@ fn draw_options(font: &FontAtlas, sel: usize, player: Player) {
             };
             ui_text(font, 230, y, label, tint);
         } else if i >= OPT_SETTINGS {
-            let mut buf = [0u8; 4];
+            let mut buf = [0u8; 12];
             let k = setting_value(i - OPT_SETTINGS, &mut buf);
             let txt = unsafe { core::str::from_utf8_unchecked(&buf[..k]) };
             ui_text(font, 278 - k as i16 * 8, y, txt, (0x70, 0xE0, 0x70));

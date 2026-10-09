@@ -122,8 +122,8 @@ The layout follows Minecraft Bedrock's PS4/PS5 defaults.
   hand)
 - L3 or double-tap forward: sprint (drops when forward stops)
 - Start: options menu -- flight, save/load to memory card, the tutorial
-  toggle, CHEATS, and the stick and volume settings (left/right adjusts
-  those)
+  toggle, CHEATS, and the stick, volume, brightness and screen position
+  settings (left/right adjusts those)
 - Main menu: up/down moves between PLAY GAME, NEW WORLD, SETTINGS and
   CREDITS; Cross confirms
 
