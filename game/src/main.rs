@@ -2996,7 +2996,9 @@ fn main() {
                 let prev_i = if st == 0 { sprev } else { spad };
                 // Before update_player, so a fall's damage also plays the hurt sound.
                 let hp_before = player.health;
-                update_player(&mut player, spad, prev_i, sl, sr);
+                // SAFETY: nothing else is live in the scratchpad during the
+                // simulation step (see FullStack).
+                unsafe { FullStack::run(|| update_player(&mut player, spad, prev_i, sl, sr)) };
                 update_survival(&mut player);
                 mob::set_lure(player.selected); // animals follow their held food
                 mob::update(player.x, player.y, player.z, spawn_sky(day), undead_burn_time(day));
@@ -6006,7 +6008,8 @@ fn render_world(cam: &Camera) -> (usize, usize) {
     }
     telemetry::stage_begin(ST_OTCLEAR); // TEMP: whole face-loop span
     let face_work = world::for_visible_faces(cam, &mut count);
-    render_near_block_shell(cam);
+    // SAFETY: the face batch is dead once the face pass returns (see FullStack).
+    unsafe { FullStack::run(|| render_near_block_shell(cam)) };
     telemetry::stage_end(ST_OTCLEAR);
     let near_tris = unsafe { NEAR_TRI_N };
     (count + near_tris, face_work)
