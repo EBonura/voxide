@@ -1,0 +1,9 @@
+[package]
+name        = "voxide-host-tests"
+version     = "0.1.0"
+edition     = "2021"
+publish     = false
+description = "Host tests that compile slices of the no_std game source with rustc and run them."
+
+# Its own workspace: the game builds for the PS1, these tests for the host.
+[workspace]

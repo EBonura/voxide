@@ -25,7 +25,7 @@ PSOXIDE_START_PULSE ?= 0x0008@700+60
 
 .DEFAULT_GOAL := build
 .PHONY: help psoxide build compile pack disc install release run smoke profile \
-	pgo-collect pgo-order pgo-choose clean
+	pgo-collect pgo-order pgo-choose clean host-tests
 
 help:
 	@echo "VoXide targets:"
@@ -135,6 +135,11 @@ profile:
 		--dump-hw "$(CAPTURE_DIR)/voxide-profile.ppm"
 	@echo "PROFILE -> $(CAPTURE_DIR)/voxide-profile.csv (per-frame stage cycles)"
 	@python3 tools/profile_report.py "$(CAPTURE_DIR)/voxide-profile.csv"
+
+# Host tests that compile slices of the game source with rustc (the clip adapter
+# against its frozen oracle, the unit conversions). They need the imported SDK.
+host-tests:
+	cd tools/host-tests && cargo test
 
 # Regenerating the profile and picking the variant need the emulator:
 #   make pgo-collect FRONTEND=/path/to/frontend   (after gameplay code changes or an SDK repin)
