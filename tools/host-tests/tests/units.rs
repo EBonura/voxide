@@ -12,6 +12,12 @@ fn units_rs() {
     let units = root.join("game/src/units.rs");
     let source = std::fs::read_to_string(&units).expect("units.rs");
     // `rustc --test` on the file itself, as the module is self-contained.
-    let output = common::compile_and_run(&scratch, &source, &["--edition", "2021", "--test"], &[], &root);
+    let output = common::compile_and_run(
+        &scratch,
+        &source,
+        &["--edition", "2021", "--test"],
+        &[],
+        &root,
+    );
     assert!(String::from_utf8_lossy(&output.stdout).contains("test result: ok"));
 }

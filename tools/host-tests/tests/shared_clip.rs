@@ -59,7 +59,10 @@ fn actual_adapter_preserves_vertices_attributes_and_order() {
         kernel.display()
     );
     let mut code = String::from("#![allow(dead_code)]\n");
-    code += &format!("#[path=\"{}\"] mod int32;\n", kernel.join("int32.rs").display());
+    code += &format!(
+        "#[path=\"{}\"] mod int32;\n",
+        kernel.join("int32.rs").display()
+    );
     code += &format!(
         "#[path=\"{}\"] mod attributed_clip;\n",
         kernel.join("attributed_clip.rs").display()
@@ -70,7 +73,11 @@ fn actual_adapter_preserves_vertices_attributes_and_order() {
     code += item(&source, "struct ClipVert");
     code += "\n";
     code += "const EMPTY_CLIP_VERT:ClipVert=ClipVert{x:0,y:0,z:0,u:0,v:0,r:0,g:0,b:0};\n";
-    for signature in ["fn clip_distance_c<", "fn clip_intersection(", "fn clip_polygon_plane_c<"] {
+    for signature in [
+        "fn clip_distance_c<",
+        "fn clip_intersection(",
+        "fn clip_polygon_plane_c<",
+    ] {
         code += item(&source, signature);
         code += "\n";
     }
@@ -80,7 +87,8 @@ fn actual_adapter_preserves_vertices_attributes_and_order() {
         "impl<const P: usize> AttributedClipPlane<ClipVert> for CellPlane<P>",
     );
     code += "\n";
-    code += &std::fs::read_to_string(root.join("tools/fixtures/legacy_clip.rs")).expect("legacy_clip.rs");
+    code += &std::fs::read_to_string(root.join("tools/fixtures/legacy_clip.rs"))
+        .expect("legacy_clip.rs");
     code += MAIN;
 
     let scratch = common::Scratch::new("vox-clip-test-");
