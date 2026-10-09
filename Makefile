@@ -134,12 +134,15 @@ profile:
 		--dump-guest-profile \
 		--dump-hw "$(CAPTURE_DIR)/voxide-profile.ppm"
 	@echo "PROFILE -> $(CAPTURE_DIR)/voxide-profile.csv (per-frame stage cycles)"
-	@python3 tools/profile_report.py "$(CAPTURE_DIR)/voxide-profile.csv"
+	@cargo run -q --locked --manifest-path tools/voxide-tools/Cargo.toml --bin profile-report -- "$(CAPTURE_DIR)/voxide-profile.csv"
 
-# Host tests that compile slices of the game source with rustc (the clip adapter
-# against its frozen oracle, the unit conversions, the near-face grid steps). They need the imported SDK.
+# Host tests. tools/host-tests compiles slices of the game source with rustc (the
+# clip adapter against its frozen oracle, the unit conversions, the near-face grid
+# steps) and needs the imported SDK. tools/voxide-tools tests the asset converters,
+# the benchmark tape generator and the profile report.
 host-tests:
 	cd tools/host-tests && cargo test
+	cd tools/voxide-tools && cargo test
 
 # Regenerating the profile and picking the variant need the emulator:
 #   make pgo-collect FRONTEND=/path/to/frontend   (after gameplay code changes or an SDK repin)

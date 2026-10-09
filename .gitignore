@@ -1,6 +1,7 @@
 /dist/
 /captures/
 /game/target/
+/tools/*/target/
 # psoxide-components, installed per SDK revision by `make psoxide`.
 /target/
 .DS_Store

@@ -10,7 +10,7 @@ The "16x16 Block Texture Set" from OpenGameArt, CC0 1.0.
 * Source: https://opengameart.org/content/16x16-block-texture-set
 * License: https://creativecommons.org/publicdomain/zero/1.0/
 
-`tools/convert_pack.py` quantises the pack into a 4bpp atlas with one CLUT per
+`convert-pack` (in `tools/voxide-tools`) quantises the pack into a 4bpp atlas with one CLUT per
 block and writes `game/src/texdata.rs`. Tiles the pack doesn't cover are drawn
 procedurally in `game/src/tex.rs`: the crafting table, chest, the four tool
 icons, the crack overlays and every mob face.
@@ -18,7 +18,7 @@ icons, the crack overlays and every mob face.
 ## Sound effects
 
 Recordings are trimmed and resampled with ffmpeg, then cooked to SPU-ADPCM by
-`tools/convert_sfx.py`, which writes the sample bank to
+`convert-sfx` (in `tools/voxide-tools`), which writes the sample bank to
 `assets/sfx/pak/chunk_3000.bin` and the lookup table to `game/src/sfxdata.rs`.
 The bank is packed into WORLD.PAK on the disc and streamed into SPU RAM at
 boot, so it never occupies main memory.

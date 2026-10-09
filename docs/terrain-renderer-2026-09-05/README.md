@@ -28,8 +28,8 @@ still falls below 30, and the shipping distance remains 16 blocks for tops,
 The baseline is upstream `1d4816c` with SDK `8df242b`. Each image uses ordinary
 default features, real controller polling and the game's normal VBlank-derived
 simulation delta. The two generated `PXITAPE1` routes run from cold boot for
-3,500 video samples. `tools/make_renderer_tapes.py` reproduces both frozen tapes
-byte for byte. The action route walks, looks down, places blocks, selects items,
+3,500 video samples. `renderer-tapes` (in `tools/voxide-tools`) reproduces both frozen
+tapes byte for byte. The action route walks, looks down, places blocks, selects items,
 mines, opens/closes inventory and turns before an idle tail. It is a synthetic
 test, not a user recording or exhaustive gameplay validation.
 
@@ -126,7 +126,7 @@ FPS. Its action route still averages 19.985 FPS, so it is a promising distance
 candidate, not proof of terrain at 30 FPS during movement. Shipping remains at
 16 while the larger moving bottleneck is addressed.
 
-`profile_report.py` now excludes terminal zero-cycle frame markers and uses
+`profile-report` (in `tools/voxide-tools`) now excludes terminal zero-cycle frame markers and uses
 the actual generation stage (25) instead of the unrelated stage 26. Missing
 generation telemetry is omitted. Two regression tests pass. This removes the
 false extra completed frame / 30.1 FPS result from stopped diagnostic captures.
@@ -134,7 +134,7 @@ false extra completed frame / 30.1 FPS result from stopped diagnostic captures.
 Reproduce the normal input routes with:
 
 ```sh
-python3 tools/make_renderer_tapes.py --out /tmp/vox-renderer-tapes
+cargo run -q --manifest-path tools/voxide-tools/Cargo.toml --bin renderer-tapes -- --out /tmp/vox-renderer-tapes
 make disc GAMES_DIR=/tmp/vox-renderer-library
 ```
 

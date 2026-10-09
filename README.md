@@ -44,7 +44,7 @@ imposters for the far ring and pulled them back out after measuring that they
 drew no visible pixels.
 
 Every asset is CC0. Block art is the "16x16 Block Texture Set" from
-OpenGameArt, quantised to per-block CLUTs by `tools/convert_pack.py`; tiles the
+OpenGameArt, quantised to per-block CLUTs by `tools/voxide-tools` (`convert-pack`); tiles the
 pack doesn't cover are drawn in code. Sources are credited in
 `assets/pack/CREDITS.md` and on the in-game credits screen. No Mojang assets,
 code or data are used.
@@ -180,7 +180,7 @@ the per-sound breakdown and the links; the short version:
 
 Tiles the texture pack doesn't cover (the crafting table, chest, tool icons,
 crack overlays and mob faces) are drawn procedurally in `game/src/tex.rs`, and
-the sound bank is cooked to SPU-ADPCM by `tools/convert_sfx.py`.
+the sound bank is cooked to SPU-ADPCM by `tools/voxide-tools` (`convert-sfx`).
 
 ## Provenance
 
