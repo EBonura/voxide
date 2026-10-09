@@ -1,6 +1,6 @@
 //! Sampled sound effects: CC0 recordings (Kenney.nl packs and freesound.org,
 //! credited in assets/pack/CREDITS.md) cooked to SPU-ADPCM by
-//! tools/convert_sfx.py and uploaded to SPU RAM once at boot -- ~110 KiB of
+//! tools/voxide-tools (convert-sfx) and uploaded to SPU RAM once at boot -- ~110 KiB of
 //! SPU RAM, nothing streamed. Each cooked sample ends in a self-looping
 //! silent block, so a finished one-shot parks its voice on silence until the
 //! round-robin re-keys it.
@@ -367,7 +367,7 @@ impl Synth {
 }
 
 /// SPU-ADPCM, filter 0 to 4 per 28-sample block (the same coding as
-/// tools/convert_sfx.py, with the shift chosen from the block's largest
+/// tools/voxide-tools, with the shift chosen from the block's largest
 /// residual instead of a full search, to keep boot short).
 const ADPCM_K: [(i32, i32); 5] = [(0, 0), (60, 0), (115, -52), (98, -55), (122, -60)];
 
