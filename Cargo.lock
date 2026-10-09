@@ -18,6 +18,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "psx-display"
+version = "0.1.0"
+dependencies = [
+ "psx-gpu",
+ "psx-hw",
+]
+
+[[package]]
 name = "psx-font"
 version = "0.1.0"
 dependencies = [
@@ -113,6 +121,7 @@ dependencies = [
 name = "psx-settings"
 version = "0.1.0"
 dependencies = [
+ "psx-display",
  "psx-mc",
  "psx-pad",
 ]
@@ -164,6 +173,7 @@ dependencies = [
  "psx-fx",
  "psx-gpu",
  "psx-gte",
+ "psx-io",
  "psx-math",
  "psx-mc",
  "psx-pack",
