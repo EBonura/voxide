@@ -1,0 +1,12 @@
+[package]
+name        = "voxide-tools"
+version     = "0.1.0"
+edition     = "2021"
+publish     = false
+description = "VoXide dev tools: asset converters, renderer benchmark tapes, profile report."
+
+[lints.rust]
+missing_docs = "warn"
+
+# Its own workspace: the game builds for the PS1, these tools for the host.
+[workspace]
