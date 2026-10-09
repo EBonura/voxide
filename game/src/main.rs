@@ -4622,6 +4622,7 @@ fn show_intro(fb: &mut FrameBuffer, font: &FontAtlas) {
             );
             x += font.text_width(glyph) as i16;
         }
+        draw_brightness_now();
         gpu::draw_sync();
         wait_vblank();
         fb.swap();
@@ -4667,6 +4668,7 @@ fn present_loading(fb: &mut FrameBuffer, font: &FontAtlas, done: usize, total: u
     gpu::draw_rect_flat(80, 124, 160, 10, 40, 40, 52);
     let w = (done * 156 / total.max(1)) as i16;
     gpu::draw_rect_flat(82, 126, w.max(2) as u16, 6, 120, 220, 120);
+    draw_brightness_now();
     gpu::draw_sync();
     // Flip on a true vblank edge like every other screen: a swap mid-scanout
     // shows a stable tear line on silicon, which emulators do not reproduce.
