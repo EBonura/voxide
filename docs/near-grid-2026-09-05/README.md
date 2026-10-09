@@ -20,9 +20,9 @@ the entire game. The common face-loop body remains 8,184 bytes with a 352-byte
 stack frame; BSS still ends at 0x801f1608 in diagnostic and normal builds.
 The normal executable has zero load-delay hazards after the standard patch.
 
-`tools/test_near_grid.py` extracts the current face construction, axis selection
-and camera-plane expressions directly from the game source and compiles them
-on the host. An independent span/division oracle checks all six directions,
+`tools/host-tests/tests/near_grid.rs` extracts the current face construction, axis
+selection and camera-plane expressions directly from the game source and compiles
+them on the host. An independent span/division oracle checks all six directions,
 all 16x8 packed face dimensions and signed camera rows. All 321,024 grid/row
 comparisons pass. The frozen proof source is retained beside this report.
 
@@ -87,7 +87,7 @@ transparent terrain. Depth alone does not prove ownership.
 
 ## Reproduction
 
-Run `python3 -m unittest discover -s tools -p test_near_grid.py` from the root.
+Run `make host-tests` (or `cargo test --test near_grid` in `tools/host-tests`) from the root.
 Build ordinary discs with `make disc GAMES_DIR=/tmp/vox-near-grid-library`;
 the destination override is required for experiments because make installs.
 The existing tape generator and terrain-renderer report describe the fixtures.

@@ -137,7 +137,7 @@ profile:
 	@python3 tools/profile_report.py "$(CAPTURE_DIR)/voxide-profile.csv"
 
 # Host tests that compile slices of the game source with rustc (the clip adapter
-# against its frozen oracle, the unit conversions). They need the imported SDK.
+# against its frozen oracle, the unit conversions, the near-face grid steps). They need the imported SDK.
 host-tests:
 	cd tools/host-tests && cargo test
 
