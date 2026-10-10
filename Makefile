@@ -80,7 +80,7 @@ FEATURES    ?=
 GAME_CARGO   = build --release$(if $(strip $(FEATURES)), --features "$(FEATURES)")
 PGO          = cargo run -q --release --locked --manifest-path "$(PSOXIDE)/tools/psoxide-pgo/Cargo.toml" --
 PGO_PROFILE  = $(ROOT)/pgo/voxide.prof
-PGO_VARIANT ?= hot=500
+PGO_VARIANT ?= hot=500+profi
 # Layout profile for `+order` variants (make pgo-order); only they read it.
 PGO_LAYOUT   = $(ROOT)/pgo/voxide.layout
 
