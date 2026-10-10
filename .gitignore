@@ -1,5 +1,6 @@
 /dist/
 /captures/
+/build/
 /game/target/
 /tools/*/target/
 # psoxide-components, installed per SDK revision by `make psoxide`.

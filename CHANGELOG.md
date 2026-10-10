@@ -47,6 +47,27 @@ Equipment, and fixes from a playtest.
   pixels for a television that crops the edge. All three are saved with the
   stick and volume settings; settings saved by an earlier version load with
   them at their defaults.
+- Fire and TNT use Java-inspired ignition and blast rules. Flint and steel,
+  adjacent fire or lava, redstone and another explosion can light TNT. Lit TNT
+  becomes an entity with a four second fuse that blinks white, gets a small
+  kick up, falls with gravity and explodes with power 4: rays of strength that
+  blast resistance and distance wear down break the blocks they reach, a
+  quarter of them drop, creatures and the player take blast damage and
+  knockback (less behind cover), other lit TNT is pushed, and TNT in reach is
+  lit with a fuse of half a second to a second and a half, so a stack goes off
+  in a chain. Before, a lit block only vanished into a hole, and nothing but
+  redstone lit it.
+- Fire ages, spreads and burns out under Java-inspired rules: a flame ticks
+  every 1.5 to 2 seconds, burns planks, logs, leaves, wool, grass and TNT away,
+  lights flames in empty cells beside fuel, goes out in rain, dies young on
+  bare ground and lives forever on netherrack. Flint and steel puts a flame
+  only where one can stand. Mobs standing in fire burn.
+- Explosions and flames use bounded queues and spare frame time. Heavy chains
+  can delay TNT detonation and crater completion substantially; in a saturated
+  lab run, sampled admission delays reached 1,270 to 1,274 simulation ticks,
+  and block completion delays reached 714 to 716 ticks after admission. If all
+  32 primed TNT slots are full, TNT that cannot be lit stays in the world,
+  including blocks reached by a chain blast.
 - A CONTROLS card lists every button on two pages, in the world and in menus.
   It is on the main menu and in the pause menu (OPTIONS > CONTROLS), and it
   comes up once on your first PLAY; the memory card remembers that it did.

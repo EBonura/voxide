@@ -12,6 +12,7 @@ use crate::{
     FAR_SIDE_Z, FAR_Z, FLOWER_R, FLOWER_Y, GOLD_ORE, GRASS, IRON_ORE, LAVA, LEAVES, PROJ_H, SAND,
     SAPLING, SNOW, STONE, TALL_GRASS, WATER, WHEAT, WHEAT_RIPE, WOOD,
 };
+use crate::flame;
 use crate::{
     is_flammable, CINDERSTONE, EMBER_CAP, FIRE, LUMISTONE, OBSIDIAN, PORTAL, SINK_SAND, SUGAR_CANE,
     TORCH, VOID_PORTAL, VOID_STONE,
@@ -1974,71 +1975,419 @@ fn remesh(cx: i32, cz: i32) {
     }
 }
 
-/// Java's explosion (minecraft.wiki/w/Explosion): rays from the centre start
-/// at power x (0.7 to 1.3), lose 0.225 per 0.3-block step and
-/// (blast resistance + 0.3) x 0.3 per step inside a block, and break what
-/// they reach; in open air that is a sphere of about 4/3 x power.
-///
-/// Casting Java's 1,352 rays is out of reach here, so each block is judged on
-/// its own ray: it breaks if it lies within power x f / (resistance + 1.05)
-/// blocks, plus the half block of air in the exploding cell, and never past
-/// the open-air 4/3 x power x f. f is the ray's 0.7 to 1.3 roll, hashed from
-/// the cell. TNT in reach is primed with Java's 10 to 30 game-tick fuse
-/// instead of vanishing. Raw-sets every block, then remeshes the overlapping
-/// chunks once -- per-block `set` would remesh a chunk ~100 times and hitch.
-pub fn explode(wx: i32, wy: i32, wz: i32, power: i32, seed: u32) {
-    let r = (4 * power * 13 + 29) / 30; // 4/3 x power x 1.3, rounded up
-    let mut dy = -r;
-    while dy <= r {
-        let mut dz = -r;
-        while dz <= r {
-            let mut dx = -r;
-            while dx <= r {
-                let (x, y, z) = (wx + dx, wy + dy, wz + dz);
-                let b = if y > 0 { get(x, y, z) } else { AIR };
-                if b != AIR {
-                    let h = (x.wrapping_mul(73856093) ^ y.wrapping_mul(19349663)
-                        ^ z.wrapping_mul(83492791)) as u32
-                        ^ seed;
-                    let f100 = 70 + (h.wrapping_mul(2654435761) >> 16) as i32 % 61;
-                    let res100 = crate::blast_resistance100(b);
-                    // Hundredths of a block.
-                    let reach = (power * f100 * 100 / (res100 + 105) + 50)
-                        .min(4 * power * f100 / 3);
-                    let d2 = (dx * dx + dy * dy + dz * dz) * 10_000;
-                    if d2 <= reach * reach {
-                        if b == crate::TNT {
-                            let fuse = crate::units::java_ticks(10 + (h % 21) as i32);
-                            crate::prime_tnt(x, y, z, fuse as u8);
-                        } else {
-                            raw_set(x, y, z, AIR);
-                        }
+// ---- Explosions ----------------------------------------------------------------
+//
+// Java's explosion (minecraft.wiki/w/Explosion), rules in blast.rs: 1,352 rays
+// from the centre, each with a strength that blast resistance and distance wear
+// down, every block a ray still has strength in breaks. A blast is a job, worked
+// a little each frame so it is never a hitch: a queue of up to BLAST_Q centres,
+// one worked at a time. The job copies the blocks around its centre (a
+// snapshot, so every ray reads the world as it stood when the blast began, as
+// Java's do), casts rays into a bit set of the cells to break, then breaks them a
+// column at a time, each as far as the frame has spare time (slack.rs), then
+// marks the chunks dirty so the remesh streams in. TNT the blast reaches is primed with Java's
+// 10 to 29 game tick fuse instead of vanishing.
+const BLAST_Q: usize = 8;
+/// Rays cast between looks at the clock (about 12,000 cycles).
+const BLAST_RAY_BATCH: u32 = 8;
+/// Snapshot columns read between looks at the clock.
+const BLAST_SNAP_BATCH: usize = 24;
+/// Sim ticks the last step waits for a player-edit mesh to commit.
+const BLAST_APPLY_WAIT: u16 = 120;
+
+#[derive(Copy, Clone)]
+struct BlastJob {
+    cx: i32, // the centre's cell
+    cy: i32,
+    cz: i32,
+    fx: i32, // where it sits in that cell, Q16 a block
+    fy: i32,
+    fz: i32,
+    power: i32,
+    seed: u32,
+}
+
+const NO_BLAST: BlastJob = BlastJob {
+    cx: 0,
+    cy: 0,
+    cz: 0,
+    fx: 0,
+    fy: 0,
+    fz: 0,
+    power: 0,
+    seed: 0,
+};
+static mut BQ: [BlastJob; BLAST_Q] = [NO_BLAST; BLAST_Q];
+static mut BQ_HEAD: usize = 0;
+static mut BQ_LEN: usize = 0;
+static mut BJ: BlastJob = NO_BLAST;
+static mut BJ_LIVE: bool = false;
+/// Completed block blast jobs in this world, including jobs with no breakable
+/// cells. Reset with the queue on load or dimension travel.
+static mut BLAST_DONE: u32 = 0;
+/// The next column of the snapshot to read, 0..SIDE^2.
+static mut BJ_SNAP: usize = 0;
+/// The next grid point to cast, 0..4096.
+static mut BJ_K: u32 = 0;
+/// The next cube column to break, 0..SIDE^2.
+static mut BJ_COL: usize = 0;
+static mut BJ_WAIT: u16 = 0;
+/// Cells broken so far (the hash that picks which drop), and the box of
+/// columns touched, for the remesh.
+static mut BJ_N: u32 = 0;
+static mut BJ_LO: (i32, i32) = (0, 0);
+static mut BJ_HI: (i32, i32) = (0, 0);
+static mut BJ_LOG: bool = false;
+static mut BCUBE: crate::blast::Cube = crate::blast::Cube::new();
+/// The blocks around the centre, as they were when the blast began: a ray
+/// reads this, a byte a cell, not the world, which costs a run walk a block.
+static mut BSNAP: [u8; crate::blast::CELLS] = [AIR; crate::blast::CELLS];
+/// Blast resistance in hundredths by block id, NO_BLOCK for air, built once.
+static mut BRES: [i32; 256] = [0; 256];
+static mut BRES_READY: bool = false;
+/// Stands for the cells below the world's floor in the snapshot: nothing
+/// breaks them.
+const SNAP_FLOOR: u8 = 255;
+
+/// Queue a blast of `power` at a point in world units. False when the queue is
+/// full (a chain reaction deeper than eight pending blasts).
+pub fn explode(x: i32, y: i32, z: i32, power: i32, seed: u32) -> bool {
+    if power <= 0 || power > crate::blast::MAX_POWER {
+        return false;
+    }
+    unsafe {
+        if BQ_LEN >= BLAST_Q {
+            return false;
+        }
+        let (cx, cy, cz) = (
+            floor_div(x, BLOCK),
+            floor_div(y, BLOCK),
+            floor_div(z, BLOCK),
+        );
+        // 64 world units to the block: Q16 is 1,024 a unit.
+        let i = (BQ_HEAD + BQ_LEN) % BLAST_Q;
+        BQ[i] = BlastJob {
+            cx,
+            cy,
+            cz,
+            fx: (x - cx * BLOCK) << 10,
+            fy: (y - cy * BLOCK) << 10,
+            fz: (z - cz * BLOCK) << 10,
+            power,
+            seed,
+        };
+        BQ_LEN += 1;
+    }
+    true
+}
+
+/// Drop every queued blast (a new world, a load, a teleport).
+pub fn blast_reset() {
+    unsafe {
+        BQ_HEAD = 0;
+        BQ_LEN = 0;
+        BJ_LIVE = false;
+        BLAST_DONE = 0;
+    }
+}
+
+/// Build the resistance table, the first time.
+fn blast_res_table() {
+    unsafe {
+        if BRES_READY {
+            return;
+        }
+        let mut b = 0;
+        while b < 256 {
+            BRES[b] = if b == AIR as usize {
+                crate::blast::NO_BLOCK
+            } else if b == SNAP_FLOOR as usize {
+                1_000_000
+            } else {
+                crate::blast_resistance100(b as u8)
+            };
+            b += 1;
+        }
+        BRES_READY = true;
+    }
+}
+
+/// Copy the next `count` columns of the blocks around the centre into BSNAP,
+/// a column run walk each (529 of them in all).
+#[inline(never)]
+fn blast_snapshot(job: &BlastJob, count: usize) {
+    unsafe {
+        let r = crate::blast::REACH_CELLS;
+        let side = crate::blast::SIDE;
+        let snap = &mut *(&raw mut BSNAP);
+        let end = (BJ_SNAP + count).min(side * side);
+        while BJ_SNAP < end {
+            let col = BJ_SNAP;
+            BJ_SNAP += 1;
+            let (dz, dx) = ((col / side) as i32 - r, (col % side) as i32 - r);
+            let base = col * side;
+            get_span(job.cx + dx, job.cy - r, job.cz + dz, &mut snap[base..base + side]);
+            // Below the world's floor nothing breaks.
+            let mut dy = -r;
+            while dy < 1 - job.cy && dy <= r {
+                snap[base + (dy + r) as usize] = SNAP_FLOOR;
+                dy += 1;
+            }
+        }
+    }
+}
+
+/// One sim tick of the blast job: as much of it as the frame has time for
+/// (slack.rs; the first unit of a frame always runs). A job is a snapshot of
+/// the blocks around its centre, the rays, then breaking the cells they
+/// reached a column at a time. Call it on the first tick of a frame; a
+/// catch-up frame's other ticks have nothing to add.
+#[inline(never)]
+pub fn blast_tick() {
+    unsafe {
+        if !BJ_LIVE {
+            if BQ_LEN == 0 {
+                return;
+            }
+            BJ = BQ[BQ_HEAD];
+            BQ_HEAD = (BQ_HEAD + 1) % BLAST_Q;
+            BQ_LEN -= 1;
+            BJ_LIVE = true;
+            BJ_SNAP = 0;
+            BJ_K = 0;
+            BJ_COL = 0;
+            BJ_WAIT = 0;
+            BJ_N = 0;
+            BJ_LO = (i32::MAX, i32::MAX);
+            BJ_HI = (i32::MIN, i32::MIN);
+            BJ_LOG = false;
+            (*(&raw mut BCUBE)).clear();
+            blast_res_table();
+        }
+        let job = BJ;
+        let side = crate::blast::SIDE;
+        if BJ_SNAP < side * side {
+            crate::telemetry::stage_begin(37);
+            while BJ_SNAP < side * side && crate::slack::room() {
+                blast_snapshot(&job, BLAST_SNAP_BATCH);
+            }
+            crate::telemetry::stage_end(37);
+            return;
+        }
+        if BJ_K < crate::blast::GRID_POINTS {
+            let mut scene = crate::blast::Scene {
+                snap: &*(&raw const BSNAP),
+                res: &*(&raw const BRES),
+                cube: &mut *(&raw mut BCUBE),
+            };
+            crate::telemetry::stage_begin(36);
+            while BJ_K < crate::blast::GRID_POINTS && crate::slack::room() {
+                let mut cast = 0;
+                while BJ_K < crate::blast::GRID_POINTS && cast < BLAST_RAY_BATCH {
+                    let k = BJ_K;
+                    BJ_K += 1;
+                    if let Some(step) = crate::blast::ray_step(k) {
+                        cast += 1;
+                        crate::blast::trace(
+                            &mut scene,
+                            (job.fx, job.fy, job.fz),
+                            step,
+                            crate::blast::ray_power(job.power, job.seed, k),
+                        );
                     }
                 }
-                dx += 1;
             }
-            dz += 1;
+            crate::telemetry::stage_end(36);
+            if BJ_K >= crate::blast::GRID_POINTS {
+                // Log the holes only if all of them fit with room to spare: a
+                // partly logged crater would come back half filled on a
+                // reload, and a full log loses the player's own building.
+                BJ_LOG = crate::EDIT_N + (*(&raw const BCUBE)).count() as usize + 128
+                    <= crate::MAX_EDITS;
+            }
+            return;
         }
-        dy += 1;
-    }
-    // Remesh the chunks that hold a cell of the blast cube or border one: a
-    // chunk's mesh reads one cell into its neighbours (faces and AO), and its
-    // sky and torch light are its own (build_sky_top floods inside the chunk).
-    // This used to remesh a whole extra ring of chunks around the blast's own:
-    // 9 to 16 synchronous chunk meshes where at most 4 are needed.
-    let c0x = floor_div(wx - r - 1, CW);
-    let c1x = floor_div(wx + r + 1, CW);
-    let c0z = floor_div(wz - r - 1, CW);
-    let c1z = floor_div(wz + r + 1, CW);
-    let mut cz = c0z;
-    while cz <= c1z {
-        let mut cx = c0x;
-        while cx <= c1x {
-            remesh(cx, cz);
-            cx += 1;
+        crate::telemetry::stage_begin(38);
+        let more = blast_break(&job);
+        crate::telemetry::stage_end(38);
+        if more {
+            return;
         }
-        cz += 1;
+        // Every column is broken. A player-edit mesh in flight snapshots its
+        // chunk and would clear the dirty flag we set, so wait for it
+        // (briefly) before marking the chunks.
+        if edit_backlog() && BJ_WAIT < BLAST_APPLY_WAIT {
+            BJ_WAIT += 1;
+            return;
+        }
+        blast_finish();
+        BLAST_DONE = BLAST_DONE.wrapping_add(1);
+        BJ_LIVE = false;
     }
+}
+
+/// Break the next few columns of the cube. Fluids beside a hole are woken, TNT
+/// is primed, containers lose their contents, a quarter of the blocks (1 /
+/// power) drop themselves, and the holes are logged as edits. A column is
+/// written once, whatever it loses (`rset_mask`), where a cell at a time cost
+/// two to eight million cycles a blast. True while columns remain.
+fn blast_break(job: &BlastJob) -> bool {
+    let cube = unsafe { &*(&raw const BCUBE) };
+    let r = crate::blast::REACH_CELLS;
+    let side = crate::blast::SIDE;
+    unsafe {
+        while BJ_COL < side * side {
+            let col = BJ_COL;
+            let mask = cube.column_mask(col);
+            if mask != 0 {
+                if !crate::slack::room() {
+                    break;
+                }
+                let (dz, dx) = ((col / side) as i32 - r, (col % side) as i32 - r);
+                blast_column(job, job.cx + dx, job.cz + dz, mask);
+            }
+            BJ_COL += 1;
+        }
+        BJ_COL < side * side
+    }
+}
+
+/// Break the cells of one column named by `mask` (bit k is height cy - 11 +
+/// k).
+fn blast_column(job: &BlastJob, x: i32, z: i32, mask: u32) {
+    let r = crate::blast::REACH_CELLS;
+    let y0 = job.cy - r;
+    let mut col = [AIR; crate::blast::SIDE];
+    get_span(x, y0, z, &mut col);
+    let mut clear = 0u32;
+    let mut m = mask;
+    while m != 0 {
+        let k = m.trailing_zeros() as usize;
+        m &= m - 1;
+        let y = y0 + k as i32;
+        if y < 1 || y >= CH {
+            continue;
+        }
+        let b = col[k];
+        if b == AIR {
+            continue;
+        }
+        let n = unsafe {
+            BJ_N + 1
+        };
+        if b == crate::TNT
+            && !crate::tnt::spawn(
+                x,
+                y,
+                z,
+                crate::units::java_ticks(crate::blast::chain_fuse_ticks(job.seed, n)),
+            )
+        {
+            // Keep this TNT block in the world. Holding this blast job here
+            // would deadlock a full blast queue and full TNT pool: neither
+            // could drain while this column waited for a slot.
+            continue;
+        }
+        unsafe { BJ_N = n };
+        clear |= 1 << k;
+        if unsafe { BJ_LOG } {
+            crate::record_edit(x, y, z, AIR);
+        }
+        if b == crate::TNT {
+            // The blast lights TNT instead of breaking it, with a short fuse.
+            continue;
+        }
+        if b == crate::CHEST {
+            crate::chest_remove(x, y, z);
+        } else if b == crate::FURNACE {
+            crate::furn_remove(x, y, z);
+        }
+        if crate::blast::drops(job.seed, n, job.power) {
+            crate::spawn_drop(
+                x * BLOCK + BLOCK / 2,
+                y * BLOCK + BLOCK / 4,
+                z * BLOCK + BLOCK / 2,
+                b,
+                job.seed ^ n,
+            );
+        }
+        // Water or lava beside the hole runs in. The cells above and below
+        // are in the column read; the four sides are looked up only for a
+        // hole that touches a fluid at all (a cheap test first).
+        let fluid_above_below = (k > 0 && is_fluid(col[k - 1]))
+            || (k + 1 < crate::blast::SIDE && is_fluid(col[k + 1]));
+        if is_fluid(b)
+            || fluid_above_below
+            || is_fluid(get(x + 1, y, z))
+            || is_fluid(get(x - 1, y, z))
+            || is_fluid(get(x, y, z + 1))
+            || is_fluid(get(x, y, z - 1))
+        {
+            wake_fluid(x, y, z);
+        }
+    }
+    if clear == 0 {
+        return;
+    }
+    // Chunk-local column and the height mask (the chunk is the world's full
+    // height, so a cell's height is its y).
+    let (cx, cz) = (floor_div(x, CW), floor_div(z, CW));
+    let s = slot(cx, cz);
+    unsafe {
+        if !(CHUNKS[s].loaded && CHUNKS[s].cx == cx && CHUNKS[s].cz == cz) {
+            return;
+        }
+        let (lx, lz) = ((x - cx * CW) as usize, (z - cz * CW) as usize);
+        let ymask = if y0 >= 0 {
+            (clear as u64) << y0
+        } else {
+            (clear as u64) >> (-y0)
+        };
+        if rle::rset_mask(s, lz * CWU + lx, ymask, AIR) && MESH_SCRATCH_OWNER == s {
+            // A mesh scratch of this chunk (a stream mesh in flight) keeps up.
+            let mut mm = ymask;
+            while mm != 0 {
+                let y = mm.trailing_zeros() as usize;
+                mm &= mm - 1;
+                let i = lidx(lx, y, lz);
+                MESH_SCRATCH[i] = AIR;
+                col_masks_set(i, AIR);
+            }
+        }
+        BJ_LO = (BJ_LO.0.min(x), BJ_LO.1.min(z));
+        BJ_HI = (BJ_HI.0.max(x), BJ_HI.1.max(z));
+    }
+}
+
+/// The last step of a blast: mark the chunks around the broken columns for a
+/// remesh, which streams in over the next frames.
+fn blast_finish() {
+    unsafe {
+        if BJ_LO.0 == i32::MAX {
+            return;
+        }
+        if MESH_S != usize::MAX {
+            abort_stream_mesh();
+        }
+        // A chunk's mesh reads one cell into its neighbours (faces and AO), so
+        // the chunks around the broken columns' box, one cell out, are redone.
+        let (c0x, c1x) = (floor_div(BJ_LO.0 - 1, CW), floor_div(BJ_HI.0 + 1, CW));
+        let (c0z, c1z) = (floor_div(BJ_LO.1 - 1, CW), floor_div(BJ_HI.1 + 1, CW));
+        let mut cz = c0z;
+        while cz <= c1z {
+            let mut cx = c0x;
+            while cx <= c1x {
+                set_dirty(cx, cz);
+                cx += 1;
+            }
+            cz += 1;
+        }
+    }
+}
+
+#[inline]
+fn is_fluid(b: u8) -> bool {
+    is_water(b) || is_lava(b)
 }
 
 // ---- Flowing water --------------------------------------------------------
@@ -2085,6 +2434,20 @@ fn fq_push(x: i32, y: i32, z: i32) {
 /// Schedule a cell and its six neighbours. Call after any player edit: placing
 /// water, scooping it, or breaking the block that was holding it back.
 pub fn wake_fluid(x: i32, y: i32, z: i32) {
+    // A full flow queue can drop the neighbouring update. Check ignition at
+    // the edit itself so lava placed beside TNT, or TNT placed beside lava,
+    // does not wait for old flow work to drain.
+    let b = get(x, y, z);
+    if is_lava(b) {
+        try_ignite(x + 1, y, z);
+        try_ignite(x - 1, y, z);
+        try_ignite(x, y + 1, z);
+        try_ignite(x, y - 1, z);
+        try_ignite(x, y, z + 1);
+        try_ignite(x, y, z - 1);
+    } else if is_flammable(b) {
+        try_ignite(x, y, z);
+    }
     fq_push(x, y, z);
     fq_push(x + 1, y, z);
     fq_push(x - 1, y, z);
@@ -2343,12 +2706,8 @@ pub fn fluid_tick() {
             continue;
         }
         fluid_step(&mut t, x, y, z);
-        try_ignite(&mut t, x, y, z);
+        try_ignite(x, y, z);
         n += 1;
-    }
-    // Flames age on the lava cadence, which is slow enough to watch.
-    if lava_turn {
-        fire_tick(&mut t);
     }
     // One remesh per chunk that actually changed, instead of one per block set.
     let mut i = 0;
@@ -2360,109 +2719,191 @@ pub fn fluid_tick() {
 
 // ---- Fire ------------------------------------------------------------------
 //
-// Rides the fluid queue rather than adding a second one: ignition and burn-out
-// are the same kind of local, edit-driven cellular update, and sharing the queue
-// means sharing the batched remesh too. A tracked cell is (position, fuel);
-// fuel counts down each fire tick and the block it stands on goes with it.
-const FIRE_CAP: usize = 16;
+// Java's fire (minecraft.wiki/w/Fire), rules in flame.rs, here the world side:
+// a pool of live flames, each with its age and the sim ticks to its next
+// scheduled tick (30 to 39 game ticks away, 90 to 117 here). A flame's tick
+// can burn the blocks around it away, light flames beside fuel, prime TNT, and
+// put itself out. The pool is the budget: spreading stops, and a flame is
+// simply not lit, when it is full, and at most FIRE_PER_TICK flames tick in a
+// sim tick however many fall due. The FIRE block is the picture; the age is
+// only here, and flames are not saved.
+const FIRE_CAP: usize = 48;
+const FIRE_FREE: u8 = 0xFF;
+/// Flame ticks run per sim tick at most. One costs a few hundred block reads.
+const FIRE_PER_TICK: usize = 2;
+/// What one flame's tick costs, system clocks, for the frame's spare time
+/// (slack.rs). A flame that finds no room stays due and goes next tick.
+const FLAME_COST: u32 = 40_000;
 static mut FIRE_X: [i32; FIRE_CAP] = [0; FIRE_CAP];
 static mut FIRE_Y: [i32; FIRE_CAP] = [0; FIRE_CAP];
 static mut FIRE_Z: [i32; FIRE_CAP] = [0; FIRE_CAP];
-static mut FIRE_FUEL: [u8; FIRE_CAP] = [0; FIRE_CAP]; // 0 = free slot
-/// Fire ticks a flame survives before it burns out.
-const FIRE_LIFE: u8 = 12;
+static mut FIRE_AGE: [u8; FIRE_CAP] = [FIRE_FREE; FIRE_CAP];
+/// Sim ticks until the flame's next tick.
+static mut FIRE_DUE: [u16; FIRE_CAP] = [0; FIRE_CAP];
+static mut FIRE_RNG: u32 = 0x2545_F491;
+/// Live flames, so a mob's per-tick fire check is free when nothing burns.
+static mut FIRE_N: u16 = 0;
 
-fn light_fire(t: &mut Touched, x: i32, y: i32, z: i32) {
-    if !fluid_replaceable(get(x, y, z)) {
-        return;
+/// Is any flame lit in the world?
+pub fn fire_live() -> bool {
+    unsafe { FIRE_N > 0 }
+}
+
+/// Flames lit right now, for the lab and the gates.
+#[allow(dead_code)]
+pub fn fire_count() -> i32 {
+    unsafe { FIRE_N as i32 }
+}
+
+/// Cells waiting in the fluid queue, for the lab and the gates.
+#[allow(dead_code)]
+pub fn fluid_pending() -> i32 {
+    unsafe { FQ_LEN as i32 }
+}
+
+/// Blasts being worked or waiting, for the lab and the gates.
+#[allow(dead_code)]
+pub fn blasts_pending() -> i32 {
+    unsafe { (BQ_LEN + BJ_LIVE as usize) as i32 }
+}
+
+/// Jobs fully applied since the most recent world-entity reset.
+pub fn blasts_completed() -> u32 {
+    unsafe { BLAST_DONE }
+}
+
+fn fire_free(i: usize) {
+    unsafe {
+        if FIRE_AGE[i] != FIRE_FREE {
+            FIRE_AGE[i] = FIRE_FREE;
+            FIRE_N -= 1;
+        }
     }
+}
+
+fn fire_rand(n: u32) -> u32 {
+    unsafe {
+        let mut x = FIRE_RNG;
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        FIRE_RNG = x;
+        (x >> 8) % n
+    }
+}
+
+/// Sim ticks to a flame's next tick: Java's 30 + 0..9 game ticks.
+fn fire_delay() -> u16 {
+    (crate::units::java_ticks(flame::tick_delay(fire_rand(10)) as i32)) as u16
+}
+
+/// Put a flame of `age` in a cell: the block and a pool slot. False when the
+/// pool is full, in which case nothing changed.
+fn kindle(x: i32, y: i32, z: i32, age: u8) -> bool {
     let mut i = 0;
     while i < FIRE_CAP {
-        if unsafe { FIRE_FUEL[i] } == 0 {
+        if unsafe { FIRE_AGE[i] } == FIRE_FREE {
             unsafe {
                 FIRE_X[i] = x;
                 FIRE_Y[i] = y;
                 FIRE_Z[i] = z;
-                FIRE_FUEL[i] = FIRE_LIFE;
+                FIRE_AGE[i] = age;
+                FIRE_DUE[i] = fire_delay();
+                FIRE_N += 1;
             }
             // Through `set`, the bounded partial rebuild a player edit gets,
-            // not the batched fluid remesh: that rebuilt the whole chunk in
-            // one frame (about 10 vblanks) every time a flame spread.
-            let _ = t;
+            // not a whole-chunk remesh.
             set(x, y, z, FIRE);
-            return;
+            return true;
         }
         i += 1;
     }
-    // Pool full: the block simply does not catch. A world where every log is
-    // alight at once is not one this machine wants to remesh anyway.
+    false
 }
 
-/// True if any of the six neighbours is lava OR fire. Java spreads flame between
-/// flammable blocks, and so do we now -- the FIRE_CAP pool is what bounds it, so
-/// a forest fire is capped at sixteen live flames however big the forest is.
-fn ignition_adjacent(x: i32, y: i32, z: i32) -> bool {
-    let hot = |b: u8| is_lava(b) || b == FIRE;
-    hot(get(x + 1, y, z))
-        || hot(get(x - 1, y, z))
-        || hot(get(x, y, z + 1))
-        || hot(get(x, y, z - 1))
-        || hot(get(x, y + 1, z))
-        || hot(get(x, y - 1, z))
+/// The world as a flame sees it.
+struct FireEnv;
+
+impl flame::Env for FireEnv {
+    fn cell(&self, x: i32, y: i32, z: i32) -> flame::Cell {
+        crate::fire_cell(get(x, y, z))
+    }
+    fn rand(&mut self, n: u32) -> u32 {
+        fire_rand(n)
+    }
+    fn raining(&self) -> bool {
+        unsafe { RAINING }
+    }
+    fn near_rain(&self, x: i32, y: i32, z: i32) -> bool {
+        near_rain(x, y, z)
+    }
+    fn rain_at(&self, x: i32, y: i32, z: i32) -> bool {
+        rained_on(x, y, z)
+    }
+    fn spawn_fire(&mut self, x: i32, y: i32, z: i32, age: u8) {
+        kindle(x, y, z, age);
+    }
+    fn burn_to_fire(&mut self, x: i32, y: i32, z: i32, age: u8) {
+        // The burnt block is gone for good, flame or not: log it as air so a
+        // reload does not bring it back (the flame itself is not saved).
+        crate::record_edit(x, y, z, AIR);
+        if !kindle(x, y, z, age) {
+            // Pool full: it burnt away without catching.
+            set(x, y, z, AIR);
+        }
+    }
+    fn burn_away(&mut self, x: i32, y: i32, z: i32) {
+        crate::record_edit(x, y, z, AIR);
+        set(x, y, z, AIR);
+    }
+    fn prime(&mut self, x: i32, y: i32, z: i32) -> bool {
+        crate::tnt::prime(x, y, z, crate::tnt::FUSE_FULL)
+    }
 }
 
-fn fire_tick(_t: &mut Touched) {
+/// One sim tick of every flame: age the countdowns, tick up to FIRE_PER_TICK
+/// that are due. Cheap when nothing burns (48 byte compares).
+#[inline(never)]
+pub fn fire_tick() {
+    if unsafe { FIRE_N } == 0 {
+        return;
+    }
+    let mut ran = 0;
     let mut i = 0;
     while i < FIRE_CAP {
-        let fuel = unsafe { FIRE_FUEL[i] };
-        if fuel == 0 {
-            i += 1;
-            continue;
-        }
-        let (x, y, z) = unsafe { (FIRE_X[i], FIRE_Y[i], FIRE_Z[i]) };
-        if get(x, y, z) != FIRE {
-            unsafe { FIRE_FUEL[i] = 0 }; // put out by an edit or a flood
-            i += 1;
-            continue;
-        }
-        // Water anywhere adjacent douses it, the way a bucket does in Java.
-        let doused = is_water(get(x + 1, y, z))
-            || is_water(get(x - 1, y, z))
-            || is_water(get(x, y, z + 1))
-            || is_water(get(x, y, z - 1))
-            || is_water(get(x, y + 1, z));
-        // Rain puts fire out: on each of its ticks a flame the rain reaches
-        // goes out with chance 0.2 + 0.03 x its age (FireBlock.tick), which
-        // is how a lightning fire in the open dies within seconds.
-        let doused = doused || {
-            let age = (FIRE_LIFE - fuel) as u32;
-            let h = (x.wrapping_mul(73_856_093) ^ z.wrapping_mul(19_349_663)) as u32
-                ^ unsafe { FLUID_PHASE }.wrapping_mul(2_654_435_761);
-            let rain = unsafe { RAINING };
-            rain && (h >> 8) % 100 < 20 + 3 * age && near_rain(x, y, z)
-        };
-        unsafe { FIRE_FUEL[i] = fuel - 1 };
-        if doused || fuel == 1 {
-            // Through `set`, the bounded partial rebuild a player edit gets: the
-            // batched fluid remesh rebuilt the whole chunk, about 15 vblanks,
-            // each time a flame went out (rain puts lightning fires out).
-            set(x, y, z, AIR);
-            // Burnt out: the fuel underneath goes with it, so a wooden floor
-            // actually disappears rather than smouldering forever.
-            if !doused && is_flammable(get(x, y - 1, z)) {
-                set(x, y - 1, z, AIR);
+        if unsafe { FIRE_AGE[i] } != FIRE_FREE {
+            if unsafe { FIRE_DUE[i] } > 0 {
+                unsafe { FIRE_DUE[i] -= 1 };
+            } else if ran < FIRE_PER_TICK && crate::slack::room_for(FLAME_COST) {
+                ran += 1;
+                flame_step(i);
             }
-            // Wake the ring around it: the neighbours are the next thing to
-            // catch, and nothing else would ever schedule them.
-            let mut k = 0;
-            while k < 4 {
-                let (dx, dz) = [(1, 0), (-1, 0), (0, 1), (0, -1)][k];
-                wake_fluid(x + dx, y - 1, z + dz);
-                k += 1;
-            }
-            unsafe { FIRE_FUEL[i] = 0 };
         }
         i += 1;
+    }
+}
+
+fn flame_step(i: usize) {
+    let (x, y, z, age) = unsafe { (FIRE_X[i], FIRE_Y[i], FIRE_Z[i], FIRE_AGE[i]) };
+    if get(x, y, z) != FIRE {
+        fire_free(i); // put out by an edit, a flood or a blast
+        return;
+    }
+    match flame::tick(&mut FireEnv, x, y, z, age) {
+        Some(a) => unsafe {
+            // The flame may already have been replaced (burnt TNT primed, a
+            // neighbour pass); keep it only if it still stands.
+            if FIRE_AGE[i] != FIRE_FREE && FIRE_X[i] == x && FIRE_Y[i] == y && FIRE_Z[i] == z {
+                FIRE_AGE[i] = a;
+                FIRE_DUE[i] = fire_delay();
+            }
+        },
+        None => {
+            fire_free(i);
+            if get(x, y, z) == FIRE {
+                set(x, y, z, AIR);
+            }
+        }
     }
 }
 
@@ -2509,49 +2950,49 @@ pub fn lightning_fire(x: i32, y: i32, z: i32) {
     if y < 1 || y >= CH || get(x, y, z) != AIR {
         return;
     }
-    let below = get(x, y - 1, z);
-    let floor = below != AIR
-        && !is_water(below)
-        && !is_lava(below)
-        && !is_cross_plant(below)
-        && !is_small_block(below);
-    let fuel = is_flammable(get(x + 1, y, z))
-        || is_flammable(get(x - 1, y, z))
-        || is_flammable(get(x, y, z + 1))
-        || is_flammable(get(x, y, z - 1))
-        || is_flammable(get(x, y + 1, z))
-        || is_flammable(below);
-    if floor || fuel {
-        light_fire_at(x, y, z);
-    }
+    light_fire_at(x, y, z);
 }
 
-/// Public ignition, for flint and steel: light the air above the struck block.
-pub fn light_fire_at(x: i32, y: i32, z: i32) {
-    let mut t = Touched {
-        n: 0,
-        cx: [0; TOUCH_CAP],
-        cz: [0; TOUCH_CAP],
-    };
-    light_fire(&mut t, x, y, z);
-    let mut i = 0;
-    while i < t.n {
-        remesh(t.cx[i], t.cz[i]);
-        i += 1;
+/// Public ignition, for flint and steel: light a flame in the (empty) cell
+/// `(x, y, z)`, which is where the struck face points. Java places fire only
+/// into air and only where it can stand (BaseFireBlock.canBePlacedAt); true
+/// when a flame was lit.
+pub fn light_fire_at(x: i32, y: i32, z: i32) -> bool {
+    let here = get(x, y, z);
+    // Air, or the grass and flowers a flame simply replaces.
+    if y < 1 || y >= CH || !(here == AIR || here == TALL_GRASS || here == FLOWER_R || here == FLOWER_Y)
+    {
+        return false;
     }
+    if !flame::can_survive(&FireEnv, x, y, z) {
+        return false;
+    }
+    kindle(x, y, z, 0)
 }
 
-/// Look for flammable blocks next to lava and set them alight. Budgeted the
-/// same way the fluid step is: only cells the player woke get considered.
-fn try_ignite(t: &mut Touched, x: i32, y: i32, z: i32) {
-    if !is_flammable(get(x, y, z)) {
+/// Fuel next to lava catches, as Java's lava lights what is beside it, and
+/// TNT beside lava is primed. Fluid ticks check queued cells; an edit also
+/// checks its immediate contact before joining that bounded queue.
+fn try_ignite(x: i32, y: i32, z: i32) {
+    let b = get(x, y, z);
+    if !is_flammable(b) {
         return;
     }
-    if !ignition_adjacent(x, y, z) {
+    let lava = is_lava(get(x + 1, y, z))
+        || is_lava(get(x - 1, y, z))
+        || is_lava(get(x, y, z + 1))
+        || is_lava(get(x, y, z - 1))
+        || is_lava(get(x, y + 1, z))
+        || is_lava(get(x, y - 1, z));
+    if !lava {
         return;
     }
-    // Fire sits in the air ABOVE what burns, as in Java.
-    light_fire(t, x, y + 1, z);
+    if b == crate::TNT {
+        crate::tnt::prime(x, y, z, crate::tnt::FUSE_FULL);
+    } else if get(x, y + 1, z) == AIR {
+        // Fire sits in the air ABOVE what burns, as in Java.
+        light_fire_at(x, y + 1, z);
+    }
 }
 
 /// Drop every pending fluid update (new world / teleport): the queue holds
@@ -2561,8 +3002,10 @@ pub fn fluid_reset() {
         FQ_HEAD = 0;
         FQ_LEN = 0;
         FLUID_PHASE = 0;
-        FIRE_FUEL = [0; FIRE_CAP];
+        FIRE_AGE = [FIRE_FREE; FIRE_CAP];
+        FIRE_N = 0;
     }
+    blast_reset();
 }
 
 /// Set a block without remeshing (for bulk apply, e.g. loading a save).

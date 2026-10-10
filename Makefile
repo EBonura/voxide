@@ -24,7 +24,7 @@ PSOXIDE_PROFILE_STEPS ?= 900000000
 PSOXIDE_START_PULSE ?= 0x0008@700+60
 
 .DEFAULT_GOAL := build
-.PHONY: help psoxide build compile pack disc install release run smoke profile \
+.PHONY: help psoxide build compile pack disc gate-disc gate-symbols install release run smoke profile \
 	pgo-collect pgo-order pgo-choose clean host-tests
 
 help:
@@ -33,6 +33,7 @@ help:
 	@echo "  make            - build + install into the PSoXide game library"
 	@echo "  make compile    - build PSX-EXE only -> $(EXE) (PGO_VARIANT=off for no PGO)"
 	@echo "  make disc       - compile + pack dist/voxide.cue/.bin"
+	@echo "  make gate-disc  - compile + pack build/gate/voxide.cue/.bin and exact journey symbols"
 	@echo "  make install    - install into $(GAMES_DIR)"
 	@echo "  make smoke      - boot the disc headlessly through PSoXide and capture PPM"
 	@echo "  make profile    - telemetry build + per-frame stage-cycle CSV report"
@@ -98,6 +99,20 @@ pack:
 		--out "$(PACK_OUT)" \
 		--volume VOXIDE \
 		--world-pack-extra-dir "$(ROOT)/assets/sfx/pak"
+
+# The release journey locates its small state block in the exact PS-X EXE
+# packed below. This route never installs into the user's game library.
+GATE_EXE ?= $(if $(CARGO_TARGET_DIR),$(CARGO_TARGET_DIR)/$(TARGET)/release/voxide.exe,$(EXE))
+GATE_DIR := $(ROOT)/build/gate
+gate-symbols:
+	@mkdir -p "$(ROOT)/build"
+	rustc --edition=2021 "$(ROOT)/tools/gate-symbols.rs" -o "$(ROOT)/build/gate-symbols-tool"
+	"$(ROOT)/build/gate-symbols-tool" "$(GATE_EXE)" > "$(ROOT)/build/gate-symbols.txt"
+
+gate-disc:
+	@$(MAKE) --no-print-directory compile
+	@$(MAKE) --no-print-directory gate-symbols
+	@$(MAKE) --no-print-directory pack PACK_EXE="$(GATE_EXE)" PACK_OUT="$(GATE_DIR)/voxide.bin"
 
 # disc always installs into the game library too, so EVERY build (disc, smoke,
 # install, default) lands in $(GAMES_DIR) and the latest is always testable there.

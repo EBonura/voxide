@@ -13,6 +13,7 @@
 
 extern crate psx_rt;
 
+mod blast;
 mod bonnie;
 mod cheat;
 mod controls;
@@ -22,19 +23,25 @@ mod grid;
 mod hand;
 #[cfg(feature = "ui-fixture")]
 mod fixture;
+mod flame;
 mod inv;
 mod mob;
 mod save;
 mod sfx;
 mod sfxdata;
+mod slack;
 mod telemetry;
 mod tex;
 mod texdata;
+mod tnt;
 mod units;
 #[cfg(feature = "tune-lab")]
 mod tunelab;
 #[cfg(feature = "tool-lab")]
 mod toollab;
+#[cfg(feature = "fire-lab")]
+mod firelab;
+
 #[cfg(any(feature = "pick-lab", feature = "look-lab"))]
 mod picklab;
 mod weather;
@@ -374,9 +381,44 @@ fn portal_frame_ok(ix: i32, iy: i32, iz: i32, ax: i32, az: i32) -> bool {
     true
 }
 
+/// Java's fire odds for a block, (encouragement, flammability), from the wiki's
+/// table (minecraft.wiki/w/Fire#Spread): planks, fences and wood (here the
+/// crafting table) 5 and 20, logs 5 and 5, leaves and wool 30 and 60, TNT
+/// 15 and 100, grass and flowers 60 and 100.
+fn fire_odds(b: u8) -> (u8, u8) {
+    match b {
+        WOOD => (5, 5),
+        PLANK | FENCE | CRAFT_TABLE => (5, 20),
+        LEAVES | WOOL => (30, 60),
+        TNT => (15, 100),
+        TALL_GRASS | FLOWER_R | FLOWER_Y => (60, 100),
+        _ => (0, 0),
+    }
+}
+
 #[inline]
 fn is_flammable(b: u8) -> bool {
-    b == WOOD || b == PLANK || b == LEAVES || b == WOOL || b == FENCE || b == CRAFT_TABLE
+    fire_odds(b).1 > 0
+}
+
+/// What a block is to a flame (flame::Cell).
+pub(crate) fn fire_cell(b: u8) -> flame::Cell {
+    let (ignite, burn) = fire_odds(b);
+    flame::Cell {
+        empty: b == AIR,
+        ignite,
+        burn,
+        // A full solid top: not air, a fluid, a plant, a part-block, leaves or
+        // the thin things that only look like blocks.
+        sturdy: b != AIR
+            && !is_water(b)
+            && !is_lava(b)
+            && !world::is_cross_plant(b)
+            && !is_small_block(b)
+            && !matches!(b, LEAVES | TORCH | WIRE | LADDER | DOOR_C | DOOR_O | BED | CACTUS),
+        infinite: b == CINDERSTONE,
+        tnt: b == TNT,
+    }
 }
 
 #[inline]
@@ -3545,13 +3587,13 @@ fn main() {
                 } else if player.selected == FLINT_STEEL {
                     // Light a portal frame if we struck one, otherwise start a
                     // fire on top of whatever we hit, as in Java.
-                    if light_portal(pick.px, pick.py, pick.pz) {
-                        sfx::place();
-                    } else {
-                        world::light_fire_at(pick.px, pick.py, pick.pz);
-                        sfx::place();
-                    }
-                    wear_item(&mut player, FLINT_STEEL);
+                    // Flint and steel is use_flint's: TNT first, then a portal
+                    // frame, then a fire where one can stand. This branch keeps
+                    // the nine lines it had before so the line offsets inside
+                    // main() that the PGO profile is keyed on do not move.
+                    use_flint(&mut player, &pick);
+                    //
+                    //
                 } else if player.selected == BONEMEAL {
                     // Bone meal grows a crop 2 to 5 stages (minecraft.wiki/w/Bone_Meal).
                     if get_block_i32(pick.bx, pick.by, pick.bz) == WHEAT && inv_take(BONEMEAL) {
@@ -3987,6 +4029,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         if go && sel == 1 {
             // NEW WORLD: reseed from the menu timing (honest entropy, the PS1
             // has no clock) and let the pump regenerate behind the menu.
+            clear_world_entities();
             world::prepare_new_world(t as i32 | 1);
             let (bx, bz) = if SPAWN_GREEN {
                 world::pick_spawn(SPAWN_BX, SPAWN_BZ)
@@ -5189,6 +5232,24 @@ fn enter_dimension(dim: u8, bx: i32, bz: i32, fb: &mut FrameBuffer, font: &FontA
 /// Sim ticks since the world opened: the one game clock (see units.rs).
 /// Advanced only by world_tick; animations read it instead of a frame count.
 static mut SIM_TICK: u32 = 0;
+/// A versioned, initialized block the journey locates in the exact PS-X EXE.
+/// Layout: magic, version, byte length, sim tick, live TNT, block edits,
+/// pending blasts, player health and completed block blasts. It only mirrors
+/// gameplay state.
+#[used]
+#[no_mangle]
+pub static mut VOXIDE_GATE_STATE: [u32; 9] = [u32::from_le_bytes(*b"VOXG"), 1, 36, 0, 0, 0, 0, 0, 0];
+
+fn gate_snapshot(player: &Player) {
+    unsafe {
+        VOXIDE_GATE_STATE[3] = SIM_TICK;
+        VOXIDE_GATE_STATE[4] = tnt::live_count();
+        VOXIDE_GATE_STATE[5] = EDIT_N as u32;
+        VOXIDE_GATE_STATE[6] = world::blasts_pending() as u32;
+        VOXIDE_GATE_STATE[7] = player.health as u32;
+        VOXIDE_GATE_STATE[8] = world::blasts_completed();
+    }
+}
 /// Frames that took longer than this are not caught up in full: a portal's
 /// loading screen should not fast-forward the world. Half a second covers the
 /// longest in-game hitch measured (a TNT blast's remesh, 21 vblanks), which the
@@ -5210,13 +5271,26 @@ const FLUID_PERIOD: u32 = units::java_ticks(5) as u32;
 #[inline(never)]
 fn world_tick(player: &mut Player, dwell: &mut u16, n: u32) -> bool {
     telemetry::stage_begin(telemetry::stage::GAME_LOGIC);
+    slack::frame_begin(); // this frame's spare time, for blasts and flames
     let mut travel = false;
     let mut w = 0;
     while w < n {
         let t = unsafe { SIM_TICK };
         furn_tick(); // furnaces smelt whether or not a menu is open
         travel |= portal_tick(player, dwell);
-        tnt_tick(player); // burn lit fuses; explode on zero
+        unsafe { tnt::PLAYER_POS = (player.x, player.y, player.z) };
+        telemetry::stage_begin(39);
+        tnt::tick(); // primed TNT: fall, burn the fuse, explode on zero
+        telemetry::stage_end(39);
+        // The explosion in flight, as far as the frame has time for (once a
+        // frame: a catch-up frame's later ticks add nothing).
+        if w == 0 {
+            world::blast_tick();
+        }
+        telemetry::stage_begin(41);
+        world::fire_tick(); // flames age, spread and burn
+        telemetry::stage_end(41);
+        apply_blast_kick(player);
         crop_tick(); // age planted crops; ripen the mature ones
         sap_tick(); // grow planted saplings into trees
         weather::tick();
@@ -5230,6 +5304,7 @@ fn world_tick(player: &mut Player, dwell: &mut u16, n: u32) -> bool {
         tick_particles();
         tick_drops(player);
         unsafe { SIM_TICK = t.wrapping_add(1) };
+        gate_snapshot(player);
         w += 1;
     }
     telemetry::stage_end(telemetry::stage::GAME_LOGIC);
@@ -5320,6 +5395,7 @@ fn travel_to(player: &mut Player, to: u8, fb: &mut FrameBuffer, font: &FontAtlas
     // The mobs belong to the dimension being left; tamed wolves are parked
     // there and come back when you do.
     mob::leave_dimension();
+    clear_world_entities();
     enter_dimension(to, nx, nz, fb, font);
     // The ring generator digs its arrival pocket raw, after replaying the
     // edit log, so it erased whatever the player had built there, the linked
@@ -5412,6 +5488,47 @@ fn portal_near(bx: i32, by: i32, bz: i32) -> bool {
         dx += 1;
     }
     false
+}
+
+/// Flint and steel (L2 with it selected): TNT lights (TntBlock.useItemOn), else
+/// a portal frame lights, else a flame goes where one can stand, on a solid top
+/// or beside something that burns (BaseFireBlock.canBePlacedAt). It wears only
+/// when it did something.
+fn use_flint(player: &mut Player, pick: &Pick) {
+    if get_block_i32(pick.bx, pick.by, pick.bz) == TNT {
+        ignite_tnt(pick.bx, pick.by, pick.bz);
+    } else if !light_portal(pick.px, pick.py, pick.pz)
+        && !world::light_fire_at(pick.px, pick.py, pick.pz)
+    {
+        return;
+    }
+    sfx::place();
+    wear_item(player, FLINT_STEEL);
+}
+
+/// The sideways shove a blast gave the player, Q8 world units a sim tick,
+/// folded into his walk in update_player and decaying by an eighth a tick.
+static mut BLAST_KICK_X: i32 = 0;
+static mut BLAST_KICK_Z: i32 = 0;
+
+/// Fold the knockback the blasts of this tick gave the player into his motion
+/// (Java adds the blast's push to his velocity): sideways into the decaying
+/// shove, up into his vertical speed.
+fn apply_blast_kick(player: &mut Player) {
+    let (kx, ky, kz) = tnt::take_kick();
+    if kx == 0 && ky == 0 && kz == 0 {
+        return;
+    }
+    // Q8 blocks a Java tick to Q8 units a sim tick: x 64 / 3.
+    unsafe {
+        BLAST_KICK_X = (BLAST_KICK_X + kx * 64 / 3).clamp(-9000, 9000);
+        BLAST_KICK_Z = (BLAST_KICK_Z + kz * 64 / 3).clamp(-9000, 9000);
+    }
+    if !player.fly {
+        // The same push in the player's quarter units a tick.
+        player.vy = (player.vy + ky / 3).clamp(-160, 160);
+        player.on_ground = false;
+    }
 }
 
 /// Environmental survival: lava + drowning damage (with i-frames via
@@ -5612,6 +5729,8 @@ fn update_survival(player: &mut Player) {
     // Tuning lab (never shipped): script the next step, mirror the player.
     #[cfg(feature = "tune-lab")]
     tunelab::step(player);
+    #[cfg(feature = "fire-lab")]
+    firelab::step(player);
 }
 
 #[inline(never)]
@@ -5837,8 +5956,14 @@ fn update_player(
     let sy = sincos::sin_q12(player.yaw);
     let cy = sincos::cos_q12(player.yaw);
     // Whole units this tick, the Q8 remainder carried to the next.
-    let qx = (((sy * forward) + (cy * strafe)) >> 12) + player.x_frac;
-    let qz = (((cy * forward) - (sy * strafe)) >> 12) + player.z_frac;
+    // A blast's shove rides on top of the walk and dies away (apply_blast_kick).
+    let (kick_x, kick_z) = unsafe { (BLAST_KICK_X, BLAST_KICK_Z) };
+    unsafe {
+        BLAST_KICK_X -= BLAST_KICK_X >> 3;
+        BLAST_KICK_Z -= BLAST_KICK_Z >> 3;
+    }
+    let qx = (((sy * forward) + (cy * strafe)) >> 12) + player.x_frac + kick_x;
+    let qz = (((cy * forward) - (sy * strafe)) >> 12) + player.z_frac + kick_z;
     player.x_frac = qx & 255;
     player.z_frac = qz & 255;
     let dx = qx >> 8;
@@ -5918,6 +6043,7 @@ fn update_player(
         {
             player.x -= dx;
             player.x_frac = 0;
+            unsafe { BLAST_KICK_X = 0 };
             blocked = dx != 0;
         }
         player.z += dz;
@@ -5927,6 +6053,7 @@ fn update_player(
         {
             player.z -= dz;
             player.z_frac = 0;
+            unsafe { BLAST_KICK_Z = 0 };
             blocked |= dz != 0;
         }
         // Running into a wall ends a sprint (minecraft.wiki/w/Sprinting).
@@ -7226,6 +7353,7 @@ fn render_mobs(cam: &Camera, tick: u32) {
         j += 1;
     }
     render_drops(cam, tick, &mut count);
+    tnt::render(cam, &mut count);
 }
 
 // ---- Cross-sprite plants: wheat + saplings as X-billboards ----
@@ -10902,6 +11030,7 @@ fn frame_present(fb: &mut FrameBuffer, in_flight: &mut bool) {
     }
 
     telemetry::stage_begin(47); // residual DMA walk + raster after CPU overlap
+    slack::idle_begin(); // the waits from here are the frame's spare time
     gpu::submit_linked_list_wait();
     gpu::draw_sync();
     telemetry::stage_end(47);
@@ -10911,6 +11040,7 @@ fn frame_present(fb: &mut FrameBuffer, in_flight: &mut bool) {
     if !PERF_FREERUN {
         wait_vblank();
     }
+    slack::idle_end();
     telemetry::stage_begin(48);
     fb.swap();
     submit_built_frame();
@@ -11773,29 +11903,8 @@ fn redstone_tick() {
     }
 }
 
-// ---- TNT: a short fuse, then world::explode + debris + a hit on nearby entities.
-// A blast primes TNT it reaches (Java's chain reaction), within the fixed pool.
-const MAX_TNT: usize = 8;
-/// TNT's explosion power, 4 (minecraft.wiki/w/TNT).
-const TNT_POWER: i32 = 4;
-
-/// Java's explosion damage to an entity at (dx, dy, dz) world units from the
-/// centre (minecraft.wiki/w/Explosion#Damage): impact = 1 - distance / (2 x
-/// power), damage = 7 x power x (impact^2 + impact) + 1 on Normal, so a TNT
-/// blast deals 57 point-blank and a creeper's 43. Exposure (how much of the
-/// entity the blast can see) is taken as full: Java casts rays for it.
-pub(crate) fn explosion_damage(power: i32, dx: i32, dy: i32, dz: i32) -> i32 {
-    let reach = 2 * power * BLOCK;
-    if dx.abs() >= reach || dy.abs() >= reach || dz.abs() >= reach {
-        return 0;
-    }
-    let dist = psx_math::int32::isqrt_i32(dx * dx + dy * dy + dz * dz);
-    if dist >= reach {
-        return 0;
-    }
-    let impact = 256 - dist * 256 / reach; // Q8
-    ((7 * power * (impact * impact + impact * 256)) >> 16) + 1
-}
+// ---- TNT: a block lit becomes an entity (tnt.rs); the blast's block side is
+// a job of rays in world.rs, its hit on the creatures is tnt::hit_on.
 
 /// Java's blast resistance in hundredths (minecraft.wiki/w/Explosion#Blast
 /// resistance). Fluids, obsidian, the enchanting table and portals' frames
@@ -11825,36 +11934,6 @@ pub(crate) fn blast_resistance100(b: u8) -> i32 {
     }
 }
 
-/// Prime the TNT block at (x, y, z) with a fuse of `fuse` sim ticks, unless it
-/// is already burning (a blast reaching a TNT block, as in Java).
-pub(crate) fn prime_tnt(x: i32, y: i32, z: i32, fuse: u8) {
-    unsafe {
-        let mut i = 0;
-        while i < MAX_TNT {
-            if TNT_FUSE[i] > 0 && TNT_X[i] == x && TNT_Y[i] == y && TNT_Z[i] == z {
-                return;
-            }
-            i += 1;
-        }
-        i = 0;
-        while i < MAX_TNT {
-            if TNT_FUSE[i] == 0 {
-                TNT_X[i] = x;
-                TNT_Y[i] = y;
-                TNT_Z[i] = z;
-                TNT_FUSE[i] = fuse.max(1);
-                return;
-            }
-            i += 1;
-        }
-    }
-}
-const TNT_FUSE_FRAMES: u8 = units::java_ticks(80) as u8; // 4 s (minecraft.wiki/w/TNT)
-static mut TNT_X: [i32; MAX_TNT] = [0; MAX_TNT];
-static mut TNT_Y: [i32; MAX_TNT] = [0; MAX_TNT];
-static mut TNT_Z: [i32; MAX_TNT] = [0; MAX_TNT];
-static mut TNT_FUSE: [u8; MAX_TNT] = [0; MAX_TNT]; // 0 = inactive
-
 /// Item drops on the ground and lit TNT belong to the world being replaced
 /// by a load: left in place, the drops were free items on top of the save.
 #[inline(never)]
@@ -11862,40 +11941,31 @@ static mut TNT_FUSE: [u8; MAX_TNT] = [0; MAX_TNT]; // 0 = inactive
 fn clear_world_entities() {
     unsafe {
         DROP_ITEM = [AIR; MAX_DROPS];
-        TNT_FUSE = [0; MAX_TNT];
+        BLAST_KICK_X = 0;
+        BLAST_KICK_Z = 0;
     }
+    tnt::reset();
+    world::blast_reset();
 }
 
+/// Light the TNT block at a cell: flint and steel, redstone, and the lab's
+/// scripted ignition all come through here.
 fn ignite_tnt(x: i32, y: i32, z: i32) {
-    prime_tnt(x, y, z, TNT_FUSE_FRAMES);
+    tnt::prime(x, y, z, tnt::FUSE_FULL);
 }
 
-#[inline(never)]
-fn tnt_tick(player: &mut Player) {
+/// A blast destroys the dropped items it deals 5 damage to (an item entity has
+/// 5 health).
+fn destroy_drops(x: i32, y: i32, z: i32, power: i32) {
     let mut i = 0usize;
-    while i < MAX_TNT {
+    while i < MAX_DROPS {
         unsafe {
-            if TNT_FUSE[i] > 0 {
-                TNT_FUSE[i] -= 1;
-                if TNT_FUSE[i] == 0 {
-                    let (x, y, z) = (TNT_X[i], TNT_Y[i], TNT_Z[i]);
-                    if get_block_i32(x, y, z) == TNT {
-                        set_block_i32(x, y, z, AIR);
-                        record_edit(x, y, z, AIR);
-                        world::explode(x, y, z, TNT_POWER, (x ^ z) as u32);
-                        let wx = block_to_world_x(x) + BLOCK / 2;
-                        let wy = y * BLOCK + BLOCK / 2;
-                        let wz = block_to_world_z(z) + BLOCK / 2;
-                        spawn_particles(wx, wy, wz, (96, 84, 72), 30, (x ^ z) as u32, 46);
-                        sfx::explode();
-                        mob::blast_mobs(wx, wy, wz, TNT_POWER);
-                        let raw = explosion_damage(
-                            TNT_POWER,
-                            player.x - wx,
-                            player.y - wy,
-                            player.z - wz,
-                        );
-                        take_hit(player, raw, true);
+            if DROP_ITEM[i] != AIR && DROP_FLY[i] == 0 {
+                let pos = (DROP_X[i] >> 2, DROP_Y[i] >> 2, DROP_Z[i] >> 2);
+                if let Some(h) = tnt::hit_on(power, (x, y, z), pos, DROP_HALF_W, DROP_H, 0, false) {
+                    if h.dmg >= 5 {
+                        spawn_particles(pos.0, pos.1, pos.2, (60, 60, 60), 2, i as u32, 10);
+                        DROP_ITEM[i] = AIR;
                     }
                 }
             }

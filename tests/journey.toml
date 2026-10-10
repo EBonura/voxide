@@ -11,16 +11,16 @@
 #    renderer's upscale, which only the strict regions below can see.
 #  - menus and panels: goldens with the 3D world around the panel masked out
 #    (the world differs per seed and timing, the panel does not).
-#  - TNT: the last checkpoint checks that the TNT disappears and the blast
-#    changes the view. Both checks are expected failures on this disc. When
-#    fire and TNT work, they report XPASS until the markers are removed.
+#  - TNT: confirm flint, the lit entity, survival, expiry and a completed
+#    block blast. The blast may knock the camera away from the source cell.
 #
 # Menu navigation is by D-pad presses; the menu cursor keeps its row between
 # visits, so NEW WORLD (second row) is entered once and PLAY GAME is one row up.
 
 name = "voxide"
 title = "VoXide: splash to menus, inventory, crafting and TNT"
-disc = ["dist/voxide.cue"]
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
 max_ticks = 6000
 
 # ---- splash ---------------------------------------------------------------
@@ -32,10 +32,19 @@ wait = 100
 [[step]]
 checkpoint = "splash"
 # "Built with PSoXide" and the Bonnie logo: 2D textured quads, must match the
-# CPU frame at every scale.
+# CPU frame at every scale. The final e has an intentional sweeping sheen;
+# mask only its 8x9 glyph from the static golden and check its presence below.
+mask = [{ x = 223, y = 150, w = 8, h = 9 }]
 strict = [{ x = 84, y = 144, w = 152, h = 18 }, { x = 110, y = 30, w = 100, h = 104 }]
 [[step.assert]]
 kind = "not_flat"
+[[step.assert]]
+kind = "pixels"
+color = [165, 214, 255]
+color_tol = 50
+region = { x = 223, y = 150, w = 8, h = 9 }
+min_count = 20
+note = "the sheen may tint the final e, but all 20 glyph pixels must remain"
 
 # ---- main menu ------------------------------------------------------------
 
@@ -249,6 +258,7 @@ wait = 30
 press = ["down"]
 hold = 4
 wait = 12
+repeat = 4
 
 [[step]]
 press = ["right"]
@@ -323,31 +333,137 @@ hold = 4
 wait = 20
 
 [[step]]
+checkpoint = "flint-equipped"
+golden = false
+strict = [{ x = 240, y = 140, w = 56, h = 46 }]
+[[step.assert]]
+kind = "pixels"
+color = [189, 189, 198]
+color_tol = 4
+region = { x = 240, y = 140, w = 56, h = 46 }
+min_count = 100
+note = "the flint and steel blade is visible in hand before ignition"
+
+[[step]]
 press = ["l2"]
 hold = 4
 wait = 30
 
 [[step]]
-label = "wait out the fuse"
-wait = 360
+label = "back away from the lit TNT before it explodes"
+lstick = [128, 255]
+hold = 50
+wait = 2
+
+[[step]]
+label = "raise the view back toward the TNT site"
+rstick = [128, 0]
+hold = 30
+wait = 2
+
+[[step]]
+checkpoint = "tnt-safe-before-blast"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+op = "eq"
+value = 0x47584f56
+note = "the exact EXE contains the VoXide gate-state magic"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 4
+op = "eq"
+value = 1
+note = "gate-state layout version"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 8
+op = "eq"
+value = 36
+note = "gate-state byte length"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 16
+op = "eq"
+value = 1
+note = "one primed TNT entity exists before its fuse expires"
+[[step.assert]]
+kind = "pixels"
+color = [206, 206, 206]
+color_tol = 4
+region = { x = 130, y = 75, w = 100, h = 65 }
+min_count = 800
+note = "the primed TNT cube is visible at the blast site"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "eq"
+value = 1
+note = "only placement was edited before the blast"
+
+[[step]]
+label = "stand still while the fuse expires and the blast finishes"
+wait = 600
 
 [[step]]
 checkpoint = "tnt-after-fuse"
 golden = false
 [[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 16
+op = "eq"
+value = 0
+note = "the primed TNT entity has expired"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 24
+op = "eq"
+value = 0
+note = "all queued blast jobs have drained"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 32
+op = "ge"
+value = 1
+note = "the crater block job completed"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "ge"
+value = 100
+note = "the completed blast made a crater (1 edit before, 142 after)"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 28
+signed = true
+op = "ge"
+value = 1
+note = "the player survived the blast"
+[[step.assert]]
+kind = "pixels"
+color = [214, 33, 33]
+color_tol = 4
+region = { x = 5, y = 190, w = 96, h = 21 }
+min_count = 250
+note = "the world HUD still shows hearts after the blast"
+[[step.assert]]
 kind = "presenting"
 window = 120
 min_changes = 5
 [[step.assert]]
-kind = "pixels"
-color = [190, 30, 30]
-color_tol = 60
-max_count = 400
-expect_fail = true
-note = "the TNT block is gone after its fuse (fire and TNT do not work yet)"
-[[step.assert]]
 kind = "frame_diff"
-from = "tnt-placed"
-min_changed = 0.3
-expect_fail = true
-note = "the blast changes a large part of the view (fire and TNT do not work yet)"
+from = "tnt-safe-before-blast"
+min_changed = 0.05
+note = "the blast changes the view, including any knockback"
