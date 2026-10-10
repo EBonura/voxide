@@ -501,6 +501,10 @@ pub fn furnace_input(idx: usize, pad: ButtonState, previous: ButtonState) {
             }
         }
     }
+    // L2/R2 page your pane, as the hint under the screen says.
+    let mut list = [0u8; BLOCK_KINDS];
+    let n = furnace_list(&mut list);
+    box_pages(pad, previous, 0, n);
     let (zone, item, count) = furnace_slot(idx);
     let s = furnace_spot(idx);
     let side = match zone {

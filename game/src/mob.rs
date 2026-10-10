@@ -506,6 +506,10 @@ fn free_slot() -> Option<usize> {
     let mut i = 0;
     while i < CAP {
         if !unsafe { MOBS[i].alive } {
+            unsafe {
+                KICK_X[i] = 0;
+                KICK_Z[i] = 0;
+            }
             return Some(i);
         }
         i += 1;
@@ -995,6 +999,9 @@ pub fn update(px: i32, py: i32, pz: i32, sky: i32, burn: bool) {
             }
             if burn {
                 sun_burn(i);
+            }
+            if world::fire_live() {
+                fire_contact(i);
             }
             if unsafe { MOBS[i].fire } > 0 {
                 mob_fire(i);
@@ -1490,38 +1497,49 @@ fn arrow_hit_mob(ax: i32, ay: i32, az: i32, dmg: i16) -> bool {
     false
 }
 
-fn explode(cx: i32, cy: i32, cz: i32, px: i32, py: i32, pz: i32, charged: bool) {
+fn explode(i: usize, cx: i32, cy: i32, cz: i32, charged: bool) -> bool {
     // A charged sapper blasts at twice the power, 6 (Creeper.explodeCreeper).
     let power = if charged { 2 * SAPPER_POWER } else { SAPPER_POWER };
-    crate::sfx::explode();
-    crate::spawn_particles(cx, cy + BLOCK, cz, (96, 84, 72), 30, (cx ^ cz) as u32, 44);
-    let cy = cy + BLOCK / 2; // the blast centre, half a block up the sapper
-    world::explode(
-        world_to_block_x(cx),
-        world_to_block_y(cy),
-        world_to_block_z(cz),
-        power,
-        (cx ^ cz) as u32,
-    );
-    let dmg = crate::explosion_damage(power, px - cx, py - cy, pz - cz);
-    if dmg > 0 {
-        unsafe {
-            HAZARD_DMG += dmg;
-        }
+    let blast_y = cy + BLOCK / 2; // half a block up the sapper
+    if !world::explode(cx, blast_y, cz, power, (cx ^ cz) as u32) {
+        return false;
     }
-    blast_mobs(cx, cy, cz, power);
+    // Remove the sapper only after its block blast is queued. The following
+    // entity hit must not kill it and drop gunpowder or XP.
+    unsafe { MOBS[i] = DEAD };
+    crate::spawn_particles(cx, cy + BLOCK, cz, (96, 84, 72), 30, (cx ^ cz) as u32, 44);
+    crate::tnt::explosion_effects(cx, blast_y, cz, power, usize::MAX);
+    true
 }
 
-/// An explosion's damage to every mob in reach (Java hurts all entities).
+/// A spent fuse retries each tick until the bounded blast queue accepts it.
+fn finish_sapper(i: usize, m: Mob) {
+    if !explode(i, m.x, m.y, m.z, m.charged) {
+        unsafe { MOBS[i] = m };
+    }
+}
+
+/// A blast's damage and knockback on every mob in reach (Java hurts all
+/// entities). The push is a decaying shove (KICK_X, KICK_Z) plus an upward
+/// speed; the centre sees the mob through the world as it stands.
 pub fn blast_mobs(cx: i32, cy: i32, cz: i32, power: i32) {
     let mut i = 0;
     while i < CAP {
         let mut m = unsafe { MOBS[i] };
         if m.alive {
-            let dmg = crate::explosion_damage(power, m.x - cx, m.y - cy, m.z - cz);
-            if dmg > 0 {
-                m.health -= dmg as i16;
+            let (hw, h) = dims(m.kind);
+            if let Some(hit) = crate::tnt::hit_on(power, (cx, cy, cz), (m.x, m.y, m.z), hw, h, h * 9 / 10, true)
+            {
+                m.health -= hit.dmg as i16;
                 m.hurt_cd = HURT_TICKS;
+                // Q8 blocks a Java tick to Q8 units a sim tick, x 64 / 3.
+                unsafe {
+                    KICK_X[i] = (KICK_X[i] + hit.kx * 64 / 3).clamp(-9000, 9000);
+                    KICK_Z[i] = (KICK_Z[i] + hit.kz * 64 / 3).clamp(-9000, 9000);
+                }
+                // The same push up, in units a sim tick (x 64 / 3 / 256).
+                m.vy = m.vy.max(hit.ky / 12);
+                m.on_ground = false;
                 if m.health <= 0 {
                     record_death(&m);
                     m = DEAD;
@@ -1531,6 +1549,45 @@ pub fn blast_mobs(cx: i32, cy: i32, cz: i32, power: i32) {
         }
         i += 1;
     }
+}
+
+/// A mob's knockback from blasts, Q8 world units a sim tick, decaying by an
+/// eighth a tick. Beside the mob table so `Mob` stays as it was.
+static mut KICK_X: [i32; CAP] = [0; CAP];
+static mut KICK_Z: [i32; CAP] = [0; CAP];
+
+/// A blast's damage to the player, taken with the arrows' through the same
+/// invulnerability rule. The strongest of a frame's blasts counts: Java gives
+/// a second hit inside the i-frames only the difference.
+pub fn blast_hazard(d: i32) {
+    unsafe { HAZARD_DMG = HAZARD_DMG.max(d) };
+}
+
+/// A mob standing in a fire block catches fire for 8 s (160 game ticks) and
+/// takes 1 damage every half second while it stays (Damage#Fire).
+#[inline(never)]
+fn fire_contact(i: usize) {
+    let mut m = unsafe { MOBS[i] };
+    let (bx, by, bz) = (
+        world_to_block_x(m.x),
+        world_to_block_y(m.y + 8),
+        world_to_block_z(m.z),
+    );
+    let (_, h) = dims(m.kind);
+    let in_fire = world::get(bx, by, bz) == crate::FIRE
+        || world::get(bx, world_to_block_y(m.y + h / 2), bz) == crate::FIRE;
+    if !in_fire {
+        return;
+    }
+    m.fire = m.fire.max(java_ticks(160) as u16);
+    if (unsafe { BURN_TICK } as usize).wrapping_add(i * 11) % java_ticks(10) as usize == 0 {
+        m.health -= 1;
+        if m.health <= 0 {
+            record_death(&m);
+            m = DEAD;
+        }
+    }
+    unsafe { MOBS[i] = m };
 }
 
 /// A player arrow's damage from its speed: ceil(2 x blocks a game tick).
@@ -1813,6 +1870,10 @@ fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
     if m.hurt_cd > 0 {
         m.hurt_cd -= 1;
     }
+    if m.kind == SAPPER && m.fuse >= FUSE_MAX {
+        finish_sapper(i, m);
+        return; // Keep a spent fuse pending until the blast queue accepts it.
+    }
 
     let dx = px - m.x;
     let dz = pz - m.z;
@@ -1972,14 +2033,8 @@ fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
                     crate::sfx::sapper_hiss(); // the dreaded tsss
                 }
                 if m.fuse >= FUSE_MAX {
-                    // Free the slot first: blast_mobs would otherwise hit the
-                    // sapper itself and record a kill, dropping the gunpowder
-                    // and XP only a slain sapper gives (Java's creeper drops
-                    // nothing when it explodes, minecraft.wiki/w/Creeper).
-                    unsafe {
-                        MOBS[i] = DEAD;
-                    }
-                    explode(m.x, m.y, m.z, px, py, pz, m.charged);
+                    m.fuse = FUSE_MAX;
+                    finish_sapper(i, m);
                     return;
                 }
             } else if m.fuse > 0 {
@@ -2129,6 +2184,28 @@ fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
             blocked = true;
         } else {
             m.z = nz;
+        }
+    }
+    // A blast's shove, through the same collision tests as the walk.
+    unsafe {
+        if KICK_X[i] != 0 || KICK_Z[i] != 0 {
+            let (kx, kz) = (KICK_X[i] >> 8, KICK_Z[i] >> 8);
+            KICK_X[i] -= KICK_X[i] >> 3;
+            KICK_Z[i] -= KICK_Z[i] >> 3;
+            if kx != 0 {
+                if aabb_collides_dims(m.x + kx, m.y, m.z, hw, h) {
+                    KICK_X[i] = 0;
+                } else {
+                    m.x += kx;
+                }
+            }
+            if kz != 0 {
+                if aabb_collides_dims(m.x, m.y, m.z + kz, hw, h) {
+                    KICK_Z[i] = 0;
+                } else {
+                    m.z += kz;
+                }
+            }
         }
     }
     // Gait: the leg phase advances with the distance actually covered, one
@@ -2484,6 +2561,10 @@ pub fn reset() {
         }
         a += 1;
     }
+    unsafe {
+        KICK_X = [0; CAP];
+        KICK_Z = [0; CAP];
+    }
 }
 
 /// Place one mob of `kind` on the ground at world coords (sx, sz).
@@ -2560,6 +2641,8 @@ pub fn clear() {
     unsafe {
         MOBS = [DEAD; CAP];
         ARROWS = [NO_ARROW; ARROW_CAP];
+        KICK_X = [0; CAP];
+        KICK_Z = [0; CAP];
         DRAGON_SLAIN = false;
     }
 }
