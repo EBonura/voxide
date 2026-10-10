@@ -462,7 +462,7 @@ sym = "VOXIDE_GATE_STATE"
 offset = 20
 op = "ge"
 value = 100
-note = "the completed blast made a crater (1 edit before, 142 after)"
+note = "the completed blast made a crater (134 edits on this route)"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_GATE_STATE"

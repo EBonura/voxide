@@ -1,0 +1,613 @@
+# VoXide save and reboot journey: follow the visual TNT route, save its edited
+# world to the gate's fresh formatted card, reboot that card, and load the
+# exact edit count and player health back through the in-game menu.
+#
+#   psoxide-gate run tests/save-repin.toml --disc build/gate/voxide.cue --strict \
+#     --golden-dir tests/golden/voxide
+#
+# What each part is for:
+#  - splash: checked strictly on the hardware renderer's upscaled paths. After
+#    an SDK repin the splash text looked garbled in the app while every gate
+#    that compared CPU frames stayed green; the cause was the hardware
+#    renderer's upscale, which only the strict regions below can see.
+#  - menus and panels: goldens with the 3D world around the panel masked out
+#    (the world differs per seed and timing, the panel does not).
+#  - TNT: confirm flint, the lit entity, survival, expiry and a completed
+#    block blast. The blast may knock the camera away from the source cell.
+#
+# Menu navigation is by D-pad presses; the menu cursor keeps its row between
+# visits, so NEW WORLD (second row) is entered once and PLAY GAME is one row up.
+
+name = "voxide"
+title = "VoXide: TNT world saved, rebooted and loaded"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+max_ticks = 12000
+
+# ---- splash ---------------------------------------------------------------
+
+[[step]]
+label = "boot, the Bonnie splash fades in"
+wait = 100
+
+[[step]]
+checkpoint = "splash"
+# "Built with PSoXide" and the Bonnie logo: 2D textured quads, must match the
+# CPU frame at every scale. The final e has an intentional sweeping sheen;
+# mask only its 8x9 glyph from the static golden and check its presence below.
+mask = [{ x = 223, y = 150, w = 8, h = 9 }]
+strict = [{ x = 84, y = 144, w = 152, h = 18 }, { x = 110, y = 30, w = 100, h = 104 }]
+[[step.assert]]
+kind = "not_flat"
+[[step.assert]]
+kind = "pixels"
+color = [165, 214, 255]
+color_tol = 50
+region = { x = 223, y = 150, w = 8, h = 9 }
+min_count = 20
+note = "the sheen may tint the final e, but all 20 glyph pixels must remain"
+
+# ---- main menu ------------------------------------------------------------
+
+[[step]]
+label = "the menu appears when the world has been generated behind it"
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 204, w = 125, h = 22 }, min_count = 500 }
+timeout = 1500
+
+[[step]]
+wait = 30
+
+[[step]]
+checkpoint = "main-menu"
+mask = [
+  { x = 0, y = 0, w = 100, h = 240 }, { x = 220, y = 0, w = 100, h = 240 },
+  { x = 100, y = 0, w = 120, h = 118 },
+  { x = 100, y = 136, w = 120, h = 4 }, { x = 100, y = 158, w = 120, h = 4 },
+  { x = 100, y = 180, w = 120, h = 4 }, { x = 100, y = 202, w = 120, h = 4 },
+  { x = 100, y = 224, w = 120, h = 16 },
+]
+strict = [{ x = 102, y = 120, w = 116, h = 17 }]
+[[step.assert]]
+kind = "presenting"
+window = 120
+min_changes = 5
+[[step.assert]]
+kind = "not_flat"
+[[step.assert]]
+kind = "pixels"
+color = [247, 247, 247]
+color_tol = 0
+region = { x = 85, y = 35, w = 150, h = 60 }
+min_count = 1305
+max_count = 1305
+note = "static VoXide mark above the five golden-checked buttons"
+
+# ---- NEW WORLD, PLAY GAME -------------------------------------------------
+
+[[step]]
+label = "NEW WORLD regenerates the world and returns to the menu"
+press = ["down"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["cross"]
+hold = 4
+
+[[step]]
+label = "NEW WORLD loading removes the menu buttons"
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 204, w = 125, h = 22 }, max_count = 50 }
+timeout = 600
+
+[[step]]
+label = "the completed new vista restores the full menu"
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 204, w = 125, h = 22 }, min_count = 500 }
+timeout = 1500
+
+[[step]]
+label = "PLAY GAME: the first play shows the CONTROLS card"
+press = ["up"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 150
+
+[[step]]
+checkpoint = "controls-card"
+strict = [{ x = 14, y = 10, w = 292, h = 194 }]
+mask = [{ x = 0, y = 0, w = 9, h = 240 }, { x = 311, y = 0, w = 9, h = 240 }, { x = 0, y = 0, w = 320, h = 4 }, { x = 0, y = 209, w = 320, h = 31 }]
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "close the card: the world"
+press = ["circle"]
+hold = 4
+wait = 60
+
+[[step]]
+checkpoint = "world-spawn"
+golden = false
+[[step.assert]]
+kind = "presenting"
+window = 120
+min_changes = 5
+[[step.assert]]
+kind = "not_flat"
+[[step.assert]]
+kind = "pc_not_stuck"
+window = 120
+
+# ---- cheat kit (OPTIONS > CHEATS > GIVE EVERYTHING) ------------------------
+
+[[step]]
+label = "Start opens OPTIONS; CHEATS is the sixth row"
+press = ["start"]
+hold = 4
+wait = 30
+
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+repeat = 5
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "cheats"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "GIVE EVERYTHING is the fourth row"
+press = ["down"]
+hold = 4
+wait = 12
+repeat = 3
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+label = "back out of CHEATS and OPTIONS"
+press = ["circle"]
+hold = 4
+wait = 30
+repeat = 2
+
+# ---- inventory: TNT and flint into the hotbar --------------------------------
+
+[[step]]
+label = "Triangle opens the inventory"
+press = ["triangle"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "inventory"
+strict = [{ x = 14, y = 10, w = 292, h = 194 }]
+mask = [{ x = 0, y = 0, w = 9, h = 240 }, { x = 311, y = 0, w = 9, h = 240 }, { x = 0, y = 0, w = 320, h = 4 }, { x = 0, y = 209, w = 320, h = 31 }]
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "BLOCKS tab; TNT is the last block (row 4, column 6)"
+press = ["r1"]
+hold = 4
+wait = 30
+
+[[step]]
+press = ["right"]
+hold = 4
+wait = 12
+repeat = 5
+
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+repeat = 3
+
+[[step]]
+checkpoint = "inventory-blocks-tnt"
+strict = [{ x = 14, y = 10, w = 292, h = 194 }]
+mask = [{ x = 0, y = 0, w = 9, h = 240 }, { x = 311, y = 0, w = 9, h = 240 }, { x = 0, y = 0, w = 320, h = 4 }, { x = 0, y = 209, w = 320, h = 31 }]
+
+[[step]]
+label = "take the stack, drop down onto the hotbar, swap it into slot 6"
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+label = "put the swapped-out stack back, close"
+press = ["circle"]
+hold = 4
+wait = 30
+repeat = 2
+
+[[step]]
+label = "reopen on the ITEMS tab for the flint and steel (sixth item)"
+press = ["triangle"]
+hold = 4
+wait = 30
+
+[[step]]
+press = ["r1"]
+hold = 4
+wait = 30
+repeat = 2
+
+[[step]]
+press = ["right"]
+hold = 4
+wait = 12
+repeat = 5
+
+[[step]]
+checkpoint = "inventory-items-flint"
+strict = [{ x = 14, y = 10, w = 292, h = 194 }]
+mask = [{ x = 0, y = 0, w = 9, h = 240 }, { x = 311, y = 0, w = 9, h = 240 }, { x = 0, y = 0, w = 320, h = 4 }, { x = 0, y = 209, w = 320, h = 31 }]
+
+[[step]]
+label = "take it, onto the hotbar one slot right of the TNT"
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+repeat = 4
+
+[[step]]
+press = ["right"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+press = ["circle"]
+hold = 4
+wait = 30
+repeat = 2
+
+# ---- crafting ---------------------------------------------------------------
+
+[[step]]
+label = "Square opens pocket crafting"
+press = ["square"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "crafting"
+strict = [{ x = 14, y = 10, w = 292, h = 194 }]
+mask = [{ x = 0, y = 0, w = 9, h = 240 }, { x = 311, y = 0, w = 9, h = 240 }, { x = 0, y = 0, w = 320, h = 4 }, { x = 0, y = 209, w = 320, h = 31 }]
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+press = ["circle"]
+hold = 4
+wait = 30
+
+# ---- TNT -------------------------------------------------------------------
+
+[[step]]
+label = "look down at the ground in front"
+rstick = [128, 255]
+hold = 40
+wait = 20
+
+[[step]]
+label = "select the TNT (slot 6) and place it"
+press = ["r1"]
+hold = 4
+wait = 8
+repeat = 5
+
+[[step]]
+press = ["l2"]
+hold = 4
+wait = 60
+
+[[step]]
+checkpoint = "tnt-placed"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [190, 30, 30]
+color_tol = 60
+min_count = 2000
+note = "the placed TNT fills the view"
+
+[[step]]
+label = "select the flint and steel (slot 7) and light it"
+press = ["r1"]
+hold = 4
+wait = 20
+
+[[step]]
+checkpoint = "flint-equipped"
+golden = false
+strict = [{ x = 240, y = 140, w = 56, h = 46 }]
+[[step.assert]]
+kind = "pixels"
+color = [189, 189, 198]
+color_tol = 4
+region = { x = 240, y = 140, w = 56, h = 46 }
+min_count = 100
+note = "the flint and steel blade is visible in hand before ignition"
+
+[[step]]
+press = ["l2"]
+hold = 4
+wait = 30
+
+[[step]]
+label = "back away from the lit TNT before it explodes"
+lstick = [128, 255]
+hold = 50
+wait = 2
+
+[[step]]
+label = "raise the view back toward the TNT site"
+rstick = [128, 0]
+hold = 30
+wait = 2
+
+[[step]]
+checkpoint = "tnt-safe-before-blast"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+op = "eq"
+value = 0x47584f56
+note = "the exact EXE contains the VoXide gate-state magic"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 4
+op = "eq"
+value = 1
+note = "gate-state layout version"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 8
+op = "eq"
+value = 36
+note = "gate-state byte length"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 16
+op = "eq"
+value = 1
+note = "one primed TNT entity exists before its fuse expires"
+[[step.assert]]
+kind = "pixels"
+color = [206, 206, 206]
+color_tol = 4
+region = { x = 130, y = 75, w = 100, h = 65 }
+min_count = 800
+note = "the primed TNT cube is visible at the blast site"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "eq"
+value = 1
+note = "only placement was edited before the blast"
+
+[[step]]
+label = "stand still while the fuse expires and the blast finishes"
+wait = 600
+
+[[step]]
+checkpoint = "tnt-after-fuse"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 16
+op = "eq"
+value = 0
+note = "the primed TNT entity has expired"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 24
+op = "eq"
+value = 0
+note = "all queued blast jobs have drained"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 32
+op = "ge"
+value = 1
+note = "the crater block job completed"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "ge"
+value = 100
+note = "the completed blast made a crater (134 edits on this route)"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 28
+signed = true
+op = "ge"
+value = 1
+note = "the player survived the blast"
+[[step.assert]]
+kind = "pixels"
+color = [214, 33, 33]
+color_tol = 4
+region = { x = 5, y = 190, w = 96, h = 21 }
+min_count = 250
+note = "the world HUD still shows hearts after the blast"
+[[step.assert]]
+kind = "presenting"
+window = 120
+min_changes = 5
+[[step.assert]]
+kind = "frame_diff"
+from = "tnt-safe-before-blast"
+min_changed = 0.05
+note = "the blast changes the view, including any knockback"
+
+# Exact SDK835 save/reboot proof, appended after the crater route.
+[[step]]
+label = "open OPTIONS over the crater"
+press = ["start"]
+hold = 4
+wait = 30
+
+[[step]]
+label = "select SAVE TO CARD"
+press = ["down"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 800
+
+[[step]]
+checkpoint = "world-saved"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "eq"
+value = 134
+note = "the saved game has the completed crater edits"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 28
+signed = true
+op = "eq"
+value = 17
+note = "the exact player health before saving"
+[[step.assert]]
+kind = "card_writes"
+min_count = 1
+note = "guest issued committed card sectors"
+
+[[step]]
+card = { action = "snapshot" }
+
+[[step]]
+card = { action = "reboot" }
+
+[[step]]
+label = "fresh boot reaches PLAY GAME with persisted card"
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 204, w = 125, h = 22 }, min_count = 500 }
+timeout = 1500
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 150
+
+[[step]]
+label = "dismiss controls card if the saved profile still needs it"
+press = ["circle"]
+hold = 4
+wait = 60
+
+[[step]]
+checkpoint = "fresh-world-before-load"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "eq"
+value = 0
+note = "fresh boot has no crater before LOAD"
+
+[[step]]
+press = ["start"]
+hold = 4
+wait = 30
+
+[[step]]
+label = "select LOAD FROM CARD"
+press = ["down"]
+hold = 4
+wait = 12
+repeat = 2
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 200
+
+[[step]]
+label = "close OPTIONS so the gameplay state mirror updates after load"
+press = ["circle"]
+hold = 4
+wait = 60
+
+[[step]]
+checkpoint = "world-reloaded"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "eq"
+value = 134
+note = "the actual world edit log was restored from card"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 28
+signed = true
+op = "eq"
+value = 17
+note = "loaded player health matches the saved state"
+
+[[step]]
+card = { action = "snapshot" }
