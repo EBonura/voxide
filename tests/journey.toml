@@ -50,7 +50,7 @@ note = "the sheen may tint the final e, but all 20 glyph pixels must remain"
 
 [[step]]
 label = "the menu appears when the world has been generated behind it"
-wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 118, w = 125, h = 100 }, min_count = 2500 }
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 204, w = 125, h = 22 }, min_count = 500 }
 timeout = 1500
 
 [[step]]
@@ -58,6 +58,13 @@ wait = 30
 
 [[step]]
 checkpoint = "main-menu"
+mask = [
+  { x = 0, y = 0, w = 100, h = 240 }, { x = 220, y = 0, w = 100, h = 240 },
+  { x = 100, y = 0, w = 120, h = 118 },
+  { x = 100, y = 136, w = 120, h = 4 }, { x = 100, y = 158, w = 120, h = 4 },
+  { x = 100, y = 180, w = 120, h = 4 }, { x = 100, y = 202, w = 120, h = 4 },
+  { x = 100, y = 224, w = 120, h = 16 },
+]
 strict = [{ x = 102, y = 120, w = 116, h = 17 }]
 [[step.assert]]
 kind = "presenting"
@@ -65,6 +72,14 @@ window = 120
 min_changes = 5
 [[step.assert]]
 kind = "not_flat"
+[[step.assert]]
+kind = "pixels"
+color = [247, 247, 247]
+color_tol = 0
+region = { x = 85, y = 35, w = 150, h = 60 }
+min_count = 1305
+max_count = 1305
+note = "static VoXide mark above the five golden-checked buttons"
 
 # ---- NEW WORLD, PLAY GAME -------------------------------------------------
 
@@ -77,10 +92,15 @@ wait = 12
 [[step]]
 press = ["cross"]
 hold = 4
-wait = 30
 
 [[step]]
-wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 118, w = 125, h = 100 }, min_count = 2500 }
+label = "NEW WORLD loading removes the menu buttons"
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 204, w = 125, h = 22 }, max_count = 50 }
+timeout = 600
+
+[[step]]
+label = "the completed new vista restores the full menu"
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 204, w = 125, h = 22 }, min_count = 500 }
 timeout = 1500
 
 [[step]]
