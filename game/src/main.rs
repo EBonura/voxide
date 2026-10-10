@@ -15,9 +15,11 @@ extern crate psx_rt;
 
 mod bonnie;
 mod cheat;
+mod controls;
 mod craft;
 mod equip;
 mod grid;
+mod hand;
 #[cfg(feature = "ui-fixture")]
 mod fixture;
 mod inv;
@@ -2467,13 +2469,13 @@ const TUT_STEPS: [(&str, &str); TUT_DONE] = [
     ("", "LEFT STICK: WALK"),
     ("X", "JUMP"),
     ("R2", "HOLD: CHOP A TREE"),
-    ("[]", "CRAFT PLANKS"),
-    ("[]", "CRAFT A CRAFTING TABLE"),
+    ("[]", "OPEN CRAFTING. X: PLANKS"),
+    ("[]", "X CRAFTS A CRAFTING TABLE"),
     ("L2", "PLACE THE CRAFTING TABLE"),
     ("L2", "AIM AT THE TABLE TO OPEN"),
     ("X", "CRAFT STICKS + A PICKAXE"),
     ("", "TOOLS SUIT WHAT YOU AIM AT"),
-    ("", "YOU KNOW THE BASICS!"),
+    ("START", "PAUSE MENU: CONTROLS"),
 ];
 
 fn tut_reset() {
@@ -2940,11 +2942,11 @@ fn main() {
                     player.offhand = off;
                     menu = 0;
                 }
-            } else if menu == MENU_INV {
-                if inv::inventory_input(pad, previous, &mut player) {
-                    menu = 0;
+            } else if menu == MENU_INV || menu == MENU_CONTROLS {
+                if menu_card_input(menu, pad, previous, &mut player) {
+                    menu = if menu == MENU_CONTROLS { MENU_OPTIONS } else { 0 };
                 }
-            } else if pad.pressed_since(previous, button::CIRCLE) {
+            } else if pad.pressed_since(previous, button::CIRCLE) && !inv::put_back(menu) {
                 if menu == MENU_OPTIONS {
                     persist_shared_settings();
                 }
@@ -3012,7 +3014,7 @@ fn main() {
                                 }
                             }
                         }
-                        _ => {}
+                        _ => menu = open_controls(menu_sel, menu),
                     }
                     sfx::confirm();
                 }
@@ -3092,7 +3094,7 @@ fn main() {
         // container screens leave it running: mobs move and hit, you fall and
         // burn, you just cannot steer (minecraft.wiki/w/Pause_menu). The
         // death screen does not pause either.
-        let paused = menu == MENU_OPTIONS || menu == MENU_CHEAT;
+        let paused = menu == MENU_OPTIONS || menu == MENU_CHEAT || menu == MENU_CONTROLS;
         if !paused && menu != MENU_DEAD {
             // In a GUI the pad drives the GUI, not the player.
             let (spad, sprev, sl, sr) = if menu == 0 {
@@ -3850,7 +3852,7 @@ fn main() {
         frame_present(&mut fb, &mut render_in_flight);
         previous = pad;
         frame = frame.wrapping_add(1);
-        if !(menu == MENU_OPTIONS || menu == MENU_CHEAT) {
+        if !(menu == MENU_OPTIONS || menu == MENU_CHEAT || menu == MENU_CONTROLS) {
             day = day.wrapping_add(sim_n); // the pause menu stops the clock too
         }
     }
@@ -3906,8 +3908,10 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         return;
     }
     let mut prev = poll_port1().buttons;
-    let mut sel = 0usize; // 0 = play, 1 = new world, 2 = settings, 3 = credits
+    let mut sel = 0usize; // 0 = play, 1 = new world, 2 = controls, 3 = settings, 4 = credits
     let mut credits = false; // the provenance card is up
+    let mut controls = false; // the controls card is up
+    let mut first_run = false; // ...because this is the first PLAY: PLAY follows it
     let mut settings = false; // the settings card is up
     let mut set_sel = 0usize;
     let mut t: u32 = 0;
@@ -3922,7 +3926,16 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         // services stragglers without costing the menu anything.
         world::recenter(unsafe { WORLD_BX }, unsafe { WORLD_BZ });
         advance_streaming();
-        if credits {
+        if controls {
+            if controls::input(pad, prev) {
+                controls = false;
+                sfx::blip();
+                if first_run {
+                    persist_shared_settings();
+                    return;
+                }
+            }
+        } else if credits {
             // Any confirm/back dismisses the card.
             if pad.pressed_since(prev, button::CROSS)
                 || pad.pressed_since(prev, button::CIRCLE)
@@ -3958,15 +3971,16 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             }
         } else {
             if pad.pressed_since(prev, button::UP) {
-                sel = (sel + 3) % 4;
+                sel = (sel + 4) % 5;
                 sfx::blip();
             }
             if pad.pressed_since(prev, button::DOWN) {
-                sel = (sel + 1) % 4;
+                sel = (sel + 1) % 5;
                 sfx::blip();
             }
         }
         let go = !credits
+            && !controls
             && !settings
             && (pad.pressed_since(prev, button::CROSS) || pad.pressed_since(prev, button::START));
         prev = pad;
@@ -3992,16 +4006,32 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             finish_world_gen(fb, font, &mut pocket_done);
             prev = poll_port1().buttons;
         } else if go && sel == 2 {
+            controls = true;
+            controls::open();
+            sfx::confirm();
+        } else if go && sel == 3 {
             settings = true;
             set_sel = 0;
             sfx::confirm();
-        } else if go && sel == 3 {
+        } else if go && sel == 4 {
             credits = true;
             sfx::confirm();
         } else if go {
-            persist_shared_settings();
             sfx::confirm();
-            return;
+            if controls_unseen() {
+                // The first PLAY shows the controls, once: the card is
+                // remembered on the settings card, written below on the way in.
+                unsafe {
+                    SETTINGS_PROFILE.difficulty = CONTROLS_SEEN;
+                    SETTINGS_DIRTY = true;
+                }
+                controls = true;
+                first_run = true;
+                controls::open();
+            } else {
+                persist_shared_settings();
+                return;
+            }
         }
 
         // The vista: a slow orbit over the spawn surface, exactly the game's
@@ -4049,15 +4079,18 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         // terrain alike, the job the Minecraft logo's dark outline does.
         draw_mark_text(91, 43, "VoXide", 3, (0x20, 0x20, 0x28));
         draw_mark_text(88, 40, "VoXide", 3, (0xF4, 0xF4, 0xF4));
-        if credits {
+        if controls {
+            controls::draw(&controls::Now, font);
+        } else if credits {
             draw_credits_now(font);
         } else if settings {
             draw_settings_now(font, set_sel);
         } else {
-            menu_button_now(font, 140, "PLAY GAME", sel == 0);
-            menu_button_now(font, 164, "NEW WORLD", sel == 1);
-            menu_button_now(font, 188, "SETTINGS", sel == 2);
-            menu_button_now(font, 212, "CREDITS", sel == 3);
+            menu_button_now(font, 118, "PLAY GAME", sel == 0);
+            menu_button_now(font, 140, "NEW WORLD", sel == 1);
+            menu_button_now(font, 162, "CONTROLS", sel == 2);
+            menu_button_now(font, 184, "SETTINGS", sel == 3);
+            menu_button_now(font, 206, "CREDITS", sel == 4);
             draw_splash_now(font, t);
             font.draw_text(6, SCREEN_H as i16 - 12, VERSION, (0xC8, 0xC8, 0xD0));
         }
@@ -4143,6 +4176,44 @@ fn draw_splash_now(font: &FontAtlas, t: u32) {
         font.draw_text(x + 1, y + 1, ch, (0x30, 0x30, 0x08));
         font.draw_text(x, y, ch, col);
         i += 1;
+    }
+}
+
+/// The settings record has a byte for a game-chosen difficulty, which VoXide
+/// does not have (its default is 1). It records that the controls card was
+/// shown on a first PLAY instead, so the card comes up once per memory card.
+const CONTROLS_SEEN: u8 = 2;
+
+/// True on the first PLAY with this memory card: the settings record does not
+/// say the controls card was shown. The lockstep and ui-fixture builds (A/B
+/// validation and headless UI captures, never shipped) skip it, as a card
+/// would swallow the tape.
+fn controls_unseen() -> bool {
+    !cfg!(any(feature = "lockstep", feature = "ui-fixture"))
+        && unsafe { SETTINGS_PROFILE.difficulty } != CONTROLS_SEEN
+}
+
+/// One frame of the screens that take no part in the gameplay loop's own
+/// dispatch (kept out of it: its profile is keyed to its line layout): the
+/// inventory, and the controls card, which returns true when it closes.
+#[inline(never)]
+fn menu_card_input(menu: u8, pad: ButtonState, previous: ButtonState, player: &mut Player) -> bool {
+    if menu == MENU_CONTROLS {
+        controls::input(pad, previous)
+    } else {
+        inv::inventory_input(pad, previous, player)
+    }
+}
+
+/// OPTIONS' CROSS on the CONTROLS row opens the card; any other row keeps the
+/// menu it was on.
+fn open_controls(sel: usize, menu: u8) -> u8 {
+    if sel == OPT_CONTROLS {
+        controls::open();
+        unsafe { OPT_MSG = "" };
+        MENU_CONTROLS
+    } else {
+        menu
     }
 }
 
@@ -10606,6 +10677,8 @@ fn draw_menu(font: &FontAtlas, menu: u8, sel: usize, chest_idx: usize, player: P
         draw_death(font);
     } else if menu == MENU_CHEAT {
         cheat::draw(font, sel, &player);
+    } else if menu == MENU_CONTROLS {
+        controls::draw(&controls::Listed, font);
     }
 }
 
@@ -11134,23 +11207,28 @@ const MENU_DEAD: u8 = 6;
 const MENU_INV: u8 = 5;
 /// The cheats page (cheat.rs), reached from OPTIONS.
 const MENU_CHEAT: u8 = 7;
+/// The controls card (controls.rs), reached from OPTIONS.
+const MENU_CONTROLS: u8 = 8;
 
 /// Index of `sel` in PLACEABLE, so the inventory opens on the item in hand.
 const OPT_FLIGHT: usize = 0;
 const OPT_SAVE: usize = 1;
 const OPT_LOAD: usize = 2;
 const OPT_TUTORIAL: usize = 3;
+/// Opens the controls card (controls.rs).
+const OPT_CONTROLS: usize = 4;
 /// Opens the cheats page (cheat.rs): weather, time, flight and the rest.
-const OPT_CHEATS: usize = 4;
+const OPT_CHEATS: usize = 5;
 /// Rows from OPT_SETTINGS on are the SETTINGS card's own rows, folded into
 /// the in-game menu so stick feel and volume can be tuned mid-session
 /// instead of only from the main menu before a world loads.
-const OPT_SETTINGS: usize = 5;
+const OPT_SETTINGS: usize = 6;
 const OPTIONS: [&str; OPT_SETTINGS + SETTING_ROWS] = [
     "FLIGHT",
     "SAVE TO CARD",
     "LOAD FROM CARD",
     "TUTORIAL",
+    "CONTROLS",
     "CHEATS",
     SETTING_NAMES[0],
     SETTING_NAMES[1],
@@ -11167,7 +11245,7 @@ static mut OPT_MSG: &str = "";
 #[optimize(size)] // menus pause the sim: its bytes are worth more than its cycles
 fn draw_options(font: &FontAtlas, sel: usize, player: Player) {
     menu_frame(font, "OPTIONS");
-    let mut hx = hint_item(font, MENU_TEXT_X, MENU_HINT_Y, "X", PS_CROSS, "TOGGLE");
+    let mut hx = hint_item(font, MENU_TEXT_X, MENU_HINT_Y, "X", PS_CROSS, "SELECT");
     hx = hint_item(font, hx, MENU_HINT_Y, "< >", PS_KEY, "ADJUST");
     hint_item(font, hx, MENU_HINT_Y, "O", PS_CIRCLE, "CLOSE");
     let n = OPTIONS.len();
