@@ -2723,6 +2723,18 @@ pub fn fire_live() -> bool {
     unsafe { FIRE_N > 0 }
 }
 
+/// Flames lit right now, for the lab and the gates.
+#[allow(dead_code)]
+pub fn fire_count() -> i32 {
+    unsafe { FIRE_N as i32 }
+}
+
+/// Blasts being worked or waiting, for the lab and the gates.
+#[allow(dead_code)]
+pub fn blasts_pending() -> i32 {
+    unsafe { (BQ_LEN + BJ_LIVE as usize) as i32 }
+}
+
 fn fire_free(i: usize) {
     unsafe {
         if FIRE_AGE[i] != FIRE_FREE {

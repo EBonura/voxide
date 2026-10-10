@@ -12,6 +12,14 @@
 
 use crate::*;
 
+/// What the gates read (`frontend launch --route-watch-u32`, the address from
+/// the link map): step, lit TNT blocks, smallest fuse, flames, blasts pending,
+/// TNT blocks standing, solid cells in the show area, planks/logs/leaves/wool
+/// standing, and the player's health. Words 6 and 7 are counted every 20
+/// steps; the rest every step.
+#[no_mangle]
+pub static mut VOXIDE_LAB_FIRE: [i32; 10] = [0; 10];
+static mut COUNTS: (i32, i32, i32) = (0, 0, 0);
 static mut T: i32 = 0; // sim steps since gameplay began
 static mut ORG: (i32, i32) = (0, 0); // arena origin, block coords
 
@@ -188,6 +196,51 @@ pub fn step(p: &mut Player) {
     }
     p.health = MAX_HEALTH;
     p.hurt_cd = 0;
-    unsafe { T = t + 1 };
+    if t % 20 == 0 {
+        // The show area: x -6..=6, y just under the floor to 4 up, z 5..=14.
+        let (mut tntb, mut solid, mut fuel) = (0, 0, 0);
+        let mut x = ox - 6;
+        while x <= ox + 6 {
+            let mut z = oz + 5;
+            while z <= oz + 14 {
+                let mut y = BY;
+                while y <= BY + 4 {
+                    let b = world::get(x, y, z);
+                    if b == TNT {
+                        tntb += 1;
+                    }
+                    if b != AIR && b != FIRE {
+                        solid += 1;
+                    }
+                    if b == PLANK || b == WOOD || b == LEAVES || b == WOOL {
+                        fuel += 1;
+                    }
+                    y += 1;
+                }
+                z += 1;
+            }
+            x += 1;
+        }
+        unsafe { COUNTS = (tntb, solid, fuel) };
+    }
+    unsafe {
+        T = t + 1;
+        let c = COUNTS;
+        core::ptr::write_volatile(
+            &raw mut VOXIDE_LAB_FIRE,
+            [
+                t,
+                tnt::live(),
+                tnt::min_fuse(),
+                world::fire_count(),
+                world::blasts_pending(),
+                c.0,
+                c.1,
+                c.2,
+                p.health,
+                0,
+            ],
+        );
+    }
     let _ = P_END;
 }
