@@ -105,8 +105,36 @@ pub(super) fn rset(s: usize, i: usize, b: u8) {
         return;
     }
     c[y] = b;
+    col_store(s, col, &c);
+}
+
+/// Write block `b` into every cell of column `col` whose bit is set in `ymask`
+/// (bit y is height y): one unpack and one repack for the whole column, where
+/// `rset` per cell costs an unpack, a repack and a shift of the chunk's
+/// data each. True if anything changed.
+pub(super) fn rset_mask(s: usize, col: usize, ymask: u64, b: u8) -> bool {
+    let mut c = [0u8; CHU];
+    col_unpack(s, col, &mut c);
+    let mut changed = false;
+    let mut m = ymask;
+    while m != 0 {
+        let y = m.trailing_zeros() as usize;
+        m &= m - 1;
+        if y < CHU && c[y] != b {
+            c[y] = b;
+            changed = true;
+        }
+    }
+    if changed {
+        col_store(s, col, &c);
+    }
+    changed
+}
+
+/// Replace column `col` of slot `s` with the unpacked column `c`.
+fn col_store(s: usize, col: usize, c: &[u8; CHU]) {
     let mut enc = [0u8; 2 * CHU];
-    let n = col_pack(&c, &mut enc);
+    let n = col_pack(c, &mut enc);
     unsafe {
         let o0 = COL_OFF[s][col] as usize;
         let o1 = COL_OFF[s][col + 1] as usize;
@@ -119,21 +147,9 @@ pub(super) fn rset(s: usize, i: usize, b: u8) {
                 return;
             }
             let base = RBASE[s] as usize;
-            if n > old {
-                let d = n - old;
-                let mut k = len;
-                while k > o1 {
-                    k -= 1;
-                    BLK[base + k + d] = BLK[base + k];
-                }
-            } else {
-                let d = old - n;
-                let mut k = o1;
-                while k < len {
-                    BLK[base + k - d] = BLK[base + k];
-                    k += 1;
-                }
-            }
+            // Slide the columns after this one over, as one copy.
+            let blk = (&raw mut BLK) as *mut u8;
+            core::ptr::copy(blk.add(base + o1), blk.add(base + o1 + n).sub(old), len - o1);
             let mut k = col + 1;
             while k <= CWU * CWU {
                 COL_OFF[s][k] = (COL_OFF[s][k] as usize + n - old) as u16;

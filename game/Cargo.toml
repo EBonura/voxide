@@ -54,6 +54,10 @@ save-lab = []
 # save-lab plus a pulled card: the first save stops after its third card
 # frame as if the card were removed there. Never ship.
 save-pull = ["save-lab"]
+# Headless fire and TNT captures and frame gates only (src/firelab.rs): a
+# scripted arena of single TNT, a chain, a big cube, fire beside TNT, a
+# burning hut and lava beside TNT. Never ship.
+fire-lab = []
 # Headless storm captures and gates only (weather.rs): a full thunderstorm
 # from the first tick and a bolt 12 blocks ahead every 4 s. Never ship.
 storm-lab = []
