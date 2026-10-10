@@ -3,9 +3,13 @@
 //! to its line layout). All of it is built for size: the sim is paused while
 //! a menu is up, and RAM is the budget that binds.
 //!
-//! Containers use the Legacy Console grammar: CROSS moves one (hold to
-//! repeat, accelerating), SQUARE moves half (rounded up), TRIANGLE moves all.
+//! Every screen here speaks one pad grammar (hand.rs): X takes a stack and
+//! places it (swapping with what is there), SQUARE takes half and places one,
+//! TRIANGLE quick-moves the stack under the cursor, CIRCLE puts the stack in
+//! hand back, or closes. The prompt bar at the bottom prints what each button
+//! does for the slot under the cursor, from the same table the input uses.
 
+use crate::hand::{self, Act, Btn, Spot, Zone};
 use crate::*;
 
 // -- chest and furnace: two panes on the grid ---------------------------------
@@ -20,17 +24,15 @@ const YOU_X: i16 = 22;
 const BOX_X: i16 = 176;
 const PANE_Y: i16 = 53;
 
-/// Frames CROSS has been held in a container menu.
+/// Frames a repeating button (SQUARE placing ones, CROSS on the result) has been held.
 static mut HOLD_T: u16 = 0;
-/// The kind a held CROSS is moving (see `same_hold`).
-static mut HOLD_KIND: u8 = AIR;
 /// Cursor: column 0..6 is your pane, 7.. the container's; row 0..3.
 static mut BOX_X_CUR: usize = 0;
 static mut BOX_Y_CUR: usize = 0;
 /// Page of each pane (L2/R2 page the pane under the cursor).
 static mut BOX_PAGE: [usize; 2] = [0; 2];
 
-/// How many items a held CROSS moves this frame: one on the press, then after
+/// How many items a held button moves this frame: one on the press, then after
 /// a short delay a repeat that speeds up the longer it is held, ending at a
 /// handful per frame so a stack of hundreds still empties in a few seconds.
 #[optimize(size)]
@@ -50,31 +52,73 @@ fn hold_step(held: bool) -> u16 {
     }
 }
 
-/// False while a held CROSS has rolled onto a different kind. When the stack
-/// under the cursor runs out, the list closes up and the next kind slides
-/// under it; the repeat used to carry straight on into that one, which in the
-/// furnace burnt every log and plank you owned as fuel. A fresh press starts
-/// a new hold.
+/// Where the stack in hand was lifted from (CARRY_FROM): a hotbar slot is
+/// 0..9, and these are everything else.
+const FROM_GRID: i8 = -1;
+const FROM_OFF: i8 = -2;
+const FROM_CELL: i8 = -3;
+const FROM_PACK: i8 = -4;
+/// Your pane of a chest or furnace.
+const FROM_MINE: i8 = -5;
+/// The chest's pane, or the furnace's input (FIN) or output (FOUT) slot.
+const FROM_BOX: i8 = -6;
+const FROM_FIN: i8 = -7;
+const FROM_FOUT: i8 = -8;
+
+/// Pick up `n` of `item`, lifted from `from`. The stack stays where it is
+/// until it is placed; the hand is a pointer to it.
 #[optimize(size)]
-fn same_hold(pad: ButtonState, previous: ButtonState, item: u8) -> bool {
+fn lift(item: u8, n: u16, from: i8) {
     unsafe {
-        if !pad.is_held(button::CROSS) || pad.pressed_since(previous, button::CROSS) {
-            HOLD_KIND = item;
-        }
-        HOLD_KIND == item
+        CARRY = item;
+        CARRY_N = n;
+        CARRY_FROM = from;
     }
 }
 
-/// How many to move for this frame's buttons, given `have` at the source:
-/// CROSS one (held, repeating), SQUARE half rounded up, TRIANGLE all.
+/// The hand's slot for the prompt table: `kind` and `count` are what the
+/// cursor is on, `full` whether that counts as a stack.
 #[optimize(size)]
-fn press_count(pad: ButtonState, previous: ButtonState, have: u16) -> u16 {
-    if pad.pressed_since(previous, button::TRIANGLE) {
-        have
-    } else if pad.pressed_since(previous, button::SQUARE) {
-        have - have / 2
-    } else {
-        hold_step(pad.is_held(button::CROSS)).min(have)
+fn spot(zone: Zone, kind: u8, count: u16, full: bool, other_side: bool) -> Spot {
+    let held = unsafe { CARRY };
+    let holding = held != AIR;
+    Spot {
+        zone,
+        full,
+        count,
+        holding,
+        same: holding && held == kind,
+        from_other: holding && other_side,
+    }
+}
+
+/// CIRCLE in a chest (menu 2) or furnace (3) with a stack in hand: put it
+/// back where it was. False when the hand was empty, or on any other menu, so
+/// CIRCLE closes the screen instead.
+#[optimize(size)]
+pub fn put_back(menu: u8) -> bool {
+    if !(menu == 2 || menu == 3) || unsafe { CARRY } == AIR {
+        return false;
+    }
+    unsafe { CARRY = AIR };
+    sfx::blip();
+    true
+}
+
+/// A held SQUARE places one at a time, speeding up like the old repeat.
+/// Only a press made while a stack was in hand starts it.
+static mut ONE_ARMED: bool = false;
+#[optimize(size)]
+fn place_ones(pad: ButtonState, previous: ButtonState, can: bool) -> u16 {
+    let held = pad.is_held(button::SQUARE);
+    unsafe {
+        if can && pad.pressed_since(previous, button::SQUARE) {
+            ONE_ARMED = true;
+        }
+        if !held || !can {
+            ONE_ARMED = false;
+        }
+        hold_step(ONE_ARMED && held)
     }
 }
 
@@ -83,6 +127,8 @@ fn press_count(pad: ButtonState, previous: ButtonState, have: u16) -> u16 {
 pub fn container_open() {
     unsafe {
         HOLD_T = 0;
+        CARRY = AIR;
+        ONE_ARMED = false;
         BOX_X_CUR = 0;
         BOX_Y_CUR = 0;
         BOX_PAGE = [0; 2];
@@ -151,6 +197,85 @@ fn pages_of(n: usize, per: usize) -> usize {
     }
 }
 
+/// The chest cursor's slot: zone, kind and how many.
+#[optimize(size)]
+fn chest_slot(idx: usize) -> (Zone, u8, u16) {
+    let (x, tab) = unsafe { (BOX_X_CUR, TAB) };
+    let pane = (x >= PANE_COLS) as usize;
+    let mut list = [0u8; BLOCK_KINDS];
+    let n = unsafe {
+        if pane == 0 {
+            tab_kinds(tab, false, &INV, &mut list)
+        } else {
+            tab_kinds(tab, false, &CHEST_INV[idx], &mut list)
+        }
+    };
+    let item = pane_item(&list, n, pane, x % PANE_COLS);
+    let count = if item == AIR {
+        0
+    } else {
+        unsafe {
+            if pane == 0 {
+                INV[item as usize]
+            } else {
+                CHEST_INV[idx][item as usize]
+            }
+        }
+    };
+    (if pane == 0 { Zone::Mine } else { Zone::Theirs }, item, count)
+}
+
+#[optimize(size)]
+fn chest_spot(idx: usize) -> Spot {
+    let (zone, item, count) = chest_slot(idx);
+    let from = unsafe { CARRY_FROM };
+    let other = if zone == Zone::Mine { from == FROM_BOX } else { from == FROM_MINE };
+    spot(zone, item, count, item != AIR && count > 0, other)
+}
+
+/// Move up to `m` of `item` across: into the chest, or back to your pack.
+#[optimize(size)]
+fn chest_move(idx: usize, item: u8, m: u16, to_chest: bool) -> u16 {
+    unsafe {
+        let m = m.min(if to_chest {
+            INV[item as usize]
+        } else {
+            CHEST_INV[idx][item as usize]
+        });
+        if m == 0 {
+            return 0;
+        }
+        if to_chest {
+            INV[item as usize] -= m;
+            CHEST_INV[idx][item as usize] = CHEST_INV[idx][item as usize].saturating_add(m);
+        } else {
+            CHEST_INV[idx][item as usize] -= m;
+            inv_give(item, m);
+        }
+        sfx::blip();
+        m
+    }
+}
+
+/// Put `want` of the stack in hand on the other pane. The hand empties when
+/// the stack is all placed or the source has none left.
+#[optimize(size)]
+fn chest_place(idx: usize, to_chest: bool, want: u16) {
+    unsafe {
+        let item = CARRY;
+        let m = chest_move(idx, item, want.min(CARRY_N), to_chest);
+        CARRY_N -= m;
+        let left = if to_chest {
+            INV[item as usize]
+        } else {
+            CHEST_INV[idx][item as usize]
+        };
+        if CARRY_N == 0 || left == 0 {
+            CARRY = AIR;
+        }
+    }
+}
+
 #[inline(never)]
 #[optimize(size)]
 pub fn chest_input(idx: usize, pad: ButtonState, previous: ButtonState) {
@@ -178,35 +303,29 @@ pub fn chest_input(idx: usize, pad: ButtonState, previous: ButtonState) {
         }
     };
     box_pages(pad, previous, pane, n);
-    let item = pane_item(&list, n, pane, x % PANE_COLS) as usize;
-    if item == AIR as usize {
-        hold_step(false);
-        return;
-    }
-    if !same_hold(pad, previous, item as u8) {
-        return;
-    }
-    let have = unsafe {
-        if pane == 0 {
-            INV[item]
-        } else {
-            CHEST_INV[idx][item]
+    let (zone, item, count) = chest_slot(idx);
+    let s = chest_spot(idx);
+    let mine = zone == Zone::Mine;
+    let side = if mine { FROM_MINE } else { FROM_BOX };
+    let ones = place_ones(pad, previous, hand::decide(s, Btn::Square) == Act::One);
+    match hand::decide(s, Btn::Cross) {
+        Act::Take if pressed(button::CROSS) => {
+            lift(item, count, side);
+            sfx::blip();
         }
-    };
-    let m = press_count(pad, previous, have);
-    if m == 0 {
-        return;
+        Act::Place if pressed(button::CROSS) => chest_place(idx, !mine, unsafe { CARRY_N }),
+        _ => {}
     }
-    unsafe {
-        if pane == 0 {
-            INV[item] -= m;
-            CHEST_INV[idx][item] = CHEST_INV[idx][item].saturating_add(m);
-        } else {
-            CHEST_INV[idx][item] -= m;
-            inv_give(item as u8, m);
-        }
+    if pressed(button::SQUARE) && hand::decide(s, Btn::Square) == Act::Half {
+        lift(item, hand::half(count), side);
+        sfx::blip();
     }
-    sfx::blip();
+    if ones > 0 {
+        chest_place(idx, !mine, ones);
+    }
+    if pressed(button::TRIANGLE) && hand::decide(s, Btn::Triangle) != Act::None {
+        chest_move(idx, item, count, mine);
+    }
 }
 
 /// Draw a count of half smelts as smelts ("7" or "7.5"; coal is 8, a log
@@ -245,59 +364,33 @@ const F_IN: usize = 0;
 const F_OUT: usize = 1;
 const F_FUEL: usize = 2;
 
-#[inline(never)]
+/// Put up to `want` of `item` from your pack into the furnace: fuel burns,
+/// ore smelts. Stops when the input slot holds a different ore.
 #[optimize(size)]
-pub fn furnace_input(idx: usize, pad: ButtonState, previous: ButtonState) {
-    // Your pane is 7x4; the furnace pane is one column of three slots.
-    let right = unsafe { BOX_X_CUR } >= PANE_COLS;
-    box_nav(pad, PANE_COLS + 1, if right { 3 } else { PANE_ROWS });
-    let (x, y) = unsafe {
-        if BOX_X_CUR >= PANE_COLS {
-            BOX_X_CUR = PANE_COLS;
-            if BOX_Y_CUR > F_FUEL {
-                BOX_Y_CUR = F_FUEL;
-            }
+fn furn_fill(idx: usize, item: u8, want: u16) -> u16 {
+    let mut moved = 0;
+    while moved < want {
+        let before = unsafe { INV[item as usize] };
+        furn_deposit(idx, item);
+        if unsafe { INV[item as usize] } == before {
+            break;
         }
-        (BOX_X_CUR, BOX_Y_CUR)
-    };
-    if x < PANE_COLS {
-        let mut list = [0u8; BLOCK_KINDS];
-        let n = furnace_list(&mut list);
-        let item = pane_item(&list, n, 0, x);
-        if item == AIR {
-            hold_step(false);
-            return;
-        }
-        if !same_hold(pad, previous, item) {
-            return;
-        }
-        let m = press_count(pad, previous, unsafe { INV[item as usize] });
-        let mut moved = false;
-        let mut i = 0;
-        while i < m {
-            let before = unsafe { INV[item as usize] };
-            furn_deposit(idx, item);
-            if unsafe { INV[item as usize] } == before {
-                break; // the input slot holds a different ore
-            }
-            moved = true;
-            i += 1;
-        }
-        if moved {
-            sfx::blip();
-        }
-        return;
+        moved += 1;
     }
+    moved
+}
+
+/// Take up to `want` out of the furnace's input (F_IN) or output (F_OUT)
+/// slot into your pack. Returns how many came out.
+#[optimize(size)]
+fn furn_pull(idx: usize, y: usize, want: u16) -> u16 {
     unsafe {
-        let (kind, count) = match y {
-            F_IN => (&mut FURN_IN[idx], &mut FURN_IN_N[idx]),
-            F_OUT => (&mut FURN_OUT[idx], &mut FURN_OUT_N[idx]),
-            _ => {
-                hold_step(false);
-                return; // fuel is burnt as it goes: it does not come back
-            }
+        let (kind, count) = if y == F_IN {
+            (&mut FURN_IN[idx], &mut FURN_IN_N[idx])
+        } else {
+            (&mut FURN_OUT[idx], &mut FURN_OUT_N[idx])
         };
-        let m = press_count(pad, previous, *count);
+        let m = want.min(*count);
         if m > 0 {
             if y == F_OUT {
                 crate::furnace_took(idx, *kind, m);
@@ -312,8 +405,140 @@ pub fn furnace_input(idx: usize, pad: ButtonState, previous: ButtonState) {
             }
             sfx::blip();
         }
+        m
     }
 }
+
+/// Whether the furnace slot under the cursor takes this kind: the fuel slot
+/// what burns, the input slot what smelts and does not burn.
+#[optimize(size)]
+fn furn_fits(zone: Zone, item: u8) -> bool {
+    if zone == Zone::FurnFuel {
+        fuel_smelts(item) > 0
+    } else {
+        fuel_smelts(item) == 0 && smelt_result(item) != AIR
+    }
+}
+
+/// The furnace cursor's slot: zone, kind and how many.
+#[optimize(size)]
+fn furnace_slot(idx: usize) -> (Zone, u8, u16) {
+    let (x, y) = unsafe { (BOX_X_CUR, BOX_Y_CUR) };
+    unsafe {
+        if x < PANE_COLS {
+            let mut list = [0u8; BLOCK_KINDS];
+            let n = furnace_list(&mut list);
+            let item = pane_item(&list, n, 0, x);
+            let count = if item == AIR { 0 } else { INV[item as usize] };
+            return (Zone::MineFurnace, item, count);
+        }
+        match y {
+            F_IN => (Zone::FurnIn, FURN_IN[idx], FURN_IN_N[idx]),
+            F_OUT => (Zone::FurnOut, FURN_OUT[idx], FURN_OUT_N[idx]),
+            _ => (Zone::FurnFuel, AIR, 0), // burnt as it goes: nothing to lift
+        }
+    }
+}
+
+#[optimize(size)]
+fn furnace_spot(idx: usize) -> Spot {
+    let (zone, item, count) = furnace_slot(idx);
+    let from = unsafe { CARRY_FROM };
+    // A stack from your pane only goes in the slot it suits; the output
+    // takes nothing (the table has no Place for it either way).
+    let other = if zone == Zone::MineFurnace {
+        from == FROM_FIN || from == FROM_FOUT
+    } else {
+        from == FROM_MINE && furn_fits(zone, unsafe { CARRY })
+    };
+    spot(zone, item, count, item != AIR && count > 0, other)
+}
+
+/// Place `want` of the stack in hand on the furnace slot under the cursor:
+/// from your pack into the input or fuel slot, or from the furnace back to
+/// your pack.
+#[optimize(size)]
+fn furn_place(idx: usize, zone: Zone, want: u16) {
+    unsafe {
+        let item = CARRY;
+        let want = want.min(CARRY_N);
+        let m = if zone == Zone::MineFurnace {
+            let y = if CARRY_FROM == FROM_FIN { F_IN } else { F_OUT };
+            let m = furn_pull(idx, y, want);
+            let left = if y == F_IN { FURN_IN_N[idx] } else { FURN_OUT_N[idx] };
+            if left == 0 {
+                CARRY_N = m; // the slot is empty: this was all of it
+            }
+            m
+        } else if furn_fits(zone, item) {
+            let m = furn_fill(idx, item, want);
+            if INV[item as usize] == 0 {
+                CARRY_N = m;
+            }
+            m
+        } else {
+            0
+        };
+        sfx::blip();
+        CARRY_N -= m;
+        if CARRY_N == 0 {
+            CARRY = AIR;
+        }
+    }
+}
+
+#[inline(never)]
+#[optimize(size)]
+pub fn furnace_input(idx: usize, pad: ButtonState, previous: ButtonState) {
+    // Your pane is 7x4; the furnace pane is one column of three slots.
+    let right = unsafe { BOX_X_CUR } >= PANE_COLS;
+    box_nav(pad, PANE_COLS + 1, if right { 3 } else { PANE_ROWS });
+    unsafe {
+        if BOX_X_CUR >= PANE_COLS {
+            BOX_X_CUR = PANE_COLS;
+            if BOX_Y_CUR > F_FUEL {
+                BOX_Y_CUR = F_FUEL;
+            }
+        }
+    }
+    let (zone, item, count) = furnace_slot(idx);
+    let s = furnace_spot(idx);
+    let side = match zone {
+        Zone::MineFurnace => FROM_MINE,
+        Zone::FurnIn => FROM_FIN,
+        _ => FROM_FOUT,
+    };
+    let pressed = |b: u16| pad.pressed_since(previous, b);
+    let ones = place_ones(pad, previous, hand::decide(s, Btn::Square) == Act::One);
+    match hand::decide(s, Btn::Cross) {
+        Act::Take if pressed(button::CROSS) => {
+            lift(item, count, side);
+            sfx::blip();
+        }
+        Act::Place if pressed(button::CROSS) => furn_place(idx, zone, unsafe { CARRY_N }),
+        _ => {}
+    }
+    if pressed(button::SQUARE) && hand::decide(s, Btn::Square) == Act::Half {
+        lift(item, hand::half(count), side);
+        sfx::blip();
+    }
+    if ones > 0 {
+        furn_place(idx, zone, ones);
+    }
+    if pressed(button::TRIANGLE) {
+        match hand::decide(s, Btn::Triangle) {
+            Act::ToFurnace => {
+                furn_fill(idx, item, count);
+                sfx::blip();
+            }
+            Act::ToPack => {
+                furn_pull(idx, if zone == Zone::FurnIn { F_IN } else { F_OUT }, count);
+            }
+            _ => {}
+        }
+    }
+}
+
 
 /// A pane of kinds with counts from `counts`, and its page marker.
 #[optimize(size)]
@@ -354,23 +579,58 @@ fn draw_pane(
     }
 }
 
-/// The controls line both containers share.
+/// One prompt: the button's pill and what it does for the slot under the
+/// cursor (nothing is drawn for a button that does nothing there). Returns
+/// the next free x.
 #[optimize(size)]
-fn container_hints(font: &FontAtlas, tabs: bool, pages: bool) {
-    let (y1, y2) = (174, 190);
-    let x = hint_item(font, 16, y1, "X", PS_CROSS, "MOVE 1");
-    let x = hint_item(font, x, y1, "[]", PS_SQUARE, "HALF");
-    hint_item(font, x, y1, "T", PS_TRIANGLE, "ALL");
-    let mut x = 16;
-    if tabs {
-        x = hint_item(font, x, y2, "L1R1", PS_KEY, "TAB");
+fn prompt(font: &FontAtlas, x: i16, y: i16, s: Spot, b: Btn) -> i16 {
+    let a = hand::decide(s, b);
+    if a == Act::None {
+        return x;
     }
-    x = if pages {
-        hint_item(font, x, y2, "L2R2", PS_KEY, "PAGE")
-    } else {
-        hint_item(font, x, y2, "HOLD X", PS_KEY, "REPEAT")
+    let (key, tint) = match b {
+        Btn::Cross => ("X", PS_CROSS),
+        Btn::Square => ("[]", PS_SQUARE),
+        Btn::Triangle => ("T", PS_TRIANGLE),
+        Btn::Circle => ("O", PS_CIRCLE),
     };
-    hint_item(font, x, y2, "O", PS_CIRCLE, "CLOSE");
+    hint_item(font, x, y, key, tint, hand::label(a))
+}
+
+/// The prompt bar every screen shares: what X, SQUARE and TRIANGLE do for the
+/// slot under the cursor on the first line, CIRCLE on the second (the caller
+/// adds its tab and page buttons after it). Returns the next free x there.
+#[optimize(size)]
+fn prompt_bar(font: &FontAtlas, y1: i16, y2: i16, s: Spot) -> i16 {
+    let mut x = 16;
+    x = prompt(font, x, y1, s, Btn::Cross);
+    x = prompt(font, x, y1, s, Btn::Square);
+    prompt(font, x, y1, s, Btn::Triangle);
+    prompt(font, 16, y2, s, Btn::Circle)
+}
+
+/// The stack in hand rides the cursor, up and to the right.
+#[optimize(size)]
+fn draw_hand(sx: i16, sy: i16) {
+    let (c, n) = unsafe { (CARRY, CARRY_N) };
+    if c == AIR {
+        return;
+    }
+    draw_icon(sx + 6, sy - 10, c, 128);
+    if n > 1 {
+        draw_count(sx + 6, sy - 11, n);
+    }
+}
+
+/// The info strip's name line while a stack is in hand: "HOLDING 12 NAME".
+#[optimize(size)]
+fn holding_line(font: &FontAtlas, x: i16, y: i16) {
+    let (c, n) = unsafe { (CARRY, CARRY_N) };
+    let mut nb = [0u8; 5];
+    ui_text(font, x, y, "HOLDING", LABEL);
+    let num = number(n, &mut nb);
+    ui_text(font, x + 64, y, num, LABEL);
+    ui_text(font, x + 72 + num.len() as i16 * 8, y, block_name(c), LABEL);
 }
 
 /// "YOU 37   CHEST 12" style counts line.
@@ -420,16 +680,22 @@ pub fn draw_chest(font: &FontAtlas, idx: usize, player: &Player) {
         pane_item(&theirs, nt, 1, x - PANE_COLS)
     };
     mc_slot(16, 130, 288, 34);
-    if item != AIR {
-        draw_icon(22, 135, item, 128);
-        ui_text(font, 42, 134, block_name(item), LABEL);
+    let hand = unsafe { CARRY };
+    let shown = if hand != AIR { hand } else { item };
+    if shown != AIR {
+        draw_icon(22, 135, shown, 128);
+        if hand != AIR {
+            holding_line(font, 42, 134);
+        } else {
+            ui_text(font, 42, 134, block_name(shown), LABEL);
+        }
         two_counts(
             font,
             148,
             "YOU",
-            inv[item as usize],
+            inv[shown as usize],
             "CHEST",
-            boxed[item as usize],
+            boxed[shown as usize],
         );
     } else {
         ui_text(
@@ -444,18 +710,20 @@ pub fn draw_chest(font: &FontAtlas, idx: usize, player: &Player) {
             GREY,
         );
     }
-    container_hints(
-        font,
-        true,
-        pages_of(nm, PANE_PAGE) > 1 || pages_of(nt, PANE_PAGE) > 1,
-    );
+    let nx = prompt_bar(font, 174, 190, chest_spot(idx));
+    let nx = hint_item(font, nx, 190, "L1R1", PS_KEY, "TAB");
+    if pages_of(nm, PANE_PAGE) > 1 || pages_of(nt, PANE_PAGE) > 1 {
+        hint_item(font, nx, 190, "L2R2", PS_KEY, "PAGE");
+    }
     draw_hotbar(hud_tool(player, AIR));
     let cx = if pane == 0 {
         YOU_X + x as i16 * SLOT
     } else {
         BOX_X + (x - PANE_COLS) as i16 * SLOT
     };
-    frame(cx, PANE_Y + y as i16 * SLOT, CURSOR);
+    let cy = PANE_Y + y as i16 * SLOT;
+    frame(cx, cy, CURSOR);
+    draw_hand(cx, cy);
 }
 
 // Furnace pane geometry: input over fuel on the left, the arrow, the output.
@@ -541,7 +809,26 @@ pub fn draw_furnace(font: &FontAtlas, idx: usize, player: &Player) {
     } else {
         pane_item(&mine, nm, 0, x)
     };
-    if right && y == F_FUEL {
+    let hand = unsafe { CARRY };
+    if hand != AIR {
+        draw_icon(22, 135, hand, 128);
+        holding_line(font, 42, 134);
+        let from_mine = unsafe { CARRY_FROM } == FROM_MINE;
+        let note = if !right || !from_mine {
+            "O PUTS IT BACK"
+        } else if y == F_OUT {
+            "THE OUTPUT ONLY GIVES"
+        } else if !furn_fits(if y == F_FUEL { Zone::FurnFuel } else { Zone::FurnIn }, hand) {
+            if y == F_FUEL {
+                "THAT WILL NOT BURN"
+            } else {
+                "THAT WILL NOT SMELT"
+            }
+        } else {
+            "O PUTS IT BACK"
+        };
+        ui_text(font, 42, 148, note, GREY);
+    } else if right && y == F_FUEL {
         ui_text(font, 42, 134, "FUEL", LABEL);
         let end = draw_halves(font, 42, 148, fuel);
         ui_text(font, end + 8, 148, "SMELTS LEFT", GREY);
@@ -579,7 +866,10 @@ pub fn draw_furnace(font: &FontAtlas, idx: usize, player: &Player) {
             GREY,
         );
     }
-    container_hints(font, false, pages_of(nm, PANE_PAGE) > 1);
+    let nx = prompt_bar(font, 174, 190, furnace_spot(idx));
+    if pages_of(nm, PANE_PAGE) > 1 {
+        hint_item(font, nx, 190, "L2R2", PS_KEY, "PAGE");
+    }
     draw_hotbar(hud_tool(player, AIR));
     let (cx, cy) = if right {
         match y {
@@ -591,6 +881,7 @@ pub fn draw_furnace(font: &FontAtlas, idx: usize, player: &Player) {
         (YOU_X + x as i16 * SLOT, PANE_Y + y as i16 * SLOT)
     };
     frame(cx, cy, CURSOR);
+    draw_hand(cx, cy);
 }
 
 // ---------------------------------------------------------------------------
@@ -598,9 +889,10 @@ pub fn draw_furnace(font: &FontAtlas, idx: usize, player: &Player) {
 // inventory. Nothing here is a Java slot: a kind shows once with its count,
 // and the only layout the player owns is the hotbar, which sits live under the
 // grid as the grid's fifth row. L1/R1 pick a tab, the D-pad snaps a cursor
-// (hold to repeat), CROSS picks a kind up and puts it on a hotbar slot,
-// TRIANGLE sends it to the first free slot, SQUARE clears a slot, SELECT
-// shows every kind of the tab instead of only what you own.
+// (hold to repeat), X takes a kind and places it on a hotbar slot (swapping
+// with what is there), TRIANGLE quick-moves it to the first free slot or, on
+// the hotbar, back into the pack, CIRCLE puts a held kind back, SELECT shows
+// every kind of the tab instead of only what you own.
 
 const GRID_X: i16 = HOTBAR_X0; // the grid sits on the hotbar's columns
 const GRID_Y: i16 = 53;
@@ -893,7 +1185,7 @@ fn drop_on_hotbar(j: usize, p: &mut Player) {
                 HOTBAR[CARRY_FROM as usize] = occupant;
             } else {
                 CARRY = occupant;
-                CARRY_FROM = -1;
+                CARRY_FROM = FROM_GRID;
             }
         }
     }
@@ -995,70 +1287,70 @@ pub fn inventory_input(pad: ButtonState, previous: ButtonState, player: &mut Pla
 
     let (cx, cy) = unsafe { (CUR_X, CUR_Y) };
     let item = cursor_item(&list, n);
+    let hot = cy == HOT_ROW;
+    let kind = if hot { unsafe { HOTBAR[cx] } } else { item };
+    let s = item_spot(hot, kind);
     if pressed(button::CROSS) {
-        unsafe {
-            NOTE_T = 0; // a new action replaces the last note
-            if cy == HOT_ROW {
-                if CARRY != AIR {
-                    drop_on_hotbar(cx, player);
-                } else if HOTBAR[cx] != AIR {
-                    CARRY = HOTBAR[cx];
-                    CARRY_FROM = cx as i8;
-                    CARRY_N = INV[CARRY as usize];
-                }
-            } else if CARRY != AIR {
-                // Back into the inventory: off the hotbar if it came from it.
-                if CARRY_FROM >= 0 && HOTBAR[CARRY_FROM as usize] == CARRY {
-                    HOTBAR[CARRY_FROM as usize] = AIR;
-                    note("TAKEN OFF THE HOTBAR");
-                }
-                CARRY = AIR;
-            } else if item != AIR {
-                if INV[item as usize] == 0 {
-                    note("YOU HAVE NONE YET");
-                } else if !holdable(item) {
-                    note("CAN'T BE HELD: USE IT IN RECIPES");
-                } else {
-                    CARRY = item;
-                    CARRY_FROM = -1;
-                    CARRY_N = INV[item as usize];
-                }
-            }
+        unsafe { NOTE_T = 0 }; // a new action replaces the last note
+        match hand::decide(s, Btn::Cross) {
+            Act::Take => lift(kind, unsafe { INV[kind as usize] }, if hot { cx as i8 } else { FROM_GRID }),
+            Act::Place | Act::Swap => drop_on_hotbar(cx, player),
+            _ => why_not(hot, item),
         }
         sfx::blip();
     }
-    if pressed(button::SQUARE) {
-        unsafe {
-            let slot = if cy == HOT_ROW {
-                Some(cx)
-            } else {
-                hotbar_slot_of(item).filter(|_| item != AIR)
-            };
-            if let Some(j) = slot {
-                if HOTBAR[j] != AIR {
-                    HOTBAR[j] = AIR;
-                    note("HOTBAR SLOT CLEARED");
-                    sfx::blip();
+    if pressed(button::SQUARE) && hand::decide(s, Btn::Square) == Act::Half {
+        lift(kind, hand::half(s.count), FROM_GRID);
+        sfx::blip();
+    }
+    if pressed(button::TRIANGLE) {
+        unsafe { NOTE_T = 0 };
+        match hand::decide(s, Btn::Triangle) {
+            Act::ToHotbar => {
+                if hotbar_slot_of(item).is_some() {
+                    note("ALREADY ON THE HOTBAR");
+                } else if let Some(j) = hotbar_slot_of(AIR) {
+                    unsafe { HOTBAR[j] = item };
+                    note("MOVED TO THE HOTBAR");
+                } else {
+                    note("HOTBAR FULL: TAKE ONE AND PLACE IT");
                 }
             }
-        }
-    }
-    if pressed(button::TRIANGLE) && cy < HOT_ROW && item != AIR {
-        if unsafe { INV[item as usize] } == 0 {
-            note("YOU HAVE NONE YET");
-        } else if !holdable(item) {
-            note("CAN'T BE HELD: USE IT IN RECIPES");
-        } else if hotbar_slot_of(item).is_some() {
-            note("ALREADY ON THE HOTBAR");
-        } else if let Some(j) = hotbar_slot_of(AIR) {
-            unsafe { HOTBAR[j] = item };
-            note("MOVED TO THE HOTBAR");
-        } else {
-            note("HOTBAR FULL: X PICKS A SLOT");
+            Act::ToPack => unsafe {
+                if CARRY == HOTBAR[cx] {
+                    CARRY = AIR;
+                }
+                HOTBAR[cx] = AIR;
+                note("BACK IN THE PACK");
+            },
+            _ => why_not(hot, item),
         }
         sfx::blip();
     }
     false
+}
+
+/// The slot under the item pages' cursor for the prompt table: a hotbar slot
+/// or a kind in the grid. A kind you own none of, or cannot hold, is not a
+/// stack to act on.
+#[optimize(size)]
+fn item_spot(hot: bool, kind: u8) -> Spot {
+    let count = if kind == AIR { 0 } else { unsafe { INV[kind as usize] } };
+    let full = kind != AIR && (hot || (count > 0 && holdable(kind)));
+    spot(if hot { Zone::Hotbar } else { Zone::Grid }, kind, count, full, false)
+}
+
+/// Why a button did nothing on a grid kind that looks like a stack.
+#[optimize(size)]
+fn why_not(hot: bool, item: u8) {
+    if hot || item == AIR || unsafe { CARRY } != AIR {
+        return;
+    }
+    if unsafe { INV[item as usize] } == 0 {
+        note("YOU HAVE NONE YET");
+    } else if !holdable(item) {
+        note("CAN'T BE HELD: USE IT IN RECIPES");
+    }
 }
 
 // -- drawing ------------------------------------------------------------------
@@ -1229,28 +1521,22 @@ pub fn draw_inventory(font: &FontAtlas, player: &Player) {
     // Info strip: what is under (or on) the cursor, and what X will do.
     mc_slot(16, 130, 288, 34);
     let hot = cy == HOT_ROW;
-    let shown = if carry != AIR {
-        carry
-    } else if hot {
-        unsafe { HOTBAR[cx] }
-    } else {
-        cursor_item(&list, n)
-    };
+    let shown_kind = if hot { unsafe { HOTBAR[cx] } } else { cursor_item(&list, n) };
+    let shown = if carry != AIR { carry } else { shown_kind };
     if shown != AIR {
         draw_icon(22, 135, shown, 128);
-        let mut x = 42;
         if carry != AIR {
-            ui_text(font, x, 134, "MOVING ", LABEL);
-            x += 56;
-        }
-        let name = block_name(shown);
-        ui_text(font, x, 134, name, LABEL);
-        if carry == AIR && unsafe { INV[shown as usize] } > 0 {
-            let mut nb = [0u8; 5];
-            let cnt = number(unsafe { INV[shown as usize] }, &mut nb);
-            let nx = x + (name.len() as i16 + 1) * 8;
-            ui_text(font, nx, 134, "X", GREY);
-            ui_text(font, nx + 8, 134, cnt, GREY);
+            holding_line(font, 42, 134);
+        } else {
+            let name = block_name(shown);
+            ui_text(font, 42, 134, name, LABEL);
+            if unsafe { INV[shown as usize] } > 0 {
+                let mut nb = [0u8; 5];
+                let cnt = number(unsafe { INV[shown as usize] }, &mut nb);
+                let nx = 42 + (name.len() as i16 + 1) * 8;
+                ui_text(font, nx, 134, "X", GREY);
+                ui_text(font, nx + 8, 134, cnt, GREY);
+            }
         }
     }
     let (note_t, note_s) = unsafe { (NOTE_T, NOTE) };
@@ -1261,11 +1547,7 @@ pub fn draw_inventory(font: &FontAtlas, player: &Player) {
             font,
             42,
             148,
-            if hot {
-                "X PUTS IT IN THIS SLOT"
-            } else {
-                "X PUTS IT BACK"
-            },
+            "CHOOSE A HOTBAR SLOT. O: BACK",
             GREY,
         );
     } else if shown != AIR {
@@ -1292,38 +1574,13 @@ pub fn draw_inventory(font: &FontAtlas, player: &Player) {
         ui_text(font, 42, 148, "AN EMPTY HOTBAR SLOT", GREY);
     }
 
-    // Controls.
-    let (y1, y2) = (174, 190);
-    let x = hint_item(
-        font,
-        16,
-        y1,
-        "X",
-        PS_CROSS,
-        if carry != AIR { "PUT" } else { "MOVE" },
-    );
-    let x = hint_item(font, x, y1, "T", PS_TRIANGLE, "TO HOTBAR");
-    hint_item(font, x, y1, "[]", PS_SQUARE, "CLEAR SLOT");
-    let x = hint_item(font, 16, y2, "L1R1", PS_KEY, "TAB");
-    let x = hint_item(
-        font,
-        x,
-        y2,
-        "SEL",
-        PS_KEY,
-        if all { "OWNED" } else { "ALL" },
-    );
-    let x = hint_item(
-        font,
-        x,
-        y2,
-        "O",
-        PS_CIRCLE,
-        if carry != AIR { "CANCEL" } else { "CLOSE" },
-    );
+    // The prompt bar: what each button does for the slot under the cursor.
+    let x = prompt_bar(font, 168, 180, item_spot(hot, shown_kind));
+    let x = hint_item(font, x, 180, "L1R1", PS_KEY, "TAB");
     if np > 1 {
-        hint_item(font, x, y2, "L2R2", PS_KEY, "PAGE");
+        hint_item(font, x, 180, "L2R2", PS_KEY, "PAGE");
     }
+    hint_item(font, 16, 192, "SEL", PS_KEY, if all { "SHOW OWNED" } else { "SHOW ALL" });
 
     // The live hotbar is the grid's fifth row, drawn over the dimming.
     draw_hotbar(hud_tool(player, AIR));
@@ -1333,14 +1590,7 @@ pub fn draw_inventory(font: &FontAtlas, player: &Player) {
         (GRID_X + cx as i16 * SLOT, GRID_Y + cy as i16 * SLOT)
     };
     frame(sx, sy, CURSOR);
-    if carry != AIR {
-        // The lifted stack rides the cursor, up and to the right.
-        draw_icon(sx + 6, sy - 10, carry, 128);
-        let c = unsafe { INV[carry as usize] };
-        if c > 1 {
-            draw_count(sx + 6, sy - 11, c);
-        }
-    }
+    draw_hand(sx, sy);
 }
 
 // -- the player page -----------------------------------------------------------
@@ -1456,6 +1706,82 @@ fn put_in_offhand(p: &mut Player) {
     }
 }
 
+/// What the player page's cursor is on, for the prompt table.
+#[optimize(size)]
+fn player_spot(z: usize, i: usize, p: &Player, ns: usize, st: &[u8; STOCK_N]) -> Spot {
+    let owned = |k: u8| if k == AIR { 0 } else { unsafe { INV[k as usize] } };
+    let (zone, kind, count, full) = match z {
+        Z_ARMOR => (Zone::Armor, p.worn[i], 1, p.worn[i] != AIR),
+        Z_OFF => (Zone::Off, p.offhand, owned(p.offhand), p.offhand != AIR),
+        Z_WEAP => {
+            let class = equip::WEAPONS[i];
+            (Zone::Weapon, AIR, 0, class == TOOL_NONE || tool_tier(p, class) > 0)
+        }
+        Z_STOCK => {
+            let k = if i < ns { st[i] } else { AIR };
+            (Zone::Pack, k, owned(k), i < ns)
+        }
+        Z_GRID => (Zone::Cell, grid::kind(i), grid::count(i), grid::kind(i) != AIR),
+        Z_OUT => (Zone::Result, AIR, 0, grid::output().is_some()),
+        _ => {
+            let k = unsafe { HOTBAR[i] };
+            (Zone::Hotbar, k, owned(k), k != AIR)
+        }
+    };
+    spot(zone, kind, count, full, false)
+}
+
+/// Put the armour piece in hand on armour slot `slot`.
+#[optimize(size)]
+fn wear_held(p: &mut Player, slot: usize) {
+    let c = unsafe { CARRY };
+    match armor_piece(c) {
+        Some((_, s)) if s == slot => match equip::wear(p, c) {
+            Ok(()) => {
+                unsafe { CARRY = AIR };
+                note("WORN");
+                sfx::confirm();
+            }
+            Err(m) => note(m),
+        },
+        Some(_) => note("THAT PIECE GOES IN ANOTHER SLOT"),
+        None => note("THAT IS NOT ARMOR"),
+    }
+}
+
+/// Put the stack in hand into crafting cell `i`: onto an empty cell or the
+/// same kind, or swapped with a different one, which comes into the hand.
+#[inline(never)]
+#[optimize(size)]
+fn cell_place(i: usize) {
+    unsafe {
+        let c = CARRY;
+        if INV[c as usize] == 0 {
+            note("NONE LEFT");
+            return;
+        }
+        let old = if grid::kind(i) != AIR && grid::kind(i) != c {
+            Some(grid::take_all(i))
+        } else {
+            None
+        };
+        let m = grid::put(i, c, CARRY_N);
+        if m == 0 {
+            if let Some((k, n)) = old {
+                grid::put(i, k, n);
+            }
+            note("THE CELL IS FULL");
+            return;
+        }
+        CARRY_N -= m;
+        match old {
+            Some((k, n)) => lift(k, n, FROM_CELL),
+            None if CARRY_N == 0 => CARRY = AIR,
+            None => {}
+        }
+    }
+}
+
 /// One frame of the player page.
 #[inline(never)]
 #[optimize(size)]
@@ -1479,125 +1805,103 @@ fn player_input(pad: ButtonState, previous: ButtonState, p: &mut Player) {
         d += 1;
     }
     let (z, i) = unsafe { (PZ, PI) };
+    let s = player_spot(z, i, p, ns, &st);
     if pressed(button::CROSS) {
         unsafe { NOTE_T = 0 };
-        match z {
-            Z_ARMOR => {
-                if p.worn[i] == AIR {
-                    note("NOTHING WORN HERE");
-                } else {
-                    match equip::take_off(p, i) {
-                        Ok(()) => note("TAKEN OFF"),
-                        Err(m) => note(m),
-                    }
-                }
-            }
-            Z_STOCK => {
-                if i < ns {
-                    match equip::wear(p, st[i]) {
-                        Ok(()) => {
-                            note("WORN");
-                            sfx::confirm();
-                        }
-                        Err(m) => note(m),
-                    }
-                }
-            }
-            Z_WEAP => {
-                let class = equip::WEAPONS[i];
-                if class == TOOL_NONE || tool_tier(p, class) > 0 {
-                    p.weapon = class;
-                    note("WEAPON EQUIPPED");
-                    sfx::confirm();
-                } else {
-                    note("YOU HAVE NONE OF THOSE");
-                }
-            }
-            Z_OFF => unsafe {
-                if CARRY != AIR {
-                    put_in_offhand(p);
-                } else if p.offhand != AIR {
-                    CARRY = p.offhand;
-                    CARRY_FROM = -2;
-                    CARRY_N = INV[CARRY as usize];
-                }
-            },
-            Z_GRID => unsafe {
-                // Java's left click: with nothing held pick the stack up, with
-                // a stack held put all of it down (a different kind swaps).
-                if CARRY != AIR {
-                    let m = grid::put(i, CARRY, CARRY_N);
-                    CARRY_N -= m;
-                    if m == 0 {
-                        note("NONE LEFT OR THE CELL IS FULL");
-                    } else if CARRY_N == 0 {
-                        CARRY = AIR;
-                    }
-                } else if grid::kind(i) != AIR {
+        let own = |k: u8| unsafe { INV[k as usize] };
+        match hand::decide(s, Btn::Cross) {
+            Act::Take => match z {
+                Z_OFF => lift(p.offhand, own(p.offhand), FROM_OFF),
+                Z_STOCK => lift(st[i], own(st[i]), FROM_PACK),
+                Z_GRID => {
                     let (k, n) = grid::take_all(i);
-                    CARRY = k;
-                    CARRY_N = n;
-                    CARRY_FROM = -3;
+                    lift(k, n, FROM_CELL);
                 }
+                _ => lift(unsafe { HOTBAR[i] }, own(unsafe { HOTBAR[i] }), i as i8),
             },
-            Z_OUT => {
+            Act::Place | Act::Swap => match z {
+                Z_OFF => put_in_offhand(p),
+                Z_GRID => cell_place(i),
+                _ => drop_on_hotbar(i, p),
+            },
+            Act::Wear => wear_held(p, i),
+            Act::Equip => {
+                p.weapon = equip::WEAPONS[i];
+                note("WEAPON EQUIPPED");
+                sfx::confirm();
+            }
+            Act::Craft => {
                 if grid::craft_once() {
                     sfx::confirm();
-                } else {
-                    note("PUT THE INGREDIENTS IN THE GRID");
                 }
             }
-            _ => unsafe {
-                // The hotbar, as on the item pages.
-                if CARRY != AIR {
-                    drop_on_hotbar(i, p);
-                } else if HOTBAR[i] != AIR {
-                    CARRY = HOTBAR[i];
-                    CARRY_FROM = i as i8;
-                    CARRY_N = INV[CARRY as usize];
-                }
+            _ => match z {
+                Z_WEAP => note("YOU HAVE NONE OF THOSE"),
+                Z_OUT => note("PUT THE INGREDIENTS IN THE GRID"),
+                _ => {}
             },
         }
         sfx::blip();
     }
     if pressed(button::SQUARE) {
-        unsafe {
-            if z == Z_GRID {
-                // Java's right click: put one down while holding a stack,
-                // else pick up half of what is there.
-                if CARRY != AIR {
-                    if grid::put(i, CARRY, 1) > 0 {
-                        CARRY_N -= 1;
-                        if CARRY_N == 0 {
-                            CARRY = AIR;
-                        }
-                    }
-                } else if grid::kind(i) != AIR {
-                    let (k, n) = grid::take_half(i);
-                    CARRY = k;
-                    CARRY_N = n;
-                    CARRY_FROM = -3;
-                }
-            } else if z == Z_HOT && HOTBAR[i] != AIR {
-                HOTBAR[i] = AIR;
-                note("HOTBAR SLOT CLEARED");
-            } else if z == Z_OFF && p.offhand != AIR {
-                p.offhand = AIR;
-                note("OFF HAND CLEARED");
+        match hand::decide(s, Btn::Square) {
+            Act::Half => {
+                let (k, n) = grid::take_half(i);
+                lift(k, n, FROM_CELL);
             }
+            Act::One => unsafe {
+                if grid::put(i, CARRY, 1) > 0 {
+                    CARRY_N -= 1;
+                    if CARRY_N == 0 {
+                        CARRY = AIR;
+                    }
+                } else {
+                    note("NONE LEFT OR THE CELL IS FULL");
+                }
+            },
+            _ => {}
         }
     }
     if pressed(button::TRIANGLE) {
-        // Java's shift-click: a cell back to the inventory, the output
-        // crafted as many times as the cells allow.
-        if z == Z_GRID && grid::kind(i) != AIR {
-            grid::clear_cell(i);
-            note("PUT BACK");
-        } else if z == Z_OUT {
-            let n = grid::craft_all();
-            if n > 0 {
-                sfx::confirm();
+        unsafe { NOTE_T = 0 };
+        match hand::decide(s, Btn::Triangle) {
+            Act::ToPack => match z {
+                Z_ARMOR => match equip::take_off(p, i) {
+                    Ok(()) => note("TAKEN OFF"),
+                    Err(m) => note(m),
+                },
+                Z_OFF => {
+                    p.offhand = AIR;
+                    note("BACK IN THE PACK");
+                }
+                Z_GRID => {
+                    grid::clear_cell(i);
+                    note("BACK IN THE PACK");
+                }
+                _ => unsafe {
+                    if CARRY == HOTBAR[i] {
+                        CARRY = AIR;
+                    }
+                    HOTBAR[i] = AIR;
+                    note("BACK IN THE PACK");
+                },
+            },
+            Act::Wear => match equip::wear(p, st[i]) {
+                Ok(()) => {
+                    if unsafe { CARRY } == st[i] {
+                        unsafe { CARRY = AIR };
+                    }
+                    note("WORN");
+                    sfx::confirm();
+                }
+                Err(m) => note(m),
+            },
+            Act::CraftAll => {
+                if grid::craft_all() > 0 {
+                    sfx::confirm();
+                }
             }
+            _ => {}
         }
     }
     // A held CROSS on the output keeps crafting, after a short delay. Only a
@@ -1812,10 +2116,10 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
         Z_ARMOR => {
             if armor_piece(p.worn[i]).is_some() {
                 shown = p.worn[i];
-                l2 = "X TAKES IT OFF";
+                l2 = "T TAKES IT OFF";
             } else {
                 l1 = SLOT_NAME[i];
-                l2 = "EMPTY. WEAR ONE FROM YOUR PACK";
+                l2 = "EMPTY. PLACE AN ARMOR PIECE HERE";
             }
         }
         Z_OFF => {
@@ -1823,7 +2127,7 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
             if shown == AIR {
                 l1 = "OFF HAND";
             }
-            l2 = "X MOVES AN ITEM HERE. L1+R1 SWAPS";
+            l2 = "OFF HAND. L1+R1 SWAPS HANDS";
         }
         Z_WEAP => {
             let class = equip::WEAPONS[i];
@@ -1844,15 +2148,15 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
             shown = grid::kind(i);
             if shown == AIR {
                 l1 = "CRAFTING GRID";
-                l2 = "X PUTS THE HELD STACK HERE";
+                l2 = "PLACE A STACK HERE";
             } else {
-                l2 = "X LIFTS THE STACK. []: HALF";
+                l2 = "A STACK IN THE GRID";
             }
         }
         Z_OUT => {
             if let Some((out, _)) = grid::output() {
                 shown = out;
-                l2 = "X CRAFTS. T: ALL OF THEM";
+                l2 = "WHAT THE GRID MAKES";
             } else {
                 l1 = "CRAFTING RESULT";
                 l2 = "FILL THE GRID, OR USE THE [] LIST";
@@ -1861,18 +2165,21 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
         Z_STOCK => {
             if i < ns {
                 shown = st[i];
-                l2 = "X WEARS IT";
+                l2 = "ARMOR YOU CARRY. T WEARS IT";
             } else {
                 l1 = "NO ARMOR HERE";
                 l2 = "CRAFT IT AT A TABLE";
             }
         }
         _ => {
-            shown = if carry != AIR { carry } else { unsafe { HOTBAR[i] } };
-            l2 = if carry != AIR { "X PUTS IT HERE" } else { "X MOVES IT" };
+            shown = unsafe { HOTBAR[i] };
+            l2 = "YOUR HOTBAR";
         }
     }
-    if shown != AIR {
+    if carry != AIR {
+        draw_icon(20, 160, carry, 128);
+        holding_line(font, 40, 161);
+    } else if shown != AIR {
         draw_icon(20, 160, shown, 128);
         ui_text(font, 40, 161, block_name(shown), LABEL);
         if let Some((t, sl)) = armor_piece(shown) {
@@ -1892,48 +2199,12 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
         ui_text(font, 20, 161, l1, LABEL);
     }
     let (note_t, note_s) = unsafe { (NOTE_T, NOTE) };
+    let l2 = if carry != AIR { "O PUTS IT BACK" } else { l2 };
     ui_text(font, 40, 172, if note_t > 0 { note_s } else { l2 }, if note_t > 0 { (0xF0, 0xE0, 0x80) } else { GREY });
 
-    // Controls.
-    let (y1, y2) = (188, 199);
-    let grid_z = z == Z_GRID;
-    let x = hint_item(
-        font,
-        16,
-        y1,
-        "X",
-        PS_CROSS,
-        if z == Z_OUT {
-            "CRAFT"
-        } else if carry != AIR {
-            "PUT"
-        } else if grid_z {
-            "LIFT"
-        } else {
-            "USE"
-        },
-    );
-    let x = hint_item(
-        font,
-        x,
-        y1,
-        "[]",
-        PS_SQUARE,
-        if grid_z && carry != AIR {
-            "ONE"
-        } else if grid_z {
-            "HALF"
-        } else {
-            "CLEAR"
-        },
-    );
-    let x = if grid_z || z == Z_OUT {
-        hint_item(font, x, y1, "T", PS_TRIANGLE, if grid_z { "BACK" } else { "ALL" })
-    } else {
-        x
-    };
-    hint_item(font, x, y1, "O", PS_CIRCLE, if carry != AIR { "CANCEL" } else { "CLOSE" });
-    hint_item(font, 16, y2, "L1R1", PS_KEY, "PAGE");
+    // The prompt bar: what each button does for the slot under the cursor.
+    let nx = prompt_bar(font, 188, 199, player_spot(z, i, p, ns, &st));
+    hint_item(font, nx, 199, "L1R1", PS_KEY, "PAGE");
 
     // The hotbar row and the cursor.
     unsafe { OFFHAND_SHOWN = p.offhand };
@@ -1948,11 +2219,5 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
         _ => (HOTBAR_X0 + i as i16 * SLOT, HUD_HOTBAR_Y),
     };
     frame(sx, sy, CURSOR);
-    if carry != AIR {
-        draw_icon(sx + 6, sy - 10, carry, 128);
-        let n = unsafe { CARRY_N }.min(unsafe { INV[carry as usize] } + 64);
-        if n > 1 {
-            draw_count(sx + 6, sy - 11, n);
-        }
-    }
+    draw_hand(sx, sy);
 }

@@ -66,6 +66,28 @@ Equipment, and fixes from a playtest.
   frame spends waiting for the next vblank), so a blast, a chain of them or a
   burning forest no longer stalls the game for a third of a second or more.
   The crater appears a moment after the blast, as its remesh streams in.
+- A CONTROLS card lists every button on two pages, in the world and in menus.
+  It is on the main menu and in the pause menu (OPTIONS > CONTROLS), and it
+  comes up once on your first PLAY; the memory card remembers that it did.
+- The inventory, the 2x2 grid, chests and furnaces share one pad grammar, the
+  one Minecraft's PlayStation editions use. X takes a stack, then places it
+  and swaps with what is there. SQUARE takes half, then places one. TRIANGLE
+  quick-moves the stack under the cursor: to the hotbar, back to the pack,
+  across to the chest or furnace, wears armour, crafts all. CIRCLE puts the
+  stack in hand back, or closes when the hand is empty. A prompt bar at the
+  bottom shows what each button does for the slot under the cursor and hides
+  the ones that do nothing there. X used to both put a stack on a hotbar slot
+  and put it back in the grid; it no longer puts anything back, CIRCLE does,
+  and a hotbar slot is cleared with TRIANGLE.
+- Chests and furnaces work with a stack in hand, like the inventory: X takes
+  the stack, move to the other side and X places it, SQUARE takes half and
+  places one (hold it to keep placing one at a time in a chest). They used
+  to move one item per X, with a held X repeating.
+- The crafting list's TRIANGLE crafts as many as the ingredients allow, and
+  SELECT now hides what you cannot make (it was TRIANGLE), as SELECT does in
+  the inventory.
+- The first tutorial steps name the buttons (X crafts in the crafting list)
+  and the last one points at CONTROLS.
 
 ## 0.3.2 | 2026-10-08
 

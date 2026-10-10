@@ -3,7 +3,9 @@
 //! and armour come in tiers, grouped into one column by their CRAFT_* output,
 //! and UP/DOWN walk the tiers (the column rolls, the chosen tier on the
 //! strip). A needs box shows the ingredients as icons, red when short.
-//! CROSS crafts (hold to keep crafting), TRIANGLE hides what you cannot make.
+//! The same pad grammar as every container screen (hand.rs): X crafts one
+//! (hold to keep crafting), TRIANGLE crafts as many as the ingredients allow
+//! (quick move), SELECT hides what you cannot make, CIRCLE closes.
 
 use crate::inv::{frame, number, slot, tabs};
 use crate::*;
@@ -233,7 +235,7 @@ pub fn craft_input(pad: ButtonState, previous: ButtonState, p: &mut Player) {
         step_tab(1, p);
         sfx::blip();
     }
-    if pressed(button::TRIANGLE) {
+    if pressed(button::SELECT) {
         unsafe { CRAFT_HIDE = !CRAFT_HIDE };
         let mut cols = [0u8; RECIPES.len()];
         if columns(p, &mut cols) == 0 {
@@ -266,6 +268,24 @@ pub fn craft_input(pad: ButtonState, previous: ButtonState, p: &mut Player) {
     if pressed(button::R2) && !unsafe { AT_BENCH } && grid::pocket_craftable(RECIPES[ri].out) {
         if makeable(ri, p) && grid::fill_recipe(RECIPES[ri].out) {
             unsafe { TO_GRID = true };
+            sfx::confirm();
+        } else {
+            sfx::blip();
+        }
+        return;
+    }
+    // TRIANGLE, the quick move: craft as many as the ingredients allow. A
+    // tier is one upgrade, so it crafts once.
+    if pressed(button::TRIANGLE) {
+        if makeable(ri, p) {
+            let mut k = 0;
+            while k < 64 && makeable(ri, p) {
+                craft(ri, p);
+                k += 1;
+                if tiered(RECIPES[ri].out) {
+                    break;
+                }
+            }
             sfx::confirm();
         } else {
             sfx::blip();
@@ -387,7 +407,7 @@ pub fn draw_crafting(font: &FontAtlas, p: &Player) {
     }
     let Some((ri, t, nt)) = cur else {
         ui_text(font, X0, STRIP_Y + 24, "NOTHING YOU CAN MAKE", MC_INK);
-        hints(font, false, false);
+        hints(font, false, false, false);
         draw_hotbar(hud_tool(p, AIR));
         return;
     };
@@ -478,36 +498,44 @@ pub fn draw_crafting(font: &FontAtlas, p: &Player) {
             GREY,
         );
     }
-    hints(font, nt > 1, !unsafe { AT_BENCH } && grid::pocket_craftable(r.out));
+    hints(
+        font,
+        nt > 1,
+        !unsafe { AT_BENCH } && grid::pocket_craftable(r.out),
+        !tiered(r.out),
+    );
     draw_hotbar(hud_tool(p, AIR));
 }
 
 #[optimize(size)]
-fn hints(font: &FontAtlas, tiers: bool, grid: bool) {
-    let (y1, y2) = (176, 190);
+fn hints(font: &FontAtlas, tiers: bool, grid: bool, all: bool) {
+    let (y1, y2, y3) = (173, 185, 197);
     let x = hint_item(font, 16, y1, "X", PS_CROSS, "CRAFT");
+    let x = if all {
+        hint_item(font, x, y1, "T", PS_TRIANGLE, "CRAFT ALL")
+    } else {
+        x
+    };
+    hint_item(font, x, y1, "O", PS_CIRCLE, "CLOSE");
+    let x = hint_item(font, 16, y2, "L1R1", PS_KEY, "TAB");
+    let x = hint_item(font, x, y2, "<>", PS_KEY, "ITEM");
+    if tiers {
+        hint_item(font, x, y2, "^v", PS_KEY, "TIER");
+    }
     let x = hint_item(
         font,
-        x,
-        y1,
-        "T",
-        PS_TRIANGLE,
+        16,
+        y3,
+        "SEL",
+        PS_KEY,
         if unsafe { CRAFT_HIDE } {
             "SHOW ALL"
         } else {
             "CAN MAKE"
         },
     );
-    hint_item(font, x, y1, "O", PS_CIRCLE, "CLOSE");
-    let x = hint_item(font, 16, y2, "L1R1", PS_KEY, "TAB");
-    let x = hint_item(font, x, y2, "<>", PS_KEY, "ITEM");
-    let x = if tiers {
-        hint_item(font, x, y2, "^v", PS_KEY, "TIER")
-    } else {
-        x
-    };
     // The recipe book: lay this recipe in the player page's 2x2 grid.
     if grid {
-        hint_item(font, x, y2, "R2", PS_KEY, "GRID");
+        hint_item(font, x, y3, "R2", PS_KEY, "GRID");
     }
 }
