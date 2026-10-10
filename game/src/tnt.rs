@@ -37,6 +37,8 @@ const HEIGHT: i32 = 62;
 const GROUND_FRICTION_256: i32 = 227;
 
 static mut USED: [bool; MAX_TNT] = [false; MAX_TNT];
+/// Blocks lit, so a world with none costs a compare a tick.
+static mut LIVE: u8 = 0;
 /// Feet-centre position in world units, and the Q8 remainder of each axis.
 static mut X: [i32; MAX_TNT] = [0; MAX_TNT];
 static mut Y: [i32; MAX_TNT] = [0; MAX_TNT];
@@ -50,6 +52,14 @@ static mut VY: [i32; MAX_TNT] = [0; MAX_TNT];
 static mut VZ: [i32; MAX_TNT] = [0; MAX_TNT];
 static mut FUSE: [u16; MAX_TNT] = [0; MAX_TNT];
 static mut GROUND: [bool; MAX_TNT] = [false; MAX_TNT];
+/// Ticks a block has stood outside the loaded ring.
+static mut LOST: [u8; MAX_TNT] = [0; MAX_TNT];
+/// How long such a block is kept, 2 s.
+const LOST_TICKS: u8 = units::secs(2) as u8;
+/// The fastest a block flies on any axis: one blast's point-blank push, 1 block
+/// a game tick, Q8 units a sim tick. Java adds every blast's push with no
+/// limit, and a stack of TNT flings its blocks out of the world.
+const MAX_SPEED_Q8: i32 = units::cbps_q8(2000);
 static mut SALT: u32 = 0x1234_5679;
 
 fn rnd() -> u32 {
@@ -65,7 +75,20 @@ fn rnd() -> u32 {
 
 /// Forget every primed block (a new world, a load).
 pub fn reset() {
-    unsafe { USED = [false; MAX_TNT] };
+    unsafe {
+        USED = [false; MAX_TNT];
+        LIVE = 0;
+    }
+}
+
+/// Free a slot.
+fn release(i: usize) {
+    unsafe {
+        if USED[i] {
+            USED[i] = false;
+            LIVE -= 1;
+        }
+    }
 }
 
 /// Light the TNT block at a cell: it becomes a primed entity with `fuse` sim
@@ -90,6 +113,7 @@ pub fn spawn(x: i32, y: i32, z: i32, fuse: i32) {
             let (s, c) = (sincos::sin_q12(a), sincos::cos_q12(a));
             unsafe {
                 USED[i] = true;
+                LIVE += 1;
                 X[i] = x * BLOCK + BLOCK / 2;
                 Y[i] = y * BLOCK;
                 Z[i] = z * BLOCK + BLOCK / 2;
@@ -101,6 +125,7 @@ pub fn spawn(x: i32, y: i32, z: i32, fuse: i32) {
                 VZ[i] = -(c * KICK_SIDE_Q8) >> 12;
                 FUSE[i] = fuse.clamp(1, u16::MAX as i32) as u16;
                 GROUND[i] = false;
+                LOST[i] = 0;
             }
             sfx::sapper_hiss(); // the fuse's hiss, as Java plays when TNT is lit
             return;
@@ -119,6 +144,9 @@ pub fn spawn(x: i32, y: i32, z: i32, fuse: i32) {
 /// One sim tick of every primed block.
 #[inline(never)]
 pub fn tick() {
+    if unsafe { LIVE } == 0 {
+        return;
+    }
     let mut i = 0;
     while i < MAX_TNT {
         if unsafe { USED[i] } {
@@ -133,6 +161,17 @@ fn step(i: usize) {
         // Out of the loaded ring a block does not tick, as Java's unloaded
         // entities do not.
         if !world::column_loaded(world_to_block_x(X[i]), world_to_block_z(Z[i])) {
+            // Thrown past the loaded ring, or under the world: it is lost
+            // after a couple of seconds rather than holding its slot for good.
+            LOST[i] += 1;
+            if LOST[i] > LOST_TICKS || Y[i] < -4 * BLOCK {
+                release(i);
+            }
+            return;
+        }
+        LOST[i] = 0;
+        if Y[i] < -4 * BLOCK {
+            release(i); // fell out of the bottom of the world
             return;
         }
         // Gravity, then the move, then drag (Java's order).
@@ -188,7 +227,7 @@ fn step(i: usize) {
             // around it, the block waits a tick, blinking, rather than lose it.
             let (x, y, z) = (X[i], Y[i], Z[i]);
             if detonate_at(x, y + 4, z, i) {
-                USED[i] = false;
+                release(i);
             }
         }
     }
@@ -213,7 +252,9 @@ fn detonate_at(x: i32, y: i32, z: i32, skip: usize) -> bool {
 /// now, before any block of this blast breaks.
 pub fn explosion_effects(x: i32, y: i32, z: i32, power: i32, skip: usize) {
     sfx::explode();
-    spawn_particles(x, y + BLOCK / 2, z, (96, 84, 72), 30, (x ^ z) as u32, 46);
+    // A fireball's orange and white at the core, then the dust and smoke.
+    spawn_particles(x, y + BLOCK / 2, z, (250, 190, 70), 12, (x ^ z) as u32 ^ 0x55, 30);
+    spawn_particles(x, y + BLOCK / 2, z, (96, 84, 72), 26, (x ^ z) as u32, 46);
     mob::blast_mobs(x, y, z, power);
     // The player, through the hazard path the sappers use (armour, i-frames).
     let p = unsafe { PLAYER_POS };
@@ -232,9 +273,9 @@ pub fn explosion_effects(x: i32, y: i32, z: i32, power: i32, skip: usize) {
             let pos = unsafe { (X[i], Y[i], Z[i]) };
             if let Some(h) = hit_on(power, (x, y, z), pos, HALF_W, HEIGHT, 0, false) {
                 unsafe {
-                    VX[i] += h.kx * 64 / 3;
-                    VY[i] += h.ky * 64 / 3;
-                    VZ[i] += h.kz * 64 / 3;
+                    VX[i] = (VX[i] + h.kx * 64 / 3).clamp(-MAX_SPEED_Q8, MAX_SPEED_Q8);
+                    VY[i] = (VY[i] + h.ky * 64 / 3).clamp(-MAX_SPEED_Q8, MAX_SPEED_Q8);
+                    VZ[i] = (VZ[i] + h.kz * 64 / 3).clamp(-MAX_SPEED_Q8, MAX_SPEED_Q8);
                 }
             }
         }
@@ -338,17 +379,9 @@ pub fn render(cam: &Camera, count: &mut usize) {
                         count,
                     );
                 } else {
-                    emit_box(
-                        cam,
-                        x - HALF_W,
-                        y,
-                        z - HALF_W,
-                        x + HALF_W,
-                        y + HEIGHT,
-                        z + HALF_W,
-                        (196, 44, 32),
-                        count,
-                    );
+                    // The band first: the world pass draws what went into a depth
+                    // slot last first, so the body goes in after and the band,
+                    // a hair wider, stays on top of it.
                     emit_box(
                         cam,
                         x - HALF_W - 1,
@@ -358,6 +391,17 @@ pub fn render(cam: &Camera, count: &mut usize) {
                         y + 40,
                         z + HALF_W + 1,
                         (226, 224, 214),
+                        count,
+                    );
+                    emit_box(
+                        cam,
+                        x - HALF_W,
+                        y,
+                        z - HALF_W,
+                        x + HALF_W,
+                        y + HEIGHT,
+                        z + HALF_W,
+                        (196, 44, 32),
                         count,
                     );
                 }
@@ -389,6 +433,22 @@ pub fn min_fuse() -> i32 {
     while i < MAX_TNT {
         if unsafe { USED[i] } && (m == 0 || (unsafe { FUSE[i] } as i32) < m) {
             m = unsafe { FUSE[i] } as i32;
+        }
+        i += 1;
+    }
+    m
+}
+
+/// The farthest a lit block is from a point, in blocks (taxicab), 0 with none.
+#[allow(dead_code)]
+pub fn farthest(bx: i32, bz: i32) -> i32 {
+    let mut m = 0;
+    let mut i = 0;
+    while i < MAX_TNT {
+        if unsafe { USED[i] } {
+            let d = (world_to_block_x(unsafe { X[i] }) - bx).abs()
+                + (world_to_block_z(unsafe { Z[i] }) - bz).abs();
+            m = m.max(d);
         }
         i += 1;
     }

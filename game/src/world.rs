@@ -2729,6 +2729,12 @@ pub fn fire_count() -> i32 {
     unsafe { FIRE_N as i32 }
 }
 
+/// Cells waiting in the fluid queue, for the lab and the gates.
+#[allow(dead_code)]
+pub fn fluid_pending() -> i32 {
+    unsafe { FQ_LEN as i32 }
+}
+
 /// Blasts being worked or waiting, for the lab and the gates.
 #[allow(dead_code)]
 pub fn blasts_pending() -> i32 {
@@ -2828,6 +2834,9 @@ impl flame::Env for FireEnv {
 /// that are due. Cheap when nothing burns (48 byte compares).
 #[inline(never)]
 pub fn fire_tick() {
+    if unsafe { FIRE_N } == 0 {
+        return;
+    }
     let mut ran = 0;
     let mut i = 0;
     while i < FIRE_CAP {
