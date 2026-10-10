@@ -108,10 +108,20 @@ The layout follows Minecraft Bedrock's PS4/PS5 defaults.
 - Square: pocket crafting (planks, sticks, torches, the crafting table);
   everything else needs a placed crafting table, opened with L2, as in the
   original. L1/R1 page the category tabs (blocks, gear, items, food), D-pad
-  selects, Cross crafts, Triangle hides what you lack materials for;
-  Square also withdraws inside the chest/furnace panels
-- Triangle: inventory panel, opened on the item in hand (Cross equips);
-  shows what you own by default, Square switches to the full catalogue
+  selects, Cross crafts (hold for more), Triangle crafts as many as the
+  ingredients allow, Select hides what you lack materials for, R2 lays a
+  small recipe in the 2x2 grid
+- Triangle: inventory, opened on the player page; L1/R1 page to the item
+  tabs. Select shows the full catalogue instead of what you own
+- In every inventory screen (item tabs and hotbar, the player page and its
+  2x2 grid, chests, furnaces) the four face buttons mean the same thing, and
+  a prompt bar at the bottom shows what each does for the slot under the
+  cursor: Cross takes a stack, then places it (swapping with what is there);
+  Square takes half, then places one (hold it to keep placing in a chest);
+  Triangle quick-moves the stack under the cursor (to the hotbar, back to
+  the pack, across to the chest or furnace, wears armour, crafts all);
+  Circle puts the stack in hand back, or closes the screen when the hand is
+  empty
 - L2: use -- interact with the targeted mob or block (chest, furnace, bed,
   enchant table, door), otherwise place/use the held block or item (bow,
   bucket, wheat, ...); sneak + L2 force-places
@@ -122,10 +132,11 @@ The layout follows Minecraft Bedrock's PS4/PS5 defaults.
   hand)
 - L3 or double-tap forward: sprint (drops when forward stops)
 - Start: options menu -- flight, save/load to memory card, the tutorial
-  toggle, CHEATS, and the stick, volume, brightness and screen position
+  toggle, CONTROLS (every button on a two-page card), CHEATS, and the stick, volume, brightness and screen position
   settings (left/right adjusts those)
-- Main menu: up/down moves between PLAY GAME, NEW WORLD, SETTINGS and
-  CREDITS; Cross confirms
+- Main menu: up/down moves between PLAY GAME, NEW WORLD, CONTROLS, SETTINGS
+  and CREDITS; Cross confirms. The first PLAY shows the controls card once
+  (it is remembered on the memory card)
 
 A first run walks you through the basics with a chain of hint toasts: look,
 move, jump, chop a tree, craft planks, craft a table, place it, open it, then
