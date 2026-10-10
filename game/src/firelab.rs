@@ -7,18 +7,19 @@
 //! The script runs on the sim-step clock. The player stands at the arena
 //! origin looking along +Z with full health; the scenes are built 8 to 10
 //! blocks ahead. Phase starts, in sim steps (60 a second):
-//!  single TNT, a 12 block chain, a 27 block cube, fire beside TNT, a burning
-//!  hut, and lava beside TNT.
+//!  single TNT, a 12 block chain, a 27 block cube, lava beside TNT, fire beside
+//!  TNT, and a burning hut.
 
 use crate::*;
 
 /// What the gates read (`frontend launch --route-watch-u32`, the address from
 /// the link map): step, lit TNT blocks, smallest fuse, flames, blasts pending,
 /// TNT blocks standing, solid cells in the show area, planks/logs/leaves/wool
-/// standing, and the player's health. Words 6 and 7 are counted every 20
+/// standing, the player's health, how far a lit block has flown and the fluid
+/// queue's length. Words 6 and 7 are counted every 20
 /// steps; the rest every step.
 #[no_mangle]
-pub static mut VOXIDE_LAB_FIRE: [i32; 10] = [0; 10];
+pub static mut VOXIDE_LAB_FIRE: [i32; 11] = [0; 11];
 static mut COUNTS: (i32, i32, i32) = (0, 0, 0);
 static mut T: i32 = 0; // sim steps since gameplay began
 static mut ORG: (i32, i32) = (0, 0); // arena origin, block coords
@@ -28,10 +29,10 @@ const BY: i32 = 50; // platform block y; you stand at (BY + 1) * BLOCK
 const P_SINGLE: i32 = 30;
 const P_CHAIN: i32 = 700;
 const P_CUBE: i32 = 1700;
-const P_FIRE_TNT: i32 = 2800;
-const P_HUT: i32 = 4000;
-const P_LAVA_TNT: i32 = 7000;
-const P_END: i32 = 8400;
+const P_LAVA_TNT: i32 = 3300;
+const P_FIRE_TNT: i32 = 4000;
+const P_HUT: i32 = 5600;
+const P_END: i32 = 9000;
 
 fn put(x: i32, y: i32, z: i32, b: u8) {
     world::set_raw_pub(x, y, z, b);
@@ -238,7 +239,8 @@ pub fn step(p: &mut Player) {
                 c.1,
                 c.2,
                 p.health,
-                0,
+                tnt::farthest(ox, oz),
+                world::fluid_pending(),
             ],
         );
     }
