@@ -2,7 +2,7 @@
 # PLAY GAME, the CONTROLS card, the cheat kit, the inventory and crafting
 # screens, then TNT placed and lit with flint and steel.
 #
-#   psoxide-gate run tests/journey.toml --disc dist/voxide.cue
+#   psoxide-gate run tests/journey.toml --disc dist/voxide.cue --strict
 #
 # What each part is for:
 #  - splash: checked strictly on the hardware renderer's upscaled paths. After
@@ -11,9 +11,9 @@
 #    renderer's upscale, which only the strict regions below can see.
 #  - menus and panels: goldens with the 3D world around the panel masked out
 #    (the world differs per seed and timing, the panel does not).
-#  - TNT: the last checkpoint asserts the blast. It is marked expect_fail until
-#    fire and TNT work (feat/fire-tnt-2026-10-10); when that lands the asserts
-#    report XPASS and the markers come off.
+#  - TNT: the last checkpoint checks that the TNT disappears and the blast
+#    changes the view. Both checks are expected failures on this disc. When
+#    fire and TNT work, they report XPASS until the markers are removed.
 #
 # Menu navigation is by D-pad presses; the menu cursor keeps its row between
 # visits, so NEW WORLD (second row) is entered once and PLAY GAME is one row up.
@@ -338,6 +338,13 @@ golden = false
 kind = "presenting"
 window = 120
 min_changes = 5
+[[step.assert]]
+kind = "pixels"
+color = [190, 30, 30]
+color_tol = 60
+max_count = 400
+expect_fail = true
+note = "the TNT block is gone after its fuse (fire and TNT do not work yet)"
 [[step.assert]]
 kind = "frame_diff"
 from = "tnt-placed"
