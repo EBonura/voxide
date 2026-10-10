@@ -366,3 +366,31 @@ pub fn render(cam: &Camera, count: &mut usize) {
         i += 1;
     }
 }
+
+/// Primed blocks lit right now, for the lab and the gates.
+#[allow(dead_code)]
+pub fn live() -> i32 {
+    let mut n = 0;
+    let mut i = 0;
+    while i < MAX_TNT {
+        if unsafe { USED[i] } {
+            n += 1;
+        }
+        i += 1;
+    }
+    n
+}
+
+/// The smallest fuse among the lit blocks (sim ticks), 0 with none lit.
+#[allow(dead_code)]
+pub fn min_fuse() -> i32 {
+    let mut m = 0;
+    let mut i = 0;
+    while i < MAX_TNT {
+        if unsafe { USED[i] } && (m == 0 || (unsafe { FUSE[i] } as i32) < m) {
+            m = unsafe { FUSE[i] } as i32;
+        }
+        i += 1;
+    }
+    m
+}
