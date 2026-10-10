@@ -1,0 +1,346 @@
+# VoXide player journey: the "built with PSoXide" splash, main menu, NEW WORLD,
+# PLAY GAME, the CONTROLS card, the cheat kit, the inventory and crafting
+# screens, then TNT placed and lit with flint and steel.
+#
+#   psoxide-gate run tests/journey.toml --disc dist/voxide.cue
+#
+# What each part is for:
+#  - splash: checked strictly on the hardware renderer's upscaled paths. After
+#    an SDK repin the splash text looked garbled in the app while every gate
+#    that compared CPU frames stayed green; the cause was the hardware
+#    renderer's upscale, which only the strict regions below can see.
+#  - menus and panels: goldens with the 3D world around the panel masked out
+#    (the world differs per seed and timing, the panel does not).
+#  - TNT: the last checkpoint asserts the blast. It is marked expect_fail until
+#    fire and TNT work (feat/fire-tnt-2026-10-10); when that lands the asserts
+#    report XPASS and the markers come off.
+#
+# Menu navigation is by D-pad presses; the menu cursor keeps its row between
+# visits, so NEW WORLD (second row) is entered once and PLAY GAME is one row up.
+
+name = "voxide"
+title = "VoXide: splash to menus, inventory, crafting and TNT"
+disc = ["dist/voxide.cue"]
+max_ticks = 6000
+
+# ---- splash ---------------------------------------------------------------
+
+[[step]]
+label = "boot, the Bonnie splash fades in"
+wait = 100
+
+[[step]]
+checkpoint = "splash"
+# "Built with PSoXide" and the Bonnie logo: 2D textured quads, must match the
+# CPU frame at every scale.
+strict = [{ x = 84, y = 144, w = 152, h = 18 }, { x = 110, y = 30, w = 100, h = 104 }]
+[[step.assert]]
+kind = "not_flat"
+
+# ---- main menu ------------------------------------------------------------
+
+[[step]]
+label = "the menu appears when the world has been generated behind it"
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 118, w = 125, h = 100 }, min_count = 2500 }
+timeout = 1500
+
+[[step]]
+wait = 30
+
+[[step]]
+checkpoint = "main-menu"
+strict = [{ x = 102, y = 120, w = 116, h = 17 }]
+[[step.assert]]
+kind = "presenting"
+window = 120
+min_changes = 5
+[[step.assert]]
+kind = "not_flat"
+
+# ---- NEW WORLD, PLAY GAME -------------------------------------------------
+
+[[step]]
+label = "NEW WORLD regenerates the world and returns to the menu"
+press = ["down"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 118, w = 125, h = 100 }, min_count = 2500 }
+timeout = 1500
+
+[[step]]
+label = "PLAY GAME: the first play shows the CONTROLS card"
+press = ["up"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 150
+
+[[step]]
+checkpoint = "controls-card"
+strict = [{ x = 14, y = 10, w = 292, h = 194 }]
+mask = [{ x = 0, y = 0, w = 9, h = 240 }, { x = 311, y = 0, w = 9, h = 240 }, { x = 0, y = 0, w = 320, h = 4 }, { x = 0, y = 209, w = 320, h = 31 }]
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "close the card: the world"
+press = ["circle"]
+hold = 4
+wait = 60
+
+[[step]]
+checkpoint = "world-spawn"
+golden = false
+[[step.assert]]
+kind = "presenting"
+window = 120
+min_changes = 5
+[[step.assert]]
+kind = "not_flat"
+[[step.assert]]
+kind = "pc_not_stuck"
+window = 120
+
+# ---- cheat kit (OPTIONS > CHEATS > GIVE EVERYTHING) ------------------------
+
+[[step]]
+label = "Start opens OPTIONS; CHEATS is the sixth row"
+press = ["start"]
+hold = 4
+wait = 30
+
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+repeat = 5
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "cheats"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "GIVE EVERYTHING is the fourth row"
+press = ["down"]
+hold = 4
+wait = 12
+repeat = 3
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+label = "back out of CHEATS and OPTIONS"
+press = ["circle"]
+hold = 4
+wait = 30
+repeat = 2
+
+# ---- inventory: TNT and flint into the hotbar --------------------------------
+
+[[step]]
+label = "Triangle opens the inventory"
+press = ["triangle"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "inventory"
+strict = [{ x = 14, y = 10, w = 292, h = 194 }]
+mask = [{ x = 0, y = 0, w = 9, h = 240 }, { x = 311, y = 0, w = 9, h = 240 }, { x = 0, y = 0, w = 320, h = 4 }, { x = 0, y = 209, w = 320, h = 31 }]
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "BLOCKS tab; TNT is the last block (row 4, column 6)"
+press = ["r1"]
+hold = 4
+wait = 30
+
+[[step]]
+press = ["right"]
+hold = 4
+wait = 12
+repeat = 5
+
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+repeat = 3
+
+[[step]]
+checkpoint = "inventory-blocks-tnt"
+strict = [{ x = 14, y = 10, w = 292, h = 194 }]
+mask = [{ x = 0, y = 0, w = 9, h = 240 }, { x = 311, y = 0, w = 9, h = 240 }, { x = 0, y = 0, w = 320, h = 4 }, { x = 0, y = 209, w = 320, h = 31 }]
+
+[[step]]
+label = "take the stack, drop down onto the hotbar, swap it into slot 6"
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+label = "put the swapped-out stack back, close"
+press = ["circle"]
+hold = 4
+wait = 30
+repeat = 2
+
+[[step]]
+label = "reopen on the ITEMS tab for the flint and steel (sixth item)"
+press = ["triangle"]
+hold = 4
+wait = 30
+
+[[step]]
+press = ["r1"]
+hold = 4
+wait = 30
+repeat = 2
+
+[[step]]
+press = ["right"]
+hold = 4
+wait = 12
+repeat = 5
+
+[[step]]
+checkpoint = "inventory-items-flint"
+strict = [{ x = 14, y = 10, w = 292, h = 194 }]
+mask = [{ x = 0, y = 0, w = 9, h = 240 }, { x = 311, y = 0, w = 9, h = 240 }, { x = 0, y = 0, w = 320, h = 4 }, { x = 0, y = 209, w = 320, h = 31 }]
+
+[[step]]
+label = "take it, onto the hotbar one slot right of the TNT"
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["right"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+press = ["circle"]
+hold = 4
+wait = 30
+repeat = 2
+
+# ---- crafting ---------------------------------------------------------------
+
+[[step]]
+label = "Square opens pocket crafting"
+press = ["square"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "crafting"
+strict = [{ x = 14, y = 10, w = 292, h = 194 }]
+mask = [{ x = 0, y = 0, w = 9, h = 240 }, { x = 311, y = 0, w = 9, h = 240 }, { x = 0, y = 0, w = 320, h = 4 }, { x = 0, y = 209, w = 320, h = 31 }]
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+press = ["circle"]
+hold = 4
+wait = 30
+
+# ---- TNT -------------------------------------------------------------------
+
+[[step]]
+label = "look down at the ground in front"
+rstick = [128, 255]
+hold = 40
+wait = 20
+
+[[step]]
+label = "select the TNT (slot 6) and place it"
+press = ["r1"]
+hold = 4
+wait = 8
+repeat = 5
+
+[[step]]
+press = ["l2"]
+hold = 4
+wait = 60
+
+[[step]]
+checkpoint = "tnt-placed"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [190, 30, 30]
+color_tol = 60
+min_count = 2000
+note = "the placed TNT fills the view"
+
+[[step]]
+label = "select the flint and steel (slot 7) and light it"
+press = ["r1"]
+hold = 4
+wait = 20
+
+[[step]]
+press = ["l2"]
+hold = 4
+wait = 30
+
+[[step]]
+label = "wait out the fuse"
+wait = 360
+
+[[step]]
+checkpoint = "tnt-after-fuse"
+golden = false
+[[step.assert]]
+kind = "presenting"
+window = 120
+min_changes = 5
+[[step.assert]]
+kind = "frame_diff"
+from = "tnt-placed"
+min_changed = 0.3
+expect_fail = true
+note = "the blast changes a large part of the view (fire and TNT do not work yet)"
