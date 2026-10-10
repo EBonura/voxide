@@ -47,6 +47,25 @@ Equipment, and fixes from a playtest.
   pixels for a television that crops the edge. All three are saved with the
   stick and volume settings; settings saved by an earlier version load with
   them at their defaults.
+- Fire and TNT work as in Java. Flint and steel on TNT lights it, and so do
+  fire or lava beside it, a redstone signal and another explosion. A lit block
+  becomes an entity with a four second fuse that blinks white, gets a small
+  kick up, falls with gravity and explodes with power 4: rays of strength that
+  blast resistance and distance wear down break the blocks they reach, a
+  quarter of them drop, creatures and the player take Java's damage and
+  knockback (less behind cover), other lit TNT is pushed, and TNT in reach is
+  lit with a fuse of half a second to a second and a half, so a stack goes off
+  in a chain. Before, a lit block only vanished into a hole, and nothing but
+  redstone lit it.
+- Fire ages, spreads and burns out by Java's rules: a flame ticks every 1.5 to
+  2 seconds, burns planks, logs, leaves, wool, grass and TNT beside it away,
+  lights flames in empty cells beside fuel, goes out in rain, dies young on
+  bare ground and lives forever on netherrack. Flint and steel puts a flame
+  only where one can stand. Mobs standing in fire burn.
+- Explosions and flames are worked in the frame's spare time (the time a
+  frame spends waiting for the next vblank), so a blast, a chain of them or a
+  burning forest no longer stalls the game for a third of a second or more.
+  The crater appears a moment after the blast, as its remesh streams in.
 
 ## 0.3.2 | 2026-10-08
 
