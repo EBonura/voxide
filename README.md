@@ -138,6 +138,11 @@ The layout follows Minecraft Bedrock's PS4/PS5 defaults.
   and CREDITS; Cross confirms. The first PLAY shows the controls card once
   (it is remembered on the memory card)
 
+The controls-seen state lives in VoXide's game flag in the shared settings
+record. This build migrates the older difficulty-2 marker on load. An older
+executable may clear game flags when it rewrites settings, so switching back
+to that executable can make the controls card appear again.
+
 A first run walks you through the basics with a chain of hint toasts: look,
 move, jump, chop a tree, craft planks, craft a table, place it, open it, then
 make a pickaxe. OPTIONS > TUTORIAL turns it off.

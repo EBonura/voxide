@@ -27,6 +27,7 @@ mod flame;
 mod inv;
 mod mob;
 mod save;
+mod settings_profile;
 mod sfx;
 mod sfxdata;
 mod slack;
@@ -4065,7 +4066,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
                 // The first PLAY shows the controls, once: the card is
                 // remembered on the settings card, written below on the way in.
                 unsafe {
-                    SETTINGS_PROFILE.difficulty = CONTROLS_SEEN;
+                    SETTINGS_PROFILE.set_game_flag(settings_profile::CONTROLS_SEEN, true);
                     SETTINGS_DIRTY = true;
                 }
                 controls = true;
@@ -4222,18 +4223,13 @@ fn draw_splash_now(font: &FontAtlas, t: u32) {
     }
 }
 
-/// The settings record has a byte for a game-chosen difficulty, which VoXide
-/// does not have (its default is 1). It records that the controls card was
-/// shown on a first PLAY instead, so the card comes up once per memory card.
-const CONTROLS_SEEN: u8 = 2;
-
 /// True on the first PLAY with this memory card: the settings record does not
 /// say the controls card was shown. The lockstep and ui-fixture builds (A/B
 /// validation and headless UI captures, never shipped) skip it, as a card
 /// would swallow the tape.
 fn controls_unseen() -> bool {
     !cfg!(any(feature = "lockstep", feature = "ui-fixture"))
-        && unsafe { SETTINGS_PROFILE.difficulty } != CONTROLS_SEEN
+        && unsafe { SETTINGS_PROFILE.game_flags() } & settings_profile::CONTROLS_SEEN == 0
 }
 
 /// One frame of the screens that take no part in the gameplay loop's own
@@ -4312,9 +4308,10 @@ fn ui_brightness() {
 }
 
 fn load_shared_settings() {
-    let Ok(profile) = psx_settings::load_slot_one(SETTINGS_FILE) else {
+    let Ok(mut profile) = psx_settings::load_slot_one(SETTINGS_FILE) else {
         return;
     };
+    let migrated = settings_profile::migrate_legacy_controls_seen(&mut profile);
     unsafe {
         SETTINGS_PROFILE = profile;
         SET_MOVE_DZ = SETTINGS_PROFILE.move_deadzone as i16;
@@ -4322,7 +4319,7 @@ fn load_shared_settings() {
         SET_LOOK_PCT = SETTINGS_PROFILE.look_speed_percent as i32;
         SET_INVERT_Y = SETTINGS_PROFILE.invert_y();
         sfx::set_volume_pct(SETTINGS_PROFILE.sfx_volume as i32);
-        SETTINGS_DIRTY = false;
+        SETTINGS_DIRTY = migrated;
     }
     if unsafe { !SETTINGS_PROFILE.screen_offset.is_centre() } {
         apply_screen_offset();

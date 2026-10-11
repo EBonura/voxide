@@ -7,3 +7,8 @@ description = "Host tests that compile slices of the no_std game source with rus
 
 # Its own workspace: the game builds for the PS1, these tests for the host.
 [workspace]
+
+[dev-dependencies]
+psx-mc = { path = "../../.psoxide/sdk/crates/psx-mc" }
+psx-pad = { path = "../../.psoxide/sdk/crates/psx-pad" }
+psx-settings = { path = "../../.psoxide/sdk/crates/psx-settings" }

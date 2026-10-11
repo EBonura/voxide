@@ -1,0 +1,46 @@
+# The committed card came from the prior shipping build after its first PLAY.
+# It holds PSST v2 with difficulty 2 and no game flag. This route verifies the
+# migration skips the controls card and rewrites the profile on a normal save.
+name = "voxide"
+title = "VoXide: legacy controls marker migrates"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+max_ticks = 3000
+
+[card_fixture]
+path = "tests/cards/legacy-controls-seen.mcd"
+sha256 = "a0bc97a529dc33cdda8c438ec8e06a5ebc19e119fad846128d8827131c4a2f08"
+
+[[step]]
+label = "menu appears over the generated world"
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 204, w = 125, h = 22 }, min_count = 500 }
+timeout = 1500
+
+[[step]]
+label = "PLAY GAME goes directly to the world"
+press = ["cross"]
+hold = 4
+
+[[step]]
+label = "normal world ticks prove the controls card was skipped"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 12, op = "ge", value = 10 }
+timeout = 800
+
+[[step]]
+checkpoint = "legacy-world"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 12
+op = "ge"
+value = 10
+[[step.assert]]
+kind = "card_writes"
+min_count = 1
+note = "the migrated profile was committed without an explicit format"
+
+[[step]]
+card = { action = "snapshot" }
