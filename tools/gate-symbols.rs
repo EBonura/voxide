@@ -18,6 +18,10 @@ fn word(bytes: &[u8], offset: usize) -> Result<u32, String> {
 }
 
 fn symbol_address(path: &Path) -> Result<u32, String> {
+    block_address(path, MAGIC, VERSION, BLOCK_LEN, "VOXIDE_GATE_STATE")
+}
+
+fn block_address(path: &Path, magic: &[u8; 4], version: u32, block_len: usize, name: &str) -> Result<u32, String> {
     let bytes = fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     if bytes.get(..8) != Some(b"PS-X EXE") {
         return Err("input is not a PS-X EXE".into());
@@ -28,10 +32,10 @@ fn symbol_address(path: &Path) -> Result<u32, String> {
         .get(HEADER_LEN..HEADER_LEN + image_len)
         .ok_or("PS-X EXE payload is shorter than its header says")?;
     let mut matches = Vec::new();
-    for (offset, block) in image.windows(BLOCK_LEN).enumerate() {
-        if &block[..4] == MAGIC
-            && word(block, 4)? == VERSION
-            && word(block, 8)? == BLOCK_LEN as u32
+    for (offset, block) in image.windows(block_len).enumerate() {
+        if &block[..4] == magic
+            && word(block, 4)? == version
+            && word(block, 8)? == block_len as u32
             && block[12..].iter().all(|&byte| byte == 0)
         {
             matches.push(offset);
@@ -39,7 +43,7 @@ fn symbol_address(path: &Path) -> Result<u32, String> {
     }
     if matches.len() != 1 {
         return Err(format!(
-            "expected one initialized VOXIDE_GATE_STATE block, found {}",
+            "expected one initialized {name} block, found {}",
             matches.len()
         ));
     }
@@ -59,7 +63,11 @@ fn main() {
     }
     match symbol_address(Path::new(&exe)) {
         Ok(addr) => {
-            writeln!(std::io::stdout(), "{addr:#010x} VOXIDE_GATE_STATE").expect("write address")
+            writeln!(std::io::stdout(), "{addr:#010x} VOXIDE_GATE_STATE").expect("write address");
+            match block_address(Path::new(&exe), b"VSET", 1, 36, "VOXIDE_SETTINGS_STATE") {
+                Ok(settings) => writeln!(std::io::stdout(), "{settings:#010x} VOXIDE_SETTINGS_STATE").expect("write settings address"),
+                Err(error) => { eprintln!("gate-symbols: {error}"); std::process::exit(1); }
+            }
         }
         Err(error) => {
             eprintln!("gate-symbols: {error}");
@@ -71,6 +79,21 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn settings_receipt_is_separate_from_gameplay_block() {
+        let mut bytes = sample(&[0x40], 0x300);
+        let block = &mut bytes[HEADER_LEN + 0x180..HEADER_LEN + 0x180 + 36];
+        block[..4].copy_from_slice(b"VSET");
+        block[4..8].copy_from_slice(&1u32.to_le_bytes());
+        block[8..12].copy_from_slice(&36u32.to_le_bytes());
+        let path = env::temp_dir().join(format!("vox-settings-symbol-{}", std::process::id()));
+        fs::write(&path, &bytes).unwrap();
+        assert_eq!(block_address(&path, b"VSET", 1, 36, "VOXIDE_SETTINGS_STATE").unwrap(), 0x8001_0180);
+        assert!(block_address(&path, b"VSET", 2, 36, "VOXIDE_SETTINGS_STATE").is_err());
+        assert!(block_address(&path, b"VSET", 1, 40, "VOXIDE_SETTINGS_STATE").is_err());
+        fs::remove_file(path).unwrap();
+    }
 
     fn sample(block_offsets: &[usize], declared_len: usize) -> Vec<u8> {
         let mut bytes = vec![0; HEADER_LEN + 0x300];

@@ -1,6 +1,7 @@
 # The committed card came from the prior shipping build after its first PLAY.
 # It holds PSST v2 with difficulty 2 and no game flag. This route verifies the
-# migration skips the controls card and rewrites the profile on a normal save.
+# migration skips the controls card in RAM and rewrites the profile only
+# after an explicit Save Settings request.
 name = "voxide"
 title = "VoXide: legacy controls marker migrates"
 disc = ["build/gate/voxide.cue"]
@@ -38,9 +39,45 @@ offset = 12
 op = "ge"
 value = 10
 [[step.assert]]
+kind = "card_unchanged"
+note = "legacy migration and world entry do not automatically rewrite the profile"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 32
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 20
+op = "eq"
+value = 1
+
+[[step]]
+press = ["start"]
+hold = 4
+wait = 12
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 100
+[[step]]
+checkpoint = "legacy-explicit-save"
+golden = false
+[[step.assert]]
 kind = "card_writes"
 min_count = 1
-note = "the migrated profile was committed without an explicit format"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 24
+op = "eq"
+value = 1
 
 [[step]]
 card = { action = "snapshot" }

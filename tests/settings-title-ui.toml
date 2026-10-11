@@ -1,0 +1,69 @@
+name = "voxide-settings-title-ui"
+title = "VoXide: settings exits and controls introduction never autosave"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+memcard = "fresh"
+max_ticks = 7500
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 1800
+[[step.assert]]
+kind = "card_unchanged"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 28
+op = "eq"
+value = 18
+
+# PLAY -> CREDIT -> SETTINGS by wrapping upward twice.
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["right"]
+hold = 4
+wait = 12
+[[step]]
+checkpoint = "settings-unsaved"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 28
+op = "eq"
+value = 20
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 20
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "card_unchanged"
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+checkpoint = "title-save-selected"
+golden = false
+strict = [{ x = 32, y = 148, w = 256, h = 20 }]
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 8
+[[step.assert]]
+kind = "card_unchanged"

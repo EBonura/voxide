@@ -1,0 +1,42 @@
+name = "voxide-settings-load"
+title = "VoXide: explicit settings save cold loads without automatic writes"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+max_ticks = 1800
+[card_fixture]
+path = "tests/fixtures/manual-saved.mcd"
+sha256 = "4829f732add6f5be6ff419549666a6764657ff75f613f7ef5355da567f2b015a"
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 1500
+[[step]]
+checkpoint = "saved-title"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 28
+op = "eq"
+value = 22
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 32
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "card_unchanged"
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 60
+[[step]]
+checkpoint = "loaded-world-no-write"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"
+[[step.assert]]
+kind = "card_unchanged"

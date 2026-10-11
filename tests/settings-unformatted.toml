@@ -1,0 +1,101 @@
+# Current pinned SDK refuses an unformatted card without writing or formatting.
+name = "voxide-settings-unformatted"
+title = "VoXide: an unformatted settings card is untouched until explicit Save"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+memcard = "fresh"
+max_ticks = 2800
+[card_fixture]
+path = "tests/fixtures/unformatted.mcd"
+sha256 = "fa43239bcee7b97ca62f007cc68487560a39e19f74f3dde7486db3f98df8e471"
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 1800
+[[step.assert]]
+kind = "card_unchanged"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 28
+op = "eq"
+value = 18
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["right"]
+hold = 4
+wait = 12
+[[step]]
+press = ["start"]
+hold = 4
+wait = 12
+[[step]]
+checkpoint = "unformatted-exit-no-write"
+golden = false
+[[step.assert]]
+kind = "card_unchanged"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 20
+op = "eq"
+value = 1
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+checkpoint = "unformatted-save-selected"
+golden = false
+[[step.assert]]
+kind = "card_unchanged"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 8
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 120
+[[step]]
+checkpoint = "explicit-save-refuses-unformatted-card"
+golden = false
+[[step.assert]]
+kind = "card_unchanged"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 24
+op = "eq"
+value = 2
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 20
+op = "eq"
+value = 1
+[[step]]
+card = { action = "snapshot" }

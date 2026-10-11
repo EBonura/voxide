@@ -28,6 +28,7 @@ mod inv;
 mod mob;
 mod save;
 mod settings_profile;
+mod settings_menu;
 mod sfx;
 mod sfxdata;
 mod slack;
@@ -1035,6 +1036,25 @@ const VOXIDE_ACTIONS: ActionMap<5> = ActionMap::new([
 ]);
 static mut SETTINGS_PROFILE: Profile<5, 0> = Profile::new(VOXIDE_ACTIONS);
 static mut SETTINGS_DIRTY: bool = false;
+static mut SETTINGS_SAVE_STATUS: &str = "";
+
+/// Read-only settings receipt: magic, version, size, menu context, selected
+/// row, dirty, save result, move deadzone and controls-seen flag. Context is
+/// world=0, title=1, settings=2, controls=3, options=4, other=5. Save result
+/// is none=0, saved=1, failed=2. Gameplay never reads this block.
+#[used]
+#[no_mangle]
+pub static mut VOXIDE_SETTINGS_STATE: [u32; 9] = [u32::from_le_bytes(*b"VSET"), 1, 36, 0, 0, 0, 0, 0, 0];
+
+fn publish_settings(context: u32, selected: usize) {
+    unsafe {
+        let state = [u32::from_le_bytes(*b"VSET"), 1, 36, context, selected as u32,
+            SETTINGS_DIRTY as u32,
+            match SETTINGS_SAVE_STATUS { "SAVED" => 1, "FAILED" => 2, _ => 0 },
+            SET_MOVE_DZ as u32, (SETTINGS_PROFILE.game_flags() & settings_profile::CONTROLS_SEEN != 0) as u32];
+        core::ptr::write_volatile(core::ptr::addr_of_mut!(VOXIDE_SETTINGS_STATE), state);
+    }
+}
 // Sim ticks the first forward push stays "armed"; a second push inside it
 // latches sprint. 0.4 s: the 12 frames it was written as at 30 Hz, now that a
 // tick is 1/60 s (Java's double-tap window is 7 game ticks, 0.35 s).
@@ -2927,9 +2947,6 @@ fn main() {
         // START opens the options menu, and closes whatever menu is open
         // (the death screen excepted -- only respawn leaves it).
         if menu != MENU_DEAD && pad.pressed_since(previous, button::START) {
-            if menu == MENU_OPTIONS {
-                persist_shared_settings(); // as CIRCLE does; START used to skip it
-            }
             menu = if menu == 0 { MENU_OPTIONS } else { 0 };
             menu_sel = 0;
         }
@@ -2990,9 +3007,6 @@ fn main() {
                     menu = if menu == MENU_CONTROLS { MENU_OPTIONS } else { 0 };
                 }
             } else if pad.pressed_since(previous, button::CIRCLE) && !inv::put_back(menu) {
-                if menu == MENU_OPTIONS {
-                    persist_shared_settings();
-                }
                 // The cheats page backs out to OPTIONS, where it was opened.
                 if menu == MENU_CHEAT {
                     menu = MENU_OPTIONS;
@@ -3002,7 +3016,7 @@ fn main() {
                 }
             } else if menu == MENU_OPTIONS {
                 // Settings rows adjust with left/right, like the main menu card.
-                if menu_sel >= OPT_SETTINGS {
+                if menu_sel >= OPT_SETTINGS && menu_sel < OPT_SETTINGS + SETTING_ADJUST_ROWS {
                     let dir = if pad.pressed_since(previous, button::LEFT) {
                         -1
                     } else if pad.pressed_since(previous, button::RIGHT) {
@@ -3028,6 +3042,7 @@ fn main() {
                             save::begin(&player, day);
                             unsafe { OPT_MSG = "SAVING - DO NOT REMOVE THE CARD" };
                         }
+                        OPT_SAVE_SETTINGS => save_shared_settings(),
                         OPT_CHEATS => {
                             menu = MENU_CHEAT;
                             menu_sel = 0;
@@ -3137,6 +3152,7 @@ fn main() {
         // container screens leave it running: mobs move and hit, you fall and
         // burn, you just cannot steer (minecraft.wiki/w/Pause_menu). The
         // death screen does not pause either.
+        publish_settings(match menu { 0 => 0, MENU_OPTIONS => 4, MENU_CONTROLS => 3, _ => 5 }, menu_sel);
         let paused = menu == MENU_OPTIONS || menu == MENU_CHEAT || menu == MENU_CONTROLS;
         if !paused && menu != MENU_DEAD {
             // In a GUI the pad drives the GUI, not the player.
@@ -3961,6 +3977,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
     loop {
         sfx::tick();
         let mut pad = poll_port1().buttons;
+        let settings_was_open = settings;
         if DEMO_PLAY && t == 90 {
             // Headless playtest: confirm PLAY at menu-frame 90.
             pad = ButtonState::from_bits(button::CROSS);
@@ -3974,7 +3991,6 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
                 controls = false;
                 sfx::blip();
                 if first_run {
-                    persist_shared_settings();
                     return;
                 }
             }
@@ -3988,16 +4004,16 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
                 sfx::blip();
             }
         } else if settings {
-            if pad.pressed_since(prev, button::CIRCLE) || pad.pressed_since(prev, button::START) {
-                persist_shared_settings();
+            let back = pad.pressed_since(prev, button::CIRCLE) || pad.pressed_since(prev, button::START);
+            if back {
                 settings = false;
                 sfx::blip();
             }
-            if pad.pressed_since(prev, button::UP) {
+            if !back && pad.pressed_since(prev, button::UP) {
                 set_sel = (set_sel + SETTING_ROWS - 1) % SETTING_ROWS;
                 sfx::blip();
             }
-            if pad.pressed_since(prev, button::DOWN) {
+            if !back && pad.pressed_since(prev, button::DOWN) {
                 set_sel = (set_sel + 1) % SETTING_ROWS;
                 sfx::blip();
             }
@@ -4008,7 +4024,10 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             } else {
                 0
             };
-            if dir != 0 {
+            if settings_menu::save_requested(set_sel == SETTING_SAVE, pad.pressed_since(prev, button::CROSS), back) {
+                save_shared_settings();
+                sfx::confirm();
+            } else if !back && set_sel < SETTING_ADJUST_ROWS && dir != 0 {
                 setting_adjust(set_sel, dir);
                 sfx::blip();
             }
@@ -4025,6 +4044,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         let go = !credits
             && !controls
             && !settings
+            && !settings_was_open
             && (pad.pressed_since(prev, button::CROSS) || pad.pressed_since(prev, button::START));
         prev = pad;
         if go && sel == 1 {
@@ -4064,7 +4084,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             sfx::confirm();
             if controls_unseen() {
                 // The first PLAY shows the controls, once: the card is
-                // remembered on the settings card, written below on the way in.
+                // remembered in RAM, persisted only by explicit Save Settings.
                 unsafe {
                     SETTINGS_PROFILE.set_game_flag(settings_profile::CONTROLS_SEEN, true);
                     SETTINGS_DIRTY = true;
@@ -4073,10 +4093,11 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
                 first_run = true;
                 controls::open();
             } else {
-                persist_shared_settings();
                 return;
             }
         }
+
+        publish_settings(if settings { 2 } else if controls { 3 } else { 1 }, if settings { set_sel } else { sel });
 
         // The vista: a slow orbit over the spawn surface, exactly the game's
         // sky + world pass. surface_y answers from the noise field before the
@@ -4256,7 +4277,9 @@ fn open_controls(sel: usize, menu: u8) -> u8 {
     }
 }
 
-const SETTING_ROWS: usize = 8;
+const SETTING_ADJUST_ROWS: usize = 8;
+const SETTING_SAVE: usize = SETTING_ADJUST_ROWS;
+const SETTING_ROWS: usize = SETTING_ADJUST_ROWS + 1;
 const SETTING_NAMES: [&str; SETTING_ROWS] = [
     "MOVE DEADZONE",
     "LOOK DEADZONE",
@@ -4266,6 +4289,7 @@ const SETTING_NAMES: [&str; SETTING_ROWS] = [
     "BRIGHTNESS",
     "SCREEN X",
     "SCREEN Y",
+    "SAVE SETTINGS",
 ];
 
 /// Move the picture on the television to the saved SCREEN X / Y. A video
@@ -4326,11 +4350,8 @@ fn load_shared_settings() {
     }
 }
 
-fn persist_shared_settings() {
+fn save_shared_settings() {
     unsafe {
-        if !SETTINGS_DIRTY {
-            return;
-        }
         SETTINGS_PROFILE.move_deadzone = SET_MOVE_DZ as u8;
         SETTINGS_PROFILE.look_deadzone = SET_LOOK_DZ as u8;
         SETTINGS_PROFILE.look_speed_percent = SET_LOOK_PCT as u8;
@@ -4338,6 +4359,9 @@ fn persist_shared_settings() {
         SETTINGS_PROFILE.sfx_volume = sfx::volume_pct() as u8;
         if psx_settings::save_slot_one(SETTINGS_FILE, SETTINGS_TITLE, &SETTINGS_PROFILE).is_ok() {
             SETTINGS_DIRTY = false;
+            SETTINGS_SAVE_STATUS = "SAVED";
+        } else {
+            SETTINGS_SAVE_STATUS = "FAILED";
         }
     }
 }
@@ -4364,6 +4388,7 @@ fn setting_adjust(row: usize, dir: i32) {
             }
         }
         SETTINGS_DIRTY = true;
+        SETTINGS_SAVE_STATUS = "";
     }
 }
 
@@ -4372,6 +4397,13 @@ fn setting_adjust(row: usize, dir: i32) {
 fn setting_value(row: usize, buf: &mut [u8; 12]) -> usize {
     let (v, pct) = unsafe {
         match row {
+            SETTING_SAVE => {
+                let status = if SETTINGS_SAVE_STATUS.is_empty() && SETTINGS_DIRTY {
+                    "UNSAVED"
+                } else { SETTINGS_SAVE_STATUS };
+                buf[..status.len()].copy_from_slice(status.as_bytes());
+                return status.len();
+            }
             5 => return SETTINGS_PROFILE.brightness.label().copy_into(buf),
             6 => return SETTINGS_PROFILE.screen_offset.label_x().copy_into(buf),
             7 => return SETTINGS_PROFILE.screen_offset.label_y().copy_into(buf),
@@ -4468,15 +4500,17 @@ fn row_button_now(y: i16, sel: bool) {
 }
 
 /// The settings card: live tune of stick feel and volume, in the same
-/// panel-and-bevel-rows dress as the in-game menus. Session-only.
+/// panel-and-bevel-rows dress as the in-game menus. Saving is explicit.
 fn draw_settings_now(font: &FontAtlas, sel: usize) {
     panel_now(MENU_PANEL_X, MENU_PANEL_Y, MENU_PANEL_W, MENU_PANEL_H);
     font.draw_text((SCREEN_W as i16 - 8 * 8) / 2, 12, "SETTINGS", MC_INK);
-    let hx = hint_now(font, MENU_TEXT_X, MENU_HINT_Y, "< >", PS_KEY, "ADJUST");
+    let hx = hint_now(font, MENU_TEXT_X, MENU_HINT_Y, "X", PS_CROSS, "SAVE");
     hint_now(font, hx, MENU_HINT_Y, "O", PS_CIRCLE, "BACK");
-    let mut i = 0usize;
-    while i < SETTING_ROWS {
-        let y = MENU_ROWS_Y + i as i16 * MENU_ROW_H as i16;
+    let start = list_window(SETTING_ROWS, 8, sel);
+    let mut j = 0usize;
+    while j < 8 && start + j < SETTING_ROWS {
+        let i = start + j;
+        let y = MENU_ROWS_Y + j as i16 * MENU_ROW_H as i16;
         row_button_now(y - 3, i == sel);
         let color = if i == sel { MC_LABEL_SEL } else { MC_LABEL };
         font.draw_text(MENU_TEXT_X, y, SETTING_NAMES[i], color);
@@ -4484,12 +4518,12 @@ fn draw_settings_now(font: &FontAtlas, sel: usize) {
         let n = setting_value(i, &mut buf);
         let txt = unsafe { core::str::from_utf8_unchecked(&buf[..n]) };
         font.draw_text(278 - n as i16 * 8, y, txt, (0x70, 0xE0, 0x70));
-        i += 1;
+        j += 1;
     }
     font.draw_text(
         MENU_TEXT_X,
-        MENU_ROWS_Y + SETTING_ROWS as i16 * MENU_ROW_H as i16,
-        "TAKES EFFECT IMMEDIATELY",
+        MENU_ROWS_Y + 8 * MENU_ROW_H as i16,
+        "< > ADJUST - X ON SAVE TO KEEP",
         (0x6A, 0x6A, 0x74),
     );
 }
@@ -11350,6 +11384,7 @@ const OPT_CHEATS: usize = 5;
 /// the in-game menu so stick feel and volume can be tuned mid-session
 /// instead of only from the main menu before a world loads.
 const OPT_SETTINGS: usize = 6;
+const OPT_SAVE_SETTINGS: usize = OPT_SETTINGS + SETTING_SAVE;
 const OPTIONS: [&str; OPT_SETTINGS + SETTING_ROWS] = [
     "FLIGHT",
     "SAVE TO CARD",
@@ -11365,6 +11400,7 @@ const OPTIONS: [&str; OPT_SETTINGS + SETTING_ROWS] = [
     SETTING_NAMES[5],
     SETTING_NAMES[6],
     SETTING_NAMES[7],
+    SETTING_NAMES[8],
 ];
 /// Result of the last card operation, shown under the list.
 static mut OPT_MSG: &str = "";
