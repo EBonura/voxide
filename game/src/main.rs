@@ -4373,12 +4373,12 @@ fn save_shared_settings(fb: &mut FrameBuffer, font: &FontAtlas) {
         SETTINGS_PROFILE.set_invert_y(SET_INVERT_Y);
         SETTINGS_PROFILE.sfx_volume = sfx::volume_pct() as u8;
         let mut card = psx_mc::Card::new(psx_mc::HardwareCard::new(psx_mc::Slot::One));
-        // The write below holds the screen for seconds (a block is 64 card
-        // frames, a format another 64), so say so first, as the world save
-        // does. A blank card that is only being asked about writes nothing.
-        let formatted = card.is_formatted().unwrap_or(false);
-        if formatted || SETTINGS_FORMAT_OK {
-            present_saving(fb, font, !formatted);
+        // Formatting writes 64 card frames in this one call and holds the
+        // screen for seconds, so say so first, as the world save does. Saving
+        // the record to a formatted card is a few frames, too short to show,
+        // and a blank card that is only being asked about writes nothing.
+        if SETTINGS_FORMAT_OK && !card.is_formatted().unwrap_or(true) {
+            present_formatting(fb, font);
         }
         let outcome = settings_menu::save_to_card(
             &mut card,
@@ -4399,11 +4399,11 @@ fn save_shared_settings(fb: &mut FrameBuffer, font: &FontAtlas) {
     }
 }
 
-/// The screen shown while SAVE SETTINGS writes the card in one blocking call.
-/// Immediate-mode, like `present_loading`: no display list is in flight.
-fn present_saving(fb: &mut FrameBuffer, font: &FontAtlas, formatting: bool) {
+/// The screen shown while SAVE SETTINGS formats a blank card in one blocking
+/// call. Immediate-mode, like `present_loading`: no display list is in flight.
+fn present_formatting(fb: &mut FrameBuffer, font: &FontAtlas) {
     gpu::draw_rect_flat(0, 0, 320, 240, 14, 14, 22);
-    let head = if formatting { "FORMATTING THE CARD" } else { "SAVING SETTINGS" };
+    let head = "FORMATTING THE CARD";
     font.draw_text((320 - head.len() as i16 * 8) / 2, 100, head, (0xF0, 0xE0, 0x80));
     let warn = "DO NOT REMOVE THE CARD";
     font.draw_text((320 - warn.len() as i16 * 8) / 2, 118, warn, (0xD0, 0xD0, 0xD0));
