@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+Rendering pass on the 0.4.0 candidate.
+
+- The dashed sky-coloured lines between terrain faces are gone. A distant floor
+  plate or a terrace edge near the side of the screen is a thin slanted sliver,
+  and the old seal grew it along its own length instead of sideways, so
+  neighbouring faces still left a one pixel gap. Every opaque polygon now grows
+  outward on its edges (by 3 pixels, 1 at the sharp end of a sliver), which
+  closes the cracks the recorded walk showed on the title fly-over, on floor
+  tiles and on terrace edges. About 2% of the frame.
+- Distant trees are whole again. The last two blocks of the draw carried only
+  the tops of faces, so a tree at the edge of the view showed as a floating
+  canopy of thin leaf slivers with its trunk and sides cut away, and terraces
+  ended in spikes. Sides now reach the far plane with the tops. About 4% of the
+  frame.
+- The PGO profile is re-collected for the new code.
+
 ## 0.4.0 | 2026-10-15
 
 Equipment, fire and TNT, a controls card, and settings that save only when you
