@@ -17,10 +17,17 @@ timeout = 1800
 [[step.assert]]
 kind = "card_unchanged"
 [[step]]
+wait = 60
+[[step]]
 label = "PLAY GAME: straight into the world, no card"
 press = ["cross"]
 hold = 4
-wait = 240
+wait = 20
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 0 }
+timeout = 1500
+[[step]]
+wait = 120
 [[step]]
 press = ["start"]
 hold = 4

@@ -25,6 +25,8 @@ offset = 28
 op = "eq"
 value = 18
 [[step]]
+wait = 120
+[[step]]
 checkpoint = "title-menu"
 golden = false
 [[step.assert]]

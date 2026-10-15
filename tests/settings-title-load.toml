@@ -20,6 +20,8 @@ offset = 80
 op = "eq"
 value = 3
 [[step]]
+wait = 120
+[[step]]
 label = "PLAY GAME: straight into the world, no card"
 press = ["cross"]
 hold = 4

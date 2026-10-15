@@ -19,6 +19,8 @@ value = 18
 
 # PLAY -> CREDIT -> SETTINGS by wrapping upward twice; STICK SETTINGS, MOVE DEADZONE.
 [[step]]
+wait = 120
+[[step]]
 press = ["up"]
 hold = 4
 wait = 12

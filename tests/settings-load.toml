@@ -10,6 +10,8 @@ sha256 = "4829f732add6f5be6ff419549666a6764657ff75f613f7ef5355da567f2b015a"
 wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
 timeout = 1500
 [[step]]
+wait = 120
+[[step]]
 checkpoint = "saved-title"
 golden = false
 [[step.assert]]

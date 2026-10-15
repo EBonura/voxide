@@ -16,6 +16,8 @@ timeout = 1800
 [[step.assert]]
 kind = "card_unchanged"
 [[step]]
+wait = 120
+[[step]]
 label = "PLAY GAME: straight into the world"
 press = ["cross"]
 hold = 4

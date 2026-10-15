@@ -391,6 +391,8 @@ wait = 60
 wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
 timeout = 1800
 [[step]]
+wait = 120
+[[step]]
 checkpoint = "slider-loaded-from-the-card"
 golden = false
 [[step.assert]]

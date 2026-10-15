@@ -20,6 +20,8 @@ value = 18
 # PLAY -> CREDIT -> SETTINGS by wrapping upward twice. SETTINGS opens the
 # OPTIONS page; STICK SETTINGS is two rows down, MOVE DEADZONE three below LOOK SPEED.
 [[step]]
+wait = 120
+[[step]]
 press = ["up"]
 hold = 4
 wait = 12
