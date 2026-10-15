@@ -4,7 +4,7 @@
 
 Equipment, fire and TNT, a controls card, and settings that save only when you
 say so, with LOAD WORLD on the title screen, long TNT chains that finish in under
-half the time, and a rendering pass.
+half the time, a 20 block view distance and a rendering pass.
 
 - LOAD WORLD on the title screen, second row, loads the world saved on the
   memory card in slot 1, as Java's Singleplayer list does for a saved world.
@@ -22,6 +22,12 @@ half the time, and a rendering pass.
   blasts wait the game takes up to two extra vblanks a frame (15 to 20 fps) for
   as long as the chain lasts. Sixteen runs 54 of 478 frames long, in one stretch
   of about 2.7 s; a single TNT is unchanged.
+- The view distance is 20 blocks, up from 16. The outermost ring of chunks is
+  drawn as coarse two-block tops with skirts (it already existed for distances
+  above 16). On the recorded walk 6.2 percent of the frames run below 30 fps (it
+  was 1.2 percent at 16); the train and unseen walks 1.1 and 0.3 percent. More
+  optimisation is to come. Faces wholly off the screen and far plants are also
+  dropped before the seal and the projection, about 1 percent of a frame.
 - The dashed sky-coloured lines between terrain faces are gone. A distant floor
   plate or a terrace edge near the side of the screen is a thin slanted sliver,
   and the old seal grew it along its own length instead of sideways, so

@@ -7,7 +7,7 @@ survival work, but much of the game is still unfinished.
 
 New in v0.4.1: a LOAD WORLD row on the title screen that brings back the world on
 the memory card (dim, with the reason, when there is no card or no saved world);
-TNT chains that finish in under half the time; music (four piano pieces, 10 to
+TNT chains that finish in under half the time; a 20 block view distance (it was 16); music (four piano pieces, 10 to
 20 minutes apart as in Java, with a MUSIC VOLUME setting); a player page with
 armour you wear a piece at a time, an off hand, a choice of weapon and a 2x2
 crafting grid; TNT and fire with Java-inspired ignition, fuses and blasts; a

@@ -234,6 +234,40 @@ meets different ground. The train tape, whose route does not diverge, shows no
 cost. Instruction-cache stall cycles are 4 to 6 percent higher on all three
 tapes (code layout; the work totals are level).
 
+## 2026-10-15: 20 block view distance (0.4.1)
+
+Manny: ship 20 blocks. `DRAW_BLOCKS` in main.rs is 20 (it is the one knob: far
+plane, side cut, fog ramp and the meshed ring, `world::RENDER_R`, follow it).
+Above 16 the ring is 5x5 chunks and its outer chunks mesh as the existing far
+LOD, `mesh_lod_tops` (two-block cells, tops and skirts, no plants); nothing new
+was written. Frames of the far band on the recorded walk at poll 991 and in the
+title fly-over show the extra ring as terrain and whole trees with no holes at
+the join; `vista-manny-poll991-20blocks.png` (in the work directory) is one.
+
+Real cadence on the three tapes, the frames longer than two vblanks (below 30
+fps) over the frames drawn, PGO builds with the profile re-collected for each,
+`psoxide-pgo measure`, polls 252..1990 (Manny) and 252..1200:
+
+| tape | 16 blocks | 20 blocks |
+|---|---|---|
+| Manny's walk, 2026-10-15 | 20 of 1,734 (1.2%), work 1,128,828 a frame | 108 of 1,734 (6.2%), 1,152,911 |
+| train | 2 of 947 (0.2%), 1,126,808 | 10 of 947 (1.1%), 1,127,910 |
+| unseen | 0 of 947, 907,102 | 3 of 947 (0.3%), 902,787 |
+
+(The view-distance work measured 9.9 percent below 30 fps on Manny's walk at 20
+with its own builds; the share swings by several points between builds of the
+same code, so read these as a range.) The two pixel-identical rejects it found
+(faces wholly off screen before the seal, far plants by axis distance) are in
+this branch; its PGO profile and crater literal are not, both were taken again
+here.
+
+Journeys: the 20 block title takes longer to settle (its first frames run 4 to 8
+vblanks while the ring streams, then 3), so a press in the first two seconds
+can fall between two polls; the journeys that press the pad first wait 120
+ticks after the title shows, and the two loads in `settings-menu-quit` and
+`save-repin` wait 500 ticks for the 5x5 ring to come back. The crater of
+`save-repin` is still 138 edits.
+
 ## 2026-10-15: music (GitHub issue 1, item 3)
 
 Music is scheduled like Java's (`game/src/music_plan.rs`, `music.rs`). `W:` is
