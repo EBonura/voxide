@@ -445,15 +445,7 @@ value = 1
 [[step.assert]]
 kind = "card_unchanged"
 
-# ---- the world: PLAY shows the CONTROLS card once ----
-[[step]]
-press = ["up"]
-hold = 4
-wait = 12
-[[step]]
-press = ["up"]
-hold = 4
-wait = 12
+# ---- the world: the title's CONTROLS row opens the card, PLAY goes straight in ----
 [[step]]
 press = ["up"]
 hold = 4
@@ -471,7 +463,32 @@ value = 3
 [[step.assert]]
 kind = "card_unchanged"
 [[step]]
+checkpoint = "t-controls-card"
+golden = false
+[[step.assert]]
+kind = "card_unchanged"
+[[step]]
 press = ["circle"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "card_unchanged"
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
 hold = 4
 wait = 60
 [[step.assert]]

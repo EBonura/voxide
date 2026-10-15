@@ -125,6 +125,10 @@ pub fn hud() -> bool {
 pub fn reset() {
     unsafe {
         GOD = false;
+        HUD = false;
+        TIME_SEL = 1;
+        MOB_SEL = 0;
+        WEATHER_SEL = 2;
         MSG = "";
     }
 }

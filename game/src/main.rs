@@ -32,7 +32,6 @@ mod music;
 mod music_plan;
 mod musicdata;
 mod save;
-mod settings_profile;
 mod settings_menu;
 mod sfx;
 mod sfxdata;
@@ -1048,24 +1047,89 @@ static mut SETTINGS_FORMAT_OK: bool = false;
 const SETTINGS_BLANK_CARD: &str = "BLANK CARD";
 
 /// Read-only settings receipt: magic, version, size, menu context, selected
-/// row, dirty, save result, move deadzone, controls-seen flag and menu page.
+/// row, dirty, save result, move deadzone, 0 (once the controls-seen flag) and menu page.
 /// Context is world=0, title=1, title settings tree=2, controls card=3, pause
 /// tree=4, other=5. Page is the open page of the options tree (menus.rs `Page`:
 /// pause=0, options=1, video=2, sound=3, sticks=4, gameplay=5, cheats=6) and 0
 /// outside it; selected is the cursor row within that page. Save result is
-/// none=0, saved=1, failed=2, blank card refused=3. Gameplay never reads this
-/// block.
+/// none=0, saved=1, failed=2, blank card refused=3. Then the line under the menu
+/// (`msg_code`), and a summary of the world the journeys check while the game
+/// is paused (refreshed each paused frame, held while playing): item count,
+/// hotbar slot 1, mobs alive, the world clock, flags (rain 1, thunder 2, fly 4,
+/// god mode 8, coordinates 16, any armour worn 32), experience, live particles,
+/// live drops and the sim tick. Gameplay never reads this block.
 #[used]
 #[no_mangle]
-pub static mut VOXIDE_SETTINGS_STATE: [u32; 10] = [u32::from_le_bytes(*b"VSET"), 2, 40, 0, 0, 0, 0, 0, 0, 0];
+pub static mut VOXIDE_SETTINGS_STATE: [u32; 21] =
+    [u32::from_le_bytes(*b"VSET"), 3, 84, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
-fn publish_settings(context: u32, selected: usize, page: u32) {
+/// What the line under the menu says, as a number: none 0, saving 1, saved 2,
+/// blank card 3, no card 4, card full 5, card removed 6, save failed 7, loaded 8,
+/// no save on the card 9, anything else 10.
+fn msg_code(m: &str) -> u32 {
+    match m {
+        "" => 0,
+        "SAVING - DO NOT REMOVE THE CARD" => 1,
+        "SAVED" => 2,
+        "BLANK CARD: SAVE AGAIN TO FORMAT" | "BLANK CARD: X AGAIN TO FORMAT" => 3,
+        "NO MEMORY CARD IN SLOT 1" => 4,
+        "MEMORY CARD FULL" => 5,
+        "CARD REMOVED - NOT SAVED" => 6,
+        "SAVE FAILED - CHECK THE CARD" => 7,
+        "LOADED" => 8,
+        "NO SAVE ON THIS CARD" => 9,
+        _ => 10,
+    }
+}
+
+/// `world` is the player and the world clock when a world is up and paused.
+fn publish_settings(context: u32, selected: usize, page: u32, world: Option<(&Player, u32)>) {
     unsafe {
-        let state = [u32::from_le_bytes(*b"VSET"), 2, 40, context, selected as u32,
-            SETTINGS_DIRTY as u32,
-            match SETTINGS_SAVE_STATUS { "SAVED" => 1, "FAILED" => 2, SETTINGS_BLANK_CARD => 3, _ => 0 },
-            SET_MOVE_DZ as u32, (SETTINGS_PROFILE.game_flags() & settings_profile::CONTROLS_SEEN != 0) as u32,
-            page];
+        let mut state = core::ptr::read_volatile(core::ptr::addr_of!(VOXIDE_SETTINGS_STATE));
+        state[1] = 3;
+        state[2] = 84;
+        state[3] = context;
+        state[4] = selected as u32;
+        state[5] = SETTINGS_DIRTY as u32;
+        state[6] = match SETTINGS_SAVE_STATUS { "SAVED" => 1, "FAILED" => 2, SETTINGS_BLANK_CARD => 3, _ => 0 };
+        state[7] = SET_MOVE_DZ as u32;
+        state[8] = 0; // was the controls-seen flag; no longer read or written
+        state[9] = page;
+        state[10] = msg_code(OPT_MSG);
+        if let Some((p, day)) = world {
+            let mut items = 0u32;
+            let mut i = 0;
+            while i < BLOCK_KINDS {
+                items += INV[i] as u32;
+                i += 1;
+            }
+            let mut live = 0u32;
+            i = 0;
+            while i < MAX_PARTICLES {
+                live += (PART_LIFE[i] != 0) as u32;
+                i += 1;
+            }
+            let mut drops = 0u32;
+            i = 0;
+            while i < MAX_DROPS {
+                drops += (DROP_ITEM[i] != AIR) as u32;
+                i += 1;
+            }
+            state[11] = items;
+            state[12] = HOTBAR[0] as u32;
+            state[13] = mob::alive_count();
+            state[14] = day;
+            state[15] = weather::raining() as u32
+                | (weather::thundering() as u32) << 1
+                | (p.fly as u32) << 2
+                | (cheat::god() as u32) << 3
+                | (cheat::hud() as u32) << 4
+                | (p.worn.iter().any(|&w| w != AIR) as u32) << 5;
+            state[16] = p.xp as u32;
+            state[17] = live;
+            state[18] = drops;
+            state[19] = SIM_TICK;
+        }
         core::ptr::write_volatile(core::ptr::addr_of_mut!(VOXIDE_SETTINGS_STATE), state);
     }
 }
@@ -3144,6 +3208,7 @@ fn main() {
             match menu { 0 => 0, MENU_OPTIONS | MENU_CHEAT => 4, MENU_CONTROLS => 3, _ => 5 },
             if menu == MENU_OPTIONS { menus::cursor() } else { menu_sel },
             match menu { MENU_OPTIONS => menus::page_id(), MENU_CHEAT => menus::CHEATS_PAGE, _ => 0 },
+            if menu != 0 { Some((&player, day)) } else { None },
         );
         let paused = menu == MENU_OPTIONS || menu == MENU_CHEAT || menu == MENU_CONTROLS;
         if !paused && menu != MENU_DEAD {
@@ -3928,9 +3993,7 @@ fn quit_to_title(fb: &mut FrameBuffer, font: &FontAtlas, entropy: u32) {
         mob::leave_dimension();
         enter_dimension(world::DIM_OVERWORLD, 0, 0, fb, font);
     }
-    menus::quit_done();
-    clear_world_entities();
-    reset_game_state();
+    reset_session();
     world::prepare_new_world(entropy as i32 | 1);
     let (bx, bz) = if SPAWN_GREEN {
         world::pick_spawn(SPAWN_BX, SPAWN_BZ)
@@ -3942,6 +4005,62 @@ fn quit_to_title(fb: &mut FrameBuffer, font: &FontAtlas, entropy: u32) {
         WORLD_BZ = bz;
         RESPAWN_BX = bx;
         RESPAWN_BZ = bz;
+    }
+}
+
+/// Put everything a world and its player leave behind back to a cold boot's
+/// values, so the title (and the world after it) cannot tell it from one.
+/// What stays on purpose: the settings and the card state (a player's, not a
+/// world's), the tutorial switch (a preference), and what boot builds once
+/// (textures, tables, the sound bank, the music player and its loaded
+/// pieces). Per-frame render state is rebuilt every frame. The world's chunks
+/// are `world::prepare_new_world`'s. docs/QUIT-TO-TITLE.md lists every item.
+#[inline(never)]
+#[optimize(size)] // a menu transition: its bytes are worth more than its cycles
+fn reset_session() {
+    clear_world_entities(); // drops, blast kick, TNT, blast queue
+    reset_game_state(); // inventory, hotbar, edits, chests, furnaces, crops, saplings, tutorial, weather, mobs, cheats
+    mob::reset_session();
+    tnt::reset_session();
+    world::reset_session();
+    sfx::reset_weather();
+    equip::reset();
+    grid::reset();
+    menus::reset_session();
+    // The screens re-initialise themselves when opened; run those so nothing
+    // is carried over in them either (the carried stack, the crafting output).
+    inv::inventory_open_grid();
+    inv::inventory_open(AIR);
+    inv::container_open();
+    unsafe {
+        PART_LIFE = [0; MAX_PARTICLES];
+        DROP_FLY = [0; MAX_DROPS];
+        DROP_AGE = [0; MAX_DROPS];
+        DROP_DELAY = [0; MAX_DROPS];
+        DROP_REST = [false; MAX_DROPS];
+        XP_PENDING = 0;
+        FURN_XP_FRAC = [0; MAX_FURNACES];
+        CRAFT_TAB = 0;
+        CRAFT_HIDE = false;
+        AT_BENCH = false;
+        NAV_UP_T = 0;
+        NAV_DOWN_T = 0;
+        USE_HELD_T = 0;
+        JUMP_DELAY = 0;
+        EQUIP_MSG = "";
+        EQUIP_T = 0;
+        TUT_PREV = (0, 0, 0, 0);
+        PROMPT_SLEEP = false;
+        STEP_ACC = 0;
+        STEP_N = 0;
+        STEP_PX = 0;
+        STEP_PZ = 0;
+        WAS_WET = false;
+        OFFHAND_SHOWN = AIR;
+        TOOL_DUR_SHOWN = 0;
+        HUD_NAME_T = 0;
+        HUD_NAME_LAST = 0xFF;
+        SIM_TICK = 0; // the clock blast seeds and animations read, 0 at a cold boot
     }
 }
 
@@ -3999,7 +4118,6 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
     let mut sel = 0usize; // 0 = play, 1 = new world, 2 = controls, 3 = settings, 4 = credits
     let mut credits = 0u8; // the credits card is up, and its page (1 music, 2 the rest)
     let mut controls = false; // the controls card is up
-    let mut first_run = false; // ...because this is the first PLAY: PLAY follows it
     let mut settings = false; // the settings card is up (menus.rs holds its cursors)
     let mut t: u32 = 0;
     loop {
@@ -4022,9 +4140,6 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             if controls::input(pad, prev) {
                 controls = false;
                 sfx::blip();
-                if first_run {
-                    return;
-                }
             }
         } else if credits != 0 {
             // CROSS turns the first page; CIRCLE or START closes the card, and
@@ -4110,25 +4225,14 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             sfx::confirm();
         } else if go {
             sfx::confirm();
-            if controls_unseen() {
-                // The first PLAY shows the controls, once: the card is
-                // remembered in RAM, persisted only by explicit Save Settings.
-                unsafe {
-                    SETTINGS_PROFILE.set_game_flag(settings_profile::CONTROLS_SEEN, true);
-                    SETTINGS_DIRTY = true;
-                }
-                controls = true;
-                first_run = true;
-                controls::open();
-            } else {
-                return;
-            }
+            return;
         }
 
         publish_settings(
             if settings { 2 } else if controls { 3 } else { 1 },
             if settings { menus::cursor() } else { sel },
             if settings { menus::page_id() } else { 0 },
+            None,
         );
 
         // The vista: a slow orbit over the spawn surface, exactly the game's
@@ -4276,15 +4380,6 @@ fn draw_splash_now(font: &FontAtlas, t: u32) {
     }
 }
 
-/// True on the first PLAY with this memory card: the settings record does not
-/// say the controls card was shown. The lockstep and ui-fixture builds (A/B
-/// validation and headless UI captures, never shipped) skip it, as a card
-/// would swallow the tape.
-fn controls_unseen() -> bool {
-    !cfg!(any(feature = "lockstep", feature = "ui-fixture"))
-        && unsafe { SETTINGS_PROFILE.game_flags() } & settings_profile::CONTROLS_SEEN == 0
-}
-
 /// One frame of the screens that take no part in the gameplay loop's own
 /// dispatch (kept out of it: its profile is keyed to its line layout): the
 /// inventory, and the controls card, which returns true when it closes.
@@ -4340,7 +4435,6 @@ fn load_shared_settings() {
     let Ok(mut profile) = psx_settings::load_slot_one(SETTINGS_FILE) else {
         return;
     };
-    let migrated = settings_profile::migrate_legacy_controls_seen(&mut profile);
     unsafe {
         SETTINGS_PROFILE = profile;
         SET_MOVE_DZ = SETTINGS_PROFILE.move_deadzone as i16;
@@ -4349,7 +4443,6 @@ fn load_shared_settings() {
         SET_INVERT_Y = SETTINGS_PROFILE.invert_y();
         sfx::set_volume_pct(SETTINGS_PROFILE.sfx_volume as i32);
         music::set_volume_pct(SETTINGS_PROFILE.music_volume as i32);
-        SETTINGS_DIRTY = migrated;
     }
     if unsafe { !SETTINGS_PROFILE.screen_offset.is_centre() } {
         apply_screen_offset();

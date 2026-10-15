@@ -64,7 +64,7 @@ fn main() {
     match symbol_address(Path::new(&exe)) {
         Ok(addr) => {
             writeln!(std::io::stdout(), "{addr:#010x} VOXIDE_GATE_STATE").expect("write address");
-            match block_address(Path::new(&exe), b"VSET", 2, 40, "VOXIDE_SETTINGS_STATE") {
+            match block_address(Path::new(&exe), b"VSET", 3, 84, "VOXIDE_SETTINGS_STATE") {
                 Ok(settings) => writeln!(std::io::stdout(), "{settings:#010x} VOXIDE_SETTINGS_STATE").expect("write settings address"),
                 Err(error) => { eprintln!("gate-symbols: {error}"); std::process::exit(1); }
             }
@@ -87,15 +87,15 @@ mod tests {
     #[test]
     fn settings_receipt_is_separate_from_gameplay_block() {
         let mut bytes = sample(&[0x40], 0x300);
-        let block = &mut bytes[HEADER_LEN + 0x180..HEADER_LEN + 0x180 + 40];
+        let block = &mut bytes[HEADER_LEN + 0x180..HEADER_LEN + 0x180 + 84];
         block[..4].copy_from_slice(b"VSET");
-        block[4..8].copy_from_slice(&2u32.to_le_bytes());
-        block[8..12].copy_from_slice(&40u32.to_le_bytes());
+        block[4..8].copy_from_slice(&3u32.to_le_bytes());
+        block[8..12].copy_from_slice(&84u32.to_le_bytes());
         let path = env::temp_dir().join(format!("vox-settings-symbol-{}", std::process::id()));
         fs::write(&path, &bytes).unwrap();
-        assert_eq!(block_address(&path, b"VSET", 2, 40, "VOXIDE_SETTINGS_STATE").unwrap(), 0x8001_0180);
+        assert_eq!(block_address(&path, b"VSET", 3, 84, "VOXIDE_SETTINGS_STATE").unwrap(), 0x8001_0180);
         assert!(block_address(&path, b"VSET", 3, 40, "VOXIDE_SETTINGS_STATE").is_err());
-        assert!(block_address(&path, b"VSET", 2, 36, "VOXIDE_SETTINGS_STATE").is_err());
+        assert!(block_address(&path, b"VSET", 2, 84, "VOXIDE_SETTINGS_STATE").is_err());
         fs::remove_file(path).unwrap();
     }
 

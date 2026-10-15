@@ -152,16 +152,8 @@ offset = 12
 op = "eq"
 value = 1
 
-# SETTINGS -> CONTROLS -> NEW WORLD -> PLAY. First PLAY displays controls,
-# changing the RAM flag without writing the settings card.
-[[step]]
-press = ["up"]
-hold = 4
-wait = 12
-[[step]]
-press = ["up"]
-hold = 4
-wait = 12
+# The CONTROLS row opens the card and O closes it, writing nothing; PLAY GAME
+# then goes straight into the world, with no card of its own.
 [[step]]
 press = ["up"]
 hold = 4
@@ -181,23 +173,54 @@ kind = "card_unchanged"
 [[step]]
 press = ["circle"]
 hold = 4
-wait = 60
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "card_unchanged"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 20
+op = "eq"
+value = 1
 [[step]]
-checkpoint = "controls-seen-in-memory-only"
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 60
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"
+[[step]]
+checkpoint = "play-skips-the-controls-card"
 golden = false
 [[step.assert]]
 kind = "card_unchanged"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
-offset = 32
-op = "eq"
-value = 1
+offset = 12
+op = "zero"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
-offset = 12
-op = "zero"
+offset = 20
+op = "eq"
+value = 1
 [[step]]
 press = ["start"]
 hold = 4

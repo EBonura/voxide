@@ -17,14 +17,10 @@ timeout = 1800
 [[step.assert]]
 kind = "card_unchanged"
 [[step]]
-label = "PLAY GAME: the first play shows the CONTROLS card"
+label = "PLAY GAME: straight into the world, no card"
 press = ["cross"]
 hold = 4
 wait = 150
-[[step]]
-press = ["circle"]
-hold = 4
-wait = 60
 [[step]]
 press = ["start"]
 hold = 4

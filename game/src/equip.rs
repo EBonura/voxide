@@ -91,6 +91,11 @@ pub fn wear_per_hit(class: u8) -> u16 {
 /// held is new.
 static mut SPARE: [u16; ARMOR_KINDS as usize] = [0; ARMOR_KINDS as usize];
 
+/// No spare armour: a cold boot's, for a new session.
+pub fn reset() {
+    unsafe { SPARE = [0; ARMOR_KINDS as usize] };
+}
+
 pub fn spare_get() -> [u16; ARMOR_KINDS as usize] {
     unsafe { SPARE }
 }

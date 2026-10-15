@@ -15,14 +15,10 @@ timeout = 1800
 [[step.assert]]
 kind = "card_unchanged"
 [[step]]
-label = "PLAY GAME: the first play shows the CONTROLS card"
+label = "PLAY GAME: straight into the world, no card"
 press = ["cross"]
 hold = 4
 wait = 150
-[[step]]
-press = ["circle"]
-hold = 4
-wait = 60
 [[step]]
 label = "look down at the ground and place a block, so the world differs from a fresh one"
 rstick = [128, 255]
@@ -133,7 +129,7 @@ sym = "VOXIDE_SETTINGS_STATE"
 offset = 36
 op = "zero"
 [[step]]
-label = "PLAY GAME again: the controls card is not shown twice"
+label = "PLAY GAME again"
 press = ["cross"]
 hold = 4
 wait = 60

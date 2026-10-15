@@ -33,9 +33,6 @@ static mut CHEAT_CUR: u8 = 0;
 static mut QUIT_PENDING: bool = false;
 /// That save finished (or was waived): leave for the title screen.
 static mut QUIT_READY: bool = false;
-/// That save failed and the player has been told; X on the row again quits
-/// without it.
-static mut QUIT_UNSAVED: bool = false;
 
 /// What the gameplay loop has to do after a frame of the pause menu.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -61,10 +58,22 @@ fn rows(page: Page) -> &'static [tree::Row] {
 }
 
 fn clear_msg() {
+    unsafe { OPT_MSG = "" };
+}
+
+/// Every cursor and flag back to a cold boot's (quitting to the title).
+#[inline(never)]
+#[optimize(size)]
+pub fn reset_session() {
     unsafe {
-        OPT_MSG = "";
-        QUIT_UNSAVED = false;
+        PAGE = Page::Pause;
+        CUR = [0; PAGES];
+        AT_TITLE = false;
+        CHEAT_CUR = 0;
+        QUIT_PENDING = false;
+        QUIT_READY = false;
     }
+    clear_msg();
 }
 
 /// The pause menu opens on its first page, first row (Java reopens it fresh).
@@ -254,11 +263,9 @@ pub fn input(
             Out::None
         }
         Kind::SaveQuit => {
-            // After a failed save the player has been offered the exit
-            // without one: X again takes it.
-            if unsafe { QUIT_UNSAVED } {
-                unsafe { QUIT_READY = true };
-            } else if let Some((player, day)) = world {
+            // A failed save keeps the player in the menu with the reason
+            // (save_step shows it); X again tries the save again.
+            if let Some((player, day)) = world {
                 save::begin(player, *day);
                 unsafe {
                     QUIT_PENDING = true;
@@ -305,28 +312,17 @@ pub fn quit_done() {
 }
 
 /// A save finished. If SAVE AND QUIT started it, a good save leaves for the
-/// title. A blank card keeps its two steps (X again formats, and then leaves).
-/// Any other failure says so and offers to leave without the save.
+/// title. Any other outcome stays in the menu: a blank card asks (X again
+/// formats, saves, and leaves), a failure shows its reason (save_step) and X
+/// again tries again. Java does not quit on a failed save either.
 #[inline(never)]
 #[optimize(size)]
 pub fn quit_after(outcome: &save::Outcome) {
     unsafe {
-        if !QUIT_PENDING {
-            return;
+        if QUIT_PENDING && matches!(outcome, save::Outcome::Saved) {
+            QUIT_READY = true;
         }
         QUIT_PENDING = false;
-        let why = match outcome {
-            save::Outcome::Saved => {
-                QUIT_READY = true;
-                return;
-            }
-            save::Outcome::NeedFormat => return,
-            save::Outcome::NoCard | save::Outcome::Removed => "NO CARD: X AGAIN QUITS UNSAVED",
-            save::Outcome::Full => "CARD FULL: X AGAIN QUITS UNSAVED",
-            save::Outcome::Failed => "FAILED: X AGAIN QUITS UNSAVED",
-        };
-        OPT_MSG = why;
-        QUIT_UNSAVED = true;
     }
 }
 

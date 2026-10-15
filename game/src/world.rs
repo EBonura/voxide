@@ -2997,6 +2997,24 @@ fn try_ignite(x: i32, y: i32, z: i32) {
 
 /// Drop every pending fluid update (new world / teleport): the queue holds
 /// absolute block coordinates that mean nothing once the world changes.
+/// Everything the world carries besides its chunks (`prepare_new_world` drops
+/// those): the fluid, fire and blast queues, the queued and half-done edit
+/// remeshes, the fire generator and the rain flag, back to a cold boot's values.
+/// Quitting to the title (main.rs `reset_session`).
+pub fn reset_session() {
+    fluid_reset();
+    unsafe {
+        EDIT_Q_LEN = 0;
+        EDIT_MESH_S = usize::MAX;
+        EDIT_LIGHT_CHANGED = false;
+        EDIT_PLANTS_CHANGED = false;
+        EDIT_PENDING_FULL = false;
+        EDIT_SKY_CHANGED = false;
+        FIRE_RNG = 0x2545_F491;
+        RAINING = false;
+    }
+}
+
 pub fn fluid_reset() {
     unsafe {
         FQ_HEAD = 0;

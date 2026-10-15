@@ -2,8 +2,8 @@
 //! the menus' own panel, pill and font. One layout, drawn two ways: into the
 //! frame's display list from the pause menu (`Listed`), and straight to the
 //! GPU from the main menu, which draws after the display list has gone out
-//! (`Now`). Shown once on the first PLAY, from the main menu, and from the
-//! pause menu at any time.
+//! (`Now`). Reached from the CONTROLS row of the main menu and of the pause
+//! menu; nothing shows it by itself.
 
 use crate::*;
 

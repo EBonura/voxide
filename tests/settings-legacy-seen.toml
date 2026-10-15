@@ -1,9 +1,10 @@
-# The committed card came from the prior shipping build after its first PLAY.
-# It holds PSST v2 with difficulty 2 and no game flag. This route verifies the
-# migration skips the controls card in RAM and rewrites the profile only
-# after an explicit Save Settings request.
+# The committed card came from a prior shipping build after its first PLAY.
+# It holds PSST v2 with difficulty 2 and no game flag, the old controls-seen
+# marker. Nothing reads that marker any more: the card loads as it is, PLAY
+# goes straight into the world, nothing is unsaved, and the profile is written
+# only after an explicit Save Settings request.
 name = "voxide"
-title = "VoXide: legacy controls marker migrates"
+title = "VoXide: a card with the legacy controls marker loads and plays"
 disc = ["build/gate/voxide.cue"]
 symbols = ["build/gate-symbols.txt"]
 max_ticks = 3000
@@ -23,7 +24,7 @@ press = ["cross"]
 hold = 4
 
 [[step]]
-label = "normal world ticks prove the controls card was skipped"
+label = "normal world ticks: no controls card was shown"
 wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 12, op = "ge", value = 10 }
 timeout = 800
 
@@ -47,19 +48,13 @@ op = "ge"
 value = 10
 [[step.assert]]
 kind = "card_unchanged"
-note = "legacy migration and world entry do not automatically rewrite the profile"
-[[step.assert]]
-kind = "ram"
-sym = "VOXIDE_SETTINGS_STATE"
-offset = 32
-op = "eq"
-value = 1
+note = "loading the card and entering the world do not rewrite the profile"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
 offset = 20
-op = "eq"
-value = 1
+op = "zero"
+note = "nothing is unsaved: there is no migration to write back"
 
 [[step]]
 press = ["start"]

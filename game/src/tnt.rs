@@ -107,6 +107,18 @@ pub fn reset() {
     }
 }
 
+/// `reset`, and the fuse-scatter generator, the lost-tick counts and the
+/// player position back to a cold boot's values (quitting to the title).
+pub fn reset_session() {
+    reset();
+    unsafe {
+        SALT = 0x1234_5679;
+        LOST = [0; MAX_TNT];
+        GROUND = [false; MAX_TNT];
+        PLAYER_POS = (0, 0, 0);
+    }
+}
+
 /// Free a slot.
 fn release(i: usize) {
     unsafe {

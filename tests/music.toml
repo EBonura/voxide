@@ -85,13 +85,8 @@ offset = 12
 op = "eq"
 value = 2
 [[step]]
-label = "PLAY; the first PLAY shows the CONTROLS card"
+label = "PLAY: the world loads"
 press = ["cross"]
-hold = 4
-wait = 60
-[[step]]
-label = "close the card: the world loads"
-press = ["circle"]
 hold = 4
 wait = 20
 [[step]]

@@ -144,20 +144,18 @@ The layout follows Minecraft Bedrock's PS4/PS5 defaults.
   up one page (and closes the menu from the first), Start closes it from
   anywhere. Each page remembers its row
 - Main menu: up/down moves between PLAY GAME, NEW WORLD, CONTROLS, SETTINGS
-  and CREDITS; Cross confirms. The first PLAY shows the controls card once.
-  SETTINGS opens the same OPTIONS pages as the game menu, minus CHEATS
+  and CREDITS; Cross confirms. PLAY GAME goes straight into the world; the
+  controls card is on the CONTROLS row (and in the game menu). SETTINGS opens the same OPTIONS pages as the game menu, minus CHEATS
 
 Settings are never written on their own. Changes to the sticks, volume,
 brightness and screen position last until you power off, unless you choose SAVE
 SETTINGS on the OPTIONS page (SETTINGS on the main menu). That writes
-them to the memory card, and the controls card's "seen" mark goes with them, so
-a player who never saves settings sees the card on each boot's first PLAY. On
-a blank card, the first SAVE SETTINGS asks and the second formats it.
+them to the memory card. On a blank card, the first SAVE SETTINGS asks and the
+second formats it.
 
-The controls-seen state lives in VoXide's game flag in the shared settings
-record. This build migrates the older difficulty-2 marker on load. An older
-executable may clear game flags when it rewrites settings, so switching back
-to that executable can make the controls card appear again.
+Earlier builds showed the controls card on the first PLAY and kept a "seen" mark
+for it in the settings record. Nothing reads or writes that mark now; cards
+with it set or not load as before.
 
 A first run walks you through the basics with a chain of hint toasts: look,
 move, jump, chop a tree, craft planks, craft a table, place it, open it, then
