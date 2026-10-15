@@ -204,7 +204,7 @@ fn dyn_far_update() {
         FAR_DYN = d;
         FOG_K = ((FAR_Z << 16) / d).max(65536);
         telemetry::counter(33, (d >> 1) as u32);
-        telemetry::counter(34, body);
+        telemetry::counter(41, body);
     }
 }
 
