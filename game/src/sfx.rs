@@ -519,6 +519,17 @@ fn panned(vol: i32, pan: i32) -> (Volume, Volume) {
     (Volume(l as i16), Volume(r as i16))
 }
 
+/// The rain loop silent, as in a cold boot: its voice keeps playing at the
+/// last level otherwise, and nothing eases it down outside a world.
+pub fn reset_weather() {
+    unsafe {
+        if RAIN_ON {
+            RAIN_LEVEL = 0;
+            RAIN_VOICE.set_volume(Volume::SILENCE, Volume::SILENCE);
+        }
+    }
+}
+
 /// A peal of thunder at `pct` percent pitch (Java's random 0.8 to 1.0) from
 /// bearing `pan`. Java plays it at volume 10,000, which carries 160,000
 /// blocks: full loudness wherever the strike is, with no delay, placed by

@@ -1,0 +1,452 @@
+# What a world leaves behind must not follow the player through SAVE AND QUIT TO
+# TITLE: a world is dirtied (flight, god mode, coordinates, a full kit, noon,
+# thunder, a spawned pig, a placed block, the world's music playing), the player quits to
+# the title, and the world PLAY starts has a cold boot's inventory, clock, mobs, weather,
+# flags and sim tick, with the title's and the world's music rules running again.
+# VOXIDE_SETTINGS_STATE offsets 44.. are the world summary (game/src/main.rs
+# `publish_settings`), refreshed while the pause menu is open.
+name = "voxide-settings-menu-quit-state"
+title = "VoXide: a new world after SAVE AND QUIT carries nothing of the old one"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+memcard = "fresh"
+max_ticks = 14000
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 1800
+[[step]]
+label = "PLAY GAME: straight into the world"
+press = ["cross"]
+hold = 4
+wait = 150
+[[step]]
+wait = 60
+[[step]]
+press = ["start"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step]]
+checkpoint = "cold-boot-world"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 44
+op = "eq"
+value = 32
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 48
+op = "eq"
+value = 2
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 52
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 56
+op = "lt"
+value = 1000
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 60
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 64
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 68
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 72
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 76
+op = "lt"
+value = 600
+[[step]]
+press = ["start"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"
+# GAME MENU > OPTIONS... > GAMEPLAY... > CHEATS...: FLY, GOD MODE, SHOW XYZ, GIVE EVERYTHING, TIME (noon), WEATHER (thunder), SPAWN (a pig)
+[[step]]
+press = ["start"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 6
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["start"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"
+[[step]]
+rstick = [128, 255]
+hold = 40
+wait = 20
+[[step]]
+press = ["l2"]
+hold = 4
+wait = 30
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_MUSIC_STATE", offset = 12, op = "eq", value = 2 }
+timeout = 1500
+[[step]]
+press = ["start"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step]]
+checkpoint = "dirty-world"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 44
+op = "gt"
+value = 2000
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 52
+op = "gt"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 56
+op = "gt"
+value = 5000
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 60
+op = "eq"
+value = 61
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 76
+op = "gt"
+value = 250
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 12
+op = "eq"
+value = 2
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 5
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 2
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 3000
+[[step]]
+wait = 60
+# The title's music rules again: waiting for the menu piece, the drive stopped, the delay a title's.
+[[step]]
+checkpoint = "title-after-quit"
+golden = false
+[[step.assert]]
+kind = "card_writes"
+min_count = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 36
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 48
+op = "between"
+value = 60
+value_hi = 1800
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_MUSIC_STATE", offset = 12, op = "eq", value = 2 }
+timeout = 3800
+[[step]]
+checkpoint = "title-piece-plays-again"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 20
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step]]
+label = "PLAY GAME: a new world, straight in"
+press = ["cross"]
+hold = 4
+wait = 150
+[[step]]
+wait = 60
+[[step]]
+press = ["start"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step]]
+checkpoint = "new-world-after-quit"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 44
+op = "eq"
+value = 32
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 48
+op = "eq"
+value = 2
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 52
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 56
+op = "lt"
+value = 1000
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 60
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 64
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 68
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 72
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 76
+op = "lt"
+value = 600
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "zero"
+# And the world's music rules: waiting out Java's starting delay.
+[[step]]
+checkpoint = "new-world-music-restarts"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 48
+op = "eq"
+value = 300
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 36
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 28
+op = "le"
+value = 300

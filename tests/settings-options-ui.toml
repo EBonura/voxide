@@ -3,7 +3,7 @@ title = "VoXide: settings exits and controls introduction never autosave"
 disc = ["build/gate/voxide.cue"]
 symbols = ["build/gate-symbols.txt"]
 memcard = "fresh"
-max_ticks = 7500
+max_ticks = 9000
 
 [[step]]
 wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
@@ -17,7 +17,7 @@ offset = 28
 op = "eq"
 value = 18
 
-# PLAY -> CREDIT -> SETTINGS by wrapping upward twice.
+# PLAY -> CREDIT -> SETTINGS by wrapping upward twice; STICK SETTINGS, MOVE DEADZONE.
 [[step]]
 press = ["up"]
 hold = 4
@@ -28,6 +28,30 @@ hold = 4
 wait = 12
 [[step]]
 press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
 hold = 4
 wait = 12
 [[step]]
@@ -50,7 +74,32 @@ offset = 20
 op = "eq"
 value = 1
 [[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 4
+[[step.assert]]
 kind = "card_unchanged"
+# Two O presses: STICK SETTINGS to OPTIONS to the title. Nothing is written.
+[[step]]
+press = ["circle"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "card_unchanged"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 2
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 1
 [[step]]
 press = ["circle"]
 hold = 4
@@ -63,11 +112,33 @@ sym = "VOXIDE_SETTINGS_STATE"
 offset = 12
 op = "eq"
 value = 1
-
+# START leaves the whole tree from a sub-page.
 [[step]]
 press = ["cross"]
 hold = 4
 wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 2
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 1
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 2
 [[step]]
 press = ["start"]
 hold = 4
@@ -81,16 +152,8 @@ offset = 12
 op = "eq"
 value = 1
 
-# SETTINGS -> CONTROLS -> NEW WORLD -> PLAY. First PLAY displays controls,
-# changing the RAM flag without writing the settings card.
-[[step]]
-press = ["up"]
-hold = 4
-wait = 12
-[[step]]
-press = ["up"]
-hold = 4
-wait = 12
+# The CONTROLS row opens the card and O closes it, writing nothing; PLAY GAME
+# then goes straight into the world, with no card of its own.
 [[step]]
 press = ["up"]
 hold = 4
@@ -110,24 +173,54 @@ kind = "card_unchanged"
 [[step]]
 press = ["circle"]
 hold = 4
-wait = 60
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "card_unchanged"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 20
+op = "eq"
+value = 1
 [[step]]
-checkpoint = "controls-seen-in-memory-only"
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 60
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"
+[[step]]
+checkpoint = "play-skips-the-controls-card"
 golden = false
 [[step.assert]]
 kind = "card_unchanged"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
-offset = 32
-op = "eq"
-value = 1
+offset = 12
+op = "zero"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
-offset = 12
-op = "zero"
-
+offset = 20
+op = "eq"
+value = 1
 [[step]]
 press = ["start"]
 hold = 4
@@ -149,9 +242,49 @@ wait = 12
 [[step.assert]]
 kind = "card_unchanged"
 
-# Options first row wraps to its last row, Save Settings.
+# The pause menu opens on GAME MENU. OPTIONS... is one down; the OPTIONS page
+# opens on its first row and wraps up through DONE to SAVE SETTINGS.
 [[step]]
 press = ["start"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "zero"
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "zero"
+[[step]]
+press = ["up"]
 hold = 4
 wait = 12
 [[step]]
@@ -161,12 +294,30 @@ wait = 12
 [[step]]
 checkpoint = "options-save-selected"
 golden = false
-strict = [{ x = 32, y = 148, w = 256, h = 20 }]
+strict = [{ x = 32, y = 103, w = 256, h = 19 }, { x = 32, y = 164, w = 256, h = 14 }]
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
 offset = 16
 op = "eq"
-value = 15
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 20
+op = "eq"
+value = 1
 [[step.assert]]
 kind = "card_unchanged"

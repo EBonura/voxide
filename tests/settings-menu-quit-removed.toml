@@ -1,0 +1,133 @@
+# SAVE AND QUIT TO TITLE while the card is pulled part-way through the write: CARD REMOVED
+# is shown, the game menu stays, the world stays loaded, and X again saves and quits.
+# Runs on the save-pull lab disc (`make compile FEATURES=save-pull PGO_VARIANT=off`, pack to
+# build/gate-pull, never shipped): the gate's power_cut action reboots the console, so
+# it cannot stand in for a card pulled from a running game.
+name = "voxide-settings-menu-quit-removed"
+title = "VoXide: SAVE AND QUIT with the card pulled mid-save stays in the game menu"
+disc = ["build/gate-pull/voxide.cue"]
+symbols = ["build/gate-pull-symbols.txt"]
+max_ticks = 12000
+memcard = "fresh"
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 1800
+[[step]]
+label = "PLAY GAME: straight into the world"
+press = ["cross"]
+hold = 4
+wait = 150
+[[step]]
+wait = 60
+[[step]]
+press = ["start"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "zero"
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 5
+[[step]]
+label = "SAVE AND QUIT, and the card is pulled part-way through the write"
+press = ["cross"]
+hold = 4
+wait = 400
+[[step]]
+checkpoint = "card-removed-error-and-stay"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 5
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 40
+op = "eq"
+value = 6
+[[step]]
+wait = 300
+[[step]]
+checkpoint = "card-removed-error-and-stay-and-still-here"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 40
+op = "eq"
+value = 6
+[[step]]
+label = "X again: the card is back, the save completes and the game quits"
+press = ["cross"]
+hold = 4
+wait = 2
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 3000
+[[step]]
+wait = 60
+[[step]]
+checkpoint = "card-back-saved-and-quit"
+golden = false
+[[step.assert]]
+kind = "card_writes"
+min_count = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1

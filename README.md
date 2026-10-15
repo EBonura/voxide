@@ -133,28 +133,33 @@ The layout follows Minecraft Bedrock's PS4/PS5 defaults.
 - L1 / R1: hotbar previous/next (9 slots, wraps; an empty slot is an empty
   hand)
 - L3 or double-tap forward: sprint (drops when forward stops)
-- Start: options menu -- flight, save/load to memory card, the tutorial
-  toggle, CONTROLS (every button on a two-page card), CHEATS, and the stick,
-  volume, brightness and screen position settings (left/right adjusts those),
-  then SAVE SETTINGS to keep them
+- Start: the game menu -- BACK TO GAME, OPTIONS..., CONTROLS (every button on
+  a two-page card), SAVE WORLD and LOAD WORLD (memory card) and SAVE AND QUIT
+  TO TITLE (saves, then back to the title screen; PLAY GAME there starts a new
+  world, LOAD WORLD in the game menu brings the saved one back). OPTIONS... opens
+  VIDEO SETTINGS (brightness, screen position), MUSIC & SOUNDS (the two
+  volumes), STICK SETTINGS (look speed, invert, deadzones) and GAMEPLAY (the
+  tutorial toggle and CHEATS), then SAVE SETTINGS to keep what you changed.
+  Cross enters a page or does the row, left/right changes a value, Circle goes
+  up one page (and closes the menu from the first), Start closes it from
+  anywhere. Each page remembers its row
 - Main menu: up/down moves between PLAY GAME, NEW WORLD, CONTROLS, SETTINGS
-  and CREDITS; Cross confirms. The first PLAY shows the controls card once
+  and CREDITS; Cross confirms. PLAY GAME goes straight into the world; the
+  controls card is on the CONTROLS row (and in the game menu). SETTINGS opens the same OPTIONS pages as the game menu, minus CHEATS
 
 Settings are never written on their own. Changes to the sticks, volume,
 brightness and screen position last until you power off, unless you choose SAVE
-SETTINGS at the bottom of SETTINGS (main menu) or OPTIONS (pause). That writes
-them to the memory card, and the controls card's "seen" mark goes with them, so
-a player who never saves settings sees the card on each boot's first PLAY. On
-a blank card, the first SAVE SETTINGS asks and the second formats it.
+SETTINGS on the OPTIONS page (SETTINGS on the main menu). That writes
+them to the memory card. On a blank card, the first SAVE SETTINGS asks and the
+second formats it.
 
-The controls-seen state lives in VoXide's game flag in the shared settings
-record. This build migrates the older difficulty-2 marker on load. An older
-executable may clear game flags when it rewrites settings, so switching back
-to that executable can make the controls card appear again.
+Earlier builds showed the controls card on the first PLAY and kept a "seen" mark
+for it in the settings record. Nothing reads or writes that mark now; cards
+with it set or not load as before.
 
 A first run walks you through the basics with a chain of hint toasts: look,
 move, jump, chop a tree, craft planks, craft a table, place it, open it, then
-make a pickaxe. OPTIONS > TUTORIAL turns it off.
+make a pickaxe. OPTIONS > GAMEPLAY > TUTORIAL turns it off.
 
 There are four tools, a pickaxe, axe, shovel and sword, each crafted per tier
 from wood up to diamond. They wear out at Java's rates, a better one
@@ -169,10 +174,11 @@ Holding up or down in any menu autorepeats after a beat.
 
 ### Cheats
 
-Press Start for OPTIONS and pick CHEATS. Up/down picks a row, left/right
-changes TIME, WEATHER and SPAWN, Cross acts, Circle goes back to OPTIONS.
+Press Start, then OPTIONS..., GAMEPLAY... and CHEATS.... Up/down picks a row,
+left/right changes TIME, WEATHER and SPAWN, Cross acts, Circle goes back to
+GAMEPLAY.
 
-- FLY (NO CLIP): the options menu's flight, which passes through blocks
+- FLY (NO CLIP): flight, which passes through blocks (the only flight switch)
 - GOD MODE: health, hunger and breath stay full
 - SHOW XYZ + FPS: block coordinates and frame rate in the top-left corner
 - GIVE EVERYTHING: 64 of every block and item, diamond tools and armour
@@ -220,7 +226,7 @@ the disc by the drive as XA-ADPCM (37.8 kHz stereo, about 29 MB). They follow
 Java: the title screen plays one a few seconds after it appears, the music stops
 when a world loads, the first piece comes five seconds after you join, then
 each piece is followed by 10 to 20 minutes of silence. The pause menu does not
-stop it. MUSIC VOLUME sits next to SFX VOLUME in SETTINGS and OPTIONS and, like
+stop it. MUSIC VOLUME sits next to SFX VOLUME in MUSIC & SOUNDS and, like
 the other settings, reaches the memory card only with SAVE SETTINGS; at 0 nothing
 plays.
 

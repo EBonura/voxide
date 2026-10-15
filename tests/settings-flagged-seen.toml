@@ -1,7 +1,8 @@
-# Cold boot from the separate card snapshot written by the legacy migration
-# journey. The settings file now has game flag bit 1 and difficulty 1.
+# Cold boot from a card whose settings file has game flag bit 1 (the controls
+# card seen) and difficulty 1, as the last build's migration wrote it. The flag
+# is ignored: PLAY goes straight into the world and the card is not touched.
 name = "voxide"
-title = "VoXide: migrated controls flag survives a cold boot"
+title = "VoXide: a card with the controls flag set loads and plays"
 disc = ["build/gate/voxide.cue"]
 symbols = ["build/gate-symbols.txt"]
 max_ticks = 3000
@@ -16,7 +17,7 @@ wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region =
 timeout = 1500
 
 [[step]]
-label = "PLAY GAME uses the migrated flag to skip the controls card"
+label = "PLAY GAME goes straight into the world"
 press = ["cross"]
 hold = 4
 

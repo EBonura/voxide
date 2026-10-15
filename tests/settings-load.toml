@@ -19,12 +19,6 @@ offset = 28
 op = "eq"
 value = 22
 [[step.assert]]
-kind = "ram"
-sym = "VOXIDE_SETTINGS_STATE"
-offset = 32
-op = "eq"
-value = 1
-[[step.assert]]
 kind = "card_unchanged"
 [[step]]
 press = ["cross"]

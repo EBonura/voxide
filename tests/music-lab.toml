@@ -21,13 +21,8 @@ max_ticks = 9000
 wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
 timeout = 1800
 [[step]]
-label = "PLAY; the CONTROLS card"
+label = "PLAY: the world loads"
 press = ["cross"]
-hold = 4
-wait = 60
-[[step]]
-label = "close the card: the world loads"
-press = ["circle"]
 hold = 4
 wait = 20
 [[step]]

@@ -17,7 +17,8 @@ offset = 28
 op = "eq"
 value = 18
 
-# PLAY -> CREDIT -> SETTINGS by wrapping upward twice.
+# PLAY -> CREDIT -> SETTINGS by wrapping upward twice. SETTINGS opens the
+# OPTIONS page; STICK SETTINGS is two rows down, MOVE DEADZONE three below LOOK SPEED.
 [[step]]
 press = ["up"]
 hold = 4
@@ -28,6 +29,58 @@ hold = 4
 wait = 12
 [[step]]
 press = ["cross"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 2
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "zero"
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "zero"
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
 hold = 4
 wait = 12
 [[step]]
@@ -50,20 +103,67 @@ offset = 20
 op = "eq"
 value = 1
 [[step.assert]]
-kind = "card_unchanged"
-[[step]]
-press = ["up"]
-hold = 4
-wait = 12
-[[step]]
-checkpoint = "title-save-selected"
-golden = false
-strict = [{ x = 32, y = 148, w = 256, h = 20 }]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 4
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
 offset = 16
 op = "eq"
-value = 9
+value = 3
+[[step.assert]]
+kind = "card_unchanged"
+# O goes up one page and the cursor stays on the row it came from; SAVE SETTINGS is two down.
+[[step]]
+press = ["circle"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "card_unchanged"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 2
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 2
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+checkpoint = "title-save-selected"
+golden = false
+strict = [{ x = 32, y = 103, w = 256, h = 19 }, { x = 32, y = 164, w = 256, h = 14 }]
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 1
 [[step.assert]]
 kind = "card_unchanged"

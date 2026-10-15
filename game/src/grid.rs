@@ -19,6 +19,15 @@ pub const CELL_MAX: u16 = 64;
 static mut KIND: [u8; 4] = [AIR; 4];
 static mut COUNT: [u16; 4] = [0; 4];
 
+/// Empty the cells without returning anything (a new session; the inventory
+/// is reset with it).
+pub fn reset() {
+    unsafe {
+        KIND = [AIR; 4];
+        COUNT = [0; 4];
+    }
+}
+
 /// A shaped recipe: a w x h block of cells (row-major, AIR = must be empty
 /// inside the box), and what it makes.
 struct Shape {

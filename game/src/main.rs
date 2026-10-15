@@ -25,12 +25,13 @@ mod hand;
 mod fixture;
 mod flame;
 mod inv;
+mod menu_tree;
+mod menus;
 mod mob;
 mod music;
 mod music_plan;
 mod musicdata;
 mod save;
-mod settings_profile;
 mod settings_menu;
 mod sfx;
 mod sfxdata;
@@ -1046,20 +1047,89 @@ static mut SETTINGS_FORMAT_OK: bool = false;
 const SETTINGS_BLANK_CARD: &str = "BLANK CARD";
 
 /// Read-only settings receipt: magic, version, size, menu context, selected
-/// row, dirty, save result, move deadzone and controls-seen flag. Context is
-/// world=0, title=1, settings=2, controls=3, options=4, other=5. Save result
-/// is none=0, saved=1, failed=2, blank card refused=3. Gameplay never reads
-/// this block.
+/// row, dirty, save result, move deadzone, 0 (once the controls-seen flag) and menu page.
+/// Context is world=0, title=1, title settings tree=2, controls card=3, pause
+/// tree=4, other=5. Page is the open page of the options tree (menus.rs `Page`:
+/// pause=0, options=1, video=2, sound=3, sticks=4, gameplay=5, cheats=6) and 0
+/// outside it; selected is the cursor row within that page. Save result is
+/// none=0, saved=1, failed=2, blank card refused=3. Then the line under the menu
+/// (`msg_code`), and a summary of the world the journeys check while the game
+/// is paused (refreshed each paused frame, held while playing): item count,
+/// hotbar slot 1, mobs alive, the world clock, flags (rain 1, thunder 2, fly 4,
+/// god mode 8, coordinates 16, any armour worn 32), experience, live particles,
+/// live drops and the sim tick. Gameplay never reads this block.
 #[used]
 #[no_mangle]
-pub static mut VOXIDE_SETTINGS_STATE: [u32; 9] = [u32::from_le_bytes(*b"VSET"), 1, 36, 0, 0, 0, 0, 0, 0];
+pub static mut VOXIDE_SETTINGS_STATE: [u32; 21] =
+    [u32::from_le_bytes(*b"VSET"), 3, 84, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
-fn publish_settings(context: u32, selected: usize) {
+/// What the line under the menu says, as a number: none 0, saving 1, saved 2,
+/// blank card 3, no card 4, card full 5, card removed 6, save failed 7, loaded 8,
+/// no save on the card 9, anything else 10.
+fn msg_code(m: &str) -> u32 {
+    match m {
+        "" => 0,
+        "SAVING - DO NOT REMOVE THE CARD" => 1,
+        "SAVED" => 2,
+        "BLANK CARD: SAVE AGAIN TO FORMAT" | "BLANK CARD: X AGAIN TO FORMAT" => 3,
+        "NO MEMORY CARD IN SLOT 1" => 4,
+        "MEMORY CARD FULL" => 5,
+        "CARD REMOVED - NOT SAVED" => 6,
+        "SAVE FAILED - CHECK THE CARD" => 7,
+        "LOADED" => 8,
+        "NO SAVE ON THIS CARD" => 9,
+        _ => 10,
+    }
+}
+
+/// `world` is the player and the world clock when a world is up and paused.
+fn publish_settings(context: u32, selected: usize, page: u32, world: Option<(&Player, u32)>) {
     unsafe {
-        let state = [u32::from_le_bytes(*b"VSET"), 1, 36, context, selected as u32,
-            SETTINGS_DIRTY as u32,
-            match SETTINGS_SAVE_STATUS { "SAVED" => 1, "FAILED" => 2, SETTINGS_BLANK_CARD => 3, _ => 0 },
-            SET_MOVE_DZ as u32, (SETTINGS_PROFILE.game_flags() & settings_profile::CONTROLS_SEEN != 0) as u32];
+        let mut state = core::ptr::read_volatile(core::ptr::addr_of!(VOXIDE_SETTINGS_STATE));
+        state[1] = 3;
+        state[2] = 84;
+        state[3] = context;
+        state[4] = selected as u32;
+        state[5] = SETTINGS_DIRTY as u32;
+        state[6] = match SETTINGS_SAVE_STATUS { "SAVED" => 1, "FAILED" => 2, SETTINGS_BLANK_CARD => 3, _ => 0 };
+        state[7] = SET_MOVE_DZ as u32;
+        state[8] = 0; // was the controls-seen flag; no longer read or written
+        state[9] = page;
+        state[10] = msg_code(OPT_MSG);
+        if let Some((p, day)) = world {
+            let mut items = 0u32;
+            let mut i = 0;
+            while i < BLOCK_KINDS {
+                items += INV[i] as u32;
+                i += 1;
+            }
+            let mut live = 0u32;
+            i = 0;
+            while i < MAX_PARTICLES {
+                live += (PART_LIFE[i] != 0) as u32;
+                i += 1;
+            }
+            let mut drops = 0u32;
+            i = 0;
+            while i < MAX_DROPS {
+                drops += (DROP_ITEM[i] != AIR) as u32;
+                i += 1;
+            }
+            state[11] = items;
+            state[12] = HOTBAR[0] as u32;
+            state[13] = mob::alive_count();
+            state[14] = day;
+            state[15] = weather::raining() as u32
+                | (weather::thundering() as u32) << 1
+                | (p.fly as u32) << 2
+                | (cheat::god() as u32) << 3
+                | (cheat::hud() as u32) << 4
+                | (p.worn.iter().any(|&w| w != AIR) as u32) << 5;
+            state[16] = p.xp as u32;
+            state[17] = live;
+            state[18] = drops;
+            state[19] = SIM_TICK;
+        }
         core::ptr::write_volatile(core::ptr::addr_of_mut!(VOXIDE_SETTINGS_STATE), state);
     }
 }
@@ -2791,6 +2861,10 @@ fn main() {
     // buttons. PLAY finishes any remainder behind the plain progress bar
     // (usually nothing is left by the time a human has picked an option).
     world::boot_prepare(spawn_bx, spawn_bz);
+    // One pass of this loop is one visit to the title screen and the world
+    // after it; SAVE AND QUIT TO TITLE ends the pass. (The body is not
+    // indented a level: the gameplay loop's source is left as it was.)
+    loop {
     main_menu(&mut fb, &font);
     music::enter_world();
     tty::println("voxide: world ready");
@@ -2896,6 +2970,9 @@ fn main() {
         if save::busy() {
             save_step(&mut pad, previous);
         }
+        if menus::quit_ready() {
+            break;
+        }
         // Safety net for a controller that wasn't ready at the boot handshake
         // (or gets re-plugged): re-assert analog while the pad still reports
         // non-analog. In the normal case the pre-interrupt boot enable already
@@ -2962,6 +3039,9 @@ fn main() {
         if menu != MENU_DEAD && pad.pressed_since(previous, button::START) {
             menu = if menu == 0 { MENU_OPTIONS } else { 0 };
             menu_sel = 0;
+            if menu == MENU_OPTIONS {
+                menus::open_pause();
+            }
         }
 
         if menu != 0 {
@@ -2970,7 +3050,7 @@ fn main() {
                 2 => 0,        // the container panes navigate themselves (inv.rs)
                 MENU_INV => 0, // the grid navigates itself (inv.rs)
                 MENU_CHEAT => cheat::ROWS.len(),
-                MENU_OPTIONS => OPTIONS.len(),
+                MENU_OPTIONS => 0, // the options tree keeps its own cursors (menus.rs)
                 MENU_DEAD => 1,
                 _ => 0,
             };
@@ -3020,84 +3100,30 @@ fn main() {
                     menu = if menu == MENU_CONTROLS { MENU_OPTIONS } else { 0 };
                 }
             } else if pad.pressed_since(previous, button::CIRCLE) && !inv::put_back(menu) {
-                // The cheats page backs out to OPTIONS, where it was opened.
                 if menu == MENU_CHEAT {
+                    // Back on GAMEPLAY, where CHEATS was opened.
                     menu = MENU_OPTIONS;
-                    menu_sel = OPT_CHEATS;
+                } else if menu == MENU_OPTIONS {
+                    // Up one level; from the first page, out of the menu.
+                    if menus::back() {
+                        menu = 0;
+                    }
                 } else {
                     menu = 0;
                 }
             } else if menu == MENU_OPTIONS {
-                // Settings rows adjust with left/right, like the main menu card.
-                if menu_sel >= OPT_SETTINGS && menu_sel < OPT_SETTINGS + SETTING_ADJUST_ROWS {
-                    let dir = if pad.pressed_since(previous, button::LEFT) {
-                        -1
-                    } else if pad.pressed_since(previous, button::RIGHT) {
-                        1
-                    } else {
-                        0
-                    };
-                    if dir != 0 {
-                        setting_adjust(menu_sel - OPT_SETTINGS, dir);
-                        unsafe { OPT_MSG = "" };
-                        sfx::blip();
+                match menus::input(pad, previous, nav_up, nav_down, Some((&mut player, &mut day)), &mut fb, &font) {
+                    menus::Out::None => {}
+                    menus::Out::Close => menu = 0,
+                    menus::Out::Controls => menu = MENU_CONTROLS,
+                    menus::Out::Cheats => {
+                        menu = MENU_CHEAT;
+                        menu_sel = menus::cheat_cursor();
                     }
-                }
-                if pad.pressed_since(previous, button::CROSS) {
-                    match menu_sel {
-                        OPT_FLIGHT => {
-                            player.fly = !player.fly;
-                            if player.fly {
-                                player.vy = 0; // stop any fall the moment it engages
-                            }
-                            unsafe { OPT_MSG = "" };
-                        }
-                        OPT_SAVE => {
-                            save::begin(&player, day);
-                            unsafe { OPT_MSG = "SAVING - DO NOT REMOVE THE CARD" };
-                        }
-                        OPT_SAVE_SETTINGS => {
-                            save_shared_settings(&mut fb, &font);
-                            unsafe {
-                                OPT_MSG = if SETTINGS_FORMAT_OK {
-                                    "BLANK CARD: SAVE AGAIN TO FORMAT"
-                                } else {
-                                    ""
-                                };
-                            }
-                        }
-                        OPT_CHEATS => {
-                            menu = MENU_CHEAT;
-                            menu_sel = 0;
-                            unsafe { OPT_MSG = "" };
-                        }
-                        OPT_TUTORIAL => {
-                            unsafe { TUT_ENABLED = !TUT_ENABLED };
-                            if unsafe { TUT_ENABLED } && unsafe { TUT_STEP } >= TUT_DONE {
-                                tut_reset(); // re-enabling after a finish restarts it
-                            }
-                            unsafe { OPT_MSG = "" };
-                        }
-                        OPT_LOAD => {
-                            if load_game(&mut player, &mut day, &mut fb, &font) {
-                                // A save made at the Void arrival point loads
-                                // standing in the rebuilt return portal: be
-                                // immune until you step out, as on arrival.
-                                portal_dwell = PORTAL_IMMUNE;
-                                unsafe { OPT_MSG = "LOADED" };
-                            } else {
-                                unsafe {
-                                    OPT_MSG = if save::selftest() {
-                                        "NO SAVE ON THIS CARD"
-                                    } else {
-                                        "NO MEMORY CARD IN SLOT 1"
-                                    };
-                                }
-                            }
-                        }
-                        _ => menu = open_controls(menu_sel, menu),
-                    }
-                    sfx::confirm();
+                    // A save made at the Void arrival point loads standing in
+                    // the rebuilt return portal: be immune until you step
+                    // out, as on arrival.
+                    menus::Out::Loaded => portal_dwell = PORTAL_IMMUNE,
                 }
             } else if menu == MENU_CHEAT {
                 match cheat::input(pad, previous, menu_sel, &mut player) {
@@ -3175,7 +3201,15 @@ fn main() {
         // container screens leave it running: mobs move and hit, you fall and
         // burn, you just cannot steer (minecraft.wiki/w/Pause_menu). The
         // death screen does not pause either.
-        publish_settings(match menu { 0 => 0, MENU_OPTIONS => 4, MENU_CONTROLS => 3, _ => 5 }, menu_sel);
+        if menu == MENU_CHEAT {
+            menus::set_cheat_cursor(menu_sel);
+        }
+        publish_settings(
+            match menu { 0 => 0, MENU_OPTIONS | MENU_CHEAT => 4, MENU_CONTROLS => 3, _ => 5 },
+            if menu == MENU_OPTIONS { menus::cursor() } else { menu_sel },
+            match menu { MENU_OPTIONS => menus::page_id(), MENU_CHEAT => menus::CHEATS_PAGE, _ => 0 },
+            if menu != 0 { Some((&player, day)) } else { None },
+        );
         let paused = menu == MENU_OPTIONS || menu == MENU_CHEAT || menu == MENU_CONTROLS;
         if !paused && menu != MENU_DEAD {
             // In a GUI the pad drives the GUI, not the player.
@@ -3941,6 +3975,93 @@ fn main() {
             day = day.wrapping_add(sim_n); // the pause menu stops the clock too
         }
     }
+    // SAVE AND QUIT TO TITLE: let the frame the GPU is still drawing finish,
+    // then back to a fresh title screen and the next pass.
+    gpu::submit_linked_list_wait();
+    gpu::draw_sync();
+    quit_to_title(&mut fb, &font, frame);
+    }
+}
+
+/// Leave a world for the title screen. The title shows a freshly seeded
+/// vista, as NEW WORLD does, and PLAY GAME starts that world: the saved one
+/// comes back with LOAD WORLD in the game menu, as it does after a boot.
+#[inline(never)]
+#[optimize(size)] // a menu transition: its bytes are worth more than its cycles
+fn quit_to_title(fb: &mut FrameBuffer, font: &FontAtlas, entropy: u32) {
+    if world::dimension() != world::DIM_OVERWORLD {
+        mob::leave_dimension();
+        enter_dimension(world::DIM_OVERWORLD, 0, 0, fb, font);
+    }
+    reset_session();
+    world::prepare_new_world(entropy as i32 | 1);
+    let (bx, bz) = if SPAWN_GREEN {
+        world::pick_spawn(SPAWN_BX, SPAWN_BZ)
+    } else {
+        (SPAWN_BX, SPAWN_BZ)
+    };
+    unsafe {
+        WORLD_BX = bx;
+        WORLD_BZ = bz;
+        RESPAWN_BX = bx;
+        RESPAWN_BZ = bz;
+    }
+}
+
+/// Put everything a world and its player leave behind back to a cold boot's
+/// values, so the title (and the world after it) cannot tell it from one.
+/// What stays on purpose: the settings and the card state (a player's, not a
+/// world's), the tutorial switch (a preference), and what boot builds once
+/// (textures, tables, the sound bank, the music player and its loaded
+/// pieces). Per-frame render state is rebuilt every frame. The world's chunks
+/// are `world::prepare_new_world`'s. docs/QUIT-TO-TITLE.md lists every item.
+#[inline(never)]
+#[optimize(size)] // a menu transition: its bytes are worth more than its cycles
+fn reset_session() {
+    clear_world_entities(); // drops, blast kick, TNT, blast queue
+    reset_game_state(); // inventory, hotbar, edits, chests, furnaces, crops, saplings, tutorial, weather, mobs, cheats
+    mob::reset_session();
+    tnt::reset_session();
+    world::reset_session();
+    sfx::reset_weather();
+    equip::reset();
+    grid::reset();
+    menus::reset_session();
+    // The screens re-initialise themselves when opened; run those so nothing
+    // is carried over in them either (the carried stack, the crafting output).
+    inv::inventory_open_grid();
+    inv::inventory_open(AIR);
+    inv::container_open();
+    unsafe {
+        PART_LIFE = [0; MAX_PARTICLES];
+        DROP_FLY = [0; MAX_DROPS];
+        DROP_AGE = [0; MAX_DROPS];
+        DROP_DELAY = [0; MAX_DROPS];
+        DROP_REST = [false; MAX_DROPS];
+        XP_PENDING = 0;
+        FURN_XP_FRAC = [0; MAX_FURNACES];
+        CRAFT_TAB = 0;
+        CRAFT_HIDE = false;
+        AT_BENCH = false;
+        NAV_UP_T = 0;
+        NAV_DOWN_T = 0;
+        USE_HELD_T = 0;
+        JUMP_DELAY = 0;
+        EQUIP_MSG = "";
+        EQUIP_T = 0;
+        TUT_PREV = (0, 0, 0, 0);
+        PROMPT_SLEEP = false;
+        STEP_ACC = 0;
+        STEP_N = 0;
+        STEP_PX = 0;
+        STEP_PZ = 0;
+        WAS_WET = false;
+        OFFHAND_SHOWN = AIR;
+        TOOL_DUR_SHOWN = 0;
+        HUD_NAME_T = 0;
+        HUD_NAME_LAST = 0xFF;
+        SIM_TICK = 0; // the clock blast seeds and animations read, 0 at a cold boot
+    }
 }
 
 /// Title screen: a slow camera orbit over the spawn world with the logo and a
@@ -3997,9 +4118,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
     let mut sel = 0usize; // 0 = play, 1 = new world, 2 = controls, 3 = settings, 4 = credits
     let mut credits = 0u8; // the credits card is up, and its page (1 music, 2 the rest)
     let mut controls = false; // the controls card is up
-    let mut first_run = false; // ...because this is the first PLAY: PLAY follows it
-    let mut settings = false; // the settings card is up
-    let mut set_sel = 0usize;
+    let mut settings = false; // the settings card is up (menus.rs holds its cursors)
     let mut t: u32 = 0;
     loop {
         sfx::tick();
@@ -4021,9 +4140,6 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             if controls::input(pad, prev) {
                 controls = false;
                 sfx::blip();
-                if first_run {
-                    return;
-                }
             }
         } else if credits != 0 {
             // CROSS turns the first page; CIRCLE or START closes the card, and
@@ -4037,31 +4153,25 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
                 sfx::blip();
             }
         } else if settings {
-            let back = pad.pressed_since(prev, button::CIRCLE) || pad.pressed_since(prev, button::START);
-            if back {
-                settings = false;
-                sfx::blip();
-            }
-            if !back && pad.pressed_since(prev, button::UP) {
-                set_sel = (set_sel + SETTING_ROWS - 1) % SETTING_ROWS;
-                sfx::blip();
-            }
-            if !back && pad.pressed_since(prev, button::DOWN) {
-                set_sel = (set_sel + 1) % SETTING_ROWS;
-                sfx::blip();
-            }
-            let dir = if pad.pressed_since(prev, button::LEFT) {
-                -1
-            } else if pad.pressed_since(prev, button::RIGHT) {
-                1
+            // O goes up a page; START, and O on the first page, back to the
+            // title. A confirm that lands with O is the O.
+            let leave = if pad.pressed_since(prev, button::START) {
+                true
+            } else if pad.pressed_since(prev, button::CIRCLE) {
+                menus::back()
             } else {
-                0
+                menus::input(
+                    pad,
+                    prev,
+                    pad.pressed_since(prev, button::UP),
+                    pad.pressed_since(prev, button::DOWN),
+                    None,
+                    fb,
+                    font,
+                ) == menus::Out::Close
             };
-            if settings_menu::save_requested(set_sel == SETTING_SAVE, pad.pressed_since(prev, button::CROSS), back) {
-                save_shared_settings(fb, font);
-                sfx::confirm();
-            } else if !back && set_sel < SETTING_ADJUST_ROWS && dir != 0 {
-                setting_adjust(set_sel, dir);
+            if leave {
+                settings = false;
                 sfx::blip();
             }
         } else {
@@ -4108,29 +4218,22 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             sfx::confirm();
         } else if go && sel == 3 {
             settings = true;
-            set_sel = 0;
+            menus::open_title();
             sfx::confirm();
         } else if go && sel == 4 {
             credits = 1;
             sfx::confirm();
         } else if go {
             sfx::confirm();
-            if controls_unseen() {
-                // The first PLAY shows the controls, once: the card is
-                // remembered in RAM, persisted only by explicit Save Settings.
-                unsafe {
-                    SETTINGS_PROFILE.set_game_flag(settings_profile::CONTROLS_SEEN, true);
-                    SETTINGS_DIRTY = true;
-                }
-                controls = true;
-                first_run = true;
-                controls::open();
-            } else {
-                return;
-            }
+            return;
         }
 
-        publish_settings(if settings { 2 } else if controls { 3 } else { 1 }, if settings { set_sel } else { sel });
+        publish_settings(
+            if settings { 2 } else if controls { 3 } else { 1 },
+            if settings { menus::cursor() } else { sel },
+            if settings { menus::page_id() } else { 0 },
+            None,
+        );
 
         // The vista: a slow orbit over the spawn surface, exactly the game's
         // sky + world pass. surface_y answers from the noise field before the
@@ -4182,7 +4285,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         } else if credits != 0 {
             draw_credits_now(font, credits);
         } else if settings {
-            draw_settings_now(font, set_sel);
+            menus::draw(&controls::Now, font);
         } else {
             menu_button_now(font, 118, "PLAY GAME", sel == 0);
             menu_button_now(font, 140, "NEW WORLD", sel == 1);
@@ -4277,15 +4380,6 @@ fn draw_splash_now(font: &FontAtlas, t: u32) {
     }
 }
 
-/// True on the first PLAY with this memory card: the settings record does not
-/// say the controls card was shown. The lockstep and ui-fixture builds (A/B
-/// validation and headless UI captures, never shipped) skip it, as a card
-/// would swallow the tape.
-fn controls_unseen() -> bool {
-    !cfg!(any(feature = "lockstep", feature = "ui-fixture"))
-        && unsafe { SETTINGS_PROFILE.game_flags() } & settings_profile::CONTROLS_SEEN == 0
-}
-
 /// One frame of the screens that take no part in the gameplay loop's own
 /// dispatch (kept out of it: its profile is keyed to its line layout): the
 /// inventory, and the controls card, which returns true when it closes.
@@ -4297,34 +4391,6 @@ fn menu_card_input(menu: u8, pad: ButtonState, previous: ButtonState, player: &m
         inv::inventory_input(pad, previous, player)
     }
 }
-
-/// OPTIONS' CROSS on the CONTROLS row opens the card; any other row keeps the
-/// menu it was on.
-fn open_controls(sel: usize, menu: u8) -> u8 {
-    if sel == OPT_CONTROLS {
-        controls::open();
-        unsafe { OPT_MSG = "" };
-        MENU_CONTROLS
-    } else {
-        menu
-    }
-}
-
-const SETTING_ADJUST_ROWS: usize = 9;
-const SETTING_SAVE: usize = SETTING_ADJUST_ROWS;
-const SETTING_ROWS: usize = SETTING_ADJUST_ROWS + 1;
-const SETTING_NAMES: [&str; SETTING_ROWS] = [
-    "MOVE DEADZONE",
-    "LOOK DEADZONE",
-    "LOOK SPEED",
-    "INVERT LOOK Y",
-    "SFX VOLUME",
-    "MUSIC VOLUME",
-    "BRIGHTNESS",
-    "SCREEN X",
-    "SCREEN Y",
-    "SAVE SETTINGS",
-];
 
 /// Move the picture on the television to the saved SCREEN X / Y. A video
 /// signal change (GP1 08h/06h/07h), nothing per frame; `gpu::init` already
@@ -4369,7 +4435,6 @@ fn load_shared_settings() {
     let Ok(mut profile) = psx_settings::load_slot_one(SETTINGS_FILE) else {
         return;
     };
-    let migrated = settings_profile::migrate_legacy_controls_seen(&mut profile);
     unsafe {
         SETTINGS_PROFILE = profile;
         SET_MOVE_DZ = SETTINGS_PROFILE.move_deadzone as i16;
@@ -4378,7 +4443,6 @@ fn load_shared_settings() {
         SET_INVERT_Y = SETTINGS_PROFILE.invert_y();
         sfx::set_volume_pct(SETTINGS_PROFILE.sfx_volume as i32);
         music::set_volume_pct(SETTINGS_PROFILE.music_volume as i32);
-        SETTINGS_DIRTY = migrated;
     }
     if unsafe { !SETTINGS_PROFILE.screen_offset.is_centre() } {
         apply_screen_offset();
@@ -4434,18 +4498,19 @@ fn present_formatting(fb: &mut FrameBuffer, font: &FontAtlas) {
     fb.swap();
 }
 
-/// Step one setting up or down, clamped to its range.
+/// Step one setting (a `menu_tree::S_*` row) up or down, clamped to its range.
 fn setting_adjust(row: usize, dir: i32) {
+    use menu_tree::*;
     unsafe {
         match row {
-            0 => SET_MOVE_DZ = (SET_MOVE_DZ + dir as i16 * 2).clamp(4, 40),
-            1 => SET_LOOK_DZ = (SET_LOOK_DZ + dir as i16 * 2).clamp(4, 40),
-            2 => SET_LOOK_PCT = (SET_LOOK_PCT + dir * 20).clamp(60, 160),
-            3 => SET_INVERT_Y = !SET_INVERT_Y,
-            4 => sfx::set_volume_pct(sfx::volume_pct() + dir * 25),
-            5 => music::set_volume_pct(music::volume_pct() + dir * 25),
-            6 => SETTINGS_PROFILE.brightness = SETTINGS_PROFILE.brightness.stepped(dir as i8),
-            7 => {
+            S_MOVE_DEADZONE => SET_MOVE_DZ = (SET_MOVE_DZ + dir as i16 * 2).clamp(4, 40),
+            S_LOOK_DEADZONE => SET_LOOK_DZ = (SET_LOOK_DZ + dir as i16 * 2).clamp(4, 40),
+            S_LOOK_SPEED => SET_LOOK_PCT = (SET_LOOK_PCT + dir * 20).clamp(60, 160),
+            S_INVERT_Y => SET_INVERT_Y = !SET_INVERT_Y,
+            S_SFX => sfx::set_volume_pct(sfx::volume_pct() + dir * 25),
+            S_MUSIC => music::set_volume_pct(music::volume_pct() + dir * 25),
+            S_BRIGHTNESS => SETTINGS_PROFILE.brightness = SETTINGS_PROFILE.brightness.stepped(dir as i8),
+            S_SCREEN_X => {
                 SETTINGS_PROFILE.screen_offset =
                     SETTINGS_PROFILE.screen_offset.stepped_x(dir as i8);
                 apply_screen_offset();
@@ -4465,22 +4530,23 @@ fn setting_adjust(row: usize, dir: i32) {
 /// A setting's display value into a small buffer ("18", "120%", "ON",
 /// "BRIGHTER 3"); the buffer is the longest label psx-display writes.
 fn setting_value(row: usize, buf: &mut [u8; 12]) -> usize {
+    use menu_tree::*;
     let (v, pct) = unsafe {
         match row {
-            SETTING_SAVE => {
+            S_SAVE => {
                 let status = if SETTINGS_SAVE_STATUS.is_empty() && SETTINGS_DIRTY {
                     "UNSAVED"
                 } else { SETTINGS_SAVE_STATUS };
                 buf[..status.len()].copy_from_slice(status.as_bytes());
                 return status.len();
             }
-            6 => return SETTINGS_PROFILE.brightness.label().copy_into(buf),
-            7 => return SETTINGS_PROFILE.screen_offset.label_x().copy_into(buf),
-            8 => return SETTINGS_PROFILE.screen_offset.label_y().copy_into(buf),
-            0 => (SET_MOVE_DZ as i32, false),
-            1 => (SET_LOOK_DZ as i32, false),
-            2 => (SET_LOOK_PCT, true),
-            3 => {
+            S_BRIGHTNESS => return SETTINGS_PROFILE.brightness.label().copy_into(buf),
+            S_SCREEN_X => return SETTINGS_PROFILE.screen_offset.label_x().copy_into(buf),
+            S_SCREEN_Y => return SETTINGS_PROFILE.screen_offset.label_y().copy_into(buf),
+            S_MOVE_DEADZONE => (SET_MOVE_DZ as i32, false),
+            S_LOOK_DEADZONE => (SET_LOOK_DZ as i32, false),
+            S_LOOK_SPEED => (SET_LOOK_PCT, true),
+            S_INVERT_Y => {
                 return if SET_INVERT_Y {
                     buf[..2].copy_from_slice(b"ON");
                     2
@@ -4489,7 +4555,7 @@ fn setting_value(row: usize, buf: &mut [u8; 12]) -> usize {
                     3
                 }
             }
-            5 => (music::volume_pct(), true),
+            S_MUSIC => (music::volume_pct(), true),
             _ => (sfx::volume_pct(), true),
         }
     };
@@ -4532,13 +4598,6 @@ fn badge_now(font: &FontAtlas, x: i16, y: i16, key: &str, tint: (u8, u8, u8)) ->
     x + w
 }
 
-/// Immediate twin of hint_item: badge + dark action label.
-fn hint_now(font: &FontAtlas, x: i16, y: i16, key: &str, tint: (u8, u8, u8), action: &str) -> i16 {
-    let nx = badge_now(font, x, y, key, tint) + 3;
-    font.draw_text(nx, y, action, MC_INK);
-    nx + action.len() as i16 * 8 + 8
-}
-
 /// Immediate twin of mc_button at the in-game row geometry.
 fn row_button_now(y: i16, sel: bool) {
     let (x, w, h) = (MENU_BTN_X, MENU_BTN_W, MENU_BTN_H);
@@ -4568,35 +4627,6 @@ fn row_button_now(y: i16, sel: bool) {
     gpu::draw_rect_flat(x + 1, y + 1, 1, (h - 2) as u16, hi, hi, hi);
     gpu::draw_rect_flat(x + 1, y + h - 2, (w - 2) as u16, 1, 0x37, 0x37, 0x37);
     gpu::draw_rect_flat(x + w - 2, y + 1, 1, (h - 2) as u16, 0x37, 0x37, 0x37);
-}
-
-/// The settings card: live tune of stick feel and volume, in the same
-/// panel-and-bevel-rows dress as the in-game menus. Saving is explicit.
-fn draw_settings_now(font: &FontAtlas, sel: usize) {
-    panel_now(MENU_PANEL_X, MENU_PANEL_Y, MENU_PANEL_W, MENU_PANEL_H);
-    font.draw_text((SCREEN_W as i16 - 8 * 8) / 2, 12, "SETTINGS", MC_INK);
-    let hx = hint_now(font, MENU_TEXT_X, MENU_HINT_Y, "X", PS_CROSS, "SAVE");
-    hint_now(font, hx, MENU_HINT_Y, "O", PS_CIRCLE, "BACK");
-    let start = list_window(SETTING_ROWS, 8, sel);
-    let mut j = 0usize;
-    while j < 8 && start + j < SETTING_ROWS {
-        let i = start + j;
-        let y = MENU_ROWS_Y + j as i16 * MENU_ROW_H as i16;
-        row_button_now(y - 3, i == sel);
-        let color = if i == sel { MC_LABEL_SEL } else { MC_LABEL };
-        font.draw_text(MENU_TEXT_X, y, SETTING_NAMES[i], color);
-        let mut buf = [0u8; 12];
-        let n = setting_value(i, &mut buf);
-        let txt = unsafe { core::str::from_utf8_unchecked(&buf[..n]) };
-        font.draw_text(278 - n as i16 * 8, y, txt, (0x70, 0xE0, 0x70));
-        j += 1;
-    }
-    let hint = if unsafe { SETTINGS_FORMAT_OK } {
-        "BLANK CARD: X AGAIN TO FORMAT"
-    } else {
-        "< > ADJUST - X ON SAVE TO KEEP"
-    };
-    font.draw_text(MENU_TEXT_X, MENU_ROWS_Y + 8 * MENU_ROW_H as i16, hint, MC_INK);
 }
 
 /// The credits card, two pages in the same panel dress as every other menu:
@@ -5252,7 +5282,7 @@ fn save_step(pad: &mut ButtonState, previous: ButtonState) {
     *pad = previous;
     if let Some(o) = save::pump() {
         unsafe {
-            OPT_MSG = match o {
+            OPT_MSG = match &o {
                 save::Outcome::Saved => "SAVED",
                 save::Outcome::NeedFormat => "BLANK CARD: SAVE AGAIN TO FORMAT",
                 save::Outcome::NoCard => "NO MEMORY CARD IN SLOT 1",
@@ -5261,6 +5291,7 @@ fn save_step(pad: &mut ButtonState, previous: ButtonState) {
                 save::Outcome::Failed => "SAVE FAILED - CHECK THE CARD",
             };
         }
+        menus::quit_after(&o);
     }
 }
 
@@ -5949,7 +5980,7 @@ fn update_player(
     // creative -- one button, since we're in creative anyway. First CROSS arms a
     // short window; a second CROSS inside it flips fly. Held CROSS (fly ascend)
     // never re-triggers because `pressed` is edge-only.
-    // Fly is toggled ONLY from the OPTIONS menu. The double-tap-CROSS toggle
+    // Fly is toggled ONLY from the CHEATS page. The double-tap-CROSS toggle
     // is gone for cause: closing a menu with CROSS and then jumping counted
     // as the double tap, silently launching the player into fly mode. SELECT
     // stays wired in demo builds only -- the headless DEMO_MARCH scripts
@@ -10905,7 +10936,7 @@ fn draw_menu(font: &FontAtlas, menu: u8, sel: usize, chest_idx: usize, player: P
     } else if menu == 3 {
         inv::draw_furnace(font, chest_idx, &player);
     } else if menu == MENU_OPTIONS {
-        draw_options(font, sel, player);
+        draw_options(font);
     } else if menu == MENU_INV {
         inv::draw_inventory(font, &player);
     } else if menu == MENU_DEAD {
@@ -11434,101 +11465,23 @@ fn menu_row(j: usize, sel: bool) -> i16 {
     y
 }
 
-/// Options menu (START). One row per entry; CROSS acts on the selected one.
-/// Table-driven so another option is one line here plus one arm in the CROSS
-/// handler.
+/// The pause menu (START): the options tree of menus.rs, one page at a time.
 const MENU_OPTIONS: u8 = 4;
 const MENU_DEAD: u8 = 6;
 /// TRIANGLE's inventory panel (Bedrock PS layout): pick any placeable directly
 /// instead of R1-cycling the whole hotbar one item at a time.
 const MENU_INV: u8 = 5;
-/// The cheats page (cheat.rs), reached from OPTIONS.
+/// The cheats page (cheat.rs), reached from OPTIONS > GAMEPLAY.
 const MENU_CHEAT: u8 = 7;
-/// The controls card (controls.rs), reached from OPTIONS.
+/// The controls card (controls.rs), reached from the pause menu.
 const MENU_CONTROLS: u8 = 8;
 
-/// Index of `sel` in PLACEABLE, so the inventory opens on the item in hand.
-const OPT_FLIGHT: usize = 0;
-const OPT_SAVE: usize = 1;
-const OPT_LOAD: usize = 2;
-const OPT_TUTORIAL: usize = 3;
-/// Opens the controls card (controls.rs).
-const OPT_CONTROLS: usize = 4;
-/// Opens the cheats page (cheat.rs): weather, time, flight and the rest.
-const OPT_CHEATS: usize = 5;
-/// Rows from OPT_SETTINGS on are the SETTINGS card's own rows, folded into
-/// the in-game menu so stick feel and volume can be tuned mid-session
-/// instead of only from the main menu before a world loads.
-const OPT_SETTINGS: usize = 6;
-const OPT_SAVE_SETTINGS: usize = OPT_SETTINGS + SETTING_SAVE;
-const OPTIONS: [&str; OPT_SETTINGS + SETTING_ROWS] = [
-    "FLIGHT",
-    "SAVE TO CARD",
-    "LOAD FROM CARD",
-    "TUTORIAL",
-    "CONTROLS",
-    "CHEATS",
-    SETTING_NAMES[0],
-    SETTING_NAMES[1],
-    SETTING_NAMES[2],
-    SETTING_NAMES[3],
-    SETTING_NAMES[4],
-    SETTING_NAMES[5],
-    SETTING_NAMES[6],
-    SETTING_NAMES[7],
-    SETTING_NAMES[8],
-    SETTING_NAMES[9],
-];
 /// Result of the last card operation, shown under the list.
 static mut OPT_MSG: &str = "";
 
 #[optimize(size)] // menus pause the sim: its bytes are worth more than its cycles
-fn draw_options(font: &FontAtlas, sel: usize, player: Player) {
-    menu_frame(font, "OPTIONS");
-    let mut hx = hint_item(font, MENU_TEXT_X, MENU_HINT_Y, "X", PS_CROSS, "SELECT");
-    hx = hint_item(font, hx, MENU_HINT_Y, "< >", PS_KEY, "ADJUST");
-    hint_item(font, hx, MENU_HINT_Y, "O", PS_CIRCLE, "CLOSE");
-    let n = OPTIONS.len();
-    let vis = 8;
-    let start = list_window(n, vis, sel);
-    menu_scroll_hint(font, n, vis, start, MENU_HINT_X, MENU_ROWS_Y);
-    let mut j = 0;
-    while j < vis && start + j < n {
-        let i = start + j;
-        let y = menu_row(j, i == sel);
-        let color = if i == sel { MC_LABEL_SEL } else { MC_LABEL };
-        ui_text(font, MENU_TEXT_X, y, OPTIONS[i], color);
-        if i == OPT_FLIGHT || i == OPT_TUTORIAL {
-            // Vanilla writes the value into the button label ("Clouds: Fancy"),
-            // right-aligned here so the states line up with future toggles.
-            let on = if i == OPT_FLIGHT {
-                player.fly
-            } else {
-                unsafe { TUT_ENABLED }
-            };
-            let (label, tint) = if on {
-                ("ON", (0x70, 0xE0, 0x70))
-            } else {
-                ("OFF", MC_LABEL_OFF)
-            };
-            ui_text(font, 230, y, label, tint);
-        } else if i >= OPT_SETTINGS {
-            let mut buf = [0u8; 12];
-            let k = setting_value(i - OPT_SETTINGS, &mut buf);
-            let txt = unsafe { core::str::from_utf8_unchecked(&buf[..k]) };
-            ui_text(font, 278 - k as i16 * 8, y, txt, (0x70, 0xE0, 0x70));
-        }
-        j += 1;
-    }
-    // Outcome of the last card operation: saving silently is worse than not
-    // saving at all, because you only find out at the next power cycle.
-    // Below the rows, not over them. (A line here used to advertise SELECT and
-    // double-tap-CROSS as fly toggles; both were removed when they started
-    // firing on menu-exit jumps, and the hint outlived them.)
-    let msg = unsafe { OPT_MSG };
-    if !msg.is_empty() {
-        draw_centered(font, 170, msg, (0xF0, 0xE0, 0x80));
-    }
+fn draw_options(font: &FontAtlas) {
+    menus::draw(&controls::Listed, font);
     if save::busy() {
         // The save runs a card frame per game frame: show it moving.
         rect(60, 182, 200, 4, 40, 40, 40);

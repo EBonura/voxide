@@ -2671,6 +2671,44 @@ pub fn clear() {
     }
 }
 
+/// Everything the mob system carries between ticks, back to a cold boot's
+/// values: the roster and arrows, the wolves parked in other dimensions, the
+/// pack target, the spawn timer and generator, pending XP and deaths. Quitting
+/// to the title screen (main.rs `reset_session`).
+#[inline(never)]
+#[optimize(size)]
+pub fn reset_session() {
+    clear();
+    reset();
+    unsafe {
+        PARKED = [NO_PARKED; TAMED_CAP];
+        PACK_TGT = CAP;
+        SIGHT = [false; CAP];
+        HAZARD_DMG = 0;
+        SPAWN_TIMER = secs(2) as u16;
+        RNG = LcgRng::new(0x1234_5678);
+        XP_DROPS = 0;
+        DEATH_N = 0;
+        LURE = 0;
+        SPAWN_MONSTER = false;
+        BURN_TICK = 0;
+        RAINING = false;
+    }
+}
+
+/// Mobs alive, for the settings receipt.
+pub fn alive_count() -> u32 {
+    let mut n = 0;
+    let mut i = 0;
+    while i < CAP {
+        if unsafe { MOBS[i].alive } {
+            n += 1;
+        }
+        i += 1;
+    }
+    n
+}
+
 pub fn populate(px: i32, pz: i32) {
     let mut k = 0i32;
     while k < 4 {

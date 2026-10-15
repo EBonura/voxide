@@ -5,6 +5,20 @@
 Equipment, fire and TNT, a controls card, and settings that save only when you
 say so.
 
+- The pause menu and the settings are nested, as in Java. Start opens the GAME
+  MENU (BACK TO GAME, OPTIONS..., CONTROLS, SAVE WORLD, LOAD WORLD, SAVE AND
+  QUIT TO TITLE). OPTIONS... holds VIDEO SETTINGS (brightness, screen position), MUSIC & SOUNDS, STICK
+  SETTINGS (look speed, invert, deadzones), GAMEPLAY (the tutorial and
+  CHEATS...) and SAVE SETTINGS. The main menu's SETTINGS opens the same pages.
+  Cross enters a page, left/right changes a value, Circle goes up one page,
+  Start leaves, and each page remembers its row. Before, OPTIONS was one
+  16-row list that scrolled, with FLIGHT in it and again on the CHEATS page;
+  flight is now only FLY (NO CLIP) on CHEATS. Nothing else about saving
+  changed: values still reach the card only through SAVE SETTINGS.
+  SAVE AND QUIT TO TITLE is new: it saves the world, then returns to the title
+  screen. A blank card asks first, and a save that fails (no card, card full,
+  card removed) shows why and stays in the menu, as Java's does. PLAY GAME
+  from there starts a new world; LOAD WORLD brings the saved one back.
 - Music, at last (GitHub issue 1): four pieces of two and a half to three
   minutes from Mulula VGM Loops, Simple Piano Music Vol 1 (Aranha, Melodia, Nulo,
   Pianeta, Side Label, Talher), CC BY 4.0, https://mululavgmloops.itch.io/,
@@ -80,9 +94,11 @@ say so.
   32 primed TNT slots are full, TNT that cannot be lit stays in the world,
   including blocks reached by a chain blast.
 - A CONTROLS card lists every button on two pages, in the world and in menus.
-  It is on the main menu and in the pause menu (OPTIONS > CONTROLS), and it
-  comes up once on your first PLAY. The memory card remembers that it did only
-  once you choose SAVE SETTINGS.
+  It is on the main menu and in the pause menu (CONTROLS). Nothing shows it by
+  itself: PLAY GAME and NEW WORLD go straight into the game. (An earlier
+  0.4.0 build showed it once on the first PLAY and kept a "seen" mark in the
+  settings record; that mark is no longer read or written, and cards that
+  have it set or not load unchanged.)
 - The inventory, the 2x2 grid, chests and furnaces share one pad grammar, the
   one Minecraft's PlayStation editions use. X takes a stack, then places it
   and swaps with what is there. SQUARE takes half, then places one. TRIANGLE
@@ -104,12 +120,12 @@ say so.
   and the last one points at CONTROLS.
 - Settings are saved only by SAVE SETTINGS, a new last row on the main menu's
   SETTINGS page and in OPTIONS. Adjusting a setting, leaving the page and
-  dismissing the controls card change the game until you power off and write
-  nothing to the memory card. SAVE SETTINGS keeps the stick, volume,
-  brightness and screen position settings and the controls-card mark. Before,
-  closing the page or the first PLAY wrote the card on its own. On a blank
+  change the game until you power off and write nothing to the memory card.
+  SAVE SETTINGS keeps the stick, volume, brightness and screen position
+  settings. Before, closing the page or the first PLAY wrote the card on its
+  own. On a blank
   card the first SAVE SETTINGS asks and the second formats it, as the world's
-  SAVE TO CARD does.
+  SAVE WORLD does.
 - A zombie, spider or other melee mob in reach now hits once a second, as in
   Java. Before, it hit every half second, as soon as your own half second of
   invulnerability ended, so one zombie took 3 hearts a second instead of 1.5.

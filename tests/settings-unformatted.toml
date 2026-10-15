@@ -35,6 +35,30 @@ press = ["cross"]
 hold = 4
 wait = 12
 [[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
 press = ["right"]
 hold = 4
 wait = 12
@@ -68,6 +92,10 @@ press = ["up"]
 hold = 4
 wait = 12
 [[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
 checkpoint = "unformatted-save-selected"
 golden = false
 [[step.assert]]
@@ -77,7 +105,13 @@ kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
 offset = 16
 op = "eq"
-value = 9
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 1
 [[step]]
 press = ["cross"]
 hold = 4

@@ -1,0 +1,190 @@
+# SAVE AND QUIT TO TITLE with no memory card: the error is shown, the game menu stays
+# up and the world stays loaded, X again tries again, and BACK TO GAME resumes.
+# VOXIDE_SETTINGS_STATE offset 40 is the line under the menu (4 no card, 5 card
+# full, 6 card removed).
+name = "voxide-settings-menu-quit-nocard"
+title = "VoXide: SAVE AND QUIT with no memory card stays in the game menu"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+max_ticks = 12000
+memcard = "none"
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 1800
+[[step]]
+label = "PLAY GAME: straight into the world"
+press = ["cross"]
+hold = 4
+wait = 150
+[[step]]
+wait = 60
+[[step]]
+press = ["start"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "zero"
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 5
+[[step]]
+label = "SAVE AND QUIT with no memory card in slot 1"
+press = ["cross"]
+hold = 4
+wait = 200
+[[step]]
+checkpoint = "no-card-error-and-stay"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 5
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 40
+op = "eq"
+value = 4
+[[step]]
+wait = 300
+[[step]]
+checkpoint = "no-card-error-and-stay-and-still-here"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 40
+op = "eq"
+value = 4
+[[step]]
+label = "X again tries again, and says the same"
+press = ["cross"]
+hold = 4
+wait = 200
+[[step]]
+checkpoint = "no-card-second-try"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 40
+op = "eq"
+value = 4
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 3
+[[step]]
+label = "SAVE WORLD says the same"
+press = ["cross"]
+hold = 4
+wait = 200
+[[step]]
+checkpoint = "no-card-save-world"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 40
+op = "eq"
+value = 4
+[[step]]
+press = ["circle"]
+hold = 4
+wait = 120
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"
+[[step]]
+checkpoint = "no-card-back-in-the-world"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"
+[[step.assert]]
+kind = "not_flat"
+[[step.assert]]
+kind = "presenting"
+window = 120
+min_changes = 5
+[[step.assert]]
+kind = "pc_not_stuck"
+window = 120

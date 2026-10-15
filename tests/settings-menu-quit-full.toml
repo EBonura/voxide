@@ -1,0 +1,166 @@
+# SAVE AND QUIT TO TITLE onto a formatted card whose 15 blocks are all taken
+# (tests/fixtures/full.mcd, built by tools/host-tests/tests/full_card.rs): CARD FULL
+# is shown, the card is not touched, the game menu stays and the world stays loaded.
+name = "voxide-settings-menu-quit-full"
+title = "VoXide: SAVE AND QUIT onto a full card stays in the game menu"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+max_ticks = 12000
+[card_fixture]
+path = "tests/fixtures/full.mcd"
+sha256 = "3ec337909f6a10050ee0999ee12be473a675a852492b9b08750f9504f40bd457"
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 1800
+[[step.assert]]
+kind = "card_unchanged"
+[[step]]
+label = "PLAY GAME: straight into the world"
+press = ["cross"]
+hold = 4
+wait = 150
+[[step]]
+wait = 60
+[[step]]
+press = ["start"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "zero"
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 5
+[[step]]
+label = "SAVE AND QUIT onto a card with every block taken"
+press = ["cross"]
+hold = 4
+wait = 250
+[[step]]
+checkpoint = "full-card-error-and-stay"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 5
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 40
+op = "eq"
+value = 5
+[[step]]
+wait = 300
+[[step]]
+checkpoint = "full-card-error-and-stay-and-still-here"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 40
+op = "eq"
+value = 5
+[[step]]
+checkpoint = "full-card-untouched"
+golden = false
+[[step.assert]]
+kind = "card_unchanged"
+[[step]]
+label = "X again tries again, and says the same"
+press = ["cross"]
+hold = 4
+wait = 250
+[[step]]
+checkpoint = "full-card-second-try"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 40
+op = "eq"
+value = 5
+[[step.assert]]
+kind = "card_unchanged"
+[[step]]
+press = ["circle"]
+hold = 4
+wait = 120
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"
+[[step]]
+checkpoint = "full-card-back-in-the-world"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"
+[[step.assert]]
+kind = "not_flat"
+[[step.assert]]
+kind = "presenting"
+window = 120
+min_changes = 5
+[[step.assert]]
+kind = "pc_not_stuck"
+window = 120
