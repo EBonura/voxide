@@ -9451,6 +9451,20 @@ fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize) {
     let mut y3 = ((sxy3 >> 16) as i16 as i32).clamp(-511, 511);
     let z3 = sz3 as i32;
 
+    // Wholly off the screen, even once the seal has pushed every corner out by
+    // GROW pixels: nothing of this face can reach the drawing area, so skip the
+    // seal, the fog bands and the packet. A face passes the sphere cull when
+    // only its bounding sphere meets the view, and a wide plate's real corners
+    // are often well clear of it (about one emitted face in five on a recorded
+    // walk). The wide-margin test further down stays for what the clamps need.
+    if max(max(x0, x1), max(x2, x3)) < -seal::GROW
+        || min(min(x0, x1), min(x2, x3)) >= SCREEN_W as i32 + seal::GROW
+        || max(max(y0, y1), max(y2, y3)) < -seal::GROW
+        || min(min(y0, y1), min(y2, y3)) >= SCREEN_H as i32 + seal::GROW
+    {
+        return;
+    }
+
     // Seal T-junction hairlines: grow the quad outward so neighbours overlap
     // instead of leaving a gap (see seal.rs for the geometry, and for why
     // moving each corner away from the quad's centre was not enough: a thin
