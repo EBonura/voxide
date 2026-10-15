@@ -143,7 +143,65 @@ const FAR_Z: i32 = DRAW_BLOCKS * BLOCK;
 // of about 4% of the frame (all sides to the far plane is commit dbd9a42).
 const FAR_SIDE_Z: i32 = FAR_Z - 2 * BLOCK;
 /// Where a tree's side faces stop.
+#[allow(dead_code)]
 const FAR_TREE_SIDE_Z: i32 = FAR_Z;
+
+/// The far plane the cull and the fog use this frame. A constant unless the
+/// `dyn-far` decision build is on, where it follows the frame's load.
+#[cfg(feature = "dyn-far")]
+pub static mut FAR_DYN: i32 = FAR_Z;
+/// 2^16 * FAR_Z / FAR_DYN: the fog bands are laid against FAR_Z, so depth is
+/// stretched by this before the band shift and the ramp always ends at FAR_DYN.
+#[cfg(feature = "dyn-far")]
+static mut FOG_K: i32 = 65536;
+#[cfg(feature = "dyn-far")]
+static mut LAST_BODY: u32 = 0;
+#[inline(always)]
+pub fn far_z() -> i32 {
+    #[cfg(feature = "dyn-far")]
+    {
+        unsafe { FAR_DYN }
+    }
+    #[cfg(not(feature = "dyn-far"))]
+    {
+        FAR_Z
+    }
+}
+#[inline(always)]
+pub fn far_side_z() -> i32 {
+    far_z() - 2 * BLOCK
+}
+/// Frame body, counter ticks (system clock over 8) of a two-vblank frame, and the
+/// load the far plane is held between. One block of far plane costs about 5K ticks.
+#[cfg(feature = "dyn-far")]
+const DYN_Q: u32 = 142_800;
+#[cfg(feature = "dyn-far")]
+const DYN_HI: u32 = DYN_Q * 94 / 100;
+#[cfg(feature = "dyn-far")]
+const DYN_LO: u32 = DYN_Q * 84 / 100;
+#[cfg(feature = "dyn-far")]
+const DYN_MIN: i32 = 14 * BLOCK;
+/// Pad poll, sim bookkeeping and the vsync handshake the slack clock does not see.
+#[cfg(feature = "dyn-far")]
+const DYN_FIXED: u32 = 3_500;
+/// Move the far plane for this frame from the last frame's load: in fast (12
+/// units, a tenth of a block a frame), out slowly (3 units), a dead band between.
+#[cfg(feature = "dyn-far")]
+fn dyn_far_update() {
+    unsafe {
+        let body = LAST_BODY;
+        let mut d = FAR_DYN;
+        if body > DYN_HI {
+            d -= 12 + ((body - DYN_HI) / 1_000) as i32;
+        } else if body < DYN_LO {
+            d += 3;
+        }
+        d = d.clamp(DYN_MIN, FAR_Z);
+        FAR_DYN = d;
+        FOG_K = ((FAR_Z << 16) / d).max(65536);
+        telemetry::counter(33, d as u32);
+    }
+}
 
 /// Decimal digits to an i32, for build-time knobs read with `option_env!`.
 const fn parse_const_i32(s: &str) -> i32 {
@@ -1373,7 +1431,10 @@ static mut MAT_TPAGE_HI: [[u32; tex::TILE_COUNT]; 2] = [[0; tex::TILE_COUNT]; 2]
 // 16 bands of 128 depth units: FAR_Z is 1792, so bands 0..14 are in use and the
 // index is a SHIFT. `depth * N / FAR_Z` would be a real division, and the R3000
 // has no divider -- that was ~35 cycles on every face.
+#[cfg(not(feature = "dyn-far"))]
 const FOG_BANDS: usize = 16;
+#[cfg(feature = "dyn-far")]
+const FOG_BANDS: usize = 32;
 const FOG_SHIFT: u32 = 7;
 #[inline(never)]
 fn advance_streaming(budgeted: bool) {
@@ -1725,6 +1786,8 @@ fn refresh_mat_ccmd() {
 /// Depth -> fog band, by shift (see FOG_SHIFT).
 #[inline]
 fn fog_band(depth: i32) -> usize {
+    #[cfg(feature = "dyn-far")]
+    let depth = ((depth.max(0) * unsafe { FOG_K }) >> 16) as i32;
     let b = (depth >> FOG_SHIFT).max(0) as usize;
     if b >= FOG_BANDS {
         FOG_BANDS - 1
@@ -3985,6 +4048,8 @@ fn main() {
         // the frame, so the clear was 76.8K pixels of pure GPU overdraw --
         // roughly 0.15 vblank of fill, the difference between 30 and 60fps at
         // short draw distances.
+        #[cfg(feature = "dyn-far")]
+        dyn_far_update();
         telemetry::stage_begin(ST_R_SKY);
         // Build only: the GPU is still rasterising the previous arena. Even GPU
         // register state such as dithering belongs in this frame's list.
@@ -4066,6 +4131,10 @@ fn main() {
         // reaches last, so they paint over the world.
         ui_submit_tail();
         telemetry::stage_end(ST_R_TAIL);
+        #[cfg(feature = "dyn-far")]
+        unsafe {
+            LAST_BODY = (slack::used().saturating_sub(slack::mesh_spent())) + DYN_FIXED;
+        }
         frame_present(&mut fb, &mut render_in_flight);
         previous = pad;
         frame = frame.wrapping_add(1);
@@ -9505,7 +9574,7 @@ fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize) {
     let depth = (z0 + z1 + z2 + z3) >> 2;
     // The GTE has no far plane; match the old projector's far cull on the
     // face average (depth_slot clamps stragglers to the back OT slot).
-    if depth >= FAR_Z {
+    if depth >= far_z() {
         return;
     }
     let slot = depth_slot(depth);

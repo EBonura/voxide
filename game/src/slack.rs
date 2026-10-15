@@ -185,6 +185,11 @@ pub fn budget() -> u32 {
 static mut JOB_SPENT: u32 = 0;
 static mut MESH_SPENT: u32 = 0;
 
+/// What the mesh burst has spent this frame so far (counter ticks).
+pub fn mesh_spent() -> u32 {
+    unsafe { MESH_SPENT }
+}
+
 pub fn mesh_done(ticks: u32) {
     unsafe { MESH_SPENT = ticks };
 }

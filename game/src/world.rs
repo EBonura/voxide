@@ -9,7 +9,7 @@
 
 use crate::{
     floor_div, Camera, AIR, BLOCK, CACTUS, CLAY, COAL_ORE, DIAMOND_ORE, DIRS, DIRT, DOOR_O,
-    FAR_SIDE_Z, FAR_TREE_SIDE_Z, FAR_Z, FLOWER_R, FLOWER_Y, GOLD_ORE, GRASS, IRON_ORE, LAVA, LEAVES, PROJ_H, SAND,
+    FAR_Z, FLOWER_R, FLOWER_Y, GOLD_ORE, GRASS, IRON_ORE, LAVA, LEAVES, PROJ_H, SAND,
     SAPLING, SNOW, STONE, TALL_GRASS, WATER, WHEAT, WHEAT_RIPE, WOOD,
 };
 use crate::flame;
@@ -5580,15 +5580,15 @@ pub fn for_visible_faces(cam: &Camera, count: &mut usize) -> usize {
             let zc = ((dxb * cam.sy) + (dzb * cam.cy)) >> 12; // forward
             let xc = ((dxb * cam.cy) - (dzb * cam.sy)) >> 12; // right
             let visible = zc >= -chunk_r
-                && zc - chunk_r <= FAR_Z
+                && zc - chunk_r <= crate::far_z()
                 && (zc <= 0 || (xc.abs() - chunk_r) <= zc * 160 / PROJ_H);
             // A far-LOD chunk holds only its top plates and the skirts between
             // height steps: few faces, and the skirts ARE its silhouette, so
             // they draw to the far plane. A near chunk's terrain sides stop at
             // FAR_SIDE_Z, its trees' sides at FAR_TREE_SIDE_Z.
             let far_lod = FAR_LOD && unsafe { CHUNKS[s].face_lod } == 1;
-            let plain_lim = if far_lod { FAR_Z } else { FAR_SIDE_Z };
-            let side_lim = if far_lod { FAR_Z } else { FAR_TREE_SIDE_Z };
+            let plain_lim = if far_lod { crate::far_z() } else { crate::far_side_z() };
+            let side_lim = crate::far_z();
             // Far-ring chunks: skip entirely if a ray to their surface is blocked
             // by nearer terrain (don't iterate/project a hill that's hidden behind
             // another hill). Near chunks always draw -- the ray would be too short.
@@ -5653,7 +5653,7 @@ fn chunk_faces(
         // Sides and bottoms stop at `side_lim` (a tree's, or the far plane for a
         // far-LOD chunk), and past `plain_lim` only trees keep them; tops carry
         // the silhouette out to FAR_Z.
-        let far_lim = if dir == 2 { FAR_Z } else { side_lim };
+        let far_lim = if dir == 2 { crate::far_z() } else { side_lim };
         let plain_lim = if dir == 2 { far_lim } else { plain_lim };
         // Visible plane sub-range for this dir: the old per-face
         // backface test compared the camera to the face's PLANE
