@@ -4524,7 +4524,7 @@ fn draw_settings_now(font: &FontAtlas, sel: usize) {
         MENU_TEXT_X,
         MENU_ROWS_Y + 8 * MENU_ROW_H as i16,
         "< > ADJUST - X ON SAVE TO KEEP",
-        (0x6A, 0x6A, 0x74),
+        MC_INK,
     );
 }
 
