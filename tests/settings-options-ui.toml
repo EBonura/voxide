@@ -197,6 +197,10 @@ press = ["up"]
 hold = 4
 wait = 12
 [[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
 press = ["cross"]
 hold = 4
 wait = 60

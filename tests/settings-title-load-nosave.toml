@@ -22,6 +22,8 @@ value = 3
 [[step.assert]]
 kind = "card_unchanged"
 [[step]]
+wait = 30
+[[step]]
 press = ["down"]
 hold = 4
 wait = 12

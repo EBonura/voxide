@@ -23,6 +23,8 @@ offset = 28
 op = "eq"
 value = 18
 [[step]]
+wait = 150
+[[step]]
 press = ["up"]
 hold = 4
 wait = 12

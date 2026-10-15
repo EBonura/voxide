@@ -20,7 +20,7 @@ kind = "card_unchanged"
 label = "PLAY GAME: straight into the world, no card"
 press = ["cross"]
 hold = 4
-wait = 150
+wait = 240
 [[step]]
 press = ["start"]
 hold = 4

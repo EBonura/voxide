@@ -85,10 +85,11 @@ note = "static VoXide mark above the five golden-checked buttons"
 # ---- NEW WORLD, PLAY GAME -------------------------------------------------
 
 [[step]]
-label = "NEW WORLD regenerates the world and returns to the menu"
+label = "NEW WORLD, two rows down (LOAD WORLD is between), regenerates the world and returns to the menu"
 press = ["down"]
 hold = 4
 wait = 12
+repeat = 2
 
 [[step]]
 press = ["cross"]
@@ -132,7 +133,7 @@ wait = 30
 press = ["up"]
 hold = 4
 wait = 12
-repeat = 2
+repeat = 3
 
 [[step]]
 press = ["cross"]

@@ -4398,16 +4398,20 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             && !settings
             && !settings_was_open
             && (pad.pressed_since(prev, button::CROSS) || pad.pressed_since(prev, button::START));
+        let cross = pad.pressed_since(prev, button::CROSS);
         prev = pad;
         if go && sel == 1 {
-            // LOAD WORLD: look at the card again (it may have changed since the
-            // title came up), and leave for the game with the load asked for.
-            // With nothing to load the row says why and the title stays.
-            unsafe {
-                TITLE_PROBE = save::probe();
-                TITLE_UNREADABLE = false;
+            // LOAD WORLD: X looks at the card again (it may have changed since
+            // the title came up), and leaves for the game with the load asked
+            // for. With nothing to load the row says why and the title stays;
+            // Start on such a row only blips, it does not go to the card.
+            if cross || title_load_reason().is_empty() {
+                unsafe {
+                    TITLE_PROBE = save::probe();
+                    TITLE_UNREADABLE = false;
+                }
             }
-            if unsafe { TITLE_PROBE } == save::Probe::Save {
+            if title_load_reason().is_empty() {
                 unsafe { TITLE_LOAD = true };
                 sfx::confirm();
                 return;
