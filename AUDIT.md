@@ -88,3 +88,17 @@ alone at -32.5 dBFS RMS at that setting, seconds peaking at 0.11 of full scale
 (0.19 at most); the sound effects in a walking capture peak at 0.1 to 0.25, and at
 the cooked level the music's peaks (0.23 typical) would have been level with
 them. Nobody listened to the result; the level is a measurement, not an ear.
+
+## 2026-10-15: attack bar on a distant block
+
+Pressing R2 at a block beyond the 4.5-block reach restarted the attack cooldown
+(the swing "found nothing", which Java also does), so the 16 x 2 cooldown bar
+flashed under the crosshair on every try at a far block. Manny read it as a
+loading bar; `e51418e` had only stopped the flash for blocks inside reach.
+
+Deviation, on purpose: only a swing at a mob (or a hotbar switch) restarts the
+cooldown now. Java also restarts it on a swing at air, so a Java player who
+swings and then hits a mob within the cooldown does less damage; here that
+swing costs nothing. Holding R2 never repeated a swing in either game.
+`tests/distant-mining.toml` asserts no bar after taps and a hold-and-press at
+the far terrain, and that a hotbar switch does show it.

@@ -3456,10 +3456,12 @@ fn main() {
             // (melee_damage).
             let swung = pad.pressed_since(previous, button::R2);
             let dmg = melee_damage(&player); // on the charge before this swing
-            // Java resets the cooldown when a swing hits a mob or finds
-            // nothing, not when it starts breaking a block, so mining no
-            // longer flashes the attack indicator under the crosshair.
-            if swung && (target.is_some() || !pick.hit) {
+            // Only a swing at a mob restarts the cooldown. Java also restarts
+            // it on a swing that finds nothing, but a press on a block beyond
+            // the 4.5-block reach finds nothing, and the bar flashing under
+            // the crosshair for every try at a distant block read as a
+            // loading bar. Starting to break a block never restarted it.
+            if swung && target.is_some() {
                 player.attack_t = 0;
             }
             if let (true, Some(t)) = (swung, target) {
