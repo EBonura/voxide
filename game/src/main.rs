@@ -181,9 +181,11 @@ const DYN_HI: u32 = DYN_Q * 95 / 100;
 const DYN_LO: u32 = DYN_Q * 86 / 100;
 #[cfg(feature = "dyn-far")]
 const DYN_MIN: i32 = 14 * BLOCK;
-/// Pad poll, sim bookkeeping and the vsync handshake the slack clock does not see.
+/// What the slack clock does not see: the pad poll, the part of the frame before the
+/// world update, the tail after the last mark (measured: the clock reads 65K cycles
+/// under the body stage).
 #[cfg(feature = "dyn-far")]
-const DYN_FIXED: u32 = 3_500;
+const DYN_FIXED: u32 = 11_500;
 /// Move the far plane for this frame from the last frame's load. Over the high
 /// mark it moves in proportion to the overshoot (a block of far plane is about
 /// 5,000 ticks, 39 per unit), up to 96 units (three quarters of a block) a frame,
