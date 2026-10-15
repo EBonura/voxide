@@ -1,0 +1,13 @@
+[package]
+name        = "loop-mixer"
+version     = "0.1.0"
+edition     = "2021"
+publish     = false
+description = "Render longer pieces of music from seamless loops: a seeded sequence of loops joined by equal-power crossfades, resampled for XA-ADPCM."
+
+[lints.rust]
+missing_docs = "warn"
+
+# Its own workspace: a host tool with no dependencies, written so it can move
+# into the SDK's tools without changing.
+[workspace]

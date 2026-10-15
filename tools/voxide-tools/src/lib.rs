@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 
 pub mod inflate;
+pub mod music;
 pub mod pack;
 pub mod png;
 pub mod profile;

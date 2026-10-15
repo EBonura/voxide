@@ -68,6 +68,10 @@ fn main() {
                 Ok(settings) => writeln!(std::io::stdout(), "{settings:#010x} VOXIDE_SETTINGS_STATE").expect("write settings address"),
                 Err(error) => { eprintln!("gate-symbols: {error}"); std::process::exit(1); }
             }
+            match block_address(Path::new(&exe), b"VMUS", 1, 64, "VOXIDE_MUSIC_STATE") {
+                Ok(music) => writeln!(std::io::stdout(), "{music:#010x} VOXIDE_MUSIC_STATE").expect("write music address"),
+                Err(error) => { eprintln!("gate-symbols: {error}"); std::process::exit(1); }
+            }
         }
         Err(error) => {
             eprintln!("gate-symbols: {error}");
