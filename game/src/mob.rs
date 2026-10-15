@@ -149,6 +149,12 @@ const TEMPT_STOP: i32 = 5 * BLOCK / 2;
 /// Java's melee goal strikes every 20 game ticks (its MeleeAttackGoal; the
 /// wiki gives no figure).
 const WOLF_BITE_TICKS: u16 = java_ticks(20) as u16;
+/// A hostile's melee goal swings at most once every 20 game ticks (1 s), so a
+/// mob touching the player hits once a second whatever the player's own
+/// 10-tick invulnerability does. The same interval as WOLF_BITE_TICKS; the
+/// figure is Java's `MeleeAttackGoal` (the wiki gives none for zombies, see
+/// AUDIT.md).
+const MELEE_TICKS: u8 = java_ticks(20) as u8;
 /// Tamed wolves kept off the mob pool: in another dimension, or left behind
 /// outside the loaded ring (Java's unloaded chunk). Saved with the world.
 pub const TAMED_CAP: usize = 4;
@@ -194,6 +200,8 @@ struct Mob {
     timer: u16, // wander/flee countdown, or skeleton shoot cooldown
     fuse: u16,  // sapper detonation charge
     hurt_cd: u8,
+    /// Sim ticks until a melee mob can strike again (Java's attack interval).
+    atk: u8,
     love: u16, // breeding "in love" countdown (passive mobs, set by feeding wheat)
     cool: u16, // sim ticks before this animal can fall in love again after breeding
     /// Gait phase, advanced only while actually moving, so legs stop when the
@@ -225,6 +233,7 @@ const DEAD: Mob = Mob {
     timer: 0,
     fuse: 0,
     hurt_cd: 0,
+    atk: 0,
     love: 0,
             cool: 0,
     walk: 0,
@@ -647,6 +656,7 @@ fn try_spawn(px: i32, pz: i32, sky: i32) {
             timer: 0,
             fuse: 0,
             hurt_cd: 0,
+            atk: 0,
             love: 0,
             cool: 0,
             walk: 0,
@@ -680,6 +690,7 @@ pub fn spawn_dragon(px: i32, pz: i32) {
             timer: 0,
             fuse: 0,
             hurt_cd: 0,
+            atk: 0,
             love: 0,
             cool: 0,
             walk: 0,
@@ -801,6 +812,7 @@ pub fn debug_lineup(px: i32, py: i32, pz: i32) {
                 timer: 0,
                 fuse: 0,
                 hurt_cd: 0,
+                atk: 0,
                 love: 0,
             cool: 0,
                 walk: 0,
@@ -1115,6 +1127,7 @@ fn spawn_offspring(kind: u8, x: i32, y: i32, z: i32) {
             timer: 0,
             fuse: 0,
             hurt_cd: 0,
+            atk: 0,
             love: 0,
             cool: 0,
             walk: 0,
@@ -2315,6 +2328,11 @@ pub fn contact_damage(px: i32, py: i32, pz: i32) -> i32 {
     let mut who = CAP;
     let mut i = 0;
     while i < CAP {
+        unsafe {
+            if MOBS[i].atk > 0 {
+                MOBS[i].atk -= 1;
+            }
+        }
         let m = unsafe { MOBS[i] };
         let angry_wolf = m.kind == WOLF && m.love != u16::MAX && m.state == ST_CHASE;
         if m.alive && (is_hostile(m.kind) || angry_wolf) {
@@ -2330,9 +2348,14 @@ pub fn contact_damage(px: i32, py: i32, pz: i32) -> i32 {
                 } else {
                     melee_damage(m.kind)
                 };
-                if d > dmg {
-                    dmg = d;
-                    who = i;
+                // Each striking mob starts its own interval; one still waiting
+                // out its last swing does no harm.
+                if d > 0 && m.atk == 0 {
+                    unsafe { MOBS[i].atk = MELEE_TICKS };
+                    if d > dmg {
+                        dmg = d;
+                        who = i;
+                    }
                 }
             }
         }
@@ -2598,6 +2621,7 @@ fn spawn_at(kind: u8, sx: i32, sz: i32) {
             timer: 0,
             fuse: 0,
             hurt_cd: 0,
+            atk: 0,
             love: 0,
             cool: 0,
             walk: 0,
