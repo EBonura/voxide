@@ -278,6 +278,10 @@ static mut POOL_OWNER: [usize; POOL] = [usize::MAX; POOL]; // chunk slot owning 
 // only chunks within render range.
 static mut PLAYER_CX: i32 = 0;
 static mut PLAYER_CZ: i32 = 0;
+// The player's block column as of the last recenter: streaming priority and
+// urgency are judged by how far a chunk is from where he stands.
+static mut PLAYER_BX: i32 = 0;
+static mut PLAYER_BZ: i32 = 0;
 // Chunk-radius that gets meshed (covers the draw distance in any facing). POOL
 // follows it.
 // Mesh ring: 3x3 around the player up to a 16-block draw. A chunk entering it
@@ -662,7 +666,7 @@ static mut MESH_COMMIT_I: usize = 0;
 static mut MESH_LIGHT_SOURCES: [(usize, usize, usize); MAX_SOURCES] = [(0, 0, 0); MAX_SOURCES];
 static mut MESH_NLIGHT: usize = 0;
 static mut MESH_LIGHT_I: usize = 0;
-const STREAM_DECODE_BATCH: usize = 4096;
+const STREAM_DECODE_BATCH: usize = 2048;
 const STREAM_COMMIT_BATCH: usize = 512;
 
 fn abort_stream_mesh() {
@@ -709,7 +713,11 @@ const EDIT_DECODE_BATCH: usize = 4096;
 // covering a sprint (~7.9K) with the slice count unchanged. Decode, lighting
 // and atomic pool publication are separately staged and batch-bounded, so the
 // worst frame still cannot swallow a whole-chunk lump.
-const MESH_CELL_BUDGET: usize = 2048;
+// 1024 since the frame clock gates streaming (main::advance_streaming): at 2048 a
+// plane-meshing slice cost up to 340K cycles (30% of a frame, p90 228K), too
+// coarse for a clock that decides slice by slice whether one more fits. The
+// decode and pack batches below were halved for the same reason.
+const MESH_CELL_BUDGET: usize = 1024;
 
 // Amortized generation: a streamed-in chunk is filled GEN_BATCH columns per
 // streaming tick (kept loaded=false -> reads as air, unrendered -- until
@@ -725,7 +733,7 @@ const GEN_BATCH: usize = 8;
 // finely enough that no single frame swallows the lump (2 and 4 ticks), NOT as
 // finely as possible -- at 16 ticks each they doubled chunk latency.
 const DECORATE_BATCH: usize = 128;
-const PACK_BATCH: usize = 4096;
+const PACK_BATCH: usize = 2048;
 static mut GEN_S: usize = usize::MAX; // slot being incrementally generated (MAX = none)
 static mut GEN_CX: i32 = 0;
 static mut GEN_CZ: i32 = 0;
@@ -4738,6 +4746,8 @@ pub fn recenter(wx: i32, wz: i32) {
     unsafe {
         PLAYER_CX = pcx;
         PLAYER_CZ = pcz;
+        PLAYER_BX = wx;
+        PLAYER_BZ = wz;
     }
     free_far_slots(); // give back slots of chunks now out of view
                       // Start the amortized gen of at most ONE missing chunk (gen_tick fills it over
@@ -4762,7 +4772,7 @@ pub fn recenter(wx: i32, wz: i32) {
             let s = slot(cx, cz);
             let ok = unsafe { CHUNKS[s].loaded && CHUNKS[s].cx == cx && CHUNKS[s].cz == cz };
             if !ok {
-                let d = i.abs().max(j.abs());
+                let d = chunk_gap(cx, cz);
                 if d < best_d {
                     best_d = d;
                     best_cx = cx;
@@ -4950,7 +4960,7 @@ pub fn stream_backlog() -> (u32, u32) {
                     // cheap tier -- this is what keeps the 6-slice burst out of
                     // mining frames that are already paying for the edit.
                     let holed = !resident || CHUNKS[s].face_slot == NO_SLOT;
-                    if holed && i.abs().max(j.abs()) <= 1 {
+                    if holed && i.abs().max(j.abs()) <= 1 && chunk_gap(cx, cz) < SEE_BLOCKS {
                         near += 1;
                     } else {
                         far += 1;
@@ -4962,6 +4972,24 @@ pub fn stream_backlog() -> (u32, u32) {
         }
     }
     (near, far)
+}
+
+/// How near to the player a missing chunk has to start before it is a hole he
+/// could see, in blocks. The draw ends at DRAW_BLOCKS and its last two blocks are
+/// solid fog, so terrain that appears there arrives as haze. The ring's new row
+/// meets the player at exactly the far plane on every chunk crossing: on a
+/// recorded walk 58 of the 65 frames with a hole open had it 14 to 16 blocks out,
+/// and none had it nearer than 12.
+const SEE_BLOCKS: i32 = crate::DRAW_BLOCKS - 2;
+
+/// Distance in blocks from the player's column to the nearest block of chunk
+/// (cx, cz), by the larger of the two axes.
+#[inline(always)]
+fn chunk_gap(cx: i32, cz: i32) -> i32 {
+    let (bx, bz) = unsafe { (PLAYER_BX, PLAYER_BZ) };
+    let dx = (cx * CW - bx).max(bx - (cx * CW + CW - 1)).max(0);
+    let dz = (cz * CW - bz).max(bz - (cz * CW + CW - 1)).max(0);
+    dx.max(dz)
 }
 
 static mut ALLOW_CLAIM: bool = true;
@@ -4991,9 +5019,7 @@ pub fn stream_tick() {
             let mut s = 0;
             while s < NCHUNKS {
                 if CHUNKS[s].loaded && CHUNKS[s].dirty && in_render_range(s) {
-                    let d = (CHUNKS[s].cx - PLAYER_CX)
-                        .abs()
-                        .max((CHUNKS[s].cz - PLAYER_CZ).abs());
+                    let d = chunk_gap(CHUNKS[s].cx, CHUNKS[s].cz);
                     if d < best_d {
                         best_d = d;
                         best = s;
@@ -5318,6 +5344,8 @@ pub fn for_visible_faces(cam: &Camera, count: &mut usize) -> usize {
             // another hill). Near chunks always draw -- the ray would be too short.
             let occluded = OCCLUSION_CULL && chunk_lod(s) == 1 && chunk_occluded(cam, cx, cz);
             if visible && !occluded {
+                // Keep the frame clock inside its 16-bit counter's range.
+                crate::slack::mark();
                 let oxw = cx * CW * BLOCK;
                 let ozw = cz * CW * BLOCK;
                 face_work += unsafe {

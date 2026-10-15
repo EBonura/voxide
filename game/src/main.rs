@@ -1303,7 +1303,7 @@ static mut MAT_TPAGE_HI: [[u32; tex::TILE_COUNT]; 2] = [[0; tex::TILE_COUNT]; 2]
 const FOG_BANDS: usize = 16;
 const FOG_SHIFT: u32 = 7;
 #[inline(never)]
-fn advance_streaming() {
+fn advance_streaming(budgeted: bool) {
     // Slices scale with the streaming BACKLOG and nothing else. Render-headroom
     // thresholds have been wrong here twice: the original tiers (240 quads /
     // 1000 faces / dt==1) are exceeded on every normal terrain frame, which
@@ -1315,16 +1315,28 @@ fn advance_streaming() {
     // Demand arithmetic: a chunk is ~38 gen ticks (~40K cycles each) + ~60 mesh
     // ticks (~144K at MESH_CELL_BUDGET 2048), a boundary cross needs five fresh
     // chunks, and a sprint crosses every ~57 frames -- low-4s of sustained
-    // slices. The split: NEAR work (within one chunk, i.e. inside the ~21-block
-    // fog radius, or a player edit) would be visible pop-in, so it gets 6
-    // slices, which outruns any movement speed. FAR-only work (the ring's outer
-    // band, beyond the fog) fills at 3 -- slightly under sprint demand on
-    // purpose, because a flat-out sprint promotes the shortfall to near work
-    // within half a crossing and the 6-slice burst absorbs it; anything gentler
-    // never sees the edge at all. Idle: one cheap slice. This keeps the
-    // catch-up fps cost proportional to how visible the missing terrain is.
+    // slices. The split: NEAR work (a missing chunk within world::SEE_BLOCKS of the
+    // player, or a player edit) would be visible pop-in, so it gets up to 6
+    // slices. FAR-only work (the ring's outer band, in the fog) gets 3 -- slightly
+    // under sprint demand on purpose, because a flat-out sprint promotes the
+    // shortfall to near work within half a crossing and the burst absorbs it.
+    // Idle: one cheap slice.
+    //
+    // On top of the tiers the frame clock holds slices back (see below): a
+    // recorded walk had 78 of its 79 frames over the 30 fps quantum carry a
+    // streaming burst, 200K to 800K cycles on top of a 600K render.
     let (near, far) = world::stream_backlog();
-    let stream_slices = if near > 0 || world::edit_backlog() {
+    // Slices a frame may take whatever the clock says: a hole the player could
+    // see (a chunk within SEE_BLOCKS), then a player's edit, then nothing.
+    let guaranteed = if near > 0 {
+        STREAM_NEAR_SLICES
+    } else if world::edit_backlog() {
+        STREAM_EDIT_SLICES
+    } else {
+        0
+    };
+    let urgent = guaranteed > 0;
+    let stream_slices = if urgent {
         6
     } else if far > 0 {
         3
@@ -1333,13 +1345,60 @@ fn advance_streaming() {
     };
     let mut sk = 0;
     while sk < stream_slices {
+        // Past its guaranteed slices a frame only streams while the clock says
+        // another slice fits before the 30 fps quantum. The ring's new row used to
+        // arrive in one 6-slice burst at the far plane, where the fog is solid;
+        // spread over the next frames, nearest chunk first, it is in before the
+        // player is within SEE_BLOCKS of it. The title's world pump is not held
+        // back.
+        if budgeted && sk >= guaranteed && unsafe { slack::used() + STREAM_EST > STREAM_END } {
+            if sk > 0 {
+                break;
+            }
+            // A frame that cannot spare a slice still lets one through every
+            // few frames, so a saturated scene does not starve the ring.
+            let starved = unsafe {
+                STREAM_STARVED += 1;
+                STREAM_STARVED
+            };
+            if starved < STREAM_FORCE_AFTER {
+                break;
+            }
+        }
+        unsafe { STREAM_STARVED = 0 };
+        let t0 = if budgeted { slack::used() } else { 0 };
         telemetry::stage_begin(ST_GEN);
         world::gen_tick();
         telemetry::stage_end(ST_GEN);
         world::stream_tick_claim(true);
+        if budgeted {
+            // The dearest slice of the last few frames: an 8th of it drains per
+            // slice, so a lone heavy mesh slice is remembered a while.
+            let dt = slack::used() - t0;
+            unsafe { STREAM_EST = dt.max(STREAM_EST - STREAM_EST / 8) };
+        }
         sk += 1;
     }
 }
+
+/// Counter ticks (system clock over 8) of the two-vblank frame the game holds
+/// 30 fps with, and the last tick streaming may still be running at: the tail
+/// that follows it (particles, the held item, the HUD, the present) and the
+/// slice that overshoots its estimate take the rest. 14K ticks left 38 of a
+/// recorded walk's frames over; 24K leaves 15.
+const FRAME_TICKS: u32 = 141_000;
+const STREAM_END: u32 = FRAME_TICKS - 24_000;
+/// What a streaming slice is expected to cost, ticks; follows the measured
+/// dearest of the recent ones.
+static mut STREAM_EST: u32 = 18_000;
+/// Consecutive frames whose first slice was held back.
+static mut STREAM_STARVED: u8 = 0;
+const STREAM_FORCE_AFTER: u8 = 6;
+/// Slices a frame with a visible hole, or with a player's edit in flight, may
+/// take whatever the clock says. An edit's partial rebuild used to finish in two
+/// frames and now takes about five (see world::edit_backlog).
+const STREAM_NEAR_SLICES: usize = 3;
+const STREAM_EDIT_SLICES: usize = 2;
 
 /// Precomputed GP0 colour words, now indexed by SKYLIGHT bucket as well as
 /// blend mode, face direction and fog band. Four buckets multiplies the table
@@ -3886,7 +3945,7 @@ fn main() {
         // gets one slice; cheap views get two. This breaks the old feedback loop
         // where a slow frame performed more streaming and became slower still.
         telemetry::stage_begin(ST_MESH);
-        advance_streaming();
+        advance_streaming(true);
         telemetry::stage_end(ST_MESH);
         telemetry::stage_end(ST_RENDER);
         telemetry::stage_begin(ST_R_TAIL);
@@ -3967,8 +4026,8 @@ fn menu_world_pump(pocket_done: &mut bool) -> u32 {
     // machine froze while ticking). advance_streaming is #[inline(never)], so
     // it is immune, and its backlog tiers give the menu 12 slices while the
     // ring is missing and next to nothing once it is complete.
-    advance_streaming();
-    advance_streaming();
+    advance_streaming(false);
+    advance_streaming(false);
     if !*pocket_done && world::column_loaded(sbx, sbz) {
         world::carve_spawn_pocket(sbx, sbz);
         *pocket_done = true;
@@ -4021,7 +4080,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         // The ring is complete; one idle-tier tick keeps it centred and
         // services stragglers without costing the menu anything.
         world::recenter(unsafe { WORLD_BX }, unsafe { WORLD_BZ });
-        advance_streaming();
+        advance_streaming(false);
         if controls {
             if controls::input(pad, prev) {
                 controls = false;
