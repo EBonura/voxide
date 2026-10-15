@@ -9,7 +9,7 @@
 
 use crate::{
     floor_div, Camera, AIR, BLOCK, CACTUS, CLAY, COAL_ORE, DIAMOND_ORE, DIRS, DIRT, DOOR_O,
-    FAR_SIDE_Z, FAR_Z, FLOWER_R, FLOWER_Y, GOLD_ORE, GRASS, IRON_ORE, LAVA, LEAVES, PROJ_H, SAND,
+    FAR_SIDE_Z, FAR_TREE_SIDE_Z, FAR_Z, FLOWER_R, FLOWER_Y, GOLD_ORE, GRASS, IRON_ORE, LAVA, LEAVES, PROJ_H, SAND,
     SAPLING, SNOW, STONE, TALL_GRASS, WATER, WHEAT, WHEAT_RIPE, WOOD,
 };
 use crate::flame;
@@ -278,6 +278,10 @@ static mut POOL_OWNER: [usize; POOL] = [usize::MAX; POOL]; // chunk slot owning 
 // only chunks within render range.
 static mut PLAYER_CX: i32 = 0;
 static mut PLAYER_CZ: i32 = 0;
+// The player's block column as of the last recenter: streaming priority and
+// urgency are judged by how far a chunk is from where he stands.
+static mut PLAYER_BX: i32 = 0;
+static mut PLAYER_BZ: i32 = 0;
 // Chunk-radius that gets meshed (covers the draw distance in any facing). POOL
 // follows it.
 // Mesh ring: 3x3 around the player up to a 16-block draw. A chunk entering it
@@ -662,7 +666,7 @@ static mut MESH_COMMIT_I: usize = 0;
 static mut MESH_LIGHT_SOURCES: [(usize, usize, usize); MAX_SOURCES] = [(0, 0, 0); MAX_SOURCES];
 static mut MESH_NLIGHT: usize = 0;
 static mut MESH_LIGHT_I: usize = 0;
-const STREAM_DECODE_BATCH: usize = 4096;
+const STREAM_DECODE_BATCH: usize = 2048;
 const STREAM_COMMIT_BATCH: usize = 512;
 
 fn abort_stream_mesh() {
@@ -714,7 +718,11 @@ const EDIT_DECODE_BATCH: usize = 4096;
 // covering a sprint (~7.9K) with the slice count unchanged. Decode, lighting
 // and atomic pool publication are separately staged and batch-bounded, so the
 // worst frame still cannot swallow a whole-chunk lump.
-const MESH_CELL_BUDGET: usize = 2048;
+// 1024 since the frame clock gates streaming (main::advance_streaming): at 2048 a
+// plane-meshing slice cost up to 340K cycles (30% of a frame, p90 228K), too
+// coarse for a clock that decides slice by slice whether one more fits. The
+// decode and pack batches below were halved for the same reason.
+const MESH_CELL_BUDGET: usize = 1024;
 
 // Amortized generation: a streamed-in chunk is filled GEN_BATCH columns per
 // streaming tick (kept loaded=false -> reads as air, unrendered -- until
@@ -730,7 +738,7 @@ const GEN_BATCH: usize = 8;
 // finely enough that no single frame swallows the lump (2 and 4 ticks), NOT as
 // finely as possible -- at 16 ticks each they doubled chunk latency.
 const DECORATE_BATCH: usize = 128;
-const PACK_BATCH: usize = 4096;
+const PACK_BATCH: usize = 2048;
 static mut GEN_S: usize = usize::MAX; // slot being incrementally generated (MAX = none)
 static mut GEN_CX: i32 = 0;
 static mut GEN_CZ: i32 = 0;
@@ -4987,6 +4995,8 @@ pub fn recenter(wx: i32, wz: i32) {
     unsafe {
         PLAYER_CX = pcx;
         PLAYER_CZ = pcz;
+        PLAYER_BX = wx;
+        PLAYER_BZ = wz;
     }
     free_far_slots(); // give back slots of chunks now out of view
                       // Start the amortized gen of at most ONE missing chunk (gen_tick fills it over
@@ -5011,7 +5021,7 @@ pub fn recenter(wx: i32, wz: i32) {
             let s = slot(cx, cz);
             let ok = unsafe { CHUNKS[s].loaded && CHUNKS[s].cx == cx && CHUNKS[s].cz == cz };
             if !ok {
-                let d = i.abs().max(j.abs());
+                let d = chunk_gap(cx, cz);
                 if d < best_d {
                     best_d = d;
                     best_cx = cx;
@@ -5199,7 +5209,7 @@ pub fn stream_backlog() -> (u32, u32) {
                     // cheap tier -- this is what keeps the 6-slice burst out of
                     // mining frames that are already paying for the edit.
                     let holed = !resident || CHUNKS[s].face_slot == NO_SLOT;
-                    if holed && i.abs().max(j.abs()) <= 1 {
+                    if holed && i.abs().max(j.abs()) <= 1 && chunk_gap(cx, cz) < SEE_BLOCKS {
                         near += 1;
                     } else {
                         far += 1;
@@ -5211,6 +5221,24 @@ pub fn stream_backlog() -> (u32, u32) {
         }
     }
     (near, far)
+}
+
+/// How near to the player a missing chunk has to start before it is a hole he
+/// could see, in blocks. The draw ends at DRAW_BLOCKS and its last two blocks are
+/// solid fog, so terrain that appears there arrives as haze. The ring's new row
+/// meets the player at exactly the far plane on every chunk crossing: on a
+/// recorded walk 58 of the 65 frames with a hole open had it 14 to 16 blocks out,
+/// and none had it nearer than 12.
+const SEE_BLOCKS: i32 = crate::DRAW_BLOCKS - 2;
+
+/// Distance in blocks from the player's column to the nearest block of chunk
+/// (cx, cz), by the larger of the two axes.
+#[inline(always)]
+fn chunk_gap(cx: i32, cz: i32) -> i32 {
+    let (bx, bz) = unsafe { (PLAYER_BX, PLAYER_BZ) };
+    let dx = (cx * CW - bx).max(bx - (cx * CW + CW - 1)).max(0);
+    let dz = (cz * CW - bz).max(bz - (cz * CW + CW - 1)).max(0);
+    dx.max(dz)
 }
 
 static mut ALLOW_CLAIM: bool = true;
@@ -5244,9 +5272,7 @@ pub fn stream_tick() {
                     && in_render_range(s)
                     && (CLAIM_ONLY == 0 || CLAIM_ONLY >> s & 1 != 0)
                 {
-                    let d = (CHUNKS[s].cx - PLAYER_CX)
-                        .abs()
-                        .max((CHUNKS[s].cz - PLAYER_CZ).abs());
+                    let d = chunk_gap(CHUNKS[s].cx, CHUNKS[s].cz);
                     if d < best_d {
                         best_d = d;
                         best = s;
@@ -5556,25 +5582,24 @@ pub fn for_visible_faces(cam: &Camera, count: &mut usize) -> usize {
             let visible = zc >= -chunk_r
                 && zc - chunk_r <= FAR_Z
                 && (zc <= 0 || (xc.abs() - chunk_r) <= zc * 160 / PROJ_H);
-            // A chunk wholly past the side horizon contributes only its
-            // silhouette, which is its TOP faces; skip the other dirs before
-            // iterating a single face of them.
             // A far-LOD chunk holds only its top plates and the skirts between
             // height steps: few faces, and the skirts ARE its silhouette, so
-            // they draw to the far plane while a near chunk's sides stop at
-            // FAR_SIDE_Z.
+            // they draw to the far plane. A near chunk's terrain sides stop at
+            // FAR_SIDE_Z, its trees' sides at FAR_TREE_SIDE_Z.
             let far_lod = FAR_LOD && unsafe { CHUNKS[s].face_lod } == 1;
-            let tops_only = zc - chunk_r > FAR_SIDE_Z && !far_lod;
-            let side_lim = if far_lod { FAR_Z } else { FAR_SIDE_Z };
+            let plain_lim = if far_lod { FAR_Z } else { FAR_SIDE_Z };
+            let side_lim = if far_lod { FAR_Z } else { FAR_TREE_SIDE_Z };
             // Far-ring chunks: skip entirely if a ray to their surface is blocked
             // by nearer terrain (don't iterate/project a hill that's hidden behind
             // another hill). Near chunks always draw -- the ray would be too short.
             let occluded = OCCLUSION_CULL && chunk_lod(s) == 1 && chunk_occluded(cam, cx, cz);
             if visible && !occluded {
+                // Keep the frame clock inside its 16-bit counter's range.
+                crate::slack::mark();
                 let oxw = cx * CW * BLOCK;
                 let ozw = cz * CW * BLOCK;
                 face_work += unsafe {
-                    FaceStack::run(|| chunk_faces(cam, p, oxw, ozw, tops_only, side_lim, count))
+                    FaceStack::run(|| chunk_faces(cam, p, oxw, ozw, plain_lim, side_lim, count))
                 };
             }
         }
@@ -5601,7 +5626,7 @@ fn chunk_faces(
     p: usize,
     oxw: i32,
     ozw: i32,
-    tops_only: bool,
+    plain_lim: i32,
     side_lim: i32,
     count: &mut usize,
 ) -> usize {
@@ -5625,13 +5650,11 @@ fn chunk_faces(
     };
     let mut dir = 0;
     while dir < 6 {
-        if tops_only && dir != 2 {
-            dir += 1;
-            continue;
-        }
-        // Sides and bottoms stop at `side_lim` (FAR_SIDE_Z, or the far plane
-        // for a far-LOD chunk); tops carry the silhouette out to FAR_Z.
+        // Sides and bottoms stop at `side_lim` (a tree's, or the far plane for a
+        // far-LOD chunk), and past `plain_lim` only trees keep them; tops carry
+        // the silhouette out to FAR_Z.
         let far_lim = if dir == 2 { FAR_Z } else { side_lim };
+        let plain_lim = if dir == 2 { far_lim } else { plain_lim };
         // Visible plane sub-range for this dir: the old per-face
         // backface test compared the camera to the face's PLANE
         // coordinate only, so cutting the (plane-sorted) range is
@@ -5687,7 +5710,7 @@ fn chunk_faces(
                 plane += 1;
                 continue;
             }
-            let plane_vis = if bounds == 0 {
+            let mut plane_vis = if bounds == 0 {
                 // The face range, not this optional cache, decides
                 // whether a plane is empty.
                 1
@@ -5702,6 +5725,22 @@ fn chunk_faces(
                     far_lim,
                 )
             };
+            // A plane that lies wholly inside the far limit but reaches past the
+            // plain one still has faces to test: only its trees go on.
+            if plane_vis == 2
+                && plain_lim < far_lim
+                && plane_in_frustum(
+                    oxw - cam.x,
+                    -cam.y,
+                    ozw - cam.z,
+                    dir,
+                    plane,
+                    bounds,
+                    plain_lim,
+                ) != 2
+            {
+                plane_vis = 1;
+            }
             if plane_vis == 0 {
                 plane += 1;
                 continue;
@@ -5770,6 +5809,13 @@ fn chunk_faces(
                 // a frame dying exactly there.
                 if z2 + r < 0 || z2 > far_lim {
                     continue;
+                }
+                // Past the plain limit only a tree's sides are drawn.
+                if z2 > plain_lim {
+                    let block = ((f >> 17) & 127) as u8;
+                    if block != LEAVES && block != WOOD {
+                        continue;
+                    }
                 }
                 // Cone tests against the sphere: compare the nearest
                 // possible screen offset (|c| - r) with the FARTHEST

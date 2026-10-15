@@ -74,6 +74,9 @@ static mut BOOST_LEFT: u32 = 0;
 static mut QUIET_FRAMES: u32 = BOOST_REARM;
 static mut UNITS: u32 = 0;
 static mut STARTED: bool = false;
+/// Counter ticks this frame has used since `frame_begin`, summed over `mark`s.
+static mut USED: u32 = 0;
+static mut MARK_T: u16 = 0;
 
 /// Start root counter 2 free-running on the system clock over 8 (once; the
 /// first frame's world update does it).
@@ -159,6 +162,8 @@ pub fn frame_begin() {
         UNITS = 0;
         LAST_T = timers::counter(Timer::Timer2);
         SPENT = 0;
+        USED = 0;
+        MARK_T = LAST_T;
     }
 }
 
@@ -193,6 +198,24 @@ pub fn job_done() {
 /// quarter of it so a long job cannot starve the meshing.
 pub fn mesh_budget() -> u32 {
     unsafe { ALLOW.saturating_sub(JOB_SPENT).max(ALLOW / 4) }
+}
+
+/// Fold the time since the last mark into the frame's running total. The counter
+/// is 16 bits (15.5 ms), so this has to run more often than that: the render
+/// marks after every chunk, which is a fraction of a frame.
+#[inline(always)]
+pub fn mark() {
+    unsafe {
+        let now = timers::counter(Timer::Timer2);
+        USED += now.wrapping_sub(MARK_T) as u32;
+        MARK_T = now;
+    }
+}
+
+/// Counter ticks (system clock over 8) since this frame's `frame_begin`.
+pub fn used() -> u32 {
+    mark();
+    unsafe { USED }
 }
 
 /// Counter ticks spent since `frame_begin`.

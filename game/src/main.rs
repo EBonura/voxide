@@ -32,6 +32,7 @@ mod music;
 mod music_plan;
 mod musicdata;
 mod save;
+mod seal;
 mod settings_menu;
 mod sfx;
 mod sfxdata;
@@ -131,11 +132,18 @@ const DRAW_BLOCKS: i32 = match option_env!("VOXIDE_DRAW_BLOCKS") {
 };
 const _: () = assert!(DRAW_BLOCKS >= 8 && DRAW_BLOCKS <= 32, "draw distance is 8..32 blocks");
 const FAR_Z: i32 = DRAW_BLOCKS * BLOCK;
-// Side/bottom faces stop two bands earlier: beyond that every face is fully
-// hazed, so only the SILHOUETTE carries information, and a heightfield's
-// silhouette is its top faces (the 25..28-block-era ring measured far sides
-// at over 2x the tops' cost for no visible difference).
+// Side/bottom faces of terrain stop two bands before the tops (FAR_Z - 2 * BLOCK):
+// the fog was meant to be solid by then, so only the silhouette, a heightfield's
+// top faces, was kept. It is not solid: the fog multiplies the texel, it cannot
+// lighten it past the haze, so a dark leaf stays green. That band left every
+// distant tree as a floating canopy of top plates with its trunk and sides cut
+// away (a recorded walk, 2026-10-15: "the rendering of far objects is very
+// weird"). Trees (leaves and logs) now keep their sides out to the far plane;
+// terrain sides stop here, which costs a terrace end a spike in the haze instead
+// of about 4% of the frame (all sides to the far plane is commit dbd9a42).
 const FAR_SIDE_Z: i32 = FAR_Z - 2 * BLOCK;
+/// Where a tree's side faces stop.
+const FAR_TREE_SIDE_Z: i32 = FAR_Z;
 
 /// Decimal digits to an i32, for build-time knobs read with `option_env!`.
 const fn parse_const_i32(s: &str) -> i32 {
@@ -1341,7 +1349,7 @@ fn ao_shade(rgb: u32, level: u32) -> u32 {
 /// Hide a value from LLVM so a mask or 0/1 flag built from a comparison stays
 /// arithmetic. The R3000 has no conditional move, so LLVM lowers every
 /// `select` it recognises to a branch and then duplicates the tails around
-/// it. Keeping `ao_shade` and `seal_edge` arithmetic took emit_faces from
+/// it. Keeping `ao_shade` and the former corner seal arithmetic took emit_faces from
 /// 4,580 to 3,800 bytes of a 4 KB instruction cache. Emits no instruction.
 #[inline(always)]
 fn opaque(mut x: u32) -> u32 {
@@ -1368,12 +1376,12 @@ static mut MAT_TPAGE_HI: [[u32; tex::TILE_COUNT]; 2] = [[0; tex::TILE_COUNT]; 2]
 const FOG_BANDS: usize = 16;
 const FOG_SHIFT: u32 = 7;
 #[inline(never)]
-fn advance_streaming() {
+fn advance_streaming(budgeted: bool) {
     // A crater the player can see: mesh its chunks now, as far as the frame's
     // spare time goes, instead of three slices a frame. One chunk is a few
     // dozen slices of a few tens of thousands of cycles each; at the ordinary
     // pace four of them were most of a second.
-    if world::blast_remesh_urgent(false) && world::blast_remesh_due() {
+    if budgeted && world::blast_remesh_urgent(false) && world::blast_remesh_due() {
         world::blast_remesh_begin();
         let budget = slack::mesh_budget();
         let mut watch = slack::Stopwatch::start();
@@ -1400,16 +1408,28 @@ fn advance_streaming() {
     // Demand arithmetic: a chunk is ~38 gen ticks (~40K cycles each) + ~60 mesh
     // ticks (~144K at MESH_CELL_BUDGET 2048), a boundary cross needs five fresh
     // chunks, and a sprint crosses every ~57 frames -- low-4s of sustained
-    // slices. The split: NEAR work (within one chunk, i.e. inside the ~21-block
-    // fog radius, or a player edit) would be visible pop-in, so it gets 6
-    // slices, which outruns any movement speed. FAR-only work (the ring's outer
-    // band, beyond the fog) fills at 3 -- slightly under sprint demand on
-    // purpose, because a flat-out sprint promotes the shortfall to near work
-    // within half a crossing and the 6-slice burst absorbs it; anything gentler
-    // never sees the edge at all. Idle: one cheap slice. This keeps the
-    // catch-up fps cost proportional to how visible the missing terrain is.
+    // slices. The split: NEAR work (a missing chunk within world::SEE_BLOCKS of the
+    // player, or a player edit) would be visible pop-in, so it gets up to 6
+    // slices. FAR-only work (the ring's outer band, in the fog) gets 3 -- slightly
+    // under sprint demand on purpose, because a flat-out sprint promotes the
+    // shortfall to near work within half a crossing and the burst absorbs it.
+    // Idle: one cheap slice.
+    //
+    // On top of the tiers the frame clock holds slices back (see below): a
+    // recorded walk had 78 of its 79 frames over the 30 fps quantum carry a
+    // streaming burst, 200K to 800K cycles on top of a 600K render.
     let (near, far) = world::stream_backlog();
-    let stream_slices = if near > 0 || world::edit_backlog() {
+    // Slices a frame may take whatever the clock says: a hole the player could
+    // see (a chunk within SEE_BLOCKS), then a player's edit, then nothing.
+    let guaranteed = if near > 0 {
+        STREAM_NEAR_SLICES
+    } else if world::edit_backlog() {
+        STREAM_EDIT_SLICES
+    } else {
+        0
+    };
+    let urgent = guaranteed > 0;
+    let stream_slices = if urgent {
         6
     } else if far > 0 {
         3
@@ -1418,13 +1438,60 @@ fn advance_streaming() {
     };
     let mut sk = 0;
     while sk < stream_slices {
+        // Past its guaranteed slices a frame only streams while the clock says
+        // another slice fits before the 30 fps quantum. The ring's new row used to
+        // arrive in one 6-slice burst at the far plane, where the fog is solid;
+        // spread over the next frames, nearest chunk first, it is in before the
+        // player is within SEE_BLOCKS of it. The title's world pump is not held
+        // back.
+        if budgeted && sk >= guaranteed && unsafe { slack::used() + STREAM_EST > STREAM_END } {
+            if sk > 0 {
+                break;
+            }
+            // A frame that cannot spare a slice still lets one through every
+            // few frames, so a saturated scene does not starve the ring.
+            let starved = unsafe {
+                STREAM_STARVED += 1;
+                STREAM_STARVED
+            };
+            if starved < STREAM_FORCE_AFTER {
+                break;
+            }
+        }
+        unsafe { STREAM_STARVED = 0 };
+        let t0 = if budgeted { slack::used() } else { 0 };
         telemetry::stage_begin(ST_GEN);
         world::gen_tick();
         telemetry::stage_end(ST_GEN);
         world::stream_tick_claim(true);
+        if budgeted {
+            // The dearest slice of the last few frames: an 8th of it drains per
+            // slice, so a lone heavy mesh slice is remembered a while.
+            let dt = slack::used() - t0;
+            unsafe { STREAM_EST = dt.max(STREAM_EST - STREAM_EST / 8) };
+        }
         sk += 1;
     }
 }
+
+/// Counter ticks (system clock over 8) of the two-vblank frame the game holds
+/// 30 fps with, and the last tick streaming may still be running at: the tail
+/// that follows it (particles, the held item, the HUD, the present) and the
+/// slice that overshoots its estimate take the rest. 14K ticks left 38 of a
+/// recorded walk's frames over; 24K leaves 15.
+const FRAME_TICKS: u32 = 141_000;
+const STREAM_END: u32 = FRAME_TICKS - 24_000;
+/// What a streaming slice is expected to cost, ticks; follows the measured
+/// dearest of the recent ones.
+static mut STREAM_EST: u32 = 18_000;
+/// Consecutive frames whose first slice was held back.
+static mut STREAM_STARVED: u8 = 0;
+const STREAM_FORCE_AFTER: u8 = 6;
+/// Slices a frame with a visible hole, or with a player's edit in flight, may
+/// take whatever the clock says. An edit's partial rebuild used to finish in two
+/// frames and now takes about five (see world::edit_backlog).
+const STREAM_NEAR_SLICES: usize = 3;
+const STREAM_EDIT_SLICES: usize = 2;
 
 /// Precomputed GP0 colour words, now indexed by SKYLIGHT bucket as well as
 /// blend mode, face direction and fog band. Four buckets multiplies the table
@@ -3938,7 +4005,7 @@ fn main() {
         // where a slow frame performed more streaming and became slower still.
         telemetry::stage_begin(ST_MESH);
         world::set_view(cam.x, cam.z, cam.sy, cam.cy);
-        advance_streaming();
+        advance_streaming(true);
         telemetry::stage_end(ST_MESH);
         telemetry::stage_end(ST_RENDER);
         telemetry::stage_begin(ST_R_TAIL);
@@ -4106,8 +4173,8 @@ fn menu_world_pump(pocket_done: &mut bool) -> u32 {
     // machine froze while ticking). advance_streaming is #[inline(never)], so
     // it is immune, and its backlog tiers give the menu 12 slices while the
     // ring is missing and next to nothing once it is complete.
-    advance_streaming();
-    advance_streaming();
+    advance_streaming(false);
+    advance_streaming(false);
     if !*pocket_done && world::column_loaded(sbx, sbz) {
         world::carve_spawn_pocket(sbx, sbz);
         *pocket_done = true;
@@ -4158,7 +4225,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         // The ring is complete; one idle-tier tick keeps it centred and
         // services stragglers without costing the menu anything.
         world::recenter(unsafe { WORLD_BX }, unsafe { WORLD_BZ });
-        advance_streaming();
+        advance_streaming(false);
         if controls {
             if controls::input(pad, prev) {
                 controls = false;
@@ -8731,47 +8798,34 @@ fn emit_clipped_cell(win: u32, cl_hi: u32, tp_hi: u32, blended: bool, depth_bias
         candidate += 1;
     }
 
-    // Project the polygon ONCE, then grow it a pixel outward from its centre:
-    // the same T-junction seal emit_face applies to distant plates, which this
-    // path never had. The near band is FULL of independently truncated
-    // boundaries -- refined 1-block cells beside 4-block coarse patches, the
-    // plate/shell handoff, shell cubes against clipped plate continuations --
-    // and each showed as dashed sky-coloured hairlines right in front of the
-    // camera. Same-texture overlap is invisible; transparent cells keep exact
-    // edges because overlapping two Average-blended quads double-blends.
+    // Project the polygon ONCE, then grow it outward (the T-junction seal
+    // emit_face applies to distant plates, see seal.rs). The near band is FULL
+    // of independently truncated boundaries -- refined 1-block cells beside
+    // 4-block coarse patches, the plate/shell handoff, shell cubes against
+    // clipped plate continuations -- and each showed as dashed sky-coloured
+    // hairlines right in front of the camera. Same-texture overlap is
+    // invisible; transparent cells keep exact edges because overlapping two
+    // Average-blended quads double-blends.
     // Scratchpad too; only the first `n` entries are ever read.
     let pp: &mut [Proj; CLIP_VERT_CAP] =
         unsafe { &mut *(clip_p() as *mut [Proj; CLIP_VERT_CAP]) };
-    let mut sx = 0i32;
-    let mut sy = 0i32;
     let mut i = 0usize;
     while i < n {
         pp[i] = clip_project(a[i]);
-        sx += pp[i].x as i32;
-        sy += pp[i].y as i32;
         i += 1;
     }
     if !blended {
-        let nn = n as i32;
-        let mut i = 0usize;
-        while i < n {
-            let p = &mut pp[i];
-            if (p.x as i32) * nn >= sx {
-                if p.x < 1022 {
-                    p.x += 2;
-                }
-            } else if p.x > -1022 {
-                p.x -= 2;
-            }
-            if (p.y as i32) * nn >= sy {
-                if p.y < 510 {
-                    p.y += 2;
-                }
-            } else if p.y > -510 {
-                p.y -= 2;
-            }
-            i += 1;
-        }
+        let base = pp.as_mut_ptr();
+        // SAFETY: the first n entries were just written; grow_polygon reads
+        // each corner's original position before it writes that corner.
+        seal::grow_polygon(
+            n,
+            |i| unsafe { ((*base.add(i)).x as i32, (*base.add(i)).y as i32) },
+            |i, x, y| unsafe {
+                (*base.add(i)).x = x as i16;
+                (*base.add(i)).y = y as i16;
+            },
+        );
     }
 
     let command = if blended { 0x3600_0000 } else { 0x3400_0000 };
@@ -9290,18 +9344,6 @@ fn mat_words(mi: usize) -> (u32, u32, u32) {
     }
 }
 
-/// One corner of the T-junction seal: two pixels away from the quad's centre
-/// (`sum` is four times the centre), short of the GPU's screen rail `lim`.
-/// Same as the branchy form
-/// `if v*4 >= sum { if v < lim { v+2 } else { v } } else if v > -lim { v-2 } else { v }`.
-#[inline(always)]
-fn seal_edge(v: i32, sum: i32, lim: i32) -> i32 {
-    let out = opaque((v * 4 >= sum) as u32) as i32;
-    let up = out & (v < lim) as i32;
-    let down = (out ^ 1) & (v > -lim) as i32;
-    v + ((up - down) << 1)
-}
-
 /// A GPU vertex word from screen coordinates already inside the i16 range.
 #[inline(always)]
 fn screen_xy(x: i32, y: i32) -> u32 {
@@ -9401,48 +9443,24 @@ fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize) {
     let mut y3 = ((sxy3 >> 16) as i16 as i32).clamp(-511, 511);
     let z3 = sz3 as i32;
 
-    // Seal T-junction hairlines. A greedy mesh is full of T-junctions: a large
-    // merged quad's screen edge is subdivided by the corners of several smaller
-    // neighbours, and every vertex truncates to integer screen coordinates on
-    // its own, so such a corner lands up to a pixel off the large quad's
-    // DDA-interpolated edge. Where it lands OUTSIDE, the sky shows through as a
-    // hairline -- dashed, because the error varies along the edge.
-    //
-    // Growing the quad a pixel outward on ALL FOUR sides makes neighbours
-    // overlap instead of gap; same-texture overlap is invisible. The previous
-    // version moved only the corners sitting exactly at max-x/max-y, which is
-    // ONE corner per axis once perspective and camera roll make the screen
-    // edges diagonal: the expansion tapered to nothing along the rest of the
-    // edge and sealed nothing. Measured on a dumped frame's real quad list,
-    // rasterised through the GPU's own coverage rule: 20 interior holes with
-    // that seal, 20 with no seal at all, 3 with this one.
+    // Seal T-junction hairlines: grow the quad outward so neighbours overlap
+    // instead of leaving a gap (see seal.rs for the geometry, and for why
+    // moving each corner away from the quad's centre was not enough: a thin
+    // sliver at a slant just slid along its own edges).
     //
     // Opaque faces only. The transparent materials draw with
     // BlendMode::Average, and overlapping two blended quads double-blends into
     // a seam that reads worse than the hairline does.
     if bl == 0 {
-        let sx = x0 + x1 + x2 + x3;
-        let sy = y0 + y1 + y2 + y3;
-        // Do NOT push a corner past the GPU's 11-bit screen rail: a corner the
-        // SW near-fallback clamped to 1023 would become 1024, which the GPU
-        // reads as -1024 (bit 10 is the sign), flipping it to the far side and
-        // turning an eye-straddling face into a screen-spanning explosion.
-        // 4*corner vs the corner SUM is the centre test without a divide.
-        // TWO pixels, not one: adjacent plates truncate their shared edge's
-        // vertices independently, so the relative error reaches ~2px -- and
-        // when the neighbour is a near-band tessellated polygon it projects
-        // through clip_project's RECIP table rather than the GTE divide, which
-        // disagrees by another pixel. One pixel left dashed hairlines on flat
-        // ground; two, on both paths, closed every truncation seam in the
-        // orbit-vista audit. Same-texture overlap is invisible.
-        x0 = seal_edge(x0, sx, 1022);
-        x1 = seal_edge(x1, sx, 1022);
-        x2 = seal_edge(x2, sx, 1022);
-        x3 = seal_edge(x3, sx, 1022);
-        y0 = seal_edge(y0, sy, 510);
-        y1 = seal_edge(y1, sy, 510);
-        y2 = seal_edge(y2, sy, 510);
-        y3 = seal_edge(y3, sy, 510);
+        let (gx, gy) = seal::grow_quad([x0, x1, x2, x3], [y0, y1, y2, y3]);
+        x0 = gx[0];
+        x1 = gx[1];
+        x2 = gx[2];
+        x3 = gx[3];
+        y0 = gy[0];
+        y1 = gy[1];
+        y2 = gy[2];
+        y3 = gy[3];
     }
 
     let min_x = min(min(x0, x1), min(x2, x3));
@@ -9451,6 +9469,15 @@ fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize) {
     let max_y = max(max(y0, y1), max(y2, y3));
     if max_x < -80 || min_x > 400 || max_y < -80 || min_y > 320 {
         return;
+    }
+    // The seal can carry a corner the GTE left at the screen's edge past the
+    // GPU's 11-bit vertex range, where it would wrap to the far side. Rare, so
+    // the corners are only clamped when the bounding box says one is out.
+    if max_x > 1023 || min_x < -1024 {
+        x0 = x0.clamp(-1024, 1023);
+        x1 = x1.clamp(-1024, 1023);
+        x2 = x2.clamp(-1024, 1023);
+        x3 = x3.clamp(-1024, 1023);
     }
 
     let depth = (z0 + z1 + z2 + z3) >> 2;
