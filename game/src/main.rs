@@ -123,12 +123,14 @@ const NEAR_Z: i32 = 18;
 // merge-break inflation scales with far-face area). Distance fog reaches
 // full ground-haze by the last band, so the short horizon reads as weather.
 //
-// The distance is one knob: DRAW_BLOCKS (16 ships). Build with
+// The distance is one knob: DRAW_BLOCKS (20 ships since 0.4.1: past 16 the outer
+// ring of chunks meshes as coarse two-block tops, world::mesh_lod_tops, and
+// frames below 30 fps rise on a heavy scene; 16 shipped in 0.3.2). Build with
 // VOXIDE_DRAW_BLOCKS=<8..32> to sweep it; it moves the far plane, the side
 // cut, the fog ramp and the meshed ring (world::RENDER_R) together.
 const DRAW_BLOCKS: i32 = match option_env!("VOXIDE_DRAW_BLOCKS") {
     Some(s) => parse_const_i32(s),
-    None => 16,
+    None => 20,
 };
 const _: () = assert!(DRAW_BLOCKS >= 8 && DRAW_BLOCKS <= 32, "draw distance is 8..32 blocks");
 const FAR_Z: i32 = DRAW_BLOCKS * BLOCK;

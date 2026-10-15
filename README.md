@@ -29,7 +29,7 @@ picks the tool that suits the block you're aiming at. Music follows Java too: a 
 Structures, falling sand, boats and rails, hoppers and signs aren't in yet.
 
 Detailed terrain
-draws 16 blocks ahead and 14 to the sides, projected on the GTE, using 2D
+draws 20 blocks ahead (the outermost ring as coarse two-block tops), projected on the GTE, using 2D
 greedy meshing over cached per-chunk face pools that only rebuild the planes an
 edit actually touches.
 
