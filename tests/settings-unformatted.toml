@@ -1,6 +1,8 @@
-# Current pinned SDK refuses an unformatted card without writing or formatting.
+# SAVE SETTINGS on an unformatted card asks first, like the world save: the first
+# press leaves the card untouched and reports a blank card, the second formats
+# it and saves.
 name = "voxide-settings-unformatted"
-title = "VoXide: an unformatted settings card is untouched until explicit Save"
+title = "VoXide: an unformatted settings card is formatted only when Save is pressed twice"
 disc = ["build/gate/voxide.cue"]
 symbols = ["build/gate-symbols.txt"]
 memcard = "fresh"
@@ -81,7 +83,7 @@ press = ["cross"]
 hold = 4
 wait = 120
 [[step]]
-checkpoint = "explicit-save-refuses-unformatted-card"
+checkpoint = "blank-card-asks-before-format"
 golden = false
 [[step.assert]]
 kind = "card_unchanged"
@@ -90,7 +92,7 @@ kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
 offset = 24
 op = "eq"
-value = 2
+value = 3
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
@@ -98,4 +100,41 @@ offset = 20
 op = "eq"
 value = 1
 [[step]]
+press = ["cross"]
+hold = 4
+wait = 200
+[[step]]
+checkpoint = "second-press-formats-and-saves"
+golden = false
+[[step.assert]]
+kind = "card_writes"
+min_count = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 24
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 20
+op = "zero"
+[[step]]
 card = { action = "snapshot" }
+[[step]]
+card = { action = "reboot" }
+[[step]]
+wait = 60
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 1800
+[[step]]
+checkpoint = "formatted-card-loads-saved-profile"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 28
+op = "eq"
+value = 20

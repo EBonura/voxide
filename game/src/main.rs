@@ -1037,11 +1037,16 @@ const VOXIDE_ACTIONS: ActionMap<5> = ActionMap::new([
 static mut SETTINGS_PROFILE: Profile<5, 0> = Profile::new(VOXIDE_ACTIONS);
 static mut SETTINGS_DIRTY: bool = false;
 static mut SETTINGS_SAVE_STATUS: &str = "";
+/// The player has been told the card is blank and pressed SAVE SETTINGS again.
+static mut SETTINGS_FORMAT_OK: bool = false;
+/// SETTINGS_SAVE_STATUS after a blank card was refused.
+const SETTINGS_BLANK_CARD: &str = "BLANK CARD";
 
 /// Read-only settings receipt: magic, version, size, menu context, selected
 /// row, dirty, save result, move deadzone and controls-seen flag. Context is
 /// world=0, title=1, settings=2, controls=3, options=4, other=5. Save result
-/// is none=0, saved=1, failed=2. Gameplay never reads this block.
+/// is none=0, saved=1, failed=2, blank card refused=3. Gameplay never reads
+/// this block.
 #[used]
 #[no_mangle]
 pub static mut VOXIDE_SETTINGS_STATE: [u32; 9] = [u32::from_le_bytes(*b"VSET"), 1, 36, 0, 0, 0, 0, 0, 0];
@@ -1050,7 +1055,7 @@ fn publish_settings(context: u32, selected: usize) {
     unsafe {
         let state = [u32::from_le_bytes(*b"VSET"), 1, 36, context, selected as u32,
             SETTINGS_DIRTY as u32,
-            match SETTINGS_SAVE_STATUS { "SAVED" => 1, "FAILED" => 2, _ => 0 },
+            match SETTINGS_SAVE_STATUS { "SAVED" => 1, "FAILED" => 2, SETTINGS_BLANK_CARD => 3, _ => 0 },
             SET_MOVE_DZ as u32, (SETTINGS_PROFILE.game_flags() & settings_profile::CONTROLS_SEEN != 0) as u32];
         core::ptr::write_volatile(core::ptr::addr_of_mut!(VOXIDE_SETTINGS_STATE), state);
     }
@@ -3026,6 +3031,7 @@ fn main() {
                     };
                     if dir != 0 {
                         setting_adjust(menu_sel - OPT_SETTINGS, dir);
+                        unsafe { OPT_MSG = "" };
                         sfx::blip();
                     }
                 }
@@ -3042,7 +3048,16 @@ fn main() {
                             save::begin(&player, day);
                             unsafe { OPT_MSG = "SAVING - DO NOT REMOVE THE CARD" };
                         }
-                        OPT_SAVE_SETTINGS => save_shared_settings(),
+                        OPT_SAVE_SETTINGS => {
+                            save_shared_settings();
+                            unsafe {
+                                OPT_MSG = if SETTINGS_FORMAT_OK {
+                                    "BLANK CARD: SAVE AGAIN TO FORMAT"
+                                } else {
+                                    ""
+                                };
+                            }
+                        }
                         OPT_CHEATS => {
                             menu = MENU_CHEAT;
                             menu_sel = 0;
@@ -4357,12 +4372,23 @@ fn save_shared_settings() {
         SETTINGS_PROFILE.look_speed_percent = SET_LOOK_PCT as u8;
         SETTINGS_PROFILE.set_invert_y(SET_INVERT_Y);
         SETTINGS_PROFILE.sfx_volume = sfx::volume_pct() as u8;
-        if psx_settings::save_slot_one(SETTINGS_FILE, SETTINGS_TITLE, &SETTINGS_PROFILE).is_ok() {
-            SETTINGS_DIRTY = false;
-            SETTINGS_SAVE_STATUS = "SAVED";
-        } else {
-            SETTINGS_SAVE_STATUS = "FAILED";
-        }
+        let mut card = psx_mc::Card::new(psx_mc::HardwareCard::new(psx_mc::Slot::One));
+        let outcome = settings_menu::save_to_card(
+            &mut card,
+            SETTINGS_FILE,
+            SETTINGS_TITLE,
+            &SETTINGS_PROFILE,
+            SETTINGS_FORMAT_OK,
+        );
+        SETTINGS_FORMAT_OK = outcome == settings_menu::CardSave::BlankCard;
+        SETTINGS_SAVE_STATUS = match outcome {
+            settings_menu::CardSave::Saved => {
+                SETTINGS_DIRTY = false;
+                "SAVED"
+            }
+            settings_menu::CardSave::BlankCard => SETTINGS_BLANK_CARD,
+            settings_menu::CardSave::Failed => "FAILED",
+        };
     }
 }
 
@@ -4389,6 +4415,7 @@ fn setting_adjust(row: usize, dir: i32) {
         }
         SETTINGS_DIRTY = true;
         SETTINGS_SAVE_STATUS = "";
+        SETTINGS_FORMAT_OK = false;
     }
 }
 
@@ -4520,12 +4547,12 @@ fn draw_settings_now(font: &FontAtlas, sel: usize) {
         font.draw_text(278 - n as i16 * 8, y, txt, (0x70, 0xE0, 0x70));
         j += 1;
     }
-    font.draw_text(
-        MENU_TEXT_X,
-        MENU_ROWS_Y + 8 * MENU_ROW_H as i16,
-        "< > ADJUST - X ON SAVE TO KEEP",
-        MC_INK,
-    );
+    let hint = if unsafe { SETTINGS_FORMAT_OK } {
+        "BLANK CARD: X AGAIN TO FORMAT"
+    } else {
+        "< > ADJUST - X ON SAVE TO KEEP"
+    };
+    font.draw_text(MENU_TEXT_X, MENU_ROWS_Y + 8 * MENU_ROW_H as i16, hint, MC_INK);
 }
 
 /// The credits card: asset provenance in the same panel dress as every
