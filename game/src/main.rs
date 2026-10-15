@@ -176,9 +176,9 @@ pub fn far_side_z() -> i32 {
 #[cfg(feature = "dyn-far")]
 const DYN_Q: u32 = 142_800;
 #[cfg(feature = "dyn-far")]
-const DYN_HI: u32 = DYN_Q * 94 / 100;
+const DYN_HI: u32 = DYN_Q * 95 / 100;
 #[cfg(feature = "dyn-far")]
-const DYN_LO: u32 = DYN_Q * 84 / 100;
+const DYN_LO: u32 = DYN_Q * 86 / 100;
 #[cfg(feature = "dyn-far")]
 const DYN_MIN: i32 = 14 * BLOCK;
 /// Pad poll, sim bookkeeping and the vsync handshake the slack clock does not see.
@@ -195,15 +195,16 @@ fn dyn_far_update() {
         let body = LAST_BODY;
         let mut d = FAR_DYN;
         if body > DYN_HI {
-            let over = body - DYN_Q * 90 / 100;
-            d -= ((over / 39) as i32).clamp(12, 96);
+            let over = body - DYN_Q * 92 / 100;
+            d -= ((over / 39) as i32).clamp(6, 64);
         } else if body < DYN_LO {
-            d += 3;
+            d += 6;
         }
         d = d.clamp(DYN_MIN, FAR_Z);
         FAR_DYN = d;
         FOG_K = ((FAR_Z << 16) / d).max(65536);
         telemetry::counter(33, (d >> 1) as u32);
+        telemetry::counter(34, body);
     }
 }
 
