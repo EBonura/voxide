@@ -463,7 +463,7 @@ sym = "VOXIDE_GATE_STATE"
 offset = 20
 op = "ge"
 value = 100
-note = "the completed blast made a crater (126 edits on this route)"
+note = "the completed blast made a crater (126 edits on this route; the exact count follows the sim tick the TNT goes off at, since the blast seed is SIM_TICK, so any change to the route timeline moves it: 126, 134, 134, 127 and 138 for extra waits of 0, 1, 2, 5 and 13 ticks before the flint. Re-measure and update world-saved and world-reloaded together)"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_GATE_STATE"
