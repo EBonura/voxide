@@ -223,14 +223,16 @@ Not changed, as before: the first six frames after a quiet spell may run two
 vblanks long; blasts beyond the render range keep the idle share; the crater
 is not there the tick the TNT goes off.
 
-Outside explosions (same tool chain and tapes as the release notes, the 0.4.0
-candidate BIN against this branch): train tape 1,122,775 and 1,122,357 work
-cycles a frame (display hashes identical), Manny's tape of 2026-10-15
-1,122,832 and 1,124,785 (+0.17 percent, three vblank frames 12 and 19), unseen
-tape 906,079 and 922,514 (+1.8 percent, display hashes differ: the title now
-looks at the card, the route moves by a few ticks, and the unseen tape walks
-the sticks, so it meets different ground; the train tape, which does not
-diverge, shows no cost).
+Outside explosions (same tool chain and tapes as the release notes, the
+pre-0.4.1 integration BIN `b831110` against the final 0.4.1 BIN): train tape
+1,122,775 and 1,122,356 work cycles a frame (display hashes identical), Manny's
+tape of 2026-10-15 1,122,832 and 1,123,470 (+0.06 percent; frames at 2, 3 and 5
+vblanks 1,721, 12, 1 and 1,718, 15, 1), unseen tape 906,079 and 924,319 (+2.0
+percent). The unseen tape's display hash differs: the title now looks at the
+card, which moves the route by a few ticks, and that tape walks the sticks and
+meets different ground. The train tape, whose route does not diverge, shows no
+cost. Instruction-cache stall cycles are 4 to 6 percent higher on all three
+tapes (code layout; the work totals are level).
 
 ## 2026-10-15: music (GitHub issue 1, item 3)
 
