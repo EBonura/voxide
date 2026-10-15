@@ -1084,7 +1084,7 @@ static mut TITLE_UNREADABLE: bool = false;
 /// The reason LOAD WORLD cannot be chosen, or "" when it can.
 fn title_load_reason() -> &'static str {
     if unsafe { TITLE_UNREADABLE } {
-        return "THE SAVE ON THE CARD CANNOT BE READ";
+        return "SAVE CANNOT BE READ";
     }
     match unsafe { TITLE_PROBE } {
         save::Probe::Save => "",
@@ -4523,7 +4523,8 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             menu_button_now(font, 208, "CREDITS", sel == 5, true);
             if sel == 1 && !can_load {
                 let why = title_load_reason();
-                let x = (SCREEN_W as i16 - why.len() as i16 * 8) / 2;
+                // Right-aligned, clear of the version number at the left edge.
+                let x = SCREEN_W as i16 - 6 - why.len() as i16 * 8;
                 font.draw_text(x + 1, SCREEN_H as i16 - 11, why, (0x20, 0x10, 0x10));
                 font.draw_text(x, SCREEN_H as i16 - 12, why, (0xFF, 0xB8, 0x68));
             }
