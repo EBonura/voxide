@@ -6,7 +6,7 @@ This is an early playable build: world generation, mining, crafting and
 survival work, but much of the game is still unfinished.
 
 New in v0.4.0: a player page with armour you wear a piece at a time, an off
-hand, a choice of weapon and a 2x2 crafting grid; TNT and fire with Java's
+hand, a choice of weapon and a 2x2 crafting grid; TNT and fire with Java-inspired
 ignition, fuses and blasts; a CONTROLS card in the menus; the same buttons in
 every inventory screen; BRIGHTNESS and SCREEN X / SCREEN Y settings; and
 mobs that hit once a second, as in Java. Settings now reach the memory card
