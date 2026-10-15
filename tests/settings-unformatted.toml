@@ -6,7 +6,7 @@ title = "VoXide: an unformatted settings card is formatted only when Save is pre
 disc = ["build/gate/voxide.cue"]
 symbols = ["build/gate-symbols.txt"]
 memcard = "fresh"
-max_ticks = 2800
+max_ticks = 4000
 [card_fixture]
 path = "tests/fixtures/unformatted.mcd"
 sha256 = "fa43239bcee7b97ca62f007cc68487560a39e19f74f3dde7486db3f98df8e471"
@@ -99,10 +99,15 @@ sym = "VOXIDE_SETTINGS_STATE"
 offset = 20
 op = "eq"
 value = 1
+# Formatting writes the whole directory and the save follows, all in one call
+# that holds the screen for several seconds, so wait for the result.
 [[step]]
 press = ["cross"]
 hold = 4
-wait = 200
+wait = 1
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 24, op = "eq", value = 1 }
+timeout = 1500
 [[step]]
 checkpoint = "second-press-formats-and-saves"
 golden = false
