@@ -44,13 +44,17 @@ fn old_seal(v: &[P]) -> Vec<P> {
         .collect()
 }
 
-
 fn new_quad_seal(v: &[P]) -> Vec<P> {
     // v is in perimeter order (0 1 3 2 of the z-order quad): [v0, v1, v3, v2].
     let x = [v[0].0, v[1].0, v[3].0, v[2].0];
     let y = [v[0].1, v[1].1, v[3].1, v[2].1];
     let (gx, gy) = seal::grow_quad(x, y);
-    vec![(gx[0], gy[0]), (gx[1], gy[1]), (gx[3], gy[3]), (gx[2], gy[2])]
+    vec![
+        (gx[0], gy[0]),
+        (gx[1], gy[1]),
+        (gx[3], gy[3]),
+        (gx[2], gy[2]),
+    ]
 }
 
 fn new_poly_seal(v: &[P]) -> Vec<P> {
@@ -64,7 +68,10 @@ fn new_poly_seal(v: &[P]) -> Vec<P> {
 struct Rng(u64);
 impl Rng {
     fn next(&mut self) -> u32 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         (self.0 >> 33) as u32
     }
     fn unit(&mut self) -> f64 {
@@ -96,7 +103,10 @@ fn strip(
     };
     let jit = |rng: &mut Rng, p: (f64, f64)| -> P {
         let j = |v: f64, r: f64| (v + r).floor() as i32;
-        (j(p.0, (rng.unit() - 0.5) * 2.0), j(p.1, (rng.unit() - 0.5) * 2.0))
+        (
+            j(p.0, (rng.unit() - 0.5) * 2.0),
+            j(p.1, (rng.unit() - 0.5) * 2.0),
+        )
     };
     let mut quads = Vec::new();
     for c in 0..cells {
@@ -167,7 +177,6 @@ fn holes(grow: &dyn Fn(&[P]) -> Vec<P>, quads: &[Vec<P>], whole: &[P], margin: f
 }
 
 fn survey(grow: &dyn Fn(&[P]) -> Vec<P>, end_to_end: bool) -> (usize, usize) {
-    let dbg = std::env::var("SEAL_DBG").is_ok();
     let mut rng = Rng(0x5EA1);
     let (mut total, mut shapes_with_holes) = (0, 0);
     for k in 0..400 {
@@ -181,7 +190,6 @@ fn survey(grow: &dyn Fn(&[P]) -> Vec<P>, end_to_end: bool) -> (usize, usize) {
         total += h;
         if h > 0 {
             shapes_with_holes += 1;
-            if dbg { eprintln!("HOLES {h}: quads {quads:?}"); }
         }
     }
     (total, shapes_with_holes)
@@ -207,8 +215,10 @@ fn survey2(grow: &dyn Fn(&[P]) -> Vec<P>, end_to_end: bool, seed: u64, n: usize)
 
 /// The rule written out directly, with the winding taken from the cross product:
 /// agree components move `ka`, conflicting ones `kc` in the sign of the longer edge.
-fn cheap_quad_c(v: &[P], ka: i32, kc: i32) -> Vec<P> {
-    let (x0, y0, x1, y1, x3, y3, x2, y2) = (v[0].0, v[0].1, v[1].0, v[1].1, v[2].0, v[2].1, v[3].0, v[3].1);
+fn rule_quad(v: &[P], ka: i32, kc: i32) -> Vec<P> {
+    let (x0, y0, x1, y1, x3, y3, x2, y2) = (
+        v[0].0, v[0].1, v[1].0, v[1].1, v[2].0, v[2].1, v[3].0, v[3].1,
+    );
     let ax = (x1 - x0) + (x3 - x2);
     let ay = (y1 - y0) + (y3 - y2);
     let bx = (x2 - x0) + (x3 - x1);
@@ -217,7 +227,12 @@ fn cheap_quad_c(v: &[P], ka: i32, kc: i32) -> Vec<P> {
     let sd = if det >= 0 { 1 } else { -1 };
     let sg0 = |v: i32| (v > 0) as i32 - (v < 0) as i32;
     // A component under a quarter of the other counts as zero.
-    let dz = |x: i32, y: i32| (if x.abs() * 4 < y.abs() { 0 } else { sg0(x) }, if y.abs() * 4 < x.abs() { 0 } else { sg0(y) });
+    let dz = |x: i32, y: i32| {
+        (
+            if x.abs() * 4 < y.abs() { 0 } else { sg0(x) },
+            if y.abs() * 4 < x.abs() { 0 } else { sg0(y) },
+        )
+    };
     let (sax, say) = dz(ax, ay);
     let (sbx, sby) = dz(bx, by);
     let u = (-sd * say, sd * sax);
@@ -241,20 +256,27 @@ fn cheap_quad_c(v: &[P], ka: i32, kc: i32) -> Vec<P> {
     let d1 = d(neg(u), w);
     let d2 = d(u, neg(w));
     let d3 = d(u, w);
-    vec![(x0 + d0.0, y0 + d0.1), (x1 + d1.0, y1 + d1.1), (x3 + d3.0, y3 + d3.1), (x2 + d2.0, y2 + d2.1)]
+    vec![
+        (x0 + d0.0, y0 + d0.1),
+        (x1 + d1.0, y1 + d1.1),
+        (x3 + d3.0, y3 + d3.1),
+        (x2 + d2.0, y2 + d2.1),
+    ]
 }
-
 
 /// Perimeter-ordered wrapper of the written-out rule.
 fn reference_quad(v: &[P], ka: i32, kc: i32) -> Vec<P> {
-    cheap_quad_c(v, ka, kc)
+    rule_quad(v, ka, kc)
 }
 
 #[test]
 fn the_old_corner_push_leaves_cracks_between_slanted_slivers() {
     let (total, shapes) = survey(&old_seal, false);
     eprintln!("old seal, side by side: {total} holes in {shapes} of 400 bands");
-    assert!(total > 1000 && shapes > 100, "baseline should crack: {total} holes in {shapes} bands");
+    assert!(
+        total > 1000 && shapes > 100,
+        "baseline should crack: {total} holes in {shapes} bands"
+    );
     // Cells laid along their own length overlap by sliding, which is why the
     // flaw hid for so long.
     let (total, _) = survey(&old_seal, true);
@@ -265,9 +287,17 @@ fn the_old_corner_push_leaves_cracks_between_slanted_slivers() {
 fn grown_quads_leave_no_crack_between_slanted_slivers() {
     for end_to_end in [false, true] {
         let (total, shapes) = survey(&new_quad_seal, end_to_end);
-        assert_eq!((total, shapes), (0, 0), "grow_quad left holes (end_to_end {end_to_end})");
+        assert_eq!(
+            (total, shapes),
+            (0, 0),
+            "grow_quad left holes (end_to_end {end_to_end})"
+        );
         let (total, shapes) = survey2(&new_quad_seal, end_to_end, 77, 600);
-        assert_eq!((total, shapes), (0, 0), "grow_quad left holes in the wide survey (end_to_end {end_to_end})");
+        assert_eq!(
+            (total, shapes),
+            (0, 0),
+            "grow_quad left holes in the wide survey (end_to_end {end_to_end})"
+        );
     }
 }
 
@@ -275,9 +305,17 @@ fn grown_quads_leave_no_crack_between_slanted_slivers() {
 fn grown_polygons_leave_no_crack_between_slanted_slivers() {
     for end_to_end in [false, true] {
         let (total, shapes) = survey(&new_poly_seal, end_to_end);
-        assert_eq!((total, shapes), (0, 0), "grow_polygon left holes (end_to_end {end_to_end})");
+        assert_eq!(
+            (total, shapes),
+            (0, 0),
+            "grow_polygon left holes (end_to_end {end_to_end})"
+        );
         let (total, shapes) = survey2(&new_poly_seal, end_to_end, 77, 600);
-        assert_eq!((total, shapes), (0, 0), "grow_polygon left holes in the wide survey (end_to_end {end_to_end})");
+        assert_eq!(
+            (total, shapes),
+            (0, 0),
+            "grow_polygon left holes in the wide survey (end_to_end {end_to_end})"
+        );
     }
 }
 
@@ -290,7 +328,12 @@ fn the_table_matches_the_rule_written_out() {
         let (ox, oy) = (p(-50, 50), p(-50, 50));
         let (ax, ay, bx, by) = (p(-40, 40), p(-40, 40), p(-40, 40), p(-40, 40));
         let (sx, sy) = (p(-6, 6), p(-6, 6)); // far-corner skew
-        let q = [(ox, oy), (ox + ax, oy + ay), (ox + ax + bx + sx, oy + ay + by + sy), (ox + bx, oy + by)];
+        let q = [
+            (ox, oy),
+            (ox + ax, oy + ay),
+            (ox + ax + bx + sx, oy + ay + by + sy),
+            (ox + bx, oy + by),
+        ];
         let got = new_quad_seal(&q);
         let want = reference_quad(&q, seal::GROW, seal::GROW_TIP);
         assert_eq!(got, want, "quad {q:?}");
@@ -301,7 +344,12 @@ fn the_table_matches_the_rule_written_out() {
 fn a_square_grows_by_the_seal_on_every_side() {
     let sq = [(100, 100), (110, 100), (110, 110), (100, 110)];
     let g = seal::GROW;
-    let want = vec![(100 - g, 100 - g), (110 + g, 100 - g), (110 + g, 110 + g), (100 - g, 110 + g)];
+    let want = vec![
+        (100 - g, 100 - g),
+        (110 + g, 100 - g),
+        (110 + g, 110 + g),
+        (100 - g, 110 + g),
+    ];
     assert_eq!(new_quad_seal(&sq), want);
     assert_eq!(new_poly_seal(&sq), want);
     // And the same square wound the other way.
@@ -318,9 +366,17 @@ fn no_corner_moves_further_than_the_grow() {
     let mut rng = Rng(9);
     for _ in 0..20000 {
         let mut p = |lo: i32, hi: i32| lo + (rng.next() % (hi - lo + 1) as u32) as i32;
-        let q = [(p(-300, 300), p(-300, 300)), (p(-300, 300), p(-300, 300)), (p(-300, 300), p(-300, 300)), (p(-300, 300), p(-300, 300))];
+        let q = [
+            (p(-300, 300), p(-300, 300)),
+            (p(-300, 300), p(-300, 300)),
+            (p(-300, 300), p(-300, 300)),
+            (p(-300, 300), p(-300, 300)),
+        ];
         for (a, b) in q.iter().zip(new_quad_seal(&q).iter()) {
-            assert!((a.0 - b.0).abs() <= seal::GROW && (a.1 - b.1).abs() <= seal::GROW, "{a:?} -> {b:?}");
+            assert!(
+                (a.0 - b.0).abs() <= seal::GROW && (a.1 - b.1).abs() <= seal::GROW,
+                "{a:?} -> {b:?}"
+            );
         }
     }
 }
@@ -347,7 +403,14 @@ fn polygons_past_the_x_rail_stay_inside_it() {
 #[test]
 fn adjacent_clipped_cells_overlap_even_when_the_first_corners_are_collinear() {
     let p1 = [(0, 167), (36, 156), (66, 170), (0, 200)];
-    let p2 = [(0, 208), (33, 238), (35, 240), (109, 190), (66, 170), (0, 200)];
+    let p2 = [
+        (0, 208),
+        (33, 238),
+        (35, 240),
+        (109, 190),
+        (66, 170),
+        (0, 200),
+    ];
     let g1 = new_poly_seal(&p1);
     let g2 = new_poly_seal(&p2);
     // Every pixel within a pixel or two of the shared edge, on either side, is
@@ -365,8 +428,12 @@ fn adjacent_clipped_cells_overlap_even_when_the_first_corners_are_collinear() {
     }
     assert_eq!(holes, 0, "grown {g1:?} and {g2:?}");
     // The shared edge's corners moved toward the other polygon, not into their own.
-    let edge_corner = |g: &Vec<P>, orig: &[P], at: P| -> P { g[orig.iter().position(|&p| p == at).unwrap()] };
-    let (a1, a2) = (edge_corner(&g1, &p1, (66, 170)), edge_corner(&g2, &p2, (66, 170)));
+    let edge_corner =
+        |g: &Vec<P>, orig: &[P], at: P| -> P { g[orig.iter().position(|&p| p == at).unwrap()] };
+    let (a1, a2) = (
+        edge_corner(&g1, &p1, (66, 170)),
+        edge_corner(&g2, &p2, (66, 170)),
+    );
     assert!(a1.0 > 66 && a1.1 >= 170, "{a1:?}");
     assert!(a2.0 <= 66 && a2.1 <= 170, "{a2:?}");
 }
