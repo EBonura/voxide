@@ -1,6 +1,7 @@
 # Asset sources
 
-Everything shipped with VoXide is CC0 1.0 (public domain). No Mojang assets,
+Everything shipped with VoXide is CC0 1.0 (public domain) except the music, which
+is CC BY 4.0 (below). No Mojang assets,
 code or data are used anywhere in this project.
 
 ## Block textures
@@ -46,3 +47,15 @@ From freesound.org, all CC0:
 | `splash` | "Splash" by swordofkings128, freesound.org/s/398032/ |
 | `eat` | "Crunch" by qubodup, freesound.org/s/816237/ |
 | `explode` | "Explosion, short" by qubodup, freesound.org/s/171971/ |
+
+## Music
+
+Mulula VGM Loops, Simple Piano Music Vol 1 (the loops Aranha, Melodia, Nulo,
+Pianeta, Side Label and Talher), licensed CC BY 4.0
+(https://creativecommons.org/licenses/by/4.0/), https://mululavgmloops.itch.io/.
+
+Changes: the loops are arranged into four longer pieces (a sequence of whole
+loops with 4 second equal-power crossfades, a fade in and a fade out),
+resampled from 44.1 kHz to 37.8 kHz, dithered to 16 bits and encoded as
+XA-ADPCM, by `tools/loop-mixer` and `convert-music` (`assets/music/tracks.txt`
+has the seed, the command and the sha256 of each loop).

@@ -5,7 +5,8 @@ A Minecraft-style survival sandbox for the PlayStation 1, written in Rust.
 This is an early playable build: world generation, mining, crafting and
 survival work, but much of the game is still unfinished.
 
-New in v0.4.0: a player page with armour you wear a piece at a time, an off
+New in v0.4.0: music (four piano pieces, 10 to 20 minutes apart as in Java, with a
+MUSIC VOLUME setting); a player page with armour you wear a piece at a time, an off
 hand, a choice of weapon and a 2x2 crafting grid; TNT and fire with Java-inspired
 ignition, fuses and blasts; a CONTROLS card in the menus; the same buttons in
 every inventory screen; BRIGHTNESS and SCREEN X / SCREEN Y settings; and
@@ -45,5 +46,9 @@ enchantments, the current dimension and return portals.
 To run:
   - Boot voxide.cue in a PS1 emulator (PSoXide, DuckStation, or PCSX-Redux), or
   - burn it to a CD-R and run on a modchipped console.
+
+Music: Mulula VGM Loops, Simple Piano Music Vol 1 (Aranha, Melodia, Nulo,
+Pianeta, Side Label, Talher), CC BY 4.0, https://mululavgmloops.itch.io/
+Arranged into longer pieces and converted to XA-ADPCM for this game.
 
 Bonnie Studios  -  https://bonnie-studios.itch.io

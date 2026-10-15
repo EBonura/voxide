@@ -5,6 +5,16 @@
 Equipment, fire and TNT, a controls card, and settings that save only when you
 say so.
 
+- Music, at last (GitHub issue 1): four pieces of two and a half to three
+  minutes from Mulula VGM Loops, Simple Piano Music Vol 1 (Aranha, Melodia, Nulo,
+  Pianeta, Side Label, Talher), CC BY 4.0, https://mululavgmloops.itch.io/,
+  arranged into pieces with crossfades. It follows Java: a piece on the title
+  screen, silence while a world loads, the first piece five seconds after you
+  join, then 10 to 20 minutes of silence after each piece; the pause menu does
+  not stop it. The disc grows by about 29 MB. MUSIC VOLUME is a new setting
+  beside SFX VOLUME (0 plays nothing) and is saved with SAVE SETTINGS like the
+  rest; settings saved earlier load with it at 100. The credits card has a
+  second page.
 - The inventory opens on a player page, as Java's survival screen does: the
   four armour slots down the left, the player in the middle wearing what you
   put on, the off hand, your armour and defense, the weapon you swing, the

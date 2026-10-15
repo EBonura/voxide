@@ -25,7 +25,7 @@ book, with a 2x2 grid on the player page that R2 fills in for a recipe, rather
 than a 3x3 grid at the table, because placing items into a grid with a d-pad is
 worse than picking what you want to make; Minecraft's own console editions made
 the same call. You choose the weapon you swing at mobs, and the game still
-picks the tool that suits the block you're aiming at. There's no music.
+picks the tool that suits the block you're aiming at. Music follows Java too: a piece plays, then silence for 10 to 20 minutes.
 Structures, falling sand, boats and rails, hoppers and signs aren't in yet.
 
 Detailed terrain
@@ -192,10 +192,15 @@ bar.
 
 ## Credits
 
-The credited texture and sound assets are CC0 (public domain); game code is
+The credited texture and sound assets are CC0 (public domain), the music is
+CC BY 4.0; game code is
 [GPL-2.0-or-later](LICENSE). `assets/pack/CREDITS.md` has
 the per-sound breakdown and the links; the short version:
 
+- **Music** is from Mulula VGM Loops, Simple Piano Music Vol 1 (Aranha, Melodia,
+  Nulo, Pianeta, Side Label, Talher), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
+  <https://mululavgmloops.itch.io/>. The loops are arranged into four pieces
+  with crossfades and converted to XA-ADPCM; see "Music" below.
 - **Block textures** are the "16x16 Block Texture Set" from OpenGameArt.
 - **Sound effects** come from [Kenney](https://kenney.nl) (Impact Sounds, RPG
   Audio, Interface Sounds) and from freesound.org, where the recordings are by
@@ -207,6 +212,27 @@ the per-sound breakdown and the links; the short version:
 Tiles the texture pack doesn't cover (the crafting table, chest, tool icons,
 crack overlays and mob faces) are drawn procedurally in `game/src/tex.rs`, and
 the sound bank is cooked to SPU-ADPCM by `tools/voxide-tools` (`convert-sfx`).
+
+## Music
+
+The disc carries four pieces of two and a half to three minutes, streamed from
+the disc by the drive as XA-ADPCM (37.8 kHz stereo, about 29 MB). They follow
+Java: the title screen plays one a few seconds after it appears, the music stops
+when a world loads, the first piece comes five seconds after you join, then
+each piece is followed by 10 to 20 minutes of silence. The pause menu does not
+stop it. MUSIC VOLUME sits next to SFX VOLUME in SETTINGS and OPTIONS and, like
+the other settings, reaches the memory card only with SAVE SETTINGS; at 0 nothing
+plays.
+
+The pieces are made offline from six seamless loops by `tools/loop-mixer`: a
+seeded sequence of whole loops, each played one or two times, joined by 4 second
+equal-power crossfades, resampled to 37.8 kHz and dithered to 16 bits. The PS1
+drive decodes one XA stream at a time, so the overlap cannot happen at run
+time. `assets/music/tracks.txt` lists the pieces, the credits card lines and the
+exact `loop-mixer` command and seed; `make music MUSIC_SRC=<dir of pieces>
+PSX_AUDIO_COOK=<built psx-audio-cook>` cooks them into `assets/music/MUSIC1.XA`
+and `game/src/musicdata.rs`, which are committed. The loops themselves are not in
+the repo. Swapping the music is a change to `tracks.txt`.
 
 ## Provenance
 

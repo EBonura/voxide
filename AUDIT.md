@@ -49,4 +49,39 @@ wrong, `MELEE_TICKS` in `game/src/mob.rs` is the only constant to change.
 Hunger drain already matches Java. Before 0.2.0 the clock was `FOOD_DRAIN`, one
 hunger point every 10 s (a tick-rate bug), which is the likely source of "you die very
 quickly from hunger". Starvation cannot kill on Normal (it stops at 1 hp). Music is
-not a tuning value and is not planned.
+checked below.
+
+## 2026-10-15: music (GitHub issue 1, item 3)
+
+Music is scheduled like Java's (`game/src/music_plan.rs`, `music.rs`). `W:` is
+`https://minecraft.wiki/w/`; the page is W:Music, section "Background music".
+
+| Item | Code | Java value | Source | Result |
+|---|---|---|---|---|
+| Title screen | one piece starts a random 20 to 600 game ticks (1 to 30 s) after the title appears, `MENU_DELAY` | "a random menu track starts playing after 1 to 30 seconds" | wiki | matches |
+| Joining a world | the menu piece stops when the world loads; `enter_world` | "Menu music stops playing" at the loading world screen | wiki | matches |
+| Gap between pieces | a random 12,000 to 24,000 game ticks (10 to 20 min) after a piece finishes, `GAME_DELAY` | "randomly plays 10 to 20 minutes" after the current track | wiki (minutes); the tick figures are the same span at 20 ticks a second | matches |
+| First piece in a world | 100 game ticks (5 s) after joining, `START_DELAY` | not on the wiki | recalled from the client's music manager source (its starting delay), not verified against the wiki | unverified |
+| Looping | a piece plays once, then the gap | background music is not looped | wiki (jukebox music loops, background music does not) | matches |
+| Pause menu | the music and the gap carry on | "When the game is paused, game music continues to play in Java Edition" | wiki | matches |
+| MUSIC slider | 0 plays nothing and the gap runs on; changing it never restarts a piece; saved only by SAVE SETTINGS | Java has a music volume slider; the wiki does not describe its behaviour at 0 | slider position at 0 follows the client's sound engine as recalled, not the wiki | unverified |
+| Quit | no world to quit to; the pieces stop at the title only when a world loads | "Game music stops playing when the player quits the world" | wiki | not applicable |
+
+Deviations, deliberate:
+
+- One shared pool. Java picks "a random general track" for the overworld and
+  keeps separate lists only for some biomes (caves with dripstone or lush
+  growth, the Deep Dark, oceans, the Nether, the End) and Creative mode. VoXide has
+  four pieces, so the title screen, the overworld by day and night, caves, the
+  Inferno and the Void all draw from the same four, with no mood tags.
+- The pieces are four, not Java's fifty. With 10 to 20 minutes between them a
+  session hears a piece or two an hour.
+- No Music Frequency option and no music toast (Java 25w20a and later).
+- The pieces are made offline from loops (`tools/loop-mixer`) because the PS1
+  drive decodes one XA stream at a time, so two loops cannot overlap at run time.
+
+Level: the drive mixer sits 6 dB under the cooked level at 100 percent
+(`MIXER_FULL` in `music_plan.rs`). A headless capture of the SPU output
+(2026-10-15) measured the music alone at -25 dBFS RMS with seconds peaking near
+0.27 of full scale at the cooked level, as loud as the sound effects' peaks (0.1
+to 0.25). Nobody listened to the result; the level is a measurement, not an ear.
