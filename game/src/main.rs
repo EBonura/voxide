@@ -7787,7 +7787,7 @@ fn render_plants(cam: &Camera) {
     unsafe { PLANT_N = 0 };
     let bt = unsafe { BLOCK_TEX };
     let tint = face_tint(2); // top-face shade -> plants track day/night light
-    world::for_plants(cam, |blk, wx, wy, wz| {
+    world::for_plants(cam, PLANT_SPRITE_FAR, |blk, wx, wy, wz| {
         let cdx = wx + BLOCK / 2 - cam.x;
         let cdz = wz + BLOCK / 2 - cam.z;
         if is_small_block(blk) {
@@ -9940,7 +9940,8 @@ const MAX_QUAD_SPAN: i16 = 460;
 const NEAR_PLANT_D2: i32 = 104 * 104;
 /// Past this a cross sprite is a couple of pixels. The chunk-level gate in
 /// world::for_plants reaches further now, for slabs and fences.
-const PLANT_SPRITE_FAR_D2: i32 = (11 * BLOCK) * (11 * BLOCK);
+const PLANT_SPRITE_FAR: i32 = 11 * BLOCK;
+const PLANT_SPRITE_FAR_D2: i32 = PLANT_SPRITE_FAR * PLANT_SPRITE_FAR;
 
 #[inline]
 fn quad_exploded(p: &[Proj; 4]) -> bool {

@@ -5910,7 +5910,7 @@ fn chunk_faces(
 /// are tiny on screen, so only chunks whose centre is within PLANT_FAR are
 /// considered; the caller (render_plants) builds the X-billboard and depth-sorts
 /// it into the OT. Reuses the per-chunk plant list recorded at mesh time.
-pub fn for_plants<F: FnMut(u8, i32, i32, i32)>(cam: &Camera, mut emit: F) {
+pub fn for_plants<F: FnMut(u8, i32, i32, i32)>(cam: &Camera, sprite_far: i32, mut emit: F) {
     // Built shapes (slabs, fences) have to survive as far as the terrain does;
     // cross sprites do not, and main drops those per block past PLANT_SPRITE_FAR.
     const PLANT_FAR: i32 = 20 * BLOCK;
@@ -5944,8 +5944,22 @@ pub fn for_plants<F: FnMut(u8, i32, i32, i32)>(cam: &Camera, mut emit: F) {
                         let ly = ((e >> 4) & 63) as i32;
                         let lz = ((e >> 10) & 15) as i32;
                         let b = ((e >> 14) & 127) as u8;
-                        emit(b, ox + lx * BLOCK, ly * BLOCK, oz + lz * BLOCK);
+                        let (wx, wz) = (ox + lx * BLOCK, oz + lz * BLOCK);
                         k += 1;
+                        // A cross sprite farther than `sprite_far` on either axis is
+                        // farther than that on the plane, and the caller drops it
+                        // (its distance test is the circle); only built shapes and
+                        // portals draw that far. Most of the ring's entries die
+                        // here, without the caller's multiplies.
+                        if !is_small_block(b)
+                            && b != PORTAL
+                            && b != VOID_PORTAL
+                            && ((wx + BLOCK / 2 - cam.x).abs() > sprite_far
+                                || (wz + BLOCK / 2 - cam.z).abs() > sprite_far)
+                        {
+                            continue;
+                        }
+                        emit(b, wx, ly * BLOCK, wz);
                     }
                 }
             }
