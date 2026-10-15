@@ -3049,7 +3049,7 @@ fn main() {
                             unsafe { OPT_MSG = "SAVING - DO NOT REMOVE THE CARD" };
                         }
                         OPT_SAVE_SETTINGS => {
-                            save_shared_settings();
+                            save_shared_settings(&mut fb, &font);
                             unsafe {
                                 OPT_MSG = if SETTINGS_FORMAT_OK {
                                     "BLANK CARD: SAVE AGAIN TO FORMAT"
@@ -4040,7 +4040,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
                 0
             };
             if settings_menu::save_requested(set_sel == SETTING_SAVE, pad.pressed_since(prev, button::CROSS), back) {
-                save_shared_settings();
+                save_shared_settings(fb, font);
                 sfx::confirm();
             } else if !back && set_sel < SETTING_ADJUST_ROWS && dir != 0 {
                 setting_adjust(set_sel, dir);
@@ -4365,7 +4365,7 @@ fn load_shared_settings() {
     }
 }
 
-fn save_shared_settings() {
+fn save_shared_settings(fb: &mut FrameBuffer, font: &FontAtlas) {
     unsafe {
         SETTINGS_PROFILE.move_deadzone = SET_MOVE_DZ as u8;
         SETTINGS_PROFILE.look_deadzone = SET_LOOK_DZ as u8;
@@ -4373,6 +4373,13 @@ fn save_shared_settings() {
         SETTINGS_PROFILE.set_invert_y(SET_INVERT_Y);
         SETTINGS_PROFILE.sfx_volume = sfx::volume_pct() as u8;
         let mut card = psx_mc::Card::new(psx_mc::HardwareCard::new(psx_mc::Slot::One));
+        // The write below holds the screen for seconds (a block is 64 card
+        // frames, a format another 64), so say so first, as the world save
+        // does. A blank card that is only being asked about writes nothing.
+        let formatted = card.is_formatted().unwrap_or(false);
+        if formatted || SETTINGS_FORMAT_OK {
+            present_saving(fb, font, !formatted);
+        }
         let outcome = settings_menu::save_to_card(
             &mut card,
             SETTINGS_FILE,
@@ -4390,6 +4397,20 @@ fn save_shared_settings() {
             settings_menu::CardSave::Failed => "FAILED",
         };
     }
+}
+
+/// The screen shown while SAVE SETTINGS writes the card in one blocking call.
+/// Immediate-mode, like `present_loading`: no display list is in flight.
+fn present_saving(fb: &mut FrameBuffer, font: &FontAtlas, formatting: bool) {
+    gpu::draw_rect_flat(0, 0, 320, 240, 14, 14, 22);
+    let head = if formatting { "FORMATTING THE CARD" } else { "SAVING SETTINGS" };
+    font.draw_text((320 - head.len() as i16 * 8) / 2, 100, head, (0xF0, 0xE0, 0x80));
+    let warn = "DO NOT REMOVE THE CARD";
+    font.draw_text((320 - warn.len() as i16 * 8) / 2, 118, warn, (0xD0, 0xD0, 0xD0));
+    draw_brightness_now();
+    gpu::draw_sync();
+    wait_vblank();
+    fb.swap();
 }
 
 /// Step one setting up or down, clamped to its range.

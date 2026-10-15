@@ -104,7 +104,16 @@ value = 1
 [[step]]
 press = ["cross"]
 hold = 4
-wait = 1
+wait = 40
+[[step]]
+checkpoint = "formatting-indicator-shown"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [14, 14, 22]
+color_tol = 4
+min_count = 50000
+note = "the FORMATTING screen, not a frozen menu, is on display while the card is written"
 [[step]]
 wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 24, op = "eq", value = 1 }
 timeout = 1500
