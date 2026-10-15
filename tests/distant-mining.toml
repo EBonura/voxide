@@ -1,0 +1,365 @@
+# Mining at a block beyond reach shows nothing. The crosshair ray reaches 4.5
+# blocks, so R2 pressed or held on the far terrain at spawn finds nothing to
+# break: no crack, no progress, and no attack-cooldown bar under the crosshair.
+# Java's bar only follows a swing that hits a mob or a hotbar switch, and a
+# bar that flashed on every try at a distant block was reported as a loading
+# bar.
+#
+#   psoxide-gate run tests/distant-mining.toml --disc build/gate/voxide.cue --strict
+#
+# The bar is a 16 x 2 strip under the crosshair at (152, 128), a dark track
+# (41,41,41 in the CPU frame) with a light fill on it. It stays up for about
+# eight ticks after the swing that starts it, so each R2 try is followed by a
+# run of checkpoints that together cover that window, each asserting the track
+# is not there. The last step switches hotbar slots, which does restart the
+# cooldown, and waits for the track to appear, so the detector is known to see
+# a real bar. Frames are not compared to goldens.
+name = "voxide-distant-mining"
+title = "VoXide: mining a distant block shows no attack bar"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+max_ticks = 3000
+
+[card_fixture]
+path = "tests/cards/legacy-controls-seen.mcd"
+sha256 = "a0bc97a529dc33cdda8c438ec8e06a5ebc19e119fad846128d8827131c4a2f08"
+
+[[step]]
+label = "menu appears over the generated world"
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 204, w = 125, h = 22 }, min_count = 500 }
+timeout = 1500
+
+[[step]]
+label = "PLAY GAME goes directly to the world"
+press = ["cross"]
+hold = 4
+
+[[step]]
+label = "normal world ticks"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 12, op = "ge", value = 10 }
+timeout = 800
+
+[[step]]
+wait = 120
+
+[[step]]
+checkpoint = "idle-no-bar"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "no cooldown track under the crosshair"
+
+[[step]]
+wait = 1
+
+[[step]]
+label = "tap R2 on the far terrain"
+press = ["r2"]
+hold = 2
+wait = 0
+
+[[step]]
+checkpoint = "tap-0"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "a tap at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "tap-1"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "a tap at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "tap-2"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "a tap at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "tap-3"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "a tap at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "tap-4"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "a tap at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "tap-5"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "a tap at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "tap-6"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "a tap at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "tap-7"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "a tap at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "tap-8"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "a tap at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "tap-9"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "a tap at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+label = "hold R2 on the far terrain, release, press again"
+press = ["r2"]
+hold = 90
+wait = 6
+
+[[step]]
+press = ["r2"]
+hold = 2
+wait = 0
+
+[[step]]
+checkpoint = "hold-0"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "holding and re-pressing at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "hold-1"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "holding and re-pressing at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "hold-2"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "holding and re-pressing at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "hold-3"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "holding and re-pressing at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "hold-4"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "holding and re-pressing at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "hold-5"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "holding and re-pressing at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "hold-6"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "holding and re-pressing at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "hold-7"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "holding and re-pressing at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "hold-8"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "holding and re-pressing at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+checkpoint = "hold-9"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [41, 41, 41]
+color_tol = 1
+region = { x = 152, y = 128, w = 16, h = 2 }
+max_count = 0
+note = "holding and re-pressing at a distant block draws no cooldown track"
+
+[[step]]
+wait = 1
+
+[[step]]
+label = "control: switching hotbar slot restarts the cooldown and the bar shows"
+press = ["r1"]
+hold = 2
+wait = 0
+
+[[step]]
+label = "the cooldown track appears"
+wait_until = { kind = "pixels", color = [41, 41, 41], color_tol = 1, region = { x = 152, y = 128, w = 16, h = 2 }, min_count = 4 }
+timeout = 30
