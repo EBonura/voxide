@@ -52,6 +52,22 @@ pub static mut VOXIDE_LAB_TNT_COUNTS: [u32; 3] = [0; 3];
 /// Blocks lit, so a world with none costs a compare a tick.
 static mut LIVE: u8 = 0;
 
+/// Primed blocks whose fuse is out and wait for the blast queue.
+pub fn pending_count() -> u32 {
+    if unsafe { LIVE } == 0 {
+        return 0;
+    }
+    let mut n = 0;
+    let mut i = 0;
+    while i < MAX_TNT {
+        if unsafe { USED[i] && PENDING[i] } {
+            n += 1;
+        }
+        i += 1;
+    }
+    n
+}
+
 /// The maintained live count for the release journey's once-per-tick state.
 pub fn live_count() -> u32 {
     unsafe { LIVE as u32 }
@@ -470,6 +486,20 @@ pub fn render(cam: &Camera, count: &mut usize) {
         }
         i += 1;
     }
+}
+
+/// Primed blocks that burnt their fuse and wait for the blast queue.
+#[cfg(feature = "fire-lab")]
+pub fn lab_pending() -> i32 {
+    let mut n = 0;
+    let mut i = 0;
+    while i < MAX_TNT {
+        if unsafe { USED[i] && PENDING[i] } {
+            n += 1;
+        }
+        i += 1;
+    }
+    n
 }
 
 /// Primed blocks lit right now, for the lab and the gates.
