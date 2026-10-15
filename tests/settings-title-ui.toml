@@ -64,6 +64,6 @@ kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
 offset = 16
 op = "eq"
-value = 8
+value = 9
 [[step.assert]]
 kind = "card_unchanged"

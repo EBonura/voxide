@@ -5,8 +5,7 @@
 //! silent block, so a finished one-shot parks its voice on silence until the
 //! round-robin re-keys it.
 //!
-//! There is deliberately no music: the world's own sounds carry the
-//! atmosphere.
+//! The music is a separate thing: streamed XA-ADPCM, see music.rs.
 
 #![allow(dead_code)]
 

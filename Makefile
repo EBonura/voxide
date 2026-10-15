@@ -24,7 +24,7 @@ PSOXIDE_PROFILE_STEPS ?= 900000000
 PSOXIDE_START_PULSE ?= 0x0008@700+60
 
 .DEFAULT_GOAL := build
-.PHONY: help psoxide build compile pack disc gate-disc gate-symbols install release run smoke profile \
+.PHONY: help psoxide build compile pack music disc gate-disc gate-symbols install release run smoke profile \
 	pgo-collect pgo-order pgo-choose clean host-tests
 
 help:
@@ -32,6 +32,7 @@ help:
 	@echo "  make psoxide    - import the components.lock.json revisions into .psoxide"
 	@echo "  make            - build + install into the PSoXide game library"
 	@echo "  make compile    - build PSX-EXE only -> $(EXE) (PGO_VARIANT=off for no PGO)"
+	@echo "  make music      - cook assets/music/tracks.txt (MUSIC_SRC=dir PSX_AUDIO_COOK=path)"
 	@echo "  make disc       - compile + pack dist/voxide.cue/.bin"
 	@echo "  make gate-disc  - compile + pack build/gate/voxide.cue/.bin and exact journey symbols"
 	@echo "  make install    - install into $(GAMES_DIR)"
@@ -98,7 +99,19 @@ pack:
 		--exe "$(PACK_EXE)" \
 		--out "$(PACK_OUT)" \
 		--volume VOXIDE \
-		--world-pack-extra-dir "$(ROOT)/assets/sfx/pak"
+		--world-pack-extra-dir "$(ROOT)/assets/sfx/pak" \
+		$(foreach xa,$(sort $(wildcard $(ROOT)/assets/music/MUSIC*.XA)),--xa-file "$(xa)")
+
+# The songs: assets/music/tracks.txt lists them (file, pools, loops, credit).
+# This cooks them into assets/music/MUSIC<n>.XA and game/src/musicdata.rs, which
+# are committed; the WAV masters are not in the repo. MUSIC_SRC is the directory
+# holding them, PSX_AUDIO_COOK a built psx-audio-cook (the SDK's host tool,
+# crates/psx-audio-cook in the PSoXide editor workspace).
+MUSIC_SRC ?=
+PSX_AUDIO_COOK ?=
+music:
+	cd tools/voxide-tools && cargo run -q --release --locked --bin convert-music -- \
+		--src "$(MUSIC_SRC)" --cook "$(PSX_AUDIO_COOK)"
 
 # The release journey locates its small state block in the exact PS-X EXE
 # packed below. This route never installs into the user's game library.

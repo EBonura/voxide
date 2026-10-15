@@ -1,0 +1,48 @@
+# The music on the disc. Edit this and run `make music`; the game, the credits
+# card and the disc follow.
+#
+# The pieces are rendered from the six loops below by tools/loop-mixer, whose
+# README text is its crate doc: a seeded sequence of whole loops (each played 1
+# to 3 times, no loop twice in a row, every loop used) joined by 4 s equal-power
+# crossfades, 1.5 s fade-in, 5 s fade-out, resampled to 37.8 kHz and dithered
+# to 16 bits. The WAV pieces and the loops are not in the repo; the cooked
+# MUSIC<n>.XA is. To render them again:
+#
+#   loop-mixer --src "<Simple Piano Music Vol 1>" --out PIECES --seed 20261015 \
+#     --pieces 4 Aranha.wav Melodia.wav Nulo.wav Pianeta.wav "Side Label.wav" Talher.wav
+#   make music MUSIC_SRC=PIECES PSX_AUDIO_COOK=<built psx-audio-cook>
+#
+# Loops: Mulula VGM Loops, Simple Piano Music Vol 1, CC BY 4.0,
+# https://mululavgmloops.itch.io/ (44.1 kHz 24-bit stereo WAV), sha256:
+#   955a43297db07ce80e328dde16dc4a5786e141f347e87e5efd07cbfc5ef9e9eb  Aranha.wav
+#   5c817fb25fd673dded6cbbc9ad496363cebacee8dc8c01a6d75969439681e23c  Melodia.wav
+#   59161a7eaaff98ba4556abf9c0da1cc990f9f6802ecfb572f66dd1ab8766cbe4  Nulo.wav
+#   06050a7b23e749e932ce258395db795a73272802dba9d8caa029cfb07c834345  Pianeta.wav
+#   2f17bc36b03753df4ad0d9b469831283afcac8ceb2c1270a1742220c5be0acdf  Side Label.wav
+#   47fd474f5f8a770682e2a6eca675c606d986b6bed00bbdc3c5a02f75dcf04b1f  Talher.wav
+#
+# Lines of the credits card, at most 34 characters each (credits page 1).
+
+[credits]
+line = MUSIC  (CC BY 4.0)
+line = MULULA VGM LOOPS
+line = SIMPLE PIANO MUSIC VOL 1
+line = ARANHA, MELODIA, NULO, PIANETA,
+line = SIDE LABEL, TALHER
+line = MULULAVGMLOOPS.ITCH.IO
+
+[track]
+name = Piece 1
+file = piece-1.wav
+
+[track]
+name = Piece 2
+file = piece-2.wav
+
+[track]
+name = Piece 3
+file = piece-3.wav
+
+[track]
+name = Piece 4
+file = piece-4.wav

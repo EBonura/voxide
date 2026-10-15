@@ -1,0 +1,166 @@
+# VoXide music scheduling across several pieces, on the music-lab disc
+# (`cargo --features music-lab`, never shipped): Java's 10 to 20 minute delay is
+# 5 to 10 seconds and every piece is cut at 12 seconds, so one run walks a piece
+# ending, the delay, the next pick, and the scheduler running through the pause
+# menu. The values it shortens are pinned by tools/host-tests/tests/music_plan.rs
+# and the shipping disc by tests/music.toml.
+#
+#   make compile FEATURES=music-lab PGO_VARIANT=off, then pack to build/gate-lab
+#   psoxide-gate run tests/music-lab.toml --no-hw
+#
+# Receipt offsets are as in tests/music.toml. Nobody listens to this journey.
+
+name = "voxide-music-lab"
+title = "VoXide: music pieces, the delay between them, and the pause menu"
+disc = ["build/gate-lab/voxide.cue"]
+symbols = ["build/gate-lab-symbols.txt"]
+memcard = "fresh"
+max_ticks = 9000
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 1800
+[[step]]
+label = "PLAY; the CONTROLS card"
+press = ["cross"]
+hold = 4
+wait = 60
+[[step]]
+label = "close the card: the world loads"
+press = ["circle"]
+hold = 4
+wait = 20
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 0 }
+timeout = 900
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_MUSIC_STATE", offset = 20, op = "eq", value = 2 }
+timeout = 600
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_MUSIC_STATE", offset = 12, op = "eq", value = 2 }
+timeout = 900
+[[step]]
+checkpoint = "first-world-piece"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 20
+op = "eq"
+value = 2
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 16
+op = "lt"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 44
+op = "zero"
+[[step]]
+label = "open the pause menu and leave it open"
+press = ["start"]
+hold = 4
+wait = 20
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_MUSIC_STATE", offset = 40, op = "ge", value = 6000 }
+timeout = 900
+[[step]]
+checkpoint = "piece-advances-in-the-pause-menu"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 12
+op = "eq"
+value = 2
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 36
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "audio"
+window = 60
+min_peak = 200
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_MUSIC_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 900
+[[step]]
+checkpoint = "piece-ended-and-the-delay-runs"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 48
+op = "between"
+value = 300
+value_hi = 599
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 36
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 44
+op = "zero"
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_MUSIC_STATE", offset = 12, op = "eq", value = 2 }
+timeout = 900
+[[step]]
+checkpoint = "next-piece-picked-in-the-pause-menu"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 32
+op = "ge"
+value = 2
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 16
+op = "lt"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 20
+op = "eq"
+value = 2
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 44
+op = "zero"
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_MUSIC_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 900
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_MUSIC_STATE", offset = 12, op = "eq", value = 2 }
+timeout = 900
+[[step]]
+checkpoint = "and-another"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 32
+op = "ge"
+value = 3
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 16
+op = "lt"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 44
+op = "zero"

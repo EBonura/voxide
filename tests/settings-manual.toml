@@ -166,7 +166,7 @@ kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
 offset = 16
 op = "eq"
-value = 14
+value = 15
 [[step.assert]]
 kind = "card_unchanged"
 # Cancel must suppress Cross on the actual paused Save Settings row.
@@ -283,7 +283,7 @@ kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
 offset = 16
 op = "eq"
-value = 8
+value = 9
 [[step]]
 press = ["cross"]
 hold = 4

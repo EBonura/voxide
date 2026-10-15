@@ -26,6 +26,9 @@ mod fixture;
 mod flame;
 mod inv;
 mod mob;
+mod music;
+mod music_plan;
+mod musicdata;
 mod save;
 mod settings_profile;
 mod settings_menu;
@@ -2759,6 +2762,7 @@ fn main() {
     interrupts::install_vblank_counter();
     load_shared_settings();
     sfx::init();
+    music::init();
     show_intro(&mut fb, &font);
 
     unsafe {
@@ -2786,6 +2790,7 @@ fn main() {
     // (usually nothing is left by the time a human has picked an option).
     world::boot_prepare(spawn_bx, spawn_bz);
     main_menu(&mut fb, &font);
+    music::enter_world();
     tty::println("voxide: world ready");
     // The starter kit for both a fresh boot and however many NEW WORLD
     // reseeds happened in the menu.
@@ -2846,6 +2851,7 @@ fn main() {
         // might start one, so a sound keyed this frame is not cut by the
         // deadline of the one it replaced.
         sfx::tick();
+        music::tick();
         telemetry::frame_begin(frame); // profiler frame boundary (no-op without the feature)
         telemetry::stage_begin(50); // TEMP: whole loop body minus vsync
                                     // Honest frame cost: VBlank IRQs elapsed since the last loop top.
@@ -3787,6 +3793,9 @@ fn main() {
             FOG_RGB = sky;
             CAVE = cave;
         }
+        if music::pick_due() {
+            music::start(false);
+        }
         refresh_mat_ccmd(); // tint words follow LIGHT and the horizon colour
         if MOB_LINEUP {
             mob::debug_lineup(player.x, player.y, player.z);
@@ -3981,9 +3990,10 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
     if PROFILE_SKIP_TITLE || POSE_TEST {
         return;
     }
+    music::enter_title();
     let mut prev = poll_port1().buttons;
     let mut sel = 0usize; // 0 = play, 1 = new world, 2 = controls, 3 = settings, 4 = credits
-    let mut credits = false; // the provenance card is up
+    let mut credits = 0u8; // the credits card is up, and its page (1 music, 2 the rest)
     let mut controls = false; // the controls card is up
     let mut first_run = false; // ...because this is the first PLAY: PLAY follows it
     let mut settings = false; // the settings card is up
@@ -3991,6 +4001,10 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
     let mut t: u32 = 0;
     loop {
         sfx::tick();
+        music::tick();
+        if music::pick_due() {
+            music::start(true);
+        }
         let mut pad = poll_port1().buttons;
         let settings_was_open = settings;
         if DEMO_PLAY && t == 90 {
@@ -4009,13 +4023,15 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
                     return;
                 }
             }
-        } else if credits {
-            // Any confirm/back dismisses the card.
-            if pad.pressed_since(prev, button::CROSS)
-                || pad.pressed_since(prev, button::CIRCLE)
-                || pad.pressed_since(prev, button::START)
-            {
-                credits = false;
+        } else if credits != 0 {
+            // CROSS turns the first page; CIRCLE or START closes the card, and
+            // CROSS on the last page does too.
+            let back = pad.pressed_since(prev, button::CIRCLE) || pad.pressed_since(prev, button::START);
+            if !back && credits == 1 && pad.pressed_since(prev, button::CROSS) {
+                credits = 2;
+                sfx::blip();
+            } else if back || pad.pressed_since(prev, button::CROSS) {
+                credits = 0;
                 sfx::blip();
             }
         } else if settings {
@@ -4056,7 +4072,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
                 sfx::blip();
             }
         }
-        let go = !credits
+        let go = credits == 0
             && !controls
             && !settings
             && !settings_was_open
@@ -4093,7 +4109,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             set_sel = 0;
             sfx::confirm();
         } else if go && sel == 4 {
-            credits = true;
+            credits = 1;
             sfx::confirm();
         } else if go {
             sfx::confirm();
@@ -4161,8 +4177,8 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         draw_mark_text(88, 40, "VoXide", 3, (0xF4, 0xF4, 0xF4));
         if controls {
             controls::draw(&controls::Now, font);
-        } else if credits {
-            draw_credits_now(font);
+        } else if credits != 0 {
+            draw_credits_now(font, credits);
         } else if settings {
             draw_settings_now(font, set_sel);
         } else {
@@ -4292,7 +4308,7 @@ fn open_controls(sel: usize, menu: u8) -> u8 {
     }
 }
 
-const SETTING_ADJUST_ROWS: usize = 8;
+const SETTING_ADJUST_ROWS: usize = 9;
 const SETTING_SAVE: usize = SETTING_ADJUST_ROWS;
 const SETTING_ROWS: usize = SETTING_ADJUST_ROWS + 1;
 const SETTING_NAMES: [&str; SETTING_ROWS] = [
@@ -4301,6 +4317,7 @@ const SETTING_NAMES: [&str; SETTING_ROWS] = [
     "LOOK SPEED",
     "INVERT LOOK Y",
     "SFX VOLUME",
+    "MUSIC VOLUME",
     "BRIGHTNESS",
     "SCREEN X",
     "SCREEN Y",
@@ -4358,6 +4375,7 @@ fn load_shared_settings() {
         SET_LOOK_PCT = SETTINGS_PROFILE.look_speed_percent as i32;
         SET_INVERT_Y = SETTINGS_PROFILE.invert_y();
         sfx::set_volume_pct(SETTINGS_PROFILE.sfx_volume as i32);
+        music::set_volume_pct(SETTINGS_PROFILE.music_volume as i32);
         SETTINGS_DIRTY = migrated;
     }
     if unsafe { !SETTINGS_PROFILE.screen_offset.is_centre() } {
@@ -4372,6 +4390,7 @@ fn save_shared_settings(fb: &mut FrameBuffer, font: &FontAtlas) {
         SETTINGS_PROFILE.look_speed_percent = SET_LOOK_PCT as u8;
         SETTINGS_PROFILE.set_invert_y(SET_INVERT_Y);
         SETTINGS_PROFILE.sfx_volume = sfx::volume_pct() as u8;
+        SETTINGS_PROFILE.music_volume = music::volume_pct() as u8;
         let mut card = psx_mc::Card::new(psx_mc::HardwareCard::new(psx_mc::Slot::One));
         // Formatting writes 64 card frames in this one call and holds the
         // screen for seconds, so say so first, as the world save does. Saving
@@ -4422,8 +4441,9 @@ fn setting_adjust(row: usize, dir: i32) {
             2 => SET_LOOK_PCT = (SET_LOOK_PCT + dir * 20).clamp(60, 160),
             3 => SET_INVERT_Y = !SET_INVERT_Y,
             4 => sfx::set_volume_pct(sfx::volume_pct() + dir * 25),
-            5 => SETTINGS_PROFILE.brightness = SETTINGS_PROFILE.brightness.stepped(dir as i8),
-            6 => {
+            5 => music::set_volume_pct(music::volume_pct() + dir * 25),
+            6 => SETTINGS_PROFILE.brightness = SETTINGS_PROFILE.brightness.stepped(dir as i8),
+            7 => {
                 SETTINGS_PROFILE.screen_offset =
                     SETTINGS_PROFILE.screen_offset.stepped_x(dir as i8);
                 apply_screen_offset();
@@ -4452,9 +4472,9 @@ fn setting_value(row: usize, buf: &mut [u8; 12]) -> usize {
                 buf[..status.len()].copy_from_slice(status.as_bytes());
                 return status.len();
             }
-            5 => return SETTINGS_PROFILE.brightness.label().copy_into(buf),
-            6 => return SETTINGS_PROFILE.screen_offset.label_x().copy_into(buf),
-            7 => return SETTINGS_PROFILE.screen_offset.label_y().copy_into(buf),
+            6 => return SETTINGS_PROFILE.brightness.label().copy_into(buf),
+            7 => return SETTINGS_PROFILE.screen_offset.label_x().copy_into(buf),
+            8 => return SETTINGS_PROFILE.screen_offset.label_y().copy_into(buf),
             0 => (SET_MOVE_DZ as i32, false),
             1 => (SET_LOOK_DZ as i32, false),
             2 => (SET_LOOK_PCT, true),
@@ -4467,6 +4487,7 @@ fn setting_value(row: usize, buf: &mut [u8; 12]) -> usize {
                     3
                 }
             }
+            5 => (music::volume_pct(), true),
             _ => (sfx::volume_pct(), true),
         }
     };
@@ -4576,14 +4597,13 @@ fn draw_settings_now(font: &FontAtlas, sel: usize) {
     font.draw_text(MENU_TEXT_X, MENU_ROWS_Y + 8 * MENU_ROW_H as i16, hint, MC_INK);
 }
 
-/// The credits card: asset provenance in the same panel dress as every
-/// other menu. The full list with URLs lives in assets/pack/CREDITS.md.
-fn draw_credits_now(font: &FontAtlas) {
+/// The credits card, two pages in the same panel dress as every other menu:
+/// the music (its lines are assets/music/tracks.txt), then the textures and
+/// sounds. The full list with URLs lives in assets/pack/CREDITS.md.
+fn draw_credits_now(font: &FontAtlas, page: u8) {
     panel_now(14, 4, SCREEN_W as i16 - 28, SCREEN_H as i16 - 8);
-    // (indent px, text, style: 0 title, 1 heading, 2 body)
-    const LINES: [(i16, &str, u8); 20] = [
-        (0, "CREDITS", 0),
-        (0, "", 2),
+    // (indent px, text, style: 1 heading, 2 body)
+    const ASSETS: [(i16, &str, u8); 15] = [
         (0, "BLOCK TEXTURES  (CC0)", 1),
         (10, "16X16 BLOCK TEXTURE SET", 2),
         (10, "FROM OPENGAMEART.ORG", 2),
@@ -4594,30 +4614,36 @@ fn draw_credits_now(font: &FontAtlas) {
         (10, "FREESOUND.ORG:", 2),
         (18, "QUBODUP: PIG BARK EAT BOOM", 2),
         (18, "ZOZZY: COW  SQEEEEK: SHEEP", 2),
-        (18, "MBPL: CHICKEN", 2),
-        (18, "OWNATHAN: ZOMBIE", 2),
+        (18, "MBPL: CHICKEN  OWNATHAN: ZOMBIE", 2),
         (18, "KNEELING: BONES  REITANNA: HISS", 2),
         (18, "SWORDOFKINGS128: SPLASH", 2),
         (0, "", 2),
         (0, "FULL LINKS: CREDITS.MD IN THE REPO", 2),
-        (0, "NOT AFFILIATED WITH MOJANG STUDIOS", 2),
-        (0, "BUILT WITH PSOXIDE", 1),
     ];
-    let mut y = 10i16;
-    for (indent, text, style) in LINES {
-        if !text.is_empty() {
-            let (x, c) = match style {
-                0 => (
-                    (SCREEN_W as i16 - text.len() as i16 * 8) / 2,
-                    (0x14, 0x14, 0x1A),
-                ),
-                1 => (24 + indent, (0x10, 0x10, 0x16)),
-                _ => (24 + indent, (0x2C, 0x2C, 0x34)),
-            };
-            font.draw_text(x, y, text, c);
+    const HEAD: (u8, u8, u8) = (0x10, 0x10, 0x16);
+    const BODY: (u8, u8, u8) = (0x2C, 0x2C, 0x34);
+    let title = "CREDITS";
+    font.draw_text((SCREEN_W as i16 - title.len() as i16 * 8) / 2, 10, title, (0x14, 0x14, 0x1A));
+    let mut y = 28i16;
+    if page == 1 {
+        for line in musicdata::CREDITS {
+            font.draw_text(24, y, line, HEAD);
+            y += 11;
         }
-        y += if style == 0 { 14 } else { 11 };
+        y += 11;
+        font.draw_text(24, y, "NOT AFFILIATED WITH MOJANG STUDIOS", BODY);
+        y += 11;
+        font.draw_text(24, y, "BUILT WITH PSOXIDE", HEAD);
+    } else {
+        for (indent, text, style) in ASSETS {
+            if !text.is_empty() {
+                font.draw_text(24 + indent, y, text, if style == 1 { HEAD } else { BODY });
+            }
+            y += 11;
+        }
     }
+    let hint = if page == 1 { "X: MORE   O: BACK" } else { "O: BACK" };
+    font.draw_text(24, SCREEN_H as i16 - 20, hint, BODY);
 }
 
 fn menu_button_now(font: &FontAtlas, y: i16, label: &str, sel: bool) {
@@ -11449,6 +11475,7 @@ const OPTIONS: [&str; OPT_SETTINGS + SETTING_ROWS] = [
     SETTING_NAMES[6],
     SETTING_NAMES[7],
     SETTING_NAMES[8],
+    SETTING_NAMES[9],
 ];
 /// Result of the last card operation, shown under the list.
 static mut OPT_MSG: &str = "";

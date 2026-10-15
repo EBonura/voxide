@@ -32,6 +32,13 @@ checkpoint = "legacy-world"
 golden = false
 [[step.assert]]
 kind = "not_flat"
+# A card saved before MUSIC VOLUME existed loads with it at 100.
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 24
+op = "eq"
+value = 100
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_GATE_STATE"

@@ -1,0 +1,450 @@
+# VoXide music, on the shipping disc: the title screen's piece, the menu music
+# stopping when the world loads, Java's starting delay, music through the pause
+# menu, the MUSIC slider silencing it, and SAVE SETTINGS keeping the slider.
+#
+#   psoxide-gate run tests/music.toml --disc build/gate/voxide.cue --no-hw
+#
+# The receipt is VOXIDE_MUSIC_STATE (game/src/music.rs): phase at offset 12
+# (waiting 1, playing 2), piece 16, what the last pick was for 20 (title 1,
+# world 2), slider 24, vblanks to the next pick 28, pieces started 32, the drive
+# has seen its head inside the file 36, milliseconds into the piece 40, refused
+# starts 44, the last delay in vblanks 48, the drive mixer level 52. The `audio`
+# asserts read the SPU output, which carries the CD input. Nobody listens to
+# this journey: it proves the drive is streaming and the SPU output is not
+# silent, not that the music sounds right.
+
+name = "voxide-music"
+title = "VoXide: music on the title, through a world, the slider and SAVE SETTINGS"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+memcard = "fresh"
+max_ticks = 14000
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_MUSIC_STATE", offset = 12, op = "eq", value = 2 }
+timeout = 3600
+[[step]]
+checkpoint = "title-piece-playing"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 20
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 32
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 16
+op = "lt"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 44
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 24
+op = "eq"
+value = 100
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 52
+op = "eq"
+value = 64
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_MUSIC_STATE", offset = 36, op = "eq", value = 1 }
+timeout = 400
+[[step]]
+wait = 400
+checkpoint = "title-drive-streams"
+golden = false
+[[step.assert]]
+kind = "audio"
+window = 120
+min_peak = 200
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 40
+op = "ge"
+value = 500
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 12
+op = "eq"
+value = 2
+[[step]]
+label = "PLAY; the first PLAY shows the CONTROLS card"
+press = ["cross"]
+hold = 4
+wait = 60
+[[step]]
+label = "close the card: the world loads"
+press = ["circle"]
+hold = 4
+wait = 20
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 0 }
+timeout = 900
+[[step]]
+checkpoint = "menu-music-stopped-at-world-load"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 32
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 36
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 28
+op = "le"
+value = 300
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 48
+op = "eq"
+value = 300
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 20
+op = "eq"
+value = 1
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_MUSIC_STATE", offset = 12, op = "eq", value = 2 }
+timeout = 600
+[[step]]
+checkpoint = "world-piece-after-javas-starting-delay"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 20
+op = "eq"
+value = 2
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 32
+op = "eq"
+value = 2
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 16
+op = "lt"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 44
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 12
+op = "between"
+value = 200
+value_hi = 330
+[[step.assert]]
+kind = "audio"
+window = 120
+min_peak = 200
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_MUSIC_STATE", offset = 36, op = "eq", value = 1 }
+timeout = 400
+[[step]]
+label = "the pause menu does not stop the music"
+press = ["start"]
+hold = 4
+wait = 30
+[[step]]
+checkpoint = "music-plays-in-the-pause-menu"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 12
+op = "eq"
+value = 2
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 36
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 32
+op = "eq"
+value = 2
+[[step.assert]]
+kind = "audio"
+window = 60
+min_peak = 200
+[[step]]
+label = "OPTIONS: up wraps to SAVE SETTINGS, MUSIC VOLUME is four rows above"
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step]]
+press = ["left"]
+hold = 4
+wait = 12
+[[step]]
+checkpoint = "music-75"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 24
+op = "eq"
+value = 75
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 52
+op = "eq"
+value = 48
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 12
+op = "eq"
+value = 2
+[[step]]
+press = ["left"]
+hold = 4
+wait = 12
+[[step]]
+press = ["left"]
+hold = 4
+wait = 12
+[[step]]
+press = ["left"]
+hold = 4
+wait = 60
+[[step]]
+checkpoint = "music-0-silences"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 24
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 52
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 36
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 32
+op = "eq"
+value = 2
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 48
+op = "between"
+value = 36000
+value_hi = 72000
+[[step]]
+press = ["right"]
+hold = 4
+wait = 30
+[[step]]
+checkpoint = "music-25-does-not-restart"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 24
+op = "eq"
+value = 25
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 52
+op = "eq"
+value = 16
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 32
+op = "eq"
+value = 2
+[[step]]
+label = "back to 0 and save it"
+press = ["left"]
+hold = 4
+wait = 30
+[[step]]
+checkpoint = "music-0-again"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 24
+op = "zero"
+[[step]]
+label = "four rows down to SAVE SETTINGS"
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+label = "four rows down to SAVE SETTINGS"
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+label = "four rows down to SAVE SETTINGS"
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+label = "four rows down to SAVE SETTINGS"
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 100
+[[step]]
+checkpoint = "music-0-saved"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 24
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 20
+op = "zero"
+[[step.assert]]
+kind = "card_writes"
+min_count = 1
+[[step]]
+card = { action = "snapshot" }
+[[step]]
+card = { action = "reboot" }
+[[step]]
+wait = 60
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 1800
+[[step]]
+checkpoint = "slider-loaded-from-the-card"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 24
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 52
+op = "zero"
+[[step]]
+wait = 2400
+checkpoint = "slider-0-title-plays-nothing"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 32
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 20
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 48
+op = "between"
+value = 36000
+value_hi = 72000
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 44
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_MUSIC_STATE"
+offset = 36
+op = "zero"

@@ -68,6 +68,10 @@ storm-calm = ["storm-lab"]
 # or snowy column (storm-snow) at the first tick, flying. Never ship.
 storm-desert = ["storm-calm"]
 storm-snow = ["storm-calm"]
+# Headless music scheduling checks only (src/music.rs): the 10 to 20 minute
+# delay between songs is 5 to 10 seconds and every song is cut at 12 seconds,
+# so a journey can walk several songs across several contexts. Never ship.
+music-lab = []
 
 [dependencies]
 psx-telemetry = { path = "../.psoxide/sdk/crates/psx-telemetry" }
@@ -86,3 +90,4 @@ psx-pack = { path = "../.psoxide/sdk/crates/psx-pack" }
 psx-mc   = { path = "../.psoxide/sdk/crates/psx-mc" }
 psx-settings = { path = "../.psoxide/sdk/crates/psx-settings" }
 psx-fx   = { path = "../.psoxide/sdk/crates/psx-fx" }
+psx-fmv  = { path = "../.psoxide/sdk/crates/psx-fmv" }
