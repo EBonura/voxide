@@ -1804,18 +1804,73 @@ pub static mut EDIT_B: [u8; MAX_EDITS] = [0; MAX_EDITS];
 pub static mut EDIT_D: [u8; MAX_EDITS] = [0; MAX_EDITS];
 pub static mut EDIT_N: usize = 0;
 
+/// Where each edit sits in the log, by position: open addressing, slot value
+/// 0 empty, else log index + 1. A blast records hundreds of holes, and a scan
+/// of the whole log for each was the second-largest cost of its break phase.
+const EDIT_SLOTS: usize = 2048;
+static mut EDIT_HASH: [u16; EDIT_SLOTS] = [0; EDIT_SLOTS];
+
+#[inline(always)]
+fn edit_slot(x: i16, y: i16, z: i16, d: u8) -> usize {
+    let h = (x as u32)
+        .wrapping_mul(0x9E37_79B1)
+        .wrapping_add((z as u32).wrapping_mul(0x85EB_CA6B))
+        .wrapping_add(((y as u32) << 2 | d as u32).wrapping_mul(0xC2B2_AE35));
+    (h >> 21) as usize & (EDIT_SLOTS - 1)
+}
+
+/// The log index of the edit at a position, or the empty slot it would take.
+#[inline(always)]
+fn edit_find(x: i16, y: i16, z: i16, d: u8) -> (usize, Option<usize>) {
+    unsafe {
+        let mut s = edit_slot(x, y, z, d);
+        loop {
+            let v = EDIT_HASH[s] as usize;
+            if v == 0 {
+                return (s, None);
+            }
+            let i = v - 1;
+            if EDIT_X[i] == x && EDIT_Y[i] == y && EDIT_Z[i] == z && EDIT_D[i] == d {
+                return (s, Some(i));
+            }
+            s = (s + 1) & (EDIT_SLOTS - 1);
+        }
+    }
+}
+
+/// Index the log's first `EDIT_N` entries (after a load wrote them in bulk);
+/// a position listed twice keeps its first entry, as the scan did.
+pub fn edit_index_rebuild() {
+    unsafe {
+        EDIT_HASH = [0; EDIT_SLOTS];
+        let mut i = 0;
+        while i < EDIT_N {
+            let (s, found) = edit_find(EDIT_X[i], EDIT_Y[i], EDIT_Z[i], EDIT_D[i]);
+            if found.is_none() {
+                EDIT_HASH[s] = (i + 1) as u16;
+            }
+            i += 1;
+        }
+    }
+}
+
+/// Forget every edit.
+pub fn edit_log_clear() {
+    unsafe {
+        EDIT_N = 0;
+        EDIT_HASH = [0; EDIT_SLOTS];
+    }
+}
+
 /// Record a player block edit (last-write-wins per position; capped region).
 fn record_edit(wx: i32, wy: i32, wz: i32, b: u8) {
     let (x, y, z) = (wx as i16, wy as i16, wz as i16);
     let d = world::dimension();
     unsafe {
-        let mut i = 0;
-        while i < EDIT_N {
-            if EDIT_X[i] == x && EDIT_Y[i] == y && EDIT_Z[i] == z && EDIT_D[i] == d {
-                EDIT_B[i] = b;
-                return;
-            }
-            i += 1;
+        let (slot, found) = edit_find(x, y, z, d);
+        if let Some(i) = found {
+            EDIT_B[i] = b;
+            return;
         }
         if EDIT_N < MAX_EDITS {
             EDIT_X[EDIT_N] = x;
@@ -1823,6 +1878,7 @@ fn record_edit(wx: i32, wy: i32, wz: i32, b: u8) {
             EDIT_Z[EDIT_N] = z;
             EDIT_B[EDIT_N] = b;
             EDIT_D[EDIT_N] = d;
+            EDIT_HASH[slot] = (EDIT_N + 1) as u16;
             EDIT_N += 1;
         }
     }
@@ -4945,7 +5001,7 @@ fn reset_game_state() {
         }
         #[cfg(feature = "ui-fixture")]
         fixture::seed();
-        EDIT_N = 0;
+        edit_log_clear();
         let mut c = 0;
         while c < MAX_CHESTS {
             CHEST_USED[c] = false;
@@ -5602,6 +5658,7 @@ fn world_tick(player: &mut Player, dwell: &mut u16, n: u32) -> bool {
     // A blast in progress, or primed TNT waiting for the queue, is what the
     // player is watching: the frame spends nearly all its spare time on it.
     slack::set_urgent(world::blast_busy() || tnt::pending_count() > 0);
+    slack::set_backlog(world::blasts_pending() as u32 + tnt::pending_count() + world::chain_remesh_waiting());
     slack::frame_begin(); // this frame's spare time, for blasts and flames
     let mut travel = false;
     let mut w = 0;

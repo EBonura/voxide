@@ -2049,6 +2049,13 @@ static mut BJ_K: u32 = 0;
 /// The next cube column to break, 0..SIDE^2.
 static mut BJ_COL: usize = 0;
 static mut BJ_WAIT: u16 = 0;
+/// The cells either side of the centre this blast can reach (blast::reach_of),
+/// the most steps one of its rays takes, and the heights at which anything but
+/// air stands within that reach (blast::column_layers, ORed over the snapshot).
+/// A ray that stays in heights of air only marks nothing and is not walked.
+static mut BJ_RC: i32 = 0;
+static mut BJ_STEPS: i32 = 0;
+static mut BJ_LAYERS: u32 = 0;
 /// Cells broken so far (the hash that picks which drop), and the box of
 /// columns touched, for the remesh.
 static mut BJ_N: u32 = 0;
@@ -2111,6 +2118,7 @@ pub fn blast_reset() {
         BJ_LIVE = false;
         BLAST_DONE = 0;
         BLAST_REMESH = 0;
+        RUN_LEN = 0;
     }
 }
 
@@ -2136,7 +2144,8 @@ fn blast_res_table() {
 }
 
 /// Copy the next `count` columns of the blocks around the centre into BSNAP,
-/// a column run walk each (529 of them in all).
+/// a column run walk each (529 of them in all, the ones inside the blast's
+/// reach: no ray goes farther, so the rest are never read).
 #[inline(never)]
 fn blast_snapshot(job: &BlastJob, count: usize) {
     unsafe {
@@ -2148,6 +2157,9 @@ fn blast_snapshot(job: &BlastJob, count: usize) {
             let col = BJ_SNAP;
             BJ_SNAP += 1;
             let (dz, dx) = ((col / side) as i32 - r, (col % side) as i32 - r);
+            if dz.abs() > BJ_RC || dx.abs() > BJ_RC {
+                continue;
+            }
             let base = col * side;
             get_span(job.cx + dx, job.cy - r, job.cz + dz, &mut snap[base..base + side]);
             // Below the world's floor nothing breaks.
@@ -2156,6 +2168,7 @@ fn blast_snapshot(job: &BlastJob, count: usize) {
                 snap[base + (dy + r) as usize] = SNAP_FLOOR;
                 dy += 1;
             }
+            BJ_LAYERS |= crate::blast::column_layers(&snap[base..base + side]);
         }
     }
 }
@@ -2184,6 +2197,9 @@ pub fn blast_tick() {
                 BJ_COL = 0;
                 BJ_WAIT = 0;
                 BJ_N = 0;
+                BJ_RC = crate::blast::reach_of(BJ.power);
+                BJ_STEPS = crate::blast::max_steps(BJ.power);
+                BJ_LAYERS = 0;
                 BJ_LO = (i32::MAX, i32::MAX);
                 BJ_HI = (i32::MIN, i32::MIN);
                 BJ_LOG = false;
@@ -2214,6 +2230,9 @@ pub fn blast_tick() {
                     while BJ_K < crate::blast::RAYS && cast < BLAST_RAY_BATCH {
                         let d = &crate::blast::RAY_DIRS[BJ_K as usize];
                         BJ_K += 1;
+                        if crate::blast::band_is_air(BJ_LAYERS, job.fy, d.sy as i32, BJ_STEPS) {
+                            continue;
+                        }
                         cast += 1;
                         crate::blast::trace(
                             &mut scene,
@@ -2248,11 +2267,39 @@ pub fn blast_tick() {
             }
             blast_finish();
             BLAST_DONE = BLAST_DONE.wrapping_add(1);
+            // A run of blasts: each within RUN_GAP ticks of the last.
+            let now = crate::SIM_TICK;
+            if now.wrapping_sub(RUN_LAST) > RUN_GAP {
+                RUN_LEN = 0;
+            }
+            RUN_LEN = RUN_LEN.saturating_add(1);
+            RUN_LAST = now;
             BJ_LIVE = false;
             // The next queued blast goes on in this frame if it has time left.
             if BQ_LEN == 0 || !crate::slack::room() {
                 return;
             }
+        }
+    }
+}
+
+/// Blasts finished in the current run (each within `RUN_GAP` sim ticks, 3 s, of
+/// the one before), and when the last one finished.
+static mut RUN_LEN: u32 = 0;
+static mut RUN_LAST: u32 = 0;
+const RUN_GAP: u32 = 180;
+/// A run this long is a chain: its craters are worth meshing quickly once the
+/// last blast is done (slack.rs counts the chunks waiting as backlog).
+const CHAIN_RUN: u32 = 4;
+
+/// Chunks of a chain's craters the player can see that wait for their mesh;
+/// 0 when the blasts were not a chain.
+pub fn chain_remesh_waiting() -> u32 {
+    unsafe {
+        if RUN_LEN >= CHAIN_RUN && crate::SIM_TICK.wrapping_sub(RUN_LAST) <= RUN_GAP {
+            blast_remesh_view().count_ones()
+        } else {
+            0
         }
     }
 }

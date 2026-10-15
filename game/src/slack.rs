@@ -22,6 +22,13 @@
 //! Only a scene with no spare time at all gets `URGENT_MIN`, which can cost it
 //! a vblank for as long as the blast lasts.
 //!
+//! A chain of blasts waiting for the queue (primed blocks whose fuse is out,
+//! queued blasts, the one running) may borrow vblanks the same way for as long
+//! as the backlog lasts (`STRETCH_AT`, `STRETCH_VBLANKS`): a 16 block chain is
+//! over in a few seconds at a lower frame rate instead of a few dozen at the
+//! scene's own. The backlog is the throttle: a chain the quiet spare time can
+//! keep up with never stretches.
+//!
 //! The first frames of an explosion after a quiet spell may borrow two vblanks
 //! more (`BOOST_FRAMES` of them, `BOOST_VBLANKS`), a dip the scene can afford
 //! once: the crater of a single TNT is up in that time, and a long chain goes
@@ -47,6 +54,13 @@ const BOOST_REARM: u32 = 90;
 /// What an urgent frame spends at least, counter ticks (8 system clocks):
 /// 20,000 is 160,000 clocks, over a quarter of a vblank.
 const URGENT_MIN: u32 = 20_000;
+
+/// Blasts waiting for work (see above); the world update sets it each frame.
+static mut BACKLOG: u32 = 0;
+/// The backlog at which a frame may run `STRETCH_VBLANKS[i]` vblanks long
+/// (an extra, on top of the period the scene kept).
+const STRETCH_AT: [u32; 2] = [2, 5];
+const STRETCH_VBLANKS: [u32; 2] = [1, 2];
 
 static mut IDLE_T: u16 = 0;
 /// Idle counter ticks banked by `idle_mark` in this frame's waits.
@@ -150,10 +164,19 @@ pub fn frame_begin() {
                 BOOST_LEFT = BOOST_FRAMES;
             }
             QUIET_FRAMES = 0;
+            let mut extra = 0;
             if BOOST_LEFT > 0 {
                 BOOST_LEFT -= 1;
-                spare += BOOST_VBLANKS * VBLANK_TICKS;
+                extra = BOOST_VBLANKS;
             }
+            let mut i = 0;
+            while i < STRETCH_AT.len() {
+                if BACKLOG >= STRETCH_AT[i] && STRETCH_VBLANKS[i] > extra {
+                    extra = STRETCH_VBLANKS[i];
+                }
+                i += 1;
+            }
+            spare += extra * VBLANK_TICKS;
             (spare * URGENT_SHARE_16 / 16).max(URGENT_MIN)
         } else {
             QUIET_FRAMES += 1;
@@ -172,6 +195,12 @@ pub fn frame_begin() {
 /// world update, before `frame_begin`.
 pub fn set_urgent(on: bool) {
     unsafe { URGENT = on };
+}
+
+/// Blasts waiting for work: queued, running, and primed blocks whose fuse is
+/// out. Set with `set_urgent`, before `frame_begin`.
+pub fn set_backlog(n: u32) {
+    unsafe { BACKLOG = n };
 }
 
 /// The frame's whole allowance for explosion work, counter ticks. The mesh

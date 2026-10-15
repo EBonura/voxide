@@ -1026,6 +1026,7 @@ fn read_edits(buf: &[u8], base: usize, n: usize) {
         idx += 1;
     }
     unsafe { EDIT_N = n };
+    crate::edit_index_rebuild();
 }
 
 /// Forget every chest and furnace. Loading replaces the session's containers

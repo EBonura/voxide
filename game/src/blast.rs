@@ -107,6 +107,64 @@ const fn ray_dirs() -> [RayDir; RAYS as usize] {
     out
 }
 
+/// The most steps any ray of a blast of `power` can take: its strongest roll
+/// (1.299) over the 0.225 every step costs, and one more for the first.
+pub const fn max_steps(power: i32) -> i32 {
+    power * 1299 / STEP_LOSS + 1
+}
+
+/// How many cells either side of the centre cell a blast of `power` can reach
+/// at all: a step is 0.3 of a block, and the centre sits anywhere in its cell.
+pub const fn reach_of(power: i32) -> i32 {
+    let r = (max_steps(power) * 3 + 9) / 10 + 1;
+    if r > REACH_CELLS {
+        REACH_CELLS
+    } else {
+        r
+    }
+}
+
+/// Bit `dy + REACH_CELLS` is set when the snapshot column of cells `dy` = -11
+/// to 11 about the centre holds anything but air. `column` is the 23 cells of
+/// one column, lowest first.
+pub fn column_layers(column: &[u8]) -> u32 {
+    let mut m = 0u32;
+    let mut k = 0;
+    // Four cells a look: most are all air, and a word of blocks is sorted into
+    // its four flags by one multiply.
+    while k + 4 <= column.len() {
+        let w = u32::from_le_bytes([column[k], column[k + 1], column[k + 2], column[k + 3]]);
+        if w != 0 {
+            // The top bit of each byte that is not zero, down to bit 0 of each.
+            let hi = ((((w & 0x7F7F_7F7F) + 0x7F7F_7F7F) | w) & 0x8080_8080) >> 7;
+            m |= (hi.wrapping_mul(0x1020_4080) >> 28) << k;
+        }
+        k += 4;
+    }
+    while k < column.len() {
+        if column[k] != 0 {
+            m |= 1 << k;
+        }
+        k += 1;
+    }
+    m
+}
+
+/// Can a ray of this height step (Q16 of a block an axis step, up positive) from a
+/// centre `fy` up Q16 into its cell, taking at most `steps` steps, stay within
+/// layers that `layers` (the OR of every reachable column's `column_layers`)
+/// says hold nothing but air? Such a ray marks no cell, so it need not be
+/// walked. The walk is monotonic in height, so only its two ends count.
+pub fn band_is_air(layers: u32, fy: i32, sy: i32, steps: i32) -> bool {
+    let c = REACH_CELLS;
+    let end = (fy + steps * sy) >> 16;
+    let (lo, hi) = if sy >= 0 { (0, end) } else { (end, 0) };
+    let lo = (lo.max(-c) + c) as u32;
+    let hi = (hi.min(c) + c) as u32;
+    let band = (u32::MAX >> (31 - hi)) & (u32::MAX << lo);
+    layers & band == 0
+}
+
 /// A ray's starting strength in thousandths, power x (0.7 + 0.6 r).
 pub fn ray_power(power: i32, seed: u32, k: u32) -> i32 {
     power * (700 + (mix(seed, k) % 600) as i32)
@@ -200,6 +258,7 @@ pub struct Scene<'a> {
 /// strides, where it used to be rebuilt with two multiplies (the largest
 /// single cost of the ray stage: the R3000 stalls on each). A ray is a
 /// straight line, so one that leaves the cube never returns and can stop.
+#[inline(never)]
 pub fn trace(scene: &mut Scene, frac: (i32, i32, i32), step: (i32, i32, i32), power_k: i32) {
     if power_k <= 0 {
         return;
@@ -506,6 +565,115 @@ mod tests {
             assert_eq!(checked, RAYS);
             assert_eq!(fast.bits, slow.bits, "round {round}");
             assert!(round == 0 || fast.count() > 0);
+        }
+    }
+
+    /// Skipping the rays whose height band is all air marks exactly what
+    /// walking every ray marks, whatever the power, the start inside the
+    /// cell and the scatter of blocks.
+    #[test]
+    fn air_band_rays_mark_nothing() {
+        let mut res = [NO_BLOCK; 256];
+        res[1] = 50;
+        res[2] = 600;
+        res[3] = 120_000;
+        let mut rng = 0x9E37_79B9u32;
+        let mut next = |m: u32| {
+            rng ^= rng << 13;
+            rng ^= rng >> 17;
+            rng ^= rng << 5;
+            (rng >> 4) % m
+        };
+        let mut skipped_total = 0u32;
+        for round in 0..24 {
+            let power = 1 + (round % MAX_POWER as u32) as i32;
+            let rc = reach_of(power);
+            let mut snap = [0u8; CELLS];
+            // Round-dependent scatter: sparse, a floor below, a ceiling above,
+            // or one lone block.
+            match round % 4 {
+                0 => {
+                    for c in snap.iter_mut() {
+                        if next(60) == 0 {
+                            *c = 1 + next(3) as u8;
+                        }
+                    }
+                }
+                1 => {
+                    for dz in -REACH_CELLS..=REACH_CELLS {
+                        for dx in -REACH_CELLS..=REACH_CELLS {
+                            for dy in -REACH_CELLS..0 {
+                                snap[Cube::index(dx, dy, dz)] = 1 + next(3) as u8;
+                            }
+                        }
+                    }
+                }
+                2 => {
+                    for dz in -REACH_CELLS..=REACH_CELLS {
+                        for dx in -REACH_CELLS..=REACH_CELLS {
+                            snap[Cube::index(dx, 4 + (round as i32 % 3), dz)] = 2;
+                        }
+                    }
+                }
+                _ => snap[Cube::index(next(9) as i32 - 4, next(9) as i32 - 4, next(9) as i32 - 4)] = 2,
+            }
+            snap[Cube::index(0, 0, 0)] = 0;
+            // The layers of the columns within the reach, as the game works them out.
+            let mut layers = 0u32;
+            for dz in -rc..=rc {
+                for dx in -rc..=rc {
+                    let base = Cube::index(dx, -REACH_CELLS, dz);
+                    layers |= column_layers(&snap[base..base + SIDE]);
+                }
+            }
+            let frac = (next(65536) as i32, next(65536) as i32, next(65536) as i32);
+            let steps = max_steps(power);
+            let mut full = Cube::new();
+            let mut banded = Cube::new();
+            let seed = 0xABCD_0000 + round;
+            for k in 0..GRID_POINTS {
+                let Some(step) = ray_step(k) else { continue };
+                let p = ray_power(power, seed, k);
+                let mut a = Scene { snap: &snap, res: &res, cube: &mut full };
+                trace(&mut a, frac, step, p);
+                if band_is_air(layers, frac.1, step.1, steps) {
+                    skipped_total += 1;
+                } else {
+                    let mut b = Scene { snap: &snap, res: &res, cube: &mut banded };
+                    trace(&mut b, frac, step, p);
+                }
+            }
+            assert_eq!(full.bits, banded.bits, "round {round} power {power}");
+        }
+        assert!(skipped_total > 1000, "the test must skip some rays: {skipped_total}");
+    }
+
+    #[test]
+    fn column_layers_flags_every_block() {
+        let mut rng = 0x1357_9BDFu32;
+        for _ in 0..2000 {
+            let mut col = [0u8; SIDE];
+            for c in col.iter_mut() {
+                rng ^= rng << 13;
+                rng ^= rng >> 17;
+                rng ^= rng << 5;
+                *c = if rng & 3 == 0 { (rng >> 8) as u8 } else { 0 };
+            }
+            let mut want = 0u32;
+            for (k, &c) in col.iter().enumerate() {
+                want |= ((c != 0) as u32) << k;
+            }
+            assert_eq!(column_layers(&col), want);
+        }
+    }
+
+    #[test]
+    fn reach_covers_the_longest_ray() {
+        for power in 1..=MAX_POWER {
+            // The longest ray, in cells from the centre, at the strongest roll.
+            let steps = power * 1299 / STEP_LOSS + 1;
+            let reach = (steps as i64 * 19_661 + 65_535) / 65_536 + 1;
+            assert!(reach_of(power) as i64 >= reach.min(REACH_CELLS as i64), "power {power}");
         }
     }
 
