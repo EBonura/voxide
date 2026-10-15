@@ -14,7 +14,6 @@
 //! fire_blast.rs) run its #[cfg(test)] module.
 
 /// Rays a full explosion casts: the surface of the 16^3 grid.
-#[allow(dead_code)]
 pub const RAYS: u32 = 1352;
 /// Grid points, indexed 0..4096; only the 1,352 on the surface cast a ray.
 pub const GRID_POINTS: u32 = 16 * 16 * 16;
@@ -44,7 +43,7 @@ pub fn mix(seed: u32, k: u32) -> u32 {
 }
 
 /// Integer square root, rounded down.
-pub fn isqrt(n: u32) -> u32 {
+pub const fn isqrt(n: u32) -> u32 {
     if n < 2 {
         return n;
     }
@@ -59,7 +58,7 @@ pub fn isqrt(n: u32) -> u32 {
 
 /// The direction of grid point `k` as a step of 0.3 of a block, Q16 a step
 /// per axis, or `None` for the interior points that cast no ray.
-pub fn ray_step(k: u32) -> Option<(i32, i32, i32)> {
+pub const fn ray_step(k: u32) -> Option<(i32, i32, i32)> {
     let (gx, gy, gz) = ((k & 15) as i32, ((k >> 4) & 15) as i32, (k >> 8) as i32);
     if gx != 0 && gx != 15 && gy != 0 && gy != 15 && gz != 0 && gz != 15 {
         return None;
@@ -75,6 +74,37 @@ pub fn ray_step(k: u32) -> Option<(i32, i32, i32)> {
         vy * 256 * STEP / len,
         vz * 256 * STEP / len,
     ))
+}
+
+/// One ray of the table: the grid point it leaves through (the hash key of its
+/// strength roll) and its step per axis, Q16 of a block. A step is under
+/// 19,661, so 16 bits hold it.
+#[derive(Copy, Clone)]
+pub struct RayDir {
+    pub k: u16,
+    pub sx: i16,
+    pub sy: i16,
+    pub sz: i16,
+}
+
+/// The 1,352 rays in grid order, worked out when the game is compiled. Every
+/// blast used to find each direction again: a square root by Newton's method
+/// (some fifteen divides, 36 cycles each on the R3000) and three more
+/// divides, a third of the whole ray stage.
+pub static RAY_DIRS: [RayDir; RAYS as usize] = ray_dirs();
+
+const fn ray_dirs() -> [RayDir; RAYS as usize] {
+    let mut out = [RayDir { k: 0, sx: 0, sy: 0, sz: 0 }; RAYS as usize];
+    let mut k = 0;
+    let mut n = 0;
+    while k < GRID_POINTS {
+        if let Some((x, y, z)) = ray_step(k) {
+            out[n] = RayDir { k: k as u16, sx: x as i16, sy: y as i16, sz: z as i16 };
+            n += 1;
+        }
+        k += 1;
+    }
+    out
 }
 
 /// A ray's starting strength in thousandths, power x (0.7 + 0.6 r).
@@ -164,35 +194,55 @@ pub struct Scene<'a> {
 /// (Q16, 0 to 65535 an axis), `step` the ray's step, `power_k` its starting
 /// strength in thousandths. Every cell the ray still had strength to break is
 /// marked in the scene's cube. Consecutive steps in one cell look it up once.
+///
+/// A step is under a third of a cell, so a ray changes cell by at most one
+/// on each axis at a time and the cell's index follows by adding the three
+/// strides, where it used to be rebuilt with two multiplies (the largest
+/// single cost of the ray stage: the R3000 stalls on each). A ray is a
+/// straight line, so one that leaves the cube never returns and can stop.
 pub fn trace(scene: &mut Scene, frac: (i32, i32, i32), step: (i32, i32, i32), power_k: i32) {
+    if power_k <= 0 {
+        return;
+    }
+    // The three tables as locals: through `scene` each look was a load first.
+    let snap = scene.snap;
+    let table = scene.res;
+    let bits = &mut scene.cube.bits;
     let (mut px, mut py, mut pz) = frac;
+    let (mut cx, mut cy, mut cz) = (px >> 16, py >> 16, pz >> 16);
+    if !Cube::contains_cell(cx, cy, cz) {
+        return;
+    }
     let mut left = power_k;
-    let mut last = i32::MAX;
-    let mut res = NO_BLOCK;
-    let mut idx = usize::MAX;
-    while left > 0 {
-        let (cx, cy, cz) = (px >> 16, py >> 16, pz >> 16);
-        let key = (cx + 16) | ((cy + 16) << 6) | ((cz + 16) << 12);
-        if key != last {
-            last = key;
-            if Cube::contains_cell(cx, cy, cz) {
-                idx = Cube::index(cx, cy, cz);
-                res = scene.res[scene.snap[idx] as usize];
-            } else {
-                idx = usize::MAX;
-                res = NO_BLOCK;
-            }
-        }
+    let mut idx = Cube::index(cx, cy, cz);
+    let mut res = table[snap[idx] as usize];
+    loop {
         if res != NO_BLOCK {
             left -= (res + 30) * 3;
-            if left > 0 && idx != usize::MAX {
-                scene.cube.bits[idx >> 5] |= 1 << (idx & 31);
+            if left > 0 {
+                bits[idx >> 5] |= 1 << (idx & 31);
             }
         }
         left -= STEP_LOSS;
+        if left <= 0 {
+            return;
+        }
         px += step.0;
         py += step.1;
         pz += step.2;
+        let (nx, ny, nz) = (px >> 16, py >> 16, pz >> 16);
+        if nx != cx || ny != cy || nz != cz {
+            const R: i32 = REACH_CELLS;
+            const SIDE_I: i32 = SIDE as i32;
+            if (nx + R) as u32 > 2 * R as u32 || (ny + R) as u32 > 2 * R as u32 || (nz + R) as u32 > 2 * R as u32 {
+                return;
+            }
+            idx = (idx as i32 + (nx - cx) * SIDE_I + (ny - cy) + (nz - cz) * SIDE_I * SIDE_I) as usize;
+            cx = nx;
+            cy = ny;
+            cz = nz;
+            res = table[snap[idx] as usize];
+        }
     }
 }
 
@@ -320,6 +370,21 @@ mod tests {
     }
 
     #[test]
+    fn ray_table_is_the_rays_in_grid_order() {
+        let mut n = 0;
+        let mut k = 0;
+        while k < GRID_POINTS {
+            if let Some((x, y, z)) = ray_step(k) {
+                let d = RAY_DIRS[n];
+                assert_eq!((d.k as u32, d.sx as i32, d.sy as i32, d.sz as i32), (k, x, y, z));
+                n += 1;
+            }
+            k += 1;
+        }
+        assert_eq!(n, RAYS as usize);
+    }
+
+    #[test]
     fn steps_are_a_third_of_a_block() {
         let mut k = 0;
         while k < GRID_POINTS {
@@ -355,6 +420,93 @@ mod tests {
             }
         }
         assert_eq!(seen, 2);
+    }
+
+    /// The ray as it was before the index followed the steps: rebuilt from the
+    /// position at every cell change, and run to the end even outside the cube.
+    fn trace_reference(scene: &mut Scene, frac: (i32, i32, i32), step: (i32, i32, i32), power_k: i32) {
+        let (mut px, mut py, mut pz) = frac;
+        let mut left = power_k;
+        let mut last = i32::MAX;
+        let mut res = NO_BLOCK;
+        let mut idx = usize::MAX;
+        while left > 0 {
+            let (cx, cy, cz) = (px >> 16, py >> 16, pz >> 16);
+            let key = (cx + 16) | ((cy + 16) << 6) | ((cz + 16) << 12);
+            if key != last {
+                last = key;
+                if Cube::contains_cell(cx, cy, cz) {
+                    idx = Cube::index(cx, cy, cz);
+                    res = scene.res[scene.snap[idx] as usize];
+                } else {
+                    idx = usize::MAX;
+                    res = NO_BLOCK;
+                }
+            }
+            if res != NO_BLOCK {
+                left -= (res + 30) * 3;
+                if left > 0 && idx != usize::MAX {
+                    scene.cube.bits[idx >> 5] |= 1 << (idx & 31);
+                }
+            }
+            left -= STEP_LOSS;
+            px += step.0;
+            py += step.1;
+            pz += step.2;
+        }
+    }
+
+    /// The faster ray marks exactly the cells the old one did, for every ray
+    /// direction, strengths from nothing to a charged sapper's, any start
+    /// inside the centre cell, and a world of mixed resistance.
+    #[test]
+    fn trace_marks_what_it_always_marked() {
+        let mut snap = [0u8; CELLS];
+        let mut res = [NO_BLOCK; 256];
+        // Block 1 dirt-soft, 2 stone, 3 obsidian-hard, 4 leaves-soft; 0 air.
+        res[1] = 50;
+        res[2] = 600;
+        res[3] = 120_000;
+        res[4] = 20;
+        let mut rng = 0x1234_5678u32;
+        let mut next = |m: u32| {
+            rng ^= rng << 13;
+            rng ^= rng >> 17;
+            rng ^= rng << 5;
+            (rng >> 4) % m
+        };
+        for round in 0..6 {
+            // Round 0 is open air; the rest scatter blocks of rising density.
+            for c in snap.iter_mut() {
+                *c = if round == 0 || next(10) >= round as u32 + 1 { 0 } else { (1 + next(4)) as u8 };
+            }
+            // The centre cell is where the blast stands: open.
+            snap[Cube::index(0, 0, 0)] = 0;
+            let mut fast = Cube::new();
+            let mut slow = Cube::new();
+            let mut checked = 0;
+            for k in 0..GRID_POINTS {
+                let Some(step) = ray_step(k) else { continue };
+                let frac = (next(65536) as i32, next(65536) as i32, next(65536) as i32);
+                let power_k = match k % 5 {
+                    0 => 0,
+                    1 => 700,
+                    _ => 6 * (700 + next(600) as i32),
+                };
+                {
+                    let mut a = Scene { snap: &snap, res: &res, cube: &mut fast };
+                    trace(&mut a, frac, step, power_k);
+                }
+                {
+                    let mut b = Scene { snap: &snap, res: &res, cube: &mut slow };
+                    trace_reference(&mut b, frac, step, power_k);
+                }
+                checked += 1;
+            }
+            assert_eq!(checked, RAYS);
+            assert_eq!(fast.bits, slow.bits, "round {round}");
+            assert!(round == 0 || fast.count() > 0);
+        }
     }
 
     #[test]

@@ -1369,6 +1369,26 @@ const FOG_BANDS: usize = 16;
 const FOG_SHIFT: u32 = 7;
 #[inline(never)]
 fn advance_streaming() {
+    // A crater the player can see: mesh its chunks now, as far as the frame's
+    // spare time goes, instead of three slices a frame. One chunk is a few
+    // dozen slices of a few tens of thousands of cycles each; at the ordinary
+    // pace four of them were most of a second.
+    if world::blast_remesh_urgent(false) && world::blast_remesh_due() {
+        world::blast_remesh_begin();
+        let budget = slack::mesh_budget();
+        let mut watch = slack::Stopwatch::start();
+        world::gen_tick();
+        let mut n = 0;
+        while n < 64 {
+            world::stream_tick_claim(true);
+            n += 1;
+            if watch.elapsed() >= budget || !world::blast_remesh_urgent(false) {
+                break;
+            }
+        }
+        world::blast_remesh_end();
+        slack::mesh_done(watch.elapsed());
+    }
     // Slices scale with the streaming BACKLOG and nothing else. Render-headroom
     // thresholds have been wrong here twice: the original tiers (240 quads /
     // 1000 faces / dt==1) are exceeded on every normal terrain frame, which
@@ -3917,6 +3937,7 @@ fn main() {
         // gets one slice; cheap views get two. This breaks the old feedback loop
         // where a slow frame performed more streaming and became slower still.
         telemetry::stage_begin(ST_MESH);
+        world::set_view(cam.x, cam.z, cam.sy, cam.cy);
         advance_streaming();
         telemetry::stage_end(ST_MESH);
         telemetry::stage_end(ST_RENDER);
@@ -5411,6 +5432,9 @@ const FLUID_PERIOD: u32 = units::java_ticks(5) as u32;
 #[inline(never)]
 fn world_tick(player: &mut Player, dwell: &mut u16, n: u32) -> bool {
     telemetry::stage_begin(telemetry::stage::GAME_LOGIC);
+    // A blast in progress, or primed TNT waiting for the queue, is what the
+    // player is watching: the frame spends nearly all its spare time on it.
+    slack::set_urgent(world::blast_busy() || tnt::pending_count() > 0);
     slack::frame_begin(); // this frame's spare time, for blasts and flames
     let mut travel = false;
     let mut w = 0;
@@ -5426,6 +5450,7 @@ fn world_tick(player: &mut Player, dwell: &mut u16, n: u32) -> bool {
         // frame: a catch-up frame's later ticks add nothing).
         if w == 0 {
             world::blast_tick();
+            slack::job_done();
         }
         telemetry::stage_begin(41);
         world::fire_tick(); // flames age, spread and burn
@@ -8063,6 +8088,33 @@ static mut DROP_VZ: [i32; MAX_DROPS] = [0; MAX_DROPS];
 static mut DROP_AGE: [u16; MAX_DROPS] = [0; MAX_DROPS];
 static mut DROP_DELAY: [u8; MAX_DROPS] = [0; MAX_DROPS];
 static mut DROP_REST: [bool; MAX_DROPS] = [false; MAX_DROPS];
+
+/// Live item drops and particles, for the TNT lab's words.
+#[cfg(feature = "fire-lab")]
+pub fn lab_live_drops() -> i32 {
+    let mut n = 0;
+    let mut i = 0;
+    while i < MAX_DROPS {
+        if unsafe { DROP_ITEM[i] } != AIR {
+            n += 1;
+        }
+        i += 1;
+    }
+    n
+}
+
+#[cfg(feature = "fire-lab")]
+pub fn lab_live_particles() -> i32 {
+    let mut n = 0;
+    let mut i = 0;
+    while i < MAX_PARTICLES {
+        if unsafe { PART_LIFE[i] } != 0 {
+            n += 1;
+        }
+        i += 1;
+    }
+    n
+}
 
 /// Spawn the drop for `block` at a world point, scattered by `seed`. Silently
 /// does nothing for blocks that yield nothing (leaves, fluids, flowers) or when
@@ -11173,6 +11225,7 @@ fn frame_present(fb: &mut FrameBuffer, in_flight: &mut bool) {
     slack::idle_begin(); // the waits from here are the frame's spare time
     gpu::submit_linked_list_wait();
     gpu::draw_sync();
+    slack::idle_mark();
     telemetry::stage_end(47);
 
     // The completed back buffer is only exposed at a VBlank boundary. swap()

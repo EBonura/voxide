@@ -669,6 +669,11 @@ fn abort_stream_mesh() {
     unsafe {
         if MESH_S != usize::MAX {
             CHUNKS[MESH_S].dirty = true;
+            // A decode cut short leaves the scratch half this chunk's and half
+            // the last owner's: nobody may trust it as either.
+            if MESH_PREP == 0 && MESH_DECODE > 0 {
+                MESH_SCRATCH_OWNER = usize::MAX;
+            }
         }
         if MESH_COMMIT_SLOT != NO_SLOT {
             POOL_OWNER[MESH_COMMIT_SLOT as usize] = usize::MAX;
@@ -2005,6 +2010,9 @@ struct BlastJob {
     fz: i32,
     power: i32,
     seed: u32,
+    /// Within the player's render range: the crater is on screen soon, so its
+    /// work is urgent (slack.rs).
+    near: bool,
 }
 
 const NO_BLAST: BlastJob = BlastJob {
@@ -2016,6 +2024,7 @@ const NO_BLAST: BlastJob = BlastJob {
     fz: 0,
     power: 0,
     seed: 0,
+    near: false,
 };
 static mut BQ: [BlastJob; BLAST_Q] = [NO_BLAST; BLAST_Q];
 static mut BQ_HEAD: usize = 0;
@@ -2027,7 +2036,7 @@ static mut BJ_LIVE: bool = false;
 static mut BLAST_DONE: u32 = 0;
 /// The next column of the snapshot to read, 0..SIDE^2.
 static mut BJ_SNAP: usize = 0;
-/// The next grid point to cast, 0..4096.
+/// The next ray to cast, 0..RAYS.
 static mut BJ_K: u32 = 0;
 /// The next cube column to break, 0..SIDE^2.
 static mut BJ_COL: usize = 0;
@@ -2038,6 +2047,9 @@ static mut BJ_N: u32 = 0;
 static mut BJ_LO: (i32, i32) = (0, 0);
 static mut BJ_HI: (i32, i32) = (0, 0);
 static mut BJ_LOG: bool = false;
+/// Cells blasts have broken, cumulative (the TNT lab's words).
+#[cfg(feature = "fire-lab")]
+static mut LAB_BROKEN: u32 = 0;
 static mut BCUBE: crate::blast::Cube = crate::blast::Cube::new();
 /// The blocks around the centre, as they were when the blast began: a ray
 /// reads this, a byte a cell, not the world, which costs a run walk a block.
@@ -2075,6 +2087,8 @@ pub fn explode(x: i32, y: i32, z: i32, power: i32, seed: u32) -> bool {
             fz: (z - cz * BLOCK) << 10,
             power,
             seed,
+            near: (floor_div(cx, CW) - PLAYER_CX).abs().max((floor_div(cz, CW) - PLAYER_CZ).abs())
+                <= RENDER_R,
         };
         BQ_LEN += 1;
     }
@@ -2088,6 +2102,7 @@ pub fn blast_reset() {
         BQ_LEN = 0;
         BJ_LIVE = false;
         BLAST_DONE = 0;
+        BLAST_REMESH = 0;
     }
 }
 
@@ -2140,89 +2155,115 @@ fn blast_snapshot(job: &BlastJob, count: usize) {
 /// One sim tick of the blast job: as much of it as the frame has time for
 /// (slack.rs; the first unit of a frame always runs). A job is a snapshot of
 /// the blocks around its centre, the rays, then breaking the cells they
-/// reached a column at a time. Call it on the first tick of a frame; a
-/// catch-up frame's other ticks have nothing to add.
+/// reached a column at a time. A phase that finishes with time left hands over
+/// to the next in the same call, and so does a finished blast to the next
+/// queued one. Call it on the first tick of a frame; a catch-up frame's other
+/// ticks have nothing to add.
 #[inline(never)]
 pub fn blast_tick() {
     unsafe {
-        if !BJ_LIVE {
-            if BQ_LEN == 0 {
-                return;
+        loop {
+            if !BJ_LIVE {
+                if BQ_LEN == 0 {
+                    return;
+                }
+                BJ = BQ[BQ_HEAD];
+                BQ_HEAD = (BQ_HEAD + 1) % BLAST_Q;
+                BQ_LEN -= 1;
+                BJ_LIVE = true;
+                BJ_SNAP = 0;
+                BJ_K = 0;
+                BJ_COL = 0;
+                BJ_WAIT = 0;
+                BJ_N = 0;
+                BJ_LO = (i32::MAX, i32::MAX);
+                BJ_HI = (i32::MIN, i32::MIN);
+                BJ_LOG = false;
+                (*(&raw mut BCUBE)).clear();
+                blast_res_table();
             }
-            BJ = BQ[BQ_HEAD];
-            BQ_HEAD = (BQ_HEAD + 1) % BLAST_Q;
-            BQ_LEN -= 1;
-            BJ_LIVE = true;
-            BJ_SNAP = 0;
-            BJ_K = 0;
-            BJ_COL = 0;
-            BJ_WAIT = 0;
-            BJ_N = 0;
-            BJ_LO = (i32::MAX, i32::MAX);
-            BJ_HI = (i32::MIN, i32::MIN);
-            BJ_LOG = false;
-            (*(&raw mut BCUBE)).clear();
-            blast_res_table();
-        }
-        let job = BJ;
-        let side = crate::blast::SIDE;
-        if BJ_SNAP < side * side {
-            crate::telemetry::stage_begin(37);
-            while BJ_SNAP < side * side && crate::slack::room() {
-                blast_snapshot(&job, BLAST_SNAP_BATCH);
+            let job = BJ;
+            let side = crate::blast::SIDE;
+            if BJ_SNAP < side * side {
+                crate::telemetry::stage_begin(37);
+                while BJ_SNAP < side * side && crate::slack::room() {
+                    blast_snapshot(&job, BLAST_SNAP_BATCH);
+                }
+                crate::telemetry::stage_end(37);
+                if BJ_SNAP < side * side {
+                    return;
+                }
             }
-            crate::telemetry::stage_end(37);
-            return;
-        }
-        if BJ_K < crate::blast::GRID_POINTS {
-            let mut scene = crate::blast::Scene {
-                snap: &*(&raw const BSNAP),
-                res: &*(&raw const BRES),
-                cube: &mut *(&raw mut BCUBE),
-            };
-            crate::telemetry::stage_begin(36);
-            while BJ_K < crate::blast::GRID_POINTS && crate::slack::room() {
-                let mut cast = 0;
-                while BJ_K < crate::blast::GRID_POINTS && cast < BLAST_RAY_BATCH {
-                    let k = BJ_K;
-                    BJ_K += 1;
-                    if let Some(step) = crate::blast::ray_step(k) {
+            if BJ_K < crate::blast::RAYS {
+                let mut scene = crate::blast::Scene {
+                    snap: &*(&raw const BSNAP),
+                    res: &*(&raw const BRES),
+                    cube: &mut *(&raw mut BCUBE),
+                };
+                crate::telemetry::stage_begin(36);
+                while BJ_K < crate::blast::RAYS && crate::slack::room() {
+                    let mut cast = 0;
+                    while BJ_K < crate::blast::RAYS && cast < BLAST_RAY_BATCH {
+                        let d = &crate::blast::RAY_DIRS[BJ_K as usize];
+                        BJ_K += 1;
                         cast += 1;
                         crate::blast::trace(
                             &mut scene,
                             (job.fx, job.fy, job.fz),
-                            step,
-                            crate::blast::ray_power(job.power, job.seed, k),
+                            (d.sx as i32, d.sy as i32, d.sz as i32),
+                            crate::blast::ray_power(job.power, job.seed, d.k as u32),
                         );
                     }
                 }
-            }
-            crate::telemetry::stage_end(36);
-            if BJ_K >= crate::blast::GRID_POINTS {
+                crate::telemetry::stage_end(36);
+                if BJ_K < crate::blast::RAYS {
+                    return;
+                }
                 // Log the holes only if all of them fit with room to spare: a
                 // partly logged crater would come back half filled on a
                 // reload, and a full log loses the player's own building.
                 BJ_LOG = crate::EDIT_N + (*(&raw const BCUBE)).count() as usize + 128
                     <= crate::MAX_EDITS;
             }
-            return;
+            crate::telemetry::stage_begin(38);
+            let more = blast_break(&job);
+            crate::telemetry::stage_end(38);
+            if more {
+                return;
+            }
+            // Every column is broken. A player-edit mesh in flight snapshots its
+            // chunk and would clear the dirty flag we set, so wait for it
+            // (briefly) before marking the chunks.
+            if edit_backlog() && BJ_WAIT < BLAST_APPLY_WAIT {
+                BJ_WAIT += 1;
+                return;
+            }
+            blast_finish();
+            BLAST_DONE = BLAST_DONE.wrapping_add(1);
+            BJ_LIVE = false;
+            // The next queued blast goes on in this frame if it has time left.
+            if BQ_LEN == 0 || !crate::slack::room() {
+                return;
+            }
         }
-        crate::telemetry::stage_begin(38);
-        let more = blast_break(&job);
-        crate::telemetry::stage_end(38);
-        if more {
-            return;
+    }
+}
+
+/// A blast near the player is queued or being worked, or its chunks have not
+/// been meshed yet: the frame spends its urgent share on it (slack.rs).
+pub fn blast_busy() -> bool {
+    unsafe {
+        if blast_remesh_urgent(true) || (BJ_LIVE && BJ.near) {
+            return true;
         }
-        // Every column is broken. A player-edit mesh in flight snapshots its
-        // chunk and would clear the dirty flag we set, so wait for it
-        // (briefly) before marking the chunks.
-        if edit_backlog() && BJ_WAIT < BLAST_APPLY_WAIT {
-            BJ_WAIT += 1;
-            return;
+        let mut i = 0;
+        while i < BQ_LEN {
+            if BQ[(BQ_HEAD + i) % BLAST_Q].near {
+                return true;
+            }
+            i += 1;
         }
-        blast_finish();
-        BLAST_DONE = BLAST_DONE.wrapping_add(1);
-        BJ_LIVE = false;
+        false
     }
 }
 
@@ -2329,6 +2370,10 @@ fn blast_column(job: &BlastJob, x: i32, z: i32, mask: u32) {
     if clear == 0 {
         return;
     }
+    #[cfg(feature = "fire-lab")]
+    unsafe {
+        LAB_BROKEN += clear.count_ones();
+    }
     // Chunk-local column and the height mask (the chunk is the world's full
     // height, so a cell's height is its y).
     let (cx, cz) = (floor_div(x, CW), floor_div(z, CW));
@@ -2343,8 +2388,13 @@ fn blast_column(job: &BlastJob, x: i32, z: i32, mask: u32) {
         } else {
             (clear as u64) >> (-y0)
         };
-        if rle::rset_mask(s, lz * CWU + lx, ymask, AIR) && MESH_SCRATCH_OWNER == s {
-            // A mesh scratch of this chunk (a stream mesh in flight) keeps up.
+        // The scratch keeps up when it holds this chunk's blocks. A mesh in
+        // flight for another chunk is decoding into it (or already holds that
+        // chunk), so it is left alone.
+        if rle::rset_mask(s, lz * CWU + lx, ymask, AIR)
+            && MESH_SCRATCH_OWNER == s
+            && (MESH_S == usize::MAX || MESH_S == s)
+        {
             let mut mm = ymask;
             while mm != 0 {
                 let y = mm.trailing_zeros() as usize;
@@ -2359,6 +2409,116 @@ fn blast_column(job: &BlastJob, x: i32, z: i32, mask: u32) {
     }
 }
 
+/// The chunks a blast has marked for a remesh and not yet seen meshed, a bit
+/// per chunk slot. The remesh of these is what the player is waiting to see.
+static mut BLAST_REMESH: u32 = 0;
+
+/// Frames the marked chunks have waited (a chunk that cannot be meshed must
+/// not hold the urgent share for good).
+static mut BLAST_REMESH_AGE: u16 = 0;
+/// The frames after which unmeshed chunks stop being urgent: 10 s at 30 fps.
+const BLAST_REMESH_GIVE_UP: u16 = 300;
+/// The camera, for the chunks of a crater the player can see.
+static mut VIEW: (i32, i32, i32, i32) = (0, 0, 0, 4096);
+/// While a mesh burst runs, the only chunks it may claim (a bit per slot).
+static mut CLAIM_ONLY: u32 = 0;
+
+/// Note where the camera is and which way it faces (world units, Q12 sine and
+/// cosine of the yaw), once a frame before the streaming.
+pub fn set_view(x: i32, z: i32, sy: i32, cy: i32) {
+    unsafe { VIEW = (x, z, sy, cy) };
+}
+
+/// Could any of chunk (cx, cz) be on screen? The test the renderer applies to
+/// a chunk before it walks its faces: in front of the camera or within a chunk
+/// behind it, inside the draw distance, and not wholly past the side of the
+/// view cone.
+fn chunk_in_view(cx: i32, cz: i32) -> bool {
+    let (vx, vz, sy, cy) = unsafe { VIEW };
+    let chunk_r = 12 * BLOCK;
+    let dx = (cx * CW + CW / 2) * BLOCK - vx;
+    let dz = (cz * CW + CW / 2) * BLOCK - vz;
+    let zc = (dx * sy + dz * cy) >> 12;
+    let xc = (dx * cy - dz * sy) >> 12;
+    zc >= -chunk_r
+        && zc - chunk_r <= crate::FAR_Z
+        && (zc <= 0 || (xc.abs() - chunk_r) <= zc * 160 / crate::PROJ_H)
+}
+
+/// The marked chunks the player can see and that still wait for a new mesh,
+/// a bit per slot. Drops the marks of chunks that are meshed, or outside the
+/// render range (they mesh when they return).
+fn blast_remesh_view() -> u32 {
+    let mut seen = 0;
+    unsafe {
+        let mut bits = BLAST_REMESH;
+        while bits != 0 {
+            let s = bits.trailing_zeros() as usize;
+            bits &= bits - 1;
+            if !(CHUNKS[s].loaded && in_render_range(s) && (CHUNKS[s].dirty || MESH_S == s)) {
+                BLAST_REMESH &= !(1 << s);
+            } else if chunk_in_view(CHUNKS[s].cx, CHUNKS[s].cz) {
+                seen |= 1 << s;
+            }
+        }
+    }
+    seen
+}
+
+/// Does a crater the player can see wait for its mesh? `frame` counts the
+/// look as a frame's, so that a chunk which cannot be meshed stops being
+/// urgent after a while.
+pub fn blast_remesh_urgent(frame: bool) -> bool {
+    unsafe {
+        if blast_remesh_view() == 0 {
+            BLAST_REMESH_AGE = 0;
+            return false;
+        }
+        if frame {
+            BLAST_REMESH_AGE += 1;
+            if BLAST_REMESH_AGE > BLAST_REMESH_GIVE_UP {
+                BLAST_REMESH = 0;
+                BLAST_REMESH_AGE = 0;
+                return false;
+            }
+        }
+        true
+    }
+}
+
+/// The burst may claim only the craters in view; the rest of the marked
+/// chunks mesh at the ordinary pace.
+pub fn blast_remesh_begin() {
+    unsafe { CLAIM_ONLY = blast_remesh_view() };
+}
+
+pub fn blast_remesh_end() {
+    unsafe { CLAIM_ONLY = 0 };
+}
+
+/// The sim tick the last mesh burst began.
+static mut BURST_TICK: u32 = 0;
+/// How long a chain of blasts waits between mesh bursts, sim ticks (1 s): each
+/// blast of a cluster dirties the same few chunks, and meshing them after
+/// every one costs more than the blasts do.
+const BURST_HOLD: u32 = 60;
+
+/// May the marked chunks be meshed in a burst now? Yes when no blast is left
+/// to work (its craters are all there is to show), and otherwise once a
+/// second so a long chain shows its craters growing.
+pub fn blast_remesh_due() -> bool {
+    unsafe {
+        let now = crate::SIM_TICK;
+        if (!BJ_LIVE && BQ_LEN == 0 && crate::tnt::pending_count() == 0)
+            || now.wrapping_sub(BURST_TICK) >= BURST_HOLD
+        {
+            BURST_TICK = now;
+            return true;
+        }
+        false
+    }
+}
+
 /// The last step of a blast: mark the chunks around the broken columns for a
 /// remesh, which streams in over the next frames.
 fn blast_finish() {
@@ -2366,18 +2526,28 @@ fn blast_finish() {
         if BJ_LO.0 == i32::MAX {
             return;
         }
-        if MESH_S != usize::MAX {
-            abort_stream_mesh();
-        }
         // A chunk's mesh reads one cell into its neighbours (faces and AO), so
         // the chunks around the broken columns' box, one cell out, are redone.
         let (c0x, c1x) = (floor_div(BJ_LO.0 - 1, CW), floor_div(BJ_HI.0 + 1, CW));
         let (c0z, c1z) = (floor_div(BJ_LO.1 - 1, CW), floor_div(BJ_HI.1 + 1, CW));
+        // A mesh in flight for one of these chunks is stale: start it over. One
+        // for any other chunk goes on (a chain of blasts would otherwise
+        // restart the mesh at every blast and never finish one).
+        if MESH_S != usize::MAX {
+            let (mx, mz) = (CHUNKS[MESH_S].cx, CHUNKS[MESH_S].cz);
+            if mx >= c0x && mx <= c1x && mz >= c0z && mz <= c1z {
+                abort_stream_mesh();
+            }
+        }
         let mut cz = c0z;
         while cz <= c1z {
             let mut cx = c0x;
             while cx <= c1x {
                 set_dirty(cx, cz);
+                let s = slot(cx, cz);
+                if CHUNKS[s].loaded && CHUNKS[s].cx == cx && CHUNKS[s].cz == cz {
+                    BLAST_REMESH |= 1 << s;
+                }
                 cx += 1;
             }
             cz += 1;
@@ -2759,6 +2929,67 @@ pub fn fire_count() -> i32 {
 #[allow(dead_code)]
 pub fn fluid_pending() -> i32 {
     unsafe { FQ_LEN as i32 }
+}
+
+/// Where the blast job in hand is: 0 none, 1 snapshot, 2 rays, 3 breaking,
+/// 4 waiting to mark the chunks. The TNT lab's word.
+#[cfg(feature = "fire-lab")]
+pub fn lab_stage() -> i32 {
+    unsafe {
+        let side = crate::blast::SIDE;
+        if !BJ_LIVE {
+            0
+        } else if BJ_SNAP < side * side {
+            1
+        } else if BJ_K < crate::blast::RAYS {
+            2
+        } else if BJ_COL < side * side {
+            3
+        } else {
+            4
+        }
+    }
+}
+
+#[cfg(feature = "fire-lab")]
+pub fn lab_broken() -> i32 {
+    unsafe { LAB_BROKEN as i32 }
+}
+
+/// Resident in-range chunks whose mesh is out of date, plus one for a mesh in
+/// flight and one for an edit mesh in flight.
+#[cfg(feature = "fire-lab")]
+pub fn lab_dirty() -> i32 {
+    let mut n = 0;
+    unsafe {
+        let mut s = 0;
+        while s < NCHUNKS {
+            if CHUNKS[s].loaded && CHUNKS[s].dirty && in_render_range(s) {
+                n += 1;
+            }
+            s += 1;
+        }
+        if MESH_S != usize::MAX {
+            n += 1;
+        }
+        if EDIT_MESH_S != usize::MAX {
+            n += 1;
+        }
+    }
+    n
+}
+
+/// Does the chunk at (cx, cz) wait for a mesh, or is one being built? The TNT
+/// lab asks it of the chunks in view.
+#[cfg(feature = "fire-lab")]
+pub fn lab_chunk_pending(cx: i32, cz: i32) -> bool {
+    let s = slot(cx, cz);
+    unsafe {
+        CHUNKS[s].loaded
+            && CHUNKS[s].cx == cx
+            && CHUNKS[s].cz == cz
+            && (CHUNKS[s].dirty || MESH_S == s || EDIT_MESH_S == s)
+    }
 }
 
 /// Blasts being worked or waiting, for the lab and the gates.
@@ -5008,7 +5239,11 @@ pub fn stream_tick() {
             let mut best_d = i32::MAX;
             let mut s = 0;
             while s < NCHUNKS {
-                if CHUNKS[s].loaded && CHUNKS[s].dirty && in_render_range(s) {
+                if CHUNKS[s].loaded
+                    && CHUNKS[s].dirty
+                    && in_render_range(s)
+                    && (CLAIM_ONLY == 0 || CLAIM_ONLY >> s & 1 != 0)
+                {
                     let d = (CHUNKS[s].cx - PLAYER_CX)
                         .abs()
                         .max((CHUNKS[s].cz - PLAYER_CZ).abs());

@@ -463,8 +463,18 @@ value = 1
 note = "only placement was edited before the blast"
 
 [[step]]
-label = "stand still while the fuse expires and the blast finishes"
-wait = 600
+label = "stand still while the fuse expires"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 0 }
+timeout = 600
+
+[[step]]
+label = "the crater's blocks are gone within half a second of the fuse"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 32, op = "ge", value = 1 }
+timeout = 30
+
+[[step]]
+label = "the crater's mesh and the rest of the blast settle"
+wait = 300
 
 [[step]]
 checkpoint = "tnt-after-fuse"

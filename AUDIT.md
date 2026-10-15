@@ -51,6 +51,101 @@ hunger point every 10 s (a tick-rate bug), which is the likely source of "you di
 quickly from hunger". Starvation cannot kill on Normal (it stops at 1 hp). Music is
 checked below.
 
+## 2026-10-15: how fast an explosion shows (TNT, creepers)
+
+Manny: "the TNT does explode, but the world is taking a lot to update". The
+rules did not change, only when the work happens. `W:` is
+`https://minecraft.wiki/w/`.
+
+| Rule | VoXide | Source | Status |
+|---|---|---|---|
+| Block damage | 1,352 rays from the centre, each power x (0.7 to 1.3), 0.3 block steps, 0.225 lost a step and (resistance + 0.3) x 0.3 in a block | W:Explosion | matches, unchanged |
+| TNT power, fuse | power 4, 80 game tick fuse | W:TNT | matches, unchanged |
+| Chained TNT | fuse of 10 to 29 game ticks (0.5 to 1.5 s) | W:TNT | matches, unchanged |
+| Drops | each broken block keeps its drop with chance 1 / power | W:Explosion | matches, unchanged |
+| When the crater exists | Java removes the blocks in the tick the TNT goes off and the client remeshes the next frame | W:Explosion | deviation, below |
+
+The faster ray is the same ray: a host test (`blast.rs`, `trace_marks_what_it_always_marked`)
+marks the same cells as the old code for every ray direction, strengths from
+nothing to a charged sapper's, any start inside the centre cell and a world of
+mixed resistance. The 1,352 directions are a table built when the game is
+compiled (`RAY_DIRS`), so a blast casts the same rays with the same
+(seed, grid point) rolls.
+
+Where the time went (cycle profile and the tnt-lab words, PGO build, one blast
+of 79 cells on the flat arena at 30 fps): the idle time a frame could spare
+was shared out at about a third of a vblank a frame. A blast is 3.1M cycles of
+rays (a third of it the per-ray square root and divides for the direction),
+0.3M of snapshot and 0.9M of breaking, then about a million cycles of remesh
+for each chunk the crater touches (one to four), and the mesh got three slices
+a frame. Each phase of the job also ended its frame, and every blast of a
+chain restarted the mesh of whatever chunk was in flight, so a chain remeshed
+a crater it had not yet finished.
+
+Ticks after the first TNT's fuse ends (60 a second; PGO build, headless;
+`tnt-lab`, `tnt-meadow`; 4 TNT is a 2 x 2 flat, 16 a 4 x 2 x 2, only the first lit):
+
+| | TNT | blocks gone | crater meshed in view | chain done |
+|---|---|---|---|---|
+| flat arena, before | 1 | 32 to 37 | 129 | 37 |
+| flat arena, after | 1 | 9 | 17 | 9 |
+| flat arena, before | 4 | 34 | 397 | 309 |
+| flat arena, after | 4 | 8 | 185 | 143 |
+| flat arena, before | 16 | 36 | not in 960 | 943 |
+| flat arena, after | 16 | 8 | 482 | 475 |
+| spawn meadow, before | 1 | 53 to 77 | 168 | 77 |
+| spawn meadow, after | 1 | 5 to 9 | 34 | 9 |
+| spawn meadow, before | 4 | 58 | 605 | 509 |
+| spawn meadow, after | 4 | 5 | 262 | 214 |
+| spawn meadow, before | 16 | 97 | not in 960 | 905 |
+| spawn meadow, after | 16 | 6 | 790 | 751 |
+
+("Crater meshed in view" is the last tick a chunk the player faces waited for
+its new mesh. A chain's first column is the first blast; its last column is the
+last blast's blocks. "Not in 960": the 1,500 tick phase ended before the last
+chunk was meshed.) The frame strips (a single TNT and a 4-chain on the meadow, before above
+after, at matched ticks) were viewed for this audit and are not committed.
+
+Deviations, deliberate:
+
+- The crater is not there the tick the TNT goes off. The R3000 spends about 3M
+  cycles on one blast's rays and block work and 1M a crater chunk on the mesh
+  (a frame is 1.1M), so the work is spread: the blocks are gone 5 to 9 ticks
+  later, the drops with them, and the crater is on
+  screen 17 to 34 ticks (0.3 to 0.6 s) after the fuse ends for one TNT, where it
+  was 129 to 168. Java is instant.
+- Craters in view are meshed first, in a burst; chunks of the crater behind the
+  player or off to the side mesh at the old pace (three slices a frame), so
+  turning round within a second of a blast can show a stale mesh.
+- A frame spends the idle time it would have had without the blast (13/16 of
+  it, against the period the scene kept before the blast), so a chain does not
+  change the vblank rate in a scene with room, and in a scene with none it
+  takes `URGENT_MIN`, 160,000 clocks a frame, which makes a 2 vblank scene 3
+  vblanks for the length of the chain. A chain of four on the meadow ran at 3
+  vblanks for about 3 s.
+- The first six frames after a quiet spell (90 frames) may take two vblanks
+  more: one TNT cost 4 to 5 vblank frames four times on the arena and six
+  4 vblank frames then seven 3 vblank frames on the meadow, about 0.15 to 0.3
+  s of lost time, against a crater 2 to 3 s late before. This dip is the price
+  of the crater arriving 5 to 34 ticks after the fuse instead of 53 to 168.
+- Flames wait while a blast near the player is urgent (they share the frame's
+  allowance); they catch up after.
+- Chained TNT still explode in the order the queue admits them, one blast job
+  at a time, so a chain of 16 takes 8 to 12 s to finish where Java takes 1.5 s.
+  Work per blast is 3M cycles; faster than that needs a cheaper ray, not a
+  bigger share.
+- Blasts farther than the render range (`near` false) keep the old idle share.
+
+Measured outside explosions (unseen walking tape, the RC disc against this
+branch, same tool chain as the release notes): work per frame 930,955 and
+931,081 cycles (+0.014 percent), train tape 1,133,205 and 1,133,331
+(+0.011 percent), the same frames on screen (display hashes identical) and the
+same vblank counts.
+
+New gates: `tests/journey.toml` and `tests/save-repin.toml` wait for the fuse,
+then require the crater's blocks gone within 30 ticks (the old build takes 37
+to 77 and fails it; this one takes 5 to 9 in the lab).
+
 ## 2026-10-15: music (GitHub issue 1, item 3)
 
 Music is scheduled like Java's (`game/src/music_plan.rs`, `music.rs`). `W:` is

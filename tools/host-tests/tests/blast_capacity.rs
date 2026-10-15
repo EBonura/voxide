@@ -50,6 +50,7 @@ static mut CAN_SPAWN: bool = false;
 static mut ACCEPTED: usize = 0;
 static mut QUEUED_BLASTS: usize = 8;
 static mut MESH_SCRATCH_OWNER: usize = usize::MAX;
+static mut MESH_S: usize = usize::MAX;
 static mut MESH_SCRATCH: [u8; 64] = [AIR; 64];
 #[derive(Copy, Clone)]
 struct Chunk { loaded: bool, cx: i32, cz: i32 }

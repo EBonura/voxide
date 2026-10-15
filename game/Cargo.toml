@@ -58,6 +58,12 @@ save-pull = ["save-lab"]
 # scripted arena of single TNT, a chain, a big cube, fire beside TNT, a
 # burning hut and lava beside TNT. Never ship.
 fire-lab = []
+# fire-lab with only the TNT timing phases (one, four, sixteen), and the lab
+# words that stamp every stage of a blast. Never ship.
+tnt-lab = ["fire-lab"]
+# tnt-lab on the natural terrain around the spawn (grass, trees), the footprint
+# of each cluster levelled, instead of the flat arena. Never ship.
+tnt-meadow = ["tnt-lab"]
 # Headless storm captures and gates only (weather.rs): a full thunderstorm
 # from the first tick and a bolt 12 blocks ahead every 4 s. Never ship.
 storm-lab = []
