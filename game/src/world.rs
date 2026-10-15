@@ -9,7 +9,7 @@
 
 use crate::{
     floor_div, Camera, AIR, BLOCK, CACTUS, CLAY, COAL_ORE, DIAMOND_ORE, DIRS, DIRT, DOOR_O,
-    FAR_SIDE_Z, FAR_Z, FLOWER_R, FLOWER_Y, GOLD_ORE, GRASS, IRON_ORE, LAVA, LEAVES, PROJ_H, SAND,
+    FAR_SIDE_Z, FAR_TREE_SIDE_Z, FAR_Z, FLOWER_R, FLOWER_Y, GOLD_ORE, GRASS, IRON_ORE, LAVA, LEAVES, PROJ_H, SAND,
     SAPLING, SNOW, STONE, TALL_GRASS, WATER, WHEAT, WHEAT_RIPE, WOOD,
 };
 use crate::flame;
@@ -5329,16 +5329,13 @@ pub fn for_visible_faces(cam: &Camera, count: &mut usize) -> usize {
             let visible = zc >= -chunk_r
                 && zc - chunk_r <= FAR_Z
                 && (zc <= 0 || (xc.abs() - chunk_r) <= zc * 160 / PROJ_H);
-            // A chunk wholly past the side horizon contributes only its
-            // silhouette, which is its TOP faces; skip the other dirs before
-            // iterating a single face of them.
             // A far-LOD chunk holds only its top plates and the skirts between
             // height steps: few faces, and the skirts ARE its silhouette, so
-            // they draw to the far plane while a near chunk's sides stop at
-            // FAR_SIDE_Z.
+            // they draw to the far plane. A near chunk's terrain sides stop at
+            // FAR_SIDE_Z, its trees' sides at FAR_TREE_SIDE_Z.
             let far_lod = FAR_LOD && unsafe { CHUNKS[s].face_lod } == 1;
-            let tops_only = zc - chunk_r > FAR_SIDE_Z && !far_lod;
-            let side_lim = if far_lod { FAR_Z } else { FAR_SIDE_Z };
+            let plain_lim = if far_lod { FAR_Z } else { FAR_SIDE_Z };
+            let side_lim = if far_lod { FAR_Z } else { FAR_TREE_SIDE_Z };
             // Far-ring chunks: skip entirely if a ray to their surface is blocked
             // by nearer terrain (don't iterate/project a hill that's hidden behind
             // another hill). Near chunks always draw -- the ray would be too short.
@@ -5349,7 +5346,7 @@ pub fn for_visible_faces(cam: &Camera, count: &mut usize) -> usize {
                 let oxw = cx * CW * BLOCK;
                 let ozw = cz * CW * BLOCK;
                 face_work += unsafe {
-                    FaceStack::run(|| chunk_faces(cam, p, oxw, ozw, tops_only, side_lim, count))
+                    FaceStack::run(|| chunk_faces(cam, p, oxw, ozw, plain_lim, side_lim, count))
                 };
             }
         }
@@ -5376,7 +5373,7 @@ fn chunk_faces(
     p: usize,
     oxw: i32,
     ozw: i32,
-    tops_only: bool,
+    plain_lim: i32,
     side_lim: i32,
     count: &mut usize,
 ) -> usize {
@@ -5400,13 +5397,11 @@ fn chunk_faces(
     };
     let mut dir = 0;
     while dir < 6 {
-        if tops_only && dir != 2 {
-            dir += 1;
-            continue;
-        }
-        // Sides and bottoms stop at `side_lim` (FAR_SIDE_Z, or the far plane
-        // for a far-LOD chunk); tops carry the silhouette out to FAR_Z.
+        // Sides and bottoms stop at `side_lim` (a tree's, or the far plane for a
+        // far-LOD chunk), and past `plain_lim` only trees keep them; tops carry
+        // the silhouette out to FAR_Z.
         let far_lim = if dir == 2 { FAR_Z } else { side_lim };
+        let plain_lim = if dir == 2 { far_lim } else { plain_lim };
         // Visible plane sub-range for this dir: the old per-face
         // backface test compared the camera to the face's PLANE
         // coordinate only, so cutting the (plane-sorted) range is
@@ -5462,7 +5457,7 @@ fn chunk_faces(
                 plane += 1;
                 continue;
             }
-            let plane_vis = if bounds == 0 {
+            let mut plane_vis = if bounds == 0 {
                 // The face range, not this optional cache, decides
                 // whether a plane is empty.
                 1
@@ -5477,6 +5472,22 @@ fn chunk_faces(
                     far_lim,
                 )
             };
+            // A plane that lies wholly inside the far limit but reaches past the
+            // plain one still has faces to test: only its trees go on.
+            if plane_vis == 2
+                && plain_lim < far_lim
+                && plane_in_frustum(
+                    oxw - cam.x,
+                    -cam.y,
+                    ozw - cam.z,
+                    dir,
+                    plane,
+                    bounds,
+                    plain_lim,
+                ) != 2
+            {
+                plane_vis = 1;
+            }
             if plane_vis == 0 {
                 plane += 1;
                 continue;
@@ -5545,6 +5556,13 @@ fn chunk_faces(
                 // a frame dying exactly there.
                 if z2 + r < 0 || z2 > far_lim {
                     continue;
+                }
+                // Past the plain limit only a tree's sides are drawn.
+                if z2 > plain_lim {
+                    let block = ((f >> 17) & 127) as u8;
+                    if block != LEAVES && block != WOOD {
+                        continue;
+                    }
                 }
                 // Cone tests against the sphere: compare the nearest
                 // possible screen offset (|c| - r) with the FARTHEST

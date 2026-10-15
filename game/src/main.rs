@@ -131,15 +131,18 @@ const DRAW_BLOCKS: i32 = match option_env!("VOXIDE_DRAW_BLOCKS") {
 };
 const _: () = assert!(DRAW_BLOCKS >= 8 && DRAW_BLOCKS <= 32, "draw distance is 8..32 blocks");
 const FAR_Z: i32 = DRAW_BLOCKS * BLOCK;
-// Side/bottom faces used to stop two bands before the tops (FAR_Z - 2 * BLOCK):
-// the fog was meant to be solid by then, so only the silhouette, a
-// heightfield's top faces, was kept. It is not solid: the fog multiplies the
-// texel, it cannot lighten it past the haze, so a dark leaf stays green. At the
-// 16-block draw that band left every distant tree as a floating canopy of top
-// plates with its trunk and sides cut away (a recorded walk, 2026-10-15:
-// "the rendering of far objects is very weird"). Sides now reach the far plane
-// with the tops, at about 3% of the frame.
-const FAR_SIDE_Z: i32 = FAR_Z;
+// Side/bottom faces of terrain stop two bands before the tops (FAR_Z - 2 * BLOCK):
+// the fog was meant to be solid by then, so only the silhouette, a heightfield's
+// top faces, was kept. It is not solid: the fog multiplies the texel, it cannot
+// lighten it past the haze, so a dark leaf stays green. That band left every
+// distant tree as a floating canopy of top plates with its trunk and sides cut
+// away (a recorded walk, 2026-10-15: "the rendering of far objects is very
+// weird"). Trees (leaves and logs) now keep their sides out to the far plane;
+// terrain sides stop here, which costs a terrace end a spike in the haze instead
+// of about 4% of the frame (all sides to the far plane is commit dbd9a42).
+const FAR_SIDE_Z: i32 = FAR_Z - 2 * BLOCK;
+/// Where a tree's side faces stop.
+const FAR_TREE_SIDE_Z: i32 = FAR_Z;
 
 /// Decimal digits to an i32, for build-time knobs read with `option_env!`.
 const fn parse_const_i32(s: &str) -> i32 {
