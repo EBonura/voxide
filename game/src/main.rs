@@ -1423,6 +1423,12 @@ fn advance_streaming(budgeted: bool) {
     // see (a chunk within SEE_BLOCKS), then a player's edit, then nothing.
     let guaranteed = if near > 0 {
         STREAM_NEAR_SLICES
+    } else if budgeted && world::blast_remesh_urgent(false) {
+        // A crater the player can see that the burst above has not finished:
+        // the slices it always had, whatever the clock says. The burst spends
+        // the explosion's share of the frame's spare time; these keep the crater
+        // coming in the frames where that share is spent.
+        STREAM_CRATER_SLICES
     } else if world::edit_backlog() {
         STREAM_EDIT_SLICES
     } else {
@@ -1492,6 +1498,8 @@ const STREAM_FORCE_AFTER: u8 = 6;
 /// frames and now takes about five (see world::edit_backlog).
 const STREAM_NEAR_SLICES: usize = 3;
 const STREAM_EDIT_SLICES: usize = 2;
+/// The same for a visible crater still waiting for its mesh (world::blast_remesh_urgent).
+const STREAM_CRATER_SLICES: usize = 3;
 
 /// Precomputed GP0 colour words, now indexed by SKYLIGHT bucket as well as
 /// blend mode, face direction and fog band. Four buckets multiplies the table
