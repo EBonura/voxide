@@ -1,4 +1,4 @@
-//! The CHEATS page, opened from the in-game OPTIONS menu: flight, god mode,
+//! The CHEATS page, opened from OPTIONS > GAMEPLAY: flight, god mode,
 //! the coordinates readout, a full kit, the time of day, the weather and
 //! lightning, mob spawning and travel. Java's equivalents are commands
 //! (/time, /weather, /summon, /gamemode, /tp), and Java does not mark a

@@ -209,26 +209,34 @@ kind = "audio"
 window = 60
 min_peak = 200
 [[step]]
-label = "OPTIONS: up wraps to SAVE SETTINGS, MUSIC VOLUME is four rows above"
-press = ["up"]
+label = "GAME MENU: OPTIONS..., then MUSIC & SOUNDS..., which opens on MUSIC VOLUME"
+press = ["down"]
 hold = 4
 wait = 12
 [[step]]
-press = ["up"]
+press = ["cross"]
 hold = 4
 wait = 12
 [[step]]
-press = ["up"]
+press = ["down"]
 hold = 4
 wait = 12
 [[step]]
-press = ["up"]
+press = ["cross"]
 hold = 4
 wait = 12
-[[step]]
-press = ["up"]
-hold = 4
-wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 3
+note = "the MUSIC & SOUNDS page is open, on its first row"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "zero"
 [[step]]
 press = ["left"]
 hold = 4
@@ -348,25 +356,15 @@ sym = "VOXIDE_MUSIC_STATE"
 offset = 24
 op = "zero"
 [[step]]
-label = "four rows down to SAVE SETTINGS"
-press = ["down"]
+label = "O back to OPTIONS, which remembered MUSIC & SOUNDS; SAVE SETTINGS is three rows down"
+press = ["circle"]
 hold = 4
 wait = 12
 [[step]]
-label = "four rows down to SAVE SETTINGS"
 press = ["down"]
 hold = 4
 wait = 12
-[[step]]
-label = "four rows down to SAVE SETTINGS"
-press = ["down"]
-hold = 4
-wait = 12
-[[step]]
-label = "four rows down to SAVE SETTINGS"
-press = ["down"]
-hold = 4
-wait = 12
+repeat = 3
 [[step]]
 press = ["cross"]
 hold = 4

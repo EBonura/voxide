@@ -3,7 +3,7 @@ title = "VoXide: settings exits and controls introduction never autosave"
 disc = ["build/gate/voxide.cue"]
 symbols = ["build/gate-symbols.txt"]
 memcard = "fresh"
-max_ticks = 7500
+max_ticks = 9000
 
 [[step]]
 wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
@@ -17,7 +17,8 @@ offset = 28
 op = "eq"
 value = 18
 
-# PLAY -> CREDIT -> SETTINGS by wrapping upward twice.
+# PLAY -> CREDIT -> SETTINGS by wrapping upward twice: the OPTIONS page. STICK
+# SETTINGS is two rows down; MOVE DEADZONE is three below its first row.
 [[step]]
 press = ["up"]
 hold = 4
@@ -28,6 +29,30 @@ hold = 4
 wait = 12
 [[step]]
 press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
 hold = 4
 wait = 12
 [[step]]
@@ -55,6 +80,10 @@ kind = "card_unchanged"
 press = ["circle"]
 hold = 4
 wait = 12
+[[step]]
+press = ["circle"]
+hold = 4
+wait = 12
 [[step.assert]]
 kind = "card_unchanged"
 [[step.assert]]
@@ -63,7 +92,6 @@ sym = "VOXIDE_SETTINGS_STATE"
 offset = 12
 op = "eq"
 value = 1
-
 [[step]]
 press = ["cross"]
 hold = 4
@@ -127,7 +155,6 @@ kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
 offset = 12
 op = "zero"
-
 [[step]]
 press = ["start"]
 hold = 4
@@ -149,9 +176,21 @@ wait = 12
 [[step.assert]]
 kind = "card_unchanged"
 
-# Options first row wraps to its last row, Save Settings.
+# GAME MENU, OPTIONS..., then up through DONE to SAVE SETTINGS.
 [[step]]
 press = ["start"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["up"]
 hold = 4
 wait = 12
 [[step]]
@@ -166,10 +205,17 @@ kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
 offset = 16
 op = "eq"
-value = 15
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 1
 [[step.assert]]
 kind = "card_unchanged"
-# Cancel must suppress Cross on the actual paused Save Settings row.
+# Cancel must suppress Cross on the actual paused Save Settings row: O takes
+# the press up to GAME MENU and nothing is written.
 [[step]]
 press = ["circle", "cross"]
 hold = 4
@@ -183,6 +229,12 @@ kind = "card_unchanged"
 kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
 offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
 op = "zero"
 [[step.assert]]
 kind = "ram"
@@ -190,14 +242,23 @@ sym = "VOXIDE_SETTINGS_STATE"
 offset = 20
 op = "eq"
 value = 1
+# GAME MENU remembered OPTIONS... and OPTIONS remembered SAVE SETTINGS. X, X saves.
 [[step]]
-press = ["start"]
+press = ["cross"]
 hold = 4
 wait = 12
-[[step]]
-press = ["up"]
-hold = 4
-wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 4
 [[step]]
 press = ["cross"]
 hold = 4
@@ -262,6 +323,30 @@ press = ["cross"]
 hold = 4
 wait = 12
 [[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
 press = ["right"]
 hold = 4
 wait = 12
@@ -272,7 +357,15 @@ offset = 28
 op = "eq"
 value = 22
 [[step]]
-press = ["up"]
+press = ["circle"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
 hold = 4
 wait = 12
 [[step]]
@@ -283,7 +376,13 @@ kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
 offset = 16
 op = "eq"
-value = 9
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "eq"
+value = 1
 [[step]]
 press = ["cross"]
 hold = 4

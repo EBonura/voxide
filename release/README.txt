@@ -8,7 +8,8 @@ survival work, but much of the game is still unfinished.
 New in v0.4.0: music (four piano pieces, 10 to 20 minutes apart as in Java, with a
 MUSIC VOLUME setting); a player page with armour you wear a piece at a time, an off
 hand, a choice of weapon and a 2x2 crafting grid; TNT and fire with Java-inspired
-ignition, fuses and blasts; a CONTROLS card in the menus; the same buttons in
+ignition, fuses and blasts; a CONTROLS card in the menus; a nested pause menu
+and settings (video, sound, sticks, gameplay); the same buttons in
 every inventory screen; BRIGHTNESS and SCREEN X / SCREEN Y settings; and
 mobs that hit once a second, as in Java. Settings now reach the memory card
 only when you choose SAVE SETTINGS. Saves from 0.4.0 do not load in 0.3.2;

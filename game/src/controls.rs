@@ -14,6 +14,10 @@ pub trait Ink {
     fn text(&self, font: &FontAtlas, x: i16, y: i16, s: &str, c: (u8, u8, u8));
     /// A button pill; returns the x just past it.
     fn pill(&self, font: &FontAtlas, x: i16, y: i16, key: &str, tint: (u8, u8, u8)) -> i16;
+    /// The menu dialog: panel and centred title (the options tree, menus.rs).
+    fn frame(&self, font: &FontAtlas, title: &str);
+    /// A menu row's bevelled button, `y` its top edge.
+    fn button(&self, y: i16, sel: bool);
 }
 
 /// Into the frame's display list (the pause menu).
@@ -32,6 +36,12 @@ impl Ink for Listed {
     fn pill(&self, font: &FontAtlas, x: i16, y: i16, key: &str, tint: (u8, u8, u8)) -> i16 {
         ui_badge(font, x, y, key, tint)
     }
+    fn frame(&self, font: &FontAtlas, title: &str) {
+        menu_frame(font, title);
+    }
+    fn button(&self, y: i16, sel: bool) {
+        mc_button(y, sel);
+    }
 }
 
 impl Ink for Now {
@@ -44,6 +54,13 @@ impl Ink for Now {
     }
     fn pill(&self, font: &FontAtlas, x: i16, y: i16, key: &str, tint: (u8, u8, u8)) -> i16 {
         badge_now(font, x, y, key, tint)
+    }
+    fn frame(&self, font: &FontAtlas, title: &str) {
+        panel_now(MENU_PANEL_X, MENU_PANEL_Y, MENU_PANEL_W, MENU_PANEL_H);
+        font.draw_text((SCREEN_W as i16 - title.len() as i16 * 8) / 2, 12, title, MC_INK);
+    }
+    fn button(&self, y: i16, sel: bool) {
+        row_button_now(y, sel);
     }
 }
 

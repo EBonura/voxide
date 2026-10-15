@@ -140,10 +140,10 @@ kind = "not_flat"
 kind = "pc_not_stuck"
 window = 120
 
-# ---- cheat kit (OPTIONS > CHEATS > GIVE EVERYTHING) ------------------------
+# ---- cheat kit (OPTIONS > GAMEPLAY > CHEATS > GIVE EVERYTHING) ------------------------
 
 [[step]]
-label = "Start opens OPTIONS; CHEATS is the sixth row"
+label = "Start opens the GAME MENU; OPTIONS... is its second row"
 press = ["start"]
 hold = 4
 wait = 30
@@ -152,7 +152,29 @@ wait = 30
 press = ["down"]
 hold = 4
 wait = 12
-repeat = 5
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+
+[[step]]
+label = "GAMEPLAY... is the fourth row of OPTIONS"
+press = ["down"]
+hold = 4
+wait = 12
+repeat = 3
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+
+[[step]]
+label = "CHEATS... is the second row of GAMEPLAY"
+press = ["down"]
+hold = 4
+wait = 12
 
 [[step]]
 press = ["cross"]
@@ -178,11 +200,11 @@ hold = 4
 wait = 30
 
 [[step]]
-label = "back out of CHEATS and OPTIONS"
+label = "back out of CHEATS, GAMEPLAY, OPTIONS and the GAME MENU"
 press = ["circle"]
 hold = 4
 wait = 30
-repeat = 2
+repeat = 4
 
 # ---- inventory: TNT and flint into the hotbar --------------------------------
 
