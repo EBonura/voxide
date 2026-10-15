@@ -2762,8 +2762,10 @@ fn main() {
     interrupts::install_vblank_counter();
     load_shared_settings();
     sfx::init();
-    music::init();
     show_intro(&mut fb, &font);
+    // After the intro, not before: it reads the disc twice, which would shift
+    // the splash's timing, and the splash is checked at a fixed tick.
+    music::init();
 
     unsafe {
         let mut z = 1usize;
