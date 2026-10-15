@@ -21,11 +21,12 @@ enchanting, and two other dimensions, the Inferno and the Void, if you build
 the portals.
 
 Some things work differently to Java, deliberately. Crafting is a tabbed recipe
-book rather than a 2x2/3x3 grid, because placing items into a grid with a d-pad
-is worse than picking what you want to make; Minecraft's own console editions
-made the same call. Tools aren't selected by hand: the game equips the best of
-each and uses whichever suits the block you're aiming at. There's no music. Structures, falling sand, boats and rails, hoppers and
-signs aren't in yet.
+book, with a 2x2 grid on the player page that R2 fills in for a recipe, rather
+than a 3x3 grid at the table, because placing items into a grid with a d-pad is
+worse than picking what you want to make; Minecraft's own console editions made
+the same call. You choose the weapon you swing at mobs, and the game still
+picks the tool that suits the block you're aiming at. There's no music.
+Structures, falling sand, boats and rails, hoppers and signs aren't in yet.
 
 Detailed terrain
 draws 16 blocks ahead and 14 to the sides, projected on the GTE, using 2D
@@ -82,9 +83,10 @@ make smoke        # boot through PSoXide headless and write captures/
 ```
 
 The build needs a nightly Rust toolchain (pinned by `rust-toolchain.toml`,
-which also pulls `rust-src` for the `mipsel-sony-psx` target), Make, Python 3
-and `mipsel-none-elf-objdump` on `PATH` for the load-delay patch/check. Host
-Rust tools require a C/C++ linker. Recooking source assets also needs Pillow.
+which also pulls `rust-src` for the `mipsel-sony-psx` target) and Make. Host
+Rust tools require a C/C++ linker. The asset converters, the benchmark tape
+generator and the profile report are Rust crates in `tools/voxide-tools`, so
+recooking source assets needs nothing else installed.
 
 `make disc` writes `dist/voxide.{bin,cue}` and installs a copy under
 `~/Downloads/ps1 games/VoXide/`; override that library with `GAMES_DIR`.
@@ -132,11 +134,18 @@ The layout follows Minecraft Bedrock's PS4/PS5 defaults.
   hand)
 - L3 or double-tap forward: sprint (drops when forward stops)
 - Start: options menu -- flight, save/load to memory card, the tutorial
-  toggle, CONTROLS (every button on a two-page card), CHEATS, and the stick, volume, brightness and screen position
-  settings (left/right adjusts those)
+  toggle, CONTROLS (every button on a two-page card), CHEATS, and the stick,
+  volume, brightness and screen position settings (left/right adjusts those),
+  then SAVE SETTINGS to keep them
 - Main menu: up/down moves between PLAY GAME, NEW WORLD, CONTROLS, SETTINGS
   and CREDITS; Cross confirms. The first PLAY shows the controls card once
-  (it is remembered on the memory card)
+
+Settings are never written on their own. Changes to the sticks, volume,
+brightness and screen position last until you power off, unless you choose SAVE
+SETTINGS at the bottom of SETTINGS (main menu) or OPTIONS (pause). That writes
+them to the memory card, and the controls card's "seen" mark goes with them, so
+a player who never saves settings sees the card on each boot's first PLAY. On
+a blank card, the first SAVE SETTINGS asks and the second formats it.
 
 The controls-seen state lives in VoXide's game flag in the shared settings
 record. This build migrates the older difficulty-2 marker on load. An older
@@ -148,12 +157,13 @@ move, jump, chop a tree, craft planks, craft a table, place it, open it, then
 make a pickaxe. OPTIONS > TUTORIAL turns it off.
 
 There are four tools, a pickaxe, axe, shovel and sword, each crafted per tier
-from wood up to diamond. They aren't cycled or selected: they wear out at
-Java's rates, a better one auto-equips, and the game picks whichever suits the block under
-your crosshair, so the slot beside the hotbar changes as you look around. Using
-the right tool is what makes a block break quickly; the wrong one works at
-bare-hand pace. Only a pickaxe of the right tier will yield ore, and melee
-damage comes from the sword.
+from wood up to diamond. They wear out at Java's rates, a better one
+auto-equips, and the game picks whichever suits the block under your
+crosshair, so the slot beside the hotbar changes as you look around. Using the
+right tool is what makes a block break quickly; the wrong one works at
+bare-hand pace. Only a pickaxe of the right tier will yield ore. The weapon you
+swing at mobs is your choice, from the player page: fist, sword, axe, pickaxe
+or shovel, each with Java's damage and attack speed.
 
 Holding up or down in any menu autorepeats after a beat.
 

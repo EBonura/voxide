@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 | 2026-10-15
 
-Equipment, and fixes from a playtest.
+Equipment, fire and TNT, a controls card, and settings that save only when you
+say so.
 
 - The inventory opens on a player page, as Java's survival screen does: the
   four armour slots down the left, the player in the middle wearing what you
@@ -70,7 +71,8 @@ Equipment, and fixes from a playtest.
   including blocks reached by a chain blast.
 - A CONTROLS card lists every button on two pages, in the world and in menus.
   It is on the main menu and in the pause menu (OPTIONS > CONTROLS), and it
-  comes up once on your first PLAY; the memory card remembers that it did.
+  comes up once on your first PLAY. The memory card remembers that it did only
+  once you choose SAVE SETTINGS.
 - The inventory, the 2x2 grid, chests and furnaces share one pad grammar, the
   one Minecraft's PlayStation editions use. X takes a stack, then places it
   and swaps with what is there. SQUARE takes half, then places one. TRIANGLE
@@ -90,6 +92,23 @@ Equipment, and fixes from a playtest.
   the inventory.
 - The first tutorial steps name the buttons (X crafts in the crafting list)
   and the last one points at CONTROLS.
+- Settings are saved only by SAVE SETTINGS, a new last row on the main menu's
+  SETTINGS page and in OPTIONS. Adjusting a setting, leaving the page and
+  dismissing the controls card change the game until you power off and write
+  nothing to the memory card. SAVE SETTINGS keeps the stick, volume,
+  brightness and screen position settings and the controls-card mark. Before,
+  closing the page or the first PLAY wrote the card on its own. On a blank
+  card the first SAVE SETTINGS asks and the second formats it, as the world's
+  SAVE TO CARD does.
+- A zombie, spider or other melee mob in reach now hits once a second, as in
+  Java. Before, it hit every half second, as soon as your own half second of
+  invulnerability ended, so one zombie took 3 hearts a second instead of 1.5.
+  Skeleton arrows, sapper blasts and every damage value are
+  unchanged. Hunger already matched Java and is unchanged. See AUDIT.md.
+- The hint line under the SETTINGS list is drawn in dark ink. It was nearly
+  invisible on the grey panel.
+- Saves written by 0.4.0 are version 12 and do not load in 0.3.2 or earlier.
+  Saves from 0.3.2 and earlier load in 0.4.0.
 
 ## 0.3.2 | 2026-10-08
 
