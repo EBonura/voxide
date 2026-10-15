@@ -14,6 +14,8 @@ memcard = "fresh"
 wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
 timeout = 1800
 [[step]]
+wait = 60
+[[step]]
 label = "PLAY GAME: straight into the world"
 press = ["cross"]
 hold = 4
