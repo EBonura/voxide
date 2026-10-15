@@ -182,17 +182,27 @@ pub fn grow_polygon(
     if n < 3 {
         return;
     }
-    // Winding from the first three corners.
+    // Winding from the signed area. The cross product of the first three
+    // corners is not enough: a clipped polygon can have three nearly collinear
+    // corners in a row (a measured one had a cross of +6 on a polygon whose area
+    // is -7594), and reading its winding from them grew the polygon inward.
     let (p0x, p0y) = get(0);
-    let (p1x, p1y) = get(1);
-    let (p2x, p2y) = get(2);
-    let cross = (p1x - p0x) * (p2y - p0y) - (p1y - p0y) * (p2x - p0x);
-    if cross == 0 {
+    let mut area = 0;
+    let (mut ax, mut ay) = (p0x, p0y);
+    let mut k = 1;
+    while k <= n {
+        let (bx, by) = if k < n { get(k) } else { (p0x, p0y) };
+        area += ax * by - bx * ay;
+        ax = bx;
+        ay = by;
+        k += 1;
+    }
+    if area == 0 {
         return;
     }
     // For a polygon traversed with positive winding the outward normal of the
     // edge (ex, ey) is (ey, -ex).
-    let m = cross >> 31;
+    let m = area >> 31;
     let (mut prev_x, mut prev_y) = get(n - 1);
     let mut i = 0;
     while i < n {

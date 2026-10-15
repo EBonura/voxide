@@ -338,3 +338,35 @@ fn polygons_past_the_x_rail_stay_inside_it() {
         assert!(p.0 <= 1023 && p.0 >= -1024, "{p:?}");
     }
 }
+
+/// Two adjacent near-band cells measured on the recorded walk (lockstep poll 991,
+/// before the seal): they share the edge (0,200)-(66,170) exactly. The second
+/// polygon's corners come in the order the clipper left them, and its first three
+/// are nearly collinear (cross +6) although its area is negative: reading the
+/// winding from those three grew the polygon inward and opened a 60 px crack.
+#[test]
+fn adjacent_clipped_cells_overlap_even_when_the_first_corners_are_collinear() {
+    let p1 = [(0, 167), (36, 156), (66, 170), (0, 200)];
+    let p2 = [(0, 208), (33, 238), (35, 240), (109, 190), (66, 170), (0, 200)];
+    let g1 = new_poly_seal(&p1);
+    let g2 = new_poly_seal(&p2);
+    // Every pixel within a pixel or two of the shared edge, on either side, is
+    // covered by one of the two grown polygons.
+    let mut holes = 0;
+    for px in 4..62 {
+        // the edge's y at this x, then the pixels just above and below it
+        let y = 200.0 - 30.0 * px as f64 / 66.0;
+        for dy in -3..=3 {
+            let py = (y + dy as f64).floor() as i32;
+            if !inside(&g1, px, py) && !inside(&g2, px, py) {
+                holes += 1;
+            }
+        }
+    }
+    assert_eq!(holes, 0, "grown {g1:?} and {g2:?}");
+    // The shared edge's corners moved toward the other polygon, not into their own.
+    let edge_corner = |g: &Vec<P>, orig: &[P], at: P| -> P { g[orig.iter().position(|&p| p == at).unwrap()] };
+    let (a1, a2) = (edge_corner(&g1, &p1, (66, 170)), edge_corner(&g2, &p2, (66, 170)));
+    assert!(a1.0 > 66 && a1.1 >= 170, "{a1:?}");
+    assert!(a2.0 <= 66 && a2.1 <= 170, "{a2:?}");
+}
