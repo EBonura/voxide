@@ -80,8 +80,11 @@ Deviations, deliberate:
 - The pieces are made offline from loops (`tools/loop-mixer`) because the PS1
   drive decodes one XA stream at a time, so two loops cannot overlap at run time.
 
-Level: the drive mixer sits 6 dB under the cooked level at 100 percent
-(`MIXER_FULL` in `music_plan.rs`). A headless capture of the SPU output
-(2026-10-15) measured the music alone at -25 dBFS RMS with seconds peaking near
-0.27 of full scale at the cooked level, as loud as the sound effects' peaks (0.1
-to 0.25). Nobody listened to the result; the level is a measurement, not an ear.
+Level: the pieces are cooked at -16 LUFS integrated (EBU R128, turned down
+only, true peak under -1.7 dBTP; `tools/loop-mixer`), and the drive mixer sits 6
+dB under that at 100 percent (`MIXER_FULL` in `music_plan.rs`). A headless
+capture of the SPU output on the title screen (2026-10-15) measured the music
+alone at -32.5 dBFS RMS at that setting, seconds peaking at 0.11 of full scale
+(0.19 at most); the sound effects in a walking capture peak at 0.1 to 0.25, and at
+the cooked level the music's peaks (0.23 typical) would have been level with
+them. Nobody listened to the result; the level is a measurement, not an ear.

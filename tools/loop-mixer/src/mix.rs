@@ -1,5 +1,6 @@
 //! Render one piece: the laps, the crossfades, the fades at the ends.
 
+use crate::loudness;
 use crate::plan::Piece;
 use crate::resample::resample;
 use crate::rng::Rng;
@@ -14,8 +15,11 @@ pub const FADE_IN_SECONDS: f64 = 1.5;
 pub const FADE_OUT_SECONDS: f64 = 5.0;
 /// Sample rate of the rendered pieces: 37.8 kHz, the XA-ADPCM rate.
 pub const OUT_RATE: u32 = 37_800;
-/// Rendered peaks above this are scaled down to it.
-pub const PEAK_LIMIT: f64 = 0.97;
+/// Integrated loudness the pieces are turned down to, in LUFS (EBU R128 and
+/// ITU-R BS.1770). A piece already quieter is left alone.
+pub const TARGET_LUFS: f64 = -16.0;
+/// True peak the pieces are kept under, in dBTP.
+pub const TRUE_PEAK_LIMIT_DB: f64 = -1.7;
 
 /// A rendered piece.
 pub struct Rendered {
@@ -23,10 +27,14 @@ pub struct Rendered {
     pub left: Vec<i16>,
     /// 16-bit right channel.
     pub right: Vec<i16>,
-    /// The peak before any scaling, 1.0 is full scale.
+    /// Integrated loudness before any gain, LUFS.
+    pub lufs: f64,
+    /// True peak before any gain, 1.0 is full scale.
     pub peak: f64,
-    /// The gain applied to keep the peak under [`PEAK_LIMIT`] (1.0 when none was).
+    /// The gain applied (1.0 or less: loudness first, then the true peak).
     pub gain: f64,
+    /// True peak after the gain, dBTP.
+    pub peak_db: f64,
 }
 
 /// Mix `piece` from `loops` (all at one rate) at that rate, as two channels.
@@ -83,8 +91,15 @@ pub fn render(piece: &Piece, loops: &[Audio], dither: &mut Rng) -> Rendered {
     let rate = loops[0].rate;
     let mixed = mix(piece, loops);
     let mut ch: [Vec<f64>; 2] = [resample(&mixed[0], rate, OUT_RATE), resample(&mixed[1], rate, OUT_RATE)];
-    let peak = ch.iter().flatten().fold(0.0f64, |m, v| m.max(v.abs()));
-    let gain = if peak > PEAK_LIMIT { PEAK_LIMIT / peak } else { 1.0 };
+    let refs = [&ch[0][..], &ch[1][..]];
+    let lufs = loudness::integrated_lufs(refs, OUT_RATE);
+    let peak = loudness::true_peak(refs, OUT_RATE);
+    let mut gain = if lufs > TARGET_LUFS { 10f64.powf((TARGET_LUFS - lufs) / 20.0) } else { 1.0 };
+    let limit = 10f64.powf(TRUE_PEAK_LIMIT_DB / 20.0);
+    if peak * gain > limit {
+        gain = limit / peak;
+    }
+    let peak_db = 20.0 * (peak * gain).log10();
     let mut quantise = |c: &mut Vec<f64>| -> Vec<i16> {
         c.iter()
             .map(|v| {
@@ -96,5 +111,5 @@ pub fn render(piece: &Piece, loops: &[Audio], dither: &mut Rng) -> Rendered {
     };
     let left = quantise(&mut ch[0]);
     let right = quantise(&mut ch[1]);
-    Rendered { left, right, peak, gain }
+    Rendered { left, right, lufs, peak, gain, peak_db }
 }

@@ -82,16 +82,57 @@ fn crossfades_are_equal_power_and_the_ends_fade() {
     assert!((out[0][12 * 44_100 + 5] - loops[1].ch[0][2 * 44_100 + 5]).abs() < 1e-12);
 }
 
+fn stereo_tone(freq: f64, dbfs: f64, secs: usize, rate: u32) -> Vec<f64> {
+    let amp = 10f64.powf(dbfs / 20.0);
+    (0..rate as usize * secs).map(|i| amp * (2.0 * std::f64::consts::PI * freq * i as f64 / rate as f64).sin()).collect()
+}
+
 #[test]
-fn render_dithers_to_16_bits_and_limits_the_peak() {
-    let loops = [loop_of(200.0, 5)];
+fn loudness_matches_the_ebu_reference_tone() {
+    // EBU Tech 3341: a 997 Hz sine at -23 dBFS in both channels reads -23.0 LUFS.
+    let t = stereo_tone(997.0, -23.0, 20, 37_800);
+    let l = loop_mixer::loudness::integrated_lufs([&t, &t], 37_800);
+    assert!((l - -23.0).abs() < 0.1, "{l}");
+    let t = stereo_tone(997.0, -23.0, 20, 44_100);
+    let l = loop_mixer::loudness::integrated_lufs([&t, &t], 44_100);
+    assert!((l - -23.0).abs() < 0.1, "{l}");
+}
+
+#[test]
+fn loudness_gates_out_silence() {
+    let mut t = stereo_tone(997.0, -23.0, 10, 37_800);
+    t.extend(std::iter::repeat(0.0).take(37_800 * 30));
+    let l = loop_mixer::loudness::integrated_lufs([&t, &t], 37_800);
+    assert!((l - -23.0).abs() < 0.15, "{l}");
+}
+
+#[test]
+fn true_peak_sees_what_the_samples_miss() {
+    // A tone at a quarter of the sample rate, offset so no sample lands on the crest.
+    let n = 4_000;
+    let t: Vec<f64> = (0..n).map(|i| (std::f64::consts::FRAC_PI_2 * i as f64 + std::f64::consts::FRAC_PI_4).sin()).collect();
+    let sample_peak = t.iter().fold(0.0f64, |m, v| m.max(v.abs()));
+    assert!((sample_peak - 0.7071).abs() < 1e-3);
+    let tp = loop_mixer::loudness::true_peak([&t[..], &t[..]], 37_800);
+    assert!(tp > 0.98 && tp < 1.02, "{tp}");
+}
+
+#[test]
+fn render_turns_a_loud_piece_down_to_minus_16_lufs_and_never_turns_one_up() {
+    // loud: a -6 dBFS tone
+    let loud = wav::Audio { rate: 44_100, ch: [stereo_tone(440.0, -6.0, 30, 44_100), stereo_tone(440.0, -6.0, 30, 44_100)] };
     let piece = vec![plan::Segment { loop_index: 0, repeats: 1 }];
-    let hot = wav::Audio { rate: 44_100, ch: [loops[0].ch[0].iter().map(|v| v * 3.0).collect(), loops[0].ch[1].iter().map(|v| v * 3.0).collect()] };
-    let r = mix::render(&piece, &[hot], &mut Rng::new(1));
-    assert!(r.gain < 1.0);
-    let peak = r.left.iter().map(|v| v.unsigned_abs()).max().unwrap();
-    assert!(peak as f64 <= 0.97 * 32768.0 + 2.0);
-    assert_eq!(r.left.len(), 5 * 37_800);
+    let r = mix::render(&piece, std::slice::from_ref(&loud), &mut Rng::new(1));
+    assert!(r.gain < 1.0 && r.lufs > -16.0);
+    let back: Vec<f64> = r.left.iter().map(|v| *v as f64 / 32768.0).collect();
+    let l = loop_mixer::loudness::integrated_lufs([&back, &back], 37_800);
+    assert!((l - -16.0).abs() < 0.3, "{l}");
+    assert!(r.peak_db <= -1.7 + 1e-9);
+    // quiet: -40 dBFS stays as it is
+    let quiet = wav::Audio { rate: 44_100, ch: [stereo_tone(440.0, -40.0, 30, 44_100), stereo_tone(440.0, -40.0, 30, 44_100)] };
+    let r = mix::render(&piece, std::slice::from_ref(&quiet), &mut Rng::new(1));
+    assert_eq!(r.gain, 1.0);
+    assert_eq!(r.left.len(), 30 * 37_800);
 }
 
 #[test]

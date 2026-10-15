@@ -7,9 +7,11 @@
 //! on the loop boundary. Every loop is seamless, so it is read as a circle: the
 //! outgoing loop runs on into its own next lap during the fade and the incoming
 //! one starts in its own tail, and both are at the right place when the
-//! boundary passes. The piece is then resampled with a Kaiser-windowed sinc and
-//! dithered to 16 bits.
+//! boundary passes. The piece is then resampled with a Kaiser-windowed sinc,
+//! turned down to -16 LUFS integrated loudness if it is louder (never turned
+//! up) and to a true peak under -1.7 dBTP, and dithered to 16 bits.
 
+pub mod loudness;
 pub mod mix;
 pub mod plan;
 pub mod resample;

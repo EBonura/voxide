@@ -56,6 +56,6 @@ Pianeta, Side Label and Talher), licensed CC BY 4.0
 
 Changes: the loops are arranged into four longer pieces (a sequence of whole
 loops with 4 second equal-power crossfades, a fade in and a fade out),
-resampled from 44.1 kHz to 37.8 kHz, dithered to 16 bits and encoded as
-XA-ADPCM, by `tools/loop-mixer` and `convert-music` (`assets/music/tracks.txt`
+resampled from 44.1 kHz to 37.8 kHz, turned down to -16 LUFS, dithered to 16
+bits and encoded as XA-ADPCM, by `tools/loop-mixer` and `convert-music` (`assets/music/tracks.txt`
 has the seed, the command and the sha256 of each loop).

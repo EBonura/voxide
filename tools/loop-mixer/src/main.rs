@@ -60,11 +60,12 @@ fn run() -> Result<(), String> {
             .map(|s| format!("{} x{}", names[s.loop_index].trim_end_matches(".wav"), s.repeats))
             .collect();
         println!(
-            "piece-{}.wav {:7.2} s  peak {:.3}{}  {}",
+            "piece-{}.wav {:7.2} s  {:6.2} LUFS  true peak {:5.2} dBTP  gain {:6.2} dB  {}",
             i + 1,
             secs,
-            r.peak,
-            if r.gain < 1.0 { format!(" (scaled {:.3})", r.gain) } else { String::new() },
+            r.lufs,
+            r.peak_db,
+            20.0 * r.gain.log10(),
             recipe.join(" > ")
         );
     }

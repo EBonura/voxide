@@ -4,8 +4,9 @@
 # The pieces are rendered from the six loops below by tools/loop-mixer, whose
 # README text is its crate doc: a seeded sequence of whole loops (each played 1
 # to 3 times, no loop twice in a row, every loop used) joined by 4 s equal-power
-# crossfades, 1.5 s fade-in, 5 s fade-out, resampled to 37.8 kHz and dithered
-# to 16 bits. The WAV pieces and the loops are not in the repo; the cooked
+# crossfades, 1.5 s fade-in, 5 s fade-out, resampled to 37.8 kHz, turned down to
+# -16 LUFS integrated (EBU R128; never turned up) and to a true peak under
+# -1.7 dBTP, and dithered to 16 bits. The WAV pieces and the loops are not in the repo; the cooked
 # MUSIC<n>.XA is. To render them again:
 #
 #   loop-mixer --src "<Simple Piano Music Vol 1>" --out PIECES --seed 20261015 \

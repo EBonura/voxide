@@ -42,11 +42,13 @@ pub const fn pick(r: u32) -> usize {
 }
 
 /// The drive mixer level at the top of the slider. 0x80 is the pieces at the
-/// level they were cooked; 0x40 is 6 dB under that. Measured on the SPU output
-/// (headless capture, 2026-10-15): at 0x80 the music alone ran -25 dBFS RMS with
-/// seconds peaking at 0.27 of full scale, as loud as the sound effects' own
-/// peaks (0.1 to 0.25), so footsteps and digging would sit in it. At 0x40 the
-/// effects stand 10 dB or more above it, closer to Java's quiet music.
+/// level they were cooked (-16 LUFS); 0x40 is 6 dB under that. Measured on the
+/// SPU output (headless capture of the title screen, 2026-10-15): at 0x40 the
+/// music alone runs -32.5 dBFS RMS with seconds peaking at 0.11 of full scale
+/// (0.19 at most), so at 0x80 its peaks (0.23 typical) would sit level with the
+/// sound effects' own (0.1 to 0.25 in a walking capture) and footsteps and
+/// digging would be buried in it. At 0x40 the effects stand clear of it, closer
+/// to Java's quiet music.
 pub const MIXER_FULL: u32 = 0x40;
 
 /// The drive mixer level for a MUSIC slider percentage.

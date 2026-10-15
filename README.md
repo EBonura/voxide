@@ -226,7 +226,8 @@ plays.
 
 The pieces are made offline from six seamless loops by `tools/loop-mixer`: a
 seeded sequence of whole loops, each played one or two times, joined by 4 second
-equal-power crossfades, resampled to 37.8 kHz and dithered to 16 bits. The PS1
+equal-power crossfades, resampled to 37.8 kHz, turned down to -16 LUFS and
+dithered to 16 bits. The PS1
 drive decodes one XA stream at a time, so the overlap cannot happen at run
 time. `assets/music/tracks.txt` lists the pieces, the credits card lines and the
 exact `loop-mixer` command and seed; `make music MUSIC_SRC=<dir of pieces>
