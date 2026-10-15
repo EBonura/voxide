@@ -136,15 +136,17 @@ The layout follows Minecraft Bedrock's PS4/PS5 defaults.
 - Start: the game menu -- BACK TO GAME, OPTIONS..., CONTROLS (every button on
   a two-page card), SAVE WORLD and LOAD WORLD (memory card) and SAVE AND QUIT
   TO TITLE (saves, then back to the title screen; PLAY GAME there starts a new
-  world, LOAD WORLD in the game menu brings the saved one back). OPTIONS... opens
+  world, LOAD WORLD there or in the game menu brings the saved one back). OPTIONS... opens
   VIDEO SETTINGS (brightness, screen position), MUSIC & SOUNDS (the two
   volumes), STICK SETTINGS (look speed, invert, deadzones) and GAMEPLAY (the
   tutorial toggle and CHEATS), then SAVE SETTINGS to keep what you changed.
   Cross enters a page or does the row, left/right changes a value, Circle goes
   up one page (and closes the menu from the first), Start closes it from
   anywhere. Each page remembers its row
-- Main menu: up/down moves between PLAY GAME, NEW WORLD, CONTROLS, SETTINGS
-  and CREDITS; Cross confirms. PLAY GAME goes straight into the world; the
+- Main menu: up/down moves between PLAY GAME, LOAD WORLD, NEW WORLD, CONTROLS,
+  SETTINGS and CREDITS; Cross confirms. PLAY GAME goes straight into the world;
+  LOAD WORLD loads the world saved on the memory card in slot 1 (it is dim, and
+  says why when you move onto it, with no card or no saved world); the
   controls card is on the CONTROLS row (and in the game menu). SETTINGS opens the same OPTIONS pages as the game menu, minus CHEATS
 
 Settings are never written on their own. Changes to the sticks, volume,

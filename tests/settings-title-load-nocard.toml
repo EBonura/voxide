@@ -1,0 +1,119 @@
+# LOAD WORLD on the title with no card: the row is dim, says why when chosen, X does
+# nothing but stay, and PLAY GAME still starts a world. VOXIDE_SETTINGS_STATE offset 80
+# is the row's state (1 a save, 2 no card, 3 no save), offset 16 the cursor.
+name = "voxide-settings-title-load-nocard"
+title = "VoXide: title LOAD WORLD with no memory card"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+memcard = "none"
+max_ticks = 6000
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 1800
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 80
+op = "eq"
+value = 2
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 80
+op = "eq"
+value = 2
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step]]
+checkpoint = "title-load-no-card"
+golden = false
+strict = [{ x = 102, y = 130, w = 116, h = 15 }, { x = 24, y = 226, w = 272, h = 14 }]
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 80
+op = "eq"
+value = 2
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 30
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 80
+op = "eq"
+value = 2
+[[step]]
+press = ["start"]
+hold = 4
+wait = 30
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 1
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "zero"
+[[step]]
+label = "PLAY GAME still starts a world"
+press = ["cross"]
+hold = 4
+wait = 20
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "zero" }
+timeout = 2500
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"
+[[step]]
+wait = 30

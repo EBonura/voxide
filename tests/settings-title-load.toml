@@ -1,0 +1,225 @@
+# Boot with a blank card (LOAD WORLD dim), play, place a block, SAVE AND QUIT TO TITLE,
+# and the row is live: LOAD WORLD on the title loads the save over the fresh title world.
+# VOXIDE_GATE_STATE offset 20 is the block-edit count.
+name = "voxide-settings-title-load"
+title = "VoXide: title LOAD WORLD brings the saved world back"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+memcard = "fresh"
+max_ticks = 16000
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 1800
+[[step.assert]]
+kind = "card_unchanged"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 80
+op = "eq"
+value = 3
+[[step]]
+label = "PLAY GAME: straight into the world, no card"
+press = ["cross"]
+hold = 4
+wait = 150
+[[step]]
+label = "look down at the ground and place a block, so the world differs from a fresh one"
+rstick = [128, 255]
+hold = 40
+wait = 20
+[[step]]
+press = ["l2"]
+hold = 4
+wait = 30
+[[step]]
+checkpoint = "world-with-an-edit"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"
+[[step]]
+press = ["start"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "zero"
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 5
+[[step]]
+checkpoint = "quit-selected"
+golden = false
+strict = [{ x = 32, y = 103, w = 256, h = 19 }, { x = 32, y = 164, w = 256, h = 14 }]
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 2
+[[step]]
+checkpoint = "saving-to-quit"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 2500
+[[step]]
+wait = 60
+[[step]]
+checkpoint = "quit-at-title"
+golden = false
+[[step.assert]]
+kind = "card_writes"
+min_count = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 80
+op = "eq"
+value = 1
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 80
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step]]
+checkpoint = "title-load-enabled"
+golden = false
+strict = [{ x = 102, y = 130, w = 116, h = 15 }]
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 80
+op = "eq"
+value = 1
+[[step]]
+label = "LOAD WORLD on the title"
+press = ["cross"]
+hold = 4
+wait = 300
+[[step]]
+checkpoint = "title-loaded-world"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"
+[[step]]
+press = ["start"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "zero"
+[[step]]
+press = ["circle"]
+hold = 4
+wait = 30
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"
+[[step]]
+checkpoint = "title-loaded-resumed"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "eq"
+value = 1

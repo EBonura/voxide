@@ -1,0 +1,103 @@
+# A formatted card that holds only the settings: LOAD WORLD is dim with its reason, and
+# choosing it changes nothing (no card write, still the title).
+name = "voxide-settings-title-load-nosave"
+title = "VoXide: title LOAD WORLD on a card with no world save"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+max_ticks = 3000
+
+[card_fixture]
+path = "tests/cards/legacy-controls-seen.mcd"
+sha256 = "a0bc97a529dc33cdda8c438ec8e06a5ebc19e119fad846128d8827131c4a2f08"
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 1800
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 80
+op = "eq"
+value = 3
+[[step.assert]]
+kind = "card_unchanged"
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 80
+op = "eq"
+value = 3
+[[step]]
+checkpoint = "title-load-no-save"
+golden = false
+strict = [{ x = 102, y = 130, w = 116, h = 15 }, { x = 24, y = 226, w = 272, h = 14 }]
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 80
+op = "eq"
+value = 3
+[[step.assert]]
+kind = "card_unchanged"
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 30
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 80
+op = "eq"
+value = 3
+[[step.assert]]
+kind = "card_unchanged"
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "zero"
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 200
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"
+[[step.assert]]
+kind = "card_unchanged"
+[[step]]
+wait = 30

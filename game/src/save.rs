@@ -259,6 +259,48 @@ pub fn selftest() -> bool {
     card().is_formatted().is_ok()
 }
 
+/// What the card holds for the title screen's LOAD WORLD row.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum Probe {
+    /// A save file is on the card (one that may still not read back).
+    Save,
+    /// No card answers in slot 1.
+    NoCard,
+    /// A card, formatted or not, with none of this game's world files.
+    NoSave,
+}
+
+/// Look at the card's directory for a world file, reading none of it: the
+/// title screen decides from this whether LOAD WORLD can be chosen.
+#[inline(never)]
+#[optimize(size)] // card I/O dominates; keep the bytes
+pub fn probe() -> Probe {
+    let mut c = card();
+    match c.is_formatted() {
+        Err(_) => return Probe::NoCard,
+        Ok(false) => return Probe::NoSave,
+        Ok(true) => {}
+    }
+    let mut list = [psx_mc::Entry {
+        name: [0; psx_mc::MAX_NAME_LEN + 1],
+        name_len: 0,
+        blocks: 0,
+    }; psx_mc::DATA_BLOCKS];
+    let n = match c.list(&mut list) {
+        Ok(n) => n,
+        Err(McError::NoCard) => return Probe::NoCard,
+        Err(_) => return Probe::NoSave,
+    };
+    let mut i = 0;
+    while i < n {
+        if list[i].name() == NAMES[0] || list[i].name() == NAMES[1] {
+            return Probe::Save;
+        }
+        i += 1;
+    }
+    Probe::NoSave
+}
+
 /// Lay player, inventory, hotbar, world, weather, chests, furnaces and edit
 /// deltas out in BUF as one save payload; returns its length.
 #[inline(never)]

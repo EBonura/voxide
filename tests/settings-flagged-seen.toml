@@ -13,7 +13,7 @@ sha256 = "785dbad37d15e2523d8c2afdae55e89708e51103cf7fb8945c56b8d8b8048542"
 
 [[step]]
 label = "menu appears over the generated world"
-wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 204, w = 125, h = 22 }, min_count = 500 }
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 208, w = 125, h = 18 }, min_count = 500 }
 timeout = 1500
 
 [[step]]

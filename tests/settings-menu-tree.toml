@@ -3,7 +3,8 @@
 # cursors, the two-state rows, and that nothing reaches the card until SAVE
 # SETTINGS. Page numbers are menus.rs `Page` (pause 0, options 1, video 2,
 # sound 3, sticks 4, gameplay 5, cheats 6); VOXIDE_SETTINGS_STATE offsets are
-# 12 context, 16 row, 20 unsaved, 24 save result, 28 move deadzone, 36 page.
+# 12 context, 16 row, 20 unsaved, 24 save result, 28 move deadzone, 36 page,
+# 80 the title's LOAD WORLD row (1 a save, 2 no card, 3 no save).
 # Every checkpoint is a frame for the before/after sheet.
 name = "voxide-settings-menu-tree"
 title = "VoXide: the nested options tree, title and pause"
@@ -28,6 +29,58 @@ checkpoint = "title-menu"
 golden = false
 [[step.assert]]
 kind = "card_unchanged"
+
+# ---- title: LOAD WORLD is the second row; this card has no world, so it is dim ----
+# (offset 80 is its state: 1 a save, 2 no card, 3 no save). X on it changes nothing.
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 80
+op = "eq"
+value = 3
+[[step]]
+checkpoint = "t-load-world-dim"
+golden = false
+strict = [{ x = 102, y = 130, w = 116, h = 15 }]
+[[step.assert]]
+kind = "card_unchanged"
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 30
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "card_unchanged"
+[[step]]
+press = ["up"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "zero"
 
 # ---- title: SETTINGS opens the OPTIONS page (PLAY -> CREDITS -> SETTINGS) ----
 [[step]]

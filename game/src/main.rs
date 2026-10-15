@@ -1071,6 +1071,39 @@ const SETTINGS_BLANK_CARD: &str = "BLANK CARD";
 pub static mut VOXIDE_SETTINGS_STATE: [u32; 21] =
     [u32::from_le_bytes(*b"VSET"), 3, 84, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
+/// The title's LOAD WORLD was chosen: `main` loads the card's save once the
+/// world around the player is set up, by the same `load_game` the game menu's
+/// LOAD WORLD runs.
+static mut TITLE_LOAD: bool = false;
+/// What the title last found on the card, for the LOAD WORLD row.
+static mut TITLE_PROBE: save::Probe = save::Probe::NoCard;
+/// The save the title offered could not be read back: shown under the buttons
+/// until the card is looked at again.
+static mut TITLE_UNREADABLE: bool = false;
+
+/// The reason LOAD WORLD cannot be chosen, or "" when it can.
+fn title_load_reason() -> &'static str {
+    if unsafe { TITLE_UNREADABLE } {
+        return "THE SAVE ON THE CARD CANNOT BE READ";
+    }
+    match unsafe { TITLE_PROBE } {
+        save::Probe::Save => "",
+        save::Probe::NoCard => "NO MEMORY CARD IN SLOT 1",
+        save::Probe::NoSave => "NO SAVE ON THIS CARD",
+    }
+}
+
+/// The title row's state as a number for the gate receipt: none 0 (not on the
+/// title), a save 1, no card 2, no save 3; 16 added when the save did not read.
+fn title_load_code() -> u32 {
+    let base = match unsafe { TITLE_PROBE } {
+        save::Probe::Save => 1,
+        save::Probe::NoCard => 2,
+        save::Probe::NoSave => 3,
+    };
+    base | (unsafe { TITLE_UNREADABLE } as u32) << 4
+}
+
 /// What the line under the menu says, as a number: none 0, saving 1, saved 2,
 /// blank card 3, no card 4, card full 5, card removed 6, save failed 7, loaded 8,
 /// no save on the card 9, anything else 10.
@@ -1104,6 +1137,7 @@ fn publish_settings(context: u32, selected: usize, page: u32, world: Option<(&Pl
         state[8] = 0; // was the controls-seen flag; no longer read or written
         state[9] = page;
         state[10] = msg_code(OPT_MSG);
+        state[20] = if context == 1 { title_load_code() } else { 0 };
         if let Some((p, day)) = world {
             let mut items = 0u32;
             let mut i = 0;
@@ -3017,6 +3051,21 @@ fn main() {
     // while frame N rasterises, with this flag tracking that pending frame.
     let mut render_in_flight = false;
 
+    // LOAD WORLD on the title: the same load the game menu runs, over the
+    // world the title was showing. A save that will not read back sends the
+    // player back to a title that says so, rather than into a new world.
+    if unsafe { TITLE_LOAD } {
+        unsafe { TITLE_LOAD = false };
+        if load_game(&mut player, &mut day, &mut fb, &font) {
+            portal_dwell = PORTAL_IMMUNE;
+            previous = poll_port1().buttons;
+        } else {
+            unsafe { TITLE_UNREADABLE = true };
+            quit_to_title(&mut fb, &font, frame);
+            continue;
+        }
+    }
+
     loop {
         // Stop any SFX voice whose sample has ended. Ahead of everything that
         // might start one, so a sound keyed this frame is not cut by the
@@ -4212,8 +4261,14 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         return;
     }
     music::enter_title();
+    unsafe {
+        TITLE_LOAD = false;
+        TITLE_PROBE = save::probe();
+    }
     let mut prev = poll_port1().buttons;
-    let mut sel = 0usize; // 0 = play, 1 = new world, 2 = controls, 3 = settings, 4 = credits
+    // 0 = play, 1 = load world, 2 = new world, 3 = controls, 4 = settings, 5 = credits.
+    // Back from a save that would not read, the cursor waits on LOAD WORLD with the reason.
+    let mut sel = unsafe { TITLE_UNREADABLE } as usize;
     let mut credits = 0u8; // the credits card is up, and its page (1 music, 2 the rest)
     let mut controls = false; // the controls card is up
     let mut settings = false; // the settings card is up (menus.rs holds its cursors)
@@ -4274,11 +4329,11 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             }
         } else {
             if pad.pressed_since(prev, button::UP) {
-                sel = (sel + 4) % 5;
+                sel = (sel + 5) % 6;
                 sfx::blip();
             }
             if pad.pressed_since(prev, button::DOWN) {
-                sel = (sel + 1) % 5;
+                sel = (sel + 1) % 6;
                 sfx::blip();
             }
         }
@@ -4289,6 +4344,20 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             && (pad.pressed_since(prev, button::CROSS) || pad.pressed_since(prev, button::START));
         prev = pad;
         if go && sel == 1 {
+            // LOAD WORLD: look at the card again (it may have changed since the
+            // title came up), and leave for the game with the load asked for.
+            // With nothing to load the row says why and the title stays.
+            unsafe {
+                TITLE_PROBE = save::probe();
+                TITLE_UNREADABLE = false;
+            }
+            if unsafe { TITLE_PROBE } == save::Probe::Save {
+                unsafe { TITLE_LOAD = true };
+                sfx::confirm();
+                return;
+            }
+            sfx::blip();
+        } else if go && sel == 2 {
             // NEW WORLD: reseed from the menu timing (honest entropy, the PS1
             // has no clock) and let the pump regenerate behind the menu.
             clear_world_entities();
@@ -4310,15 +4379,15 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             // fresh vista.
             finish_world_gen(fb, font, &mut pocket_done);
             prev = poll_port1().buttons;
-        } else if go && sel == 2 {
+        } else if go && sel == 3 {
             controls = true;
             controls::open();
             sfx::confirm();
-        } else if go && sel == 3 {
+        } else if go && sel == 4 {
             settings = true;
             menus::open_title();
             sfx::confirm();
-        } else if go && sel == 4 {
+        } else if go && sel == 5 {
             credits = 1;
             sfx::confirm();
         } else if go {
@@ -4385,11 +4454,19 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         } else if settings {
             menus::draw(&controls::Now, font);
         } else {
-            menu_button_now(font, 118, "PLAY GAME", sel == 0);
-            menu_button_now(font, 140, "NEW WORLD", sel == 1);
-            menu_button_now(font, 162, "CONTROLS", sel == 2);
-            menu_button_now(font, 184, "SETTINGS", sel == 3);
-            menu_button_now(font, 206, "CREDITS", sel == 4);
+            let can_load = title_load_reason().is_empty();
+            menu_button_now(font, 108, "PLAY GAME", sel == 0, true);
+            menu_button_now(font, 128, "LOAD WORLD", sel == 1, can_load);
+            menu_button_now(font, 148, "NEW WORLD", sel == 2, true);
+            menu_button_now(font, 168, "CONTROLS", sel == 3, true);
+            menu_button_now(font, 188, "SETTINGS", sel == 4, true);
+            menu_button_now(font, 208, "CREDITS", sel == 5, true);
+            if sel == 1 && !can_load {
+                let why = title_load_reason();
+                let x = (SCREEN_W as i16 - why.len() as i16 * 8) / 2;
+                font.draw_text(x + 1, SCREEN_H as i16 - 11, why, (0x20, 0x10, 0x10));
+                font.draw_text(x, SCREEN_H as i16 - 12, why, (0xFF, 0xB8, 0x68));
+            }
             draw_splash_now(font, t);
             font.draw_text(6, SCREEN_H as i16 - 12, VERSION, (0xC8, 0xC8, 0xD0));
         }
@@ -4776,10 +4853,17 @@ fn draw_credits_now(font: &FontAtlas, page: u8) {
     font.draw_text(24, SCREEN_H as i16 - 20, hint, BODY);
 }
 
-fn menu_button_now(font: &FontAtlas, y: i16, label: &str, sel: bool) {
-    let (x, w, h) = (100i16, 120i16, 20i16);
+fn menu_button_now(font: &FontAtlas, y: i16, label: &str, sel: bool, enabled: bool) {
+    let (x, w, h) = (100i16, 120i16, 18i16);
     gpu::draw_rect_flat(x, y, w as u16, h as u16, 0, 0, 0);
-    let (top, bot) = if sel { (0xA6, 0x8B) } else { (0x8B, 0x6E) };
+    // A row that cannot be chosen is flat and dim whatever the cursor does.
+    let (top, bot) = if !enabled {
+        (0x5C, 0x4E)
+    } else if sel {
+        (0xA6, 0x8B)
+    } else {
+        (0x8B, 0x6E)
+    };
     let half = h / 2;
     gpu::draw_rect_flat(
         x + 1,
@@ -4799,13 +4883,21 @@ fn menu_button_now(font: &FontAtlas, y: i16, label: &str, sel: bool) {
         bot,
         bot,
     );
-    let hi = if sel { 0xFF } else { 0xC6 };
+    let hi = if !enabled {
+        0x80
+    } else if sel {
+        0xFF
+    } else {
+        0xC6
+    };
     gpu::draw_rect_flat(x + 1, y + 1, (w - 2) as u16, 1, hi, hi, hi);
     gpu::draw_rect_flat(x + 1, y + 1, 1, (h - 2) as u16, hi, hi, hi);
     gpu::draw_rect_flat(x + 1, y + h - 2, (w - 2) as u16, 1, 0x37, 0x37, 0x37);
     gpu::draw_rect_flat(x + w - 2, y + 1, 1, (h - 2) as u16, 0x37, 0x37, 0x37);
     let tx = x + (w - (label.len() as i16) * 8) / 2;
-    let color = if sel {
+    let color = if !enabled {
+        (0x98, 0x98, 0x98)
+    } else if sel {
         (0xFF, 0xFF, 0xA0)
     } else {
         (0xE0, 0xE0, 0xE0)
