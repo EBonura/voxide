@@ -506,7 +506,7 @@ sym = "VOXIDE_GATE_STATE"
 offset = 20
 op = "ge"
 value = 100
-note = "the completed blast made a crater (134 edits on this route since the visible-crater slices of the combined release candidate; 126 before it; the exact count follows the sim tick the TNT goes off at, since the blast seed is SIM_TICK, so any change to the route timeline moves it: 126, 134, 134, 127 and 138 for extra waits of 0, 1, 2, 5 and 13 ticks before the flint. Re-measure and update world-saved and world-reloaded together)"
+note = "the completed blast made a crater (126 edits on this route with the off-screen face reject, which shortens frames and so moves the tick the TNT goes off at; 134 on the combined release candidate before it; the exact count follows the sim tick the TNT goes off at, since the blast seed is SIM_TICK, so any change to the route timeline moves it: 126, 134, 134, 127 and 138 for extra waits of 0, 1, 2, 5 and 13 ticks before the flint. Re-measure and update world-saved and world-reloaded together)"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_GATE_STATE"
@@ -561,7 +561,7 @@ kind = "ram"
 sym = "VOXIDE_GATE_STATE"
 offset = 20
 op = "eq"
-value = 134
+value = 126
 note = "the saved game has the completed crater edits"
 [[step.assert]]
 kind = "ram"
@@ -637,7 +637,7 @@ kind = "ram"
 sym = "VOXIDE_GATE_STATE"
 offset = 20
 op = "eq"
-value = 134
+value = 126
 note = "the actual world edit log was restored from card"
 [[step.assert]]
 kind = "ram"
