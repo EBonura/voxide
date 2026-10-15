@@ -131,9 +131,9 @@ Deviations, deliberate:
 - Flames wait while a blast near the player is urgent (they share the frame's
   allowance); they catch up after.
 - Chained TNT still explode in the order the queue admits them, one blast job
-  at a time, so a chain of 16 takes 8 to 12 s to finish where Java takes 1.5 s.
-  Work per blast is 3M cycles; faster than that needs a cheaper ray, not a
-  bigger share.
+  at a time, so a chain of 16 took 8 to 12 s to finish where Java takes 1.5 s.
+  Work per blast was 3M cycles; the 0.4.1 section below makes the blast cheaper
+  and lets a long chain borrow more of the frame.
 - Blasts farther than the render range (`near` false) keep the old idle share.
 
 Measured outside explosions (unseen walking tape, the RC disc against this
@@ -145,6 +145,92 @@ same vblank counts.
 New gates: `tests/journey.toml` and `tests/save-repin.toml` wait for the fuse,
 then require the crater's blocks gone within 30 ticks (the old build takes 37
 to 77 and fails it; this one takes 5 to 9 in the lab).
+
+## 2026-10-15: long TNT chains (0.4.1)
+
+Manny: a 16 TNT chain takes 8 to 12 s to settle where Java takes about 1.5 s.
+The rules did not change (power 4, a fuse of 0.5 to 1.5 s for TNT a blast
+lights, W:TNT and W:Explosion as in the table above); only when and at what
+cost the blasts run. Measured with the `tnt-lab` and `tnt-meadow` discs (a
+4 x 2 x 2 block of 16, only the first lit), the PGO build, headless, 60 ticks a
+second, ticks counted from the first TNT going off.
+
+Where the ticks went in the 16 chain on the flat arena (cycle counts over the
+window from the first blast to the last crater meshed, 330 frames of 1.2M):
+
+| | before | after |
+|---|---|---|
+| blast job, ray stage | 27.9M (1.74M a blast) | 16 to 20M |
+| blast job, snapshot of the blocks around the centre | 4.3M | 5.3M (it now also finds which heights hold a block) |
+| blast job, breaking (column rewrites, drops, edit log) | 15.2M, 7.0M of it `record_edit` scanning the edit log | 8.5 to 10M |
+| the TNT tick (fall, fuse, the blast's hit on mobs, player, drops, smoke) | 4.8M | 5.0M |
+| remesh of the craters | 25.7M | 22M (two bursts of four chunks: after the first blast, which costs nothing because the fuses are still burning, and after the last) |
+| lighting (`flood_light`) | 1.5M of 249M profiled cycles | 1.4M of 178M, not changed |
+| admission (the queue of eight blasts) | no wait: a primed block is admitted on the first free unit of a frame | same |
+
+The admission queue was never the limit: the blast job is, one at a time, and a
+frame spared it about 0.25M of its 1.14M. 83M of work at 0.25M a frame is 330
+frames, the 7 s. Three changes, none of which alters a cell a blast breaks:
+
+- A frame may run longer while blasts wait (`slack.rs`, `STRETCH_AT`,
+  `STRETCH_VBLANKS`). A backlog of 2 (queued and running blasts, primed blocks
+  whose fuse is out, and, for a run of four or more blasts, the craters waiting
+  for their mesh) lets the frame take one vblank more than the scene's own
+  period, a backlog of 5 two more. The backlog is the throttle: a chain the
+  quiet spare time keeps up with never stretches, and a single TNT still gets
+  its existing boost.
+- A ray whose whole height band holds only air marks nothing and is not walked
+  (`blast::band_is_air`; the snapshot records which heights hold a block). On
+  open ground that is every upward ray, half of them and the longest. The
+  snapshot also reads only the columns the blast's power can reach (19 x 19 for
+  power 4, not 23 x 23). A host test (`air_band_rays_mark_nothing`) casts all
+  1,352 rays both ways over scattered, floored and ceilinged snapshots at every
+  power and asserts the same set of broken cells.
+- `trace` is a function of its own (its state stays in registers: a quarter
+  off the ray stage) and `record_edit` finds a position through a hash index
+  (`EDIT_HASH`, 4 KB) instead of scanning up to 1,024 entries a hole.
+
+Ticks after the lab lights the first TNT (60 a second; the first goes off at
+tick 240), before and after (flat arena; spawn meadow, whose scene runs at 3
+vblanks to begin with). "In view" is the last tick a chunk the player faces
+waited for its new mesh.
+
+| | chain | all blasts done | craters in view meshed | settled |
+|---|---|---|---|---|
+| flat | 1 | 249 to 247 | 268 to 255 | 279 to 255 |
+| flat | 4 | 380 to 328 | 425 to 352 | 425 to 360 |
+| flat | 16 | 679 to 421 | 694 to 450 | 705 to 450 |
+| meadow | 1 | 254 to 253 | 279 to 278 | 294 to 293 |
+| meadow | 4 | 479 to 370 | 536 to 403 | 551 to 403 |
+| meadow | 16 | 1,015 to 439 | 1,105 to 473 | 1,105 to 473 |
+
+(Each cell is before to after.) A chain of 16 is done 3.0 s after its first
+blast on the flat arena and 3.3 s on the meadow, where it took 7.3 s and 12.9
+s. Java's is done at about 1.5 s, the longest fuse of the blocks the first
+blast lights (87 ticks here); what is left is the blast job, about 2M clocks a
+blast against a frame that has 1.1M to give, so the tail is work, not waiting.
+
+Frames, 16 chain on the flat arena (from the first blast on, the lab's route log): before, 35 of 505 frames longer than two vblanks,
+41 extra vblanks, worst streak 10 frames, longest frame 4 vblanks. After, 54 of
+478 frames, 93 extra vblanks, worst streak 42 frames (about 2.7 s at 15 to 20
+fps), longest frame 5 vblanks (3 frames). The 4 chain: 20 of 337 before,
+25 of 334 after; the single TNT: 9 of 293 before, 5 of 295 after. Outside the
+explosions the lab's frames stay at two vblanks (6,519 of 6,552 before, 6,301
+of 6,701 after; the 366 one-vblank frames after are the title and loading frames of the
+lab script, which now draws a menu that is cheaper to run).
+
+Not changed, as before: the first six frames after a quiet spell may run two
+vblanks long; blasts beyond the render range keep the idle share; the crater
+is not there the tick the TNT goes off.
+
+Outside explosions (same tool chain and tapes as the release notes, the 0.4.0
+candidate BIN against this branch): train tape 1,122,775 and 1,122,357 work
+cycles a frame (display hashes identical), Manny's tape of 2026-10-15
+1,122,832 and 1,124,785 (+0.17 percent, three vblank frames 12 and 19), unseen
+tape 906,079 and 922,514 (+1.8 percent, display hashes differ: the title now
+looks at the card, the route moves by a few ticks, and the unseen tape walks
+the sticks, so it meets different ground; the train tape, which does not
+diverge, shows no cost).
 
 ## 2026-10-15: music (GitHub issue 1, item 3)
 

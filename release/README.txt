@@ -1,19 +1,21 @@
-VoXide (PSX)  -  v0.4.0
+VoXide (PSX)  -  v0.4.1
 ======================
 
 A Minecraft-style survival sandbox for the PlayStation 1, written in Rust.
 This is an early playable build: world generation, mining, crafting and
 survival work, but much of the game is still unfinished.
 
-New in v0.4.0: music (four piano pieces, 10 to 20 minutes apart as in Java, with a
-MUSIC VOLUME setting); a player page with armour you wear a piece at a time, an off
-hand, a choice of weapon and a 2x2 crafting grid; TNT and fire with Java-inspired
-ignition, fuses and blasts; a CONTROLS card in the menus; a nested pause menu
-and settings (video, sound, sticks, gameplay); the same buttons in
-every inventory screen; BRIGHTNESS and SCREEN X / SCREEN Y settings; and
-mobs that hit once a second, as in Java. Settings now reach the memory card
-only when you choose SAVE SETTINGS. Saves from 0.4.0 do not load in 0.3.2;
-older saves load in 0.4.0.
+New in v0.4.1: a LOAD WORLD row on the title screen that brings back the world on
+the memory card (dim, with the reason, when there is no card or no saved world);
+TNT chains that finish in under half the time; music (four piano pieces, 10 to
+20 minutes apart as in Java, with a MUSIC VOLUME setting); a player page with
+armour you wear a piece at a time, an off hand, a choice of weapon and a 2x2
+crafting grid; TNT and fire with Java-inspired ignition, fuses and blasts; a
+CONTROLS card in the menus; a nested pause menu and settings (video, sound,
+sticks, gameplay); the same buttons in every inventory screen; BRIGHTNESS and
+SCREEN X / SCREEN Y settings; and mobs that hit once a second, as in Java.
+Settings now reach the memory card only when you choose SAVE SETTINGS. Saves
+from this version do not load in 0.3.2; older saves load in 0.4.1.
 
 New in v0.3.2: portals drawn as Java's blended sheets, and the Void portal
 walks through like the Nether one; dying in the Inferno or the Void respawns

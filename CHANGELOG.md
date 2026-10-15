@@ -1,9 +1,27 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 | TBD
 
-Rendering pass on the 0.4.0 candidate.
+Equipment, fire and TNT, a controls card, and settings that save only when you
+say so, with LOAD WORLD on the title screen, long TNT chains that finish in under
+half the time, and a rendering pass.
 
+- LOAD WORLD on the title screen, second row, loads the world saved on the
+  memory card in slot 1, as Java's Singleplayer list does for a saved world.
+  After SAVE AND QUIT TO TITLE it is one press instead of PLAY GAME, Start,
+  LOAD WORLD. With no card in the slot, or no saved world on it, the row is
+  dim and says which when the cursor is on it; X on it looks at the card again,
+  so a card put in later works. A save that will not read back returns to the
+  title with that reason. The six title buttons are a little shorter to fit.
+- A chain of TNT settles in under half the time. Sixteen, lit by one, is done
+  3.0 s after the first goes off on flat ground and 3.3 s on the spawn meadow
+  (it was 7.3 s and 12.9 s); four is done in 1.5 to 2.2 s (it was 2.3 to 4 s).
+  Java's is done in about 1.5 s. The blasts break exactly the blocks they did:
+  a ray that can only cross air is not walked, a blast reads only the columns it
+  can reach, the log of broken blocks is looked up instead of scanned, and while
+  blasts wait the game takes up to two extra vblanks a frame (15 to 20 fps) for
+  as long as the chain lasts. Sixteen runs 54 of 478 frames long, in one stretch
+  of about 2.7 s; a single TNT is unchanged.
 - The dashed sky-coloured lines between terrain faces are gone. A distant floor
   plate or a terrace edge near the side of the screen is a thin slanted sliver,
   and the old seal grew it along its own length instead of sideways, so
@@ -17,12 +35,6 @@ Rendering pass on the 0.4.0 candidate.
   ended in spikes. Sides now reach the far plane with the tops. About 4% of the
   frame.
 - The PGO profile is re-collected for the new code.
-
-## 0.4.0 | 2026-10-15
-
-Equipment, fire and TNT, a controls card, and settings that save only when you
-say so.
-
 - The pause menu and the settings are nested, as in Java. Start opens the GAME
   MENU (BACK TO GAME, OPTIONS..., CONTROLS, SAVE WORLD, LOAD WORLD, SAVE AND
   QUIT TO TITLE). OPTIONS... holds VIDEO SETTINGS (brightness, screen position), MUSIC & SOUNDS, STICK
@@ -110,8 +122,8 @@ say so.
   its phases one after another in the same frame, casts its rays from a table
   and meshes the crater you can see first. One TNT's blocks are gone in about
   a tenth of a second and the crater is on screen in 0.3 to 0.6 s (it was 2 to
-  3 s). A chain of four finishes in 2.4 to 3.6 s (it was 5 to 9), sixteen in 8
-  to 12 s (it was 15 or more). The first frames of an explosion can run at 12
+  3 s). A chain of four is done in 1.5 to 2.2 s and sixteen in 3 to 3.3 s (see
+  the first entries above). The first frames of an explosion can run at 12
   to 20 fps. If all 32 primed TNT slots are full, TNT that cannot be lit stays in the
   world, including blocks reached by a chain blast.
 - A CONTROLS card lists every button on two pages, in the world and in menus.
@@ -292,3 +304,4 @@ listed separately below; source cleanup does not replace an already published di
 Standalone disc published on itch.io.
 
 - Published the SDK split build of VoXide 0.1.11.
+

@@ -19,6 +19,9 @@ nothing behind. Every static in the game was read; this is the list.
 | Chunks, chunk pool owners, half-done generation and mesh jobs | world.rs | `prepare_new_world` (the NEW WORLD path), new seed from the frame count |
 | Other dimension | world.rs | quit leaves through the overworld first (`mob::leave_dimension`, `enter_dimension`) |
 | Fluid, fire, blast queues; fire list | world.rs | `world::reset_session` (`fluid_reset`, `blast_reset`) |
+| Length of the current run of blasts (`RUN_LEN`) | world.rs | `blast_reset` |
+| Edit log index (`EDIT_HASH`) | main.rs | `edit_log_clear`, from `reset_game_state` with the log |
+| The title's LOAD WORLD request, and what the card held (`TITLE_LOAD`, `TITLE_PROBE`) | main.rs | `main_menu` clears the request and looks at the card again on every visit to the title |
 | Queued and half-done edit remeshes, their change flags | world.rs | `world::reset_session` |
 | Fire generator, rain flag | world.rs | `world::reset_session` |
 | Mobs, arrows, knockback, dragon slain | mob.rs | `mob::reset_session` (`clear`, `reset`) |
@@ -46,6 +49,12 @@ nothing behind. Every static in the game was read; this is the list.
 | Respawn point, world spawn | main.rs | `quit_to_title` sets them from the new seed |
 
 ## Kept on purpose
+
+- `TITLE_UNREADABLE`: set when the title's LOAD WORLD found a save it could not
+  read back and returned to the title; the title shows the reason and the next
+  press of LOAD WORLD looks at the card again and clears it.
+- The spare-time bookkeeping in slack.rs (idle history, the backlog it is told
+  each frame): it only shapes how much work a frame takes.
 
 - The settings and their save state (`SETTINGS_*`, the sliders, the profile): a
   player's, not a world's. SAVE SETTINGS still decides what reaches the card.
