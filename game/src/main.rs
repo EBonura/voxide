@@ -184,22 +184,26 @@ const DYN_MIN: i32 = 14 * BLOCK;
 /// Pad poll, sim bookkeeping and the vsync handshake the slack clock does not see.
 #[cfg(feature = "dyn-far")]
 const DYN_FIXED: u32 = 3_500;
-/// Move the far plane for this frame from the last frame's load: in fast (12
-/// units, a tenth of a block a frame), out slowly (3 units), a dead band between.
+/// Move the far plane for this frame from the last frame's load. Over the high
+/// mark it moves in proportion to the overshoot (a block of far plane is about
+/// 5,000 ticks, 39 per unit), up to 96 units (three quarters of a block) a frame,
+/// so a heavy scene is shed in a few frames; under the low mark it creeps out at
+/// 3 units a frame (0.7 block a second). Between the marks it stays.
 #[cfg(feature = "dyn-far")]
 fn dyn_far_update() {
     unsafe {
         let body = LAST_BODY;
         let mut d = FAR_DYN;
         if body > DYN_HI {
-            d -= 12 + ((body - DYN_HI) / 1_000) as i32;
+            let over = body - DYN_Q * 90 / 100;
+            d -= ((over / 39) as i32).clamp(12, 96);
         } else if body < DYN_LO {
             d += 3;
         }
         d = d.clamp(DYN_MIN, FAR_Z);
         FAR_DYN = d;
         FOG_K = ((FAR_Z << 16) / d).max(65536);
-        telemetry::counter(33, d as u32);
+        telemetry::counter(33, (d >> 1) as u32);
     }
 }
 
