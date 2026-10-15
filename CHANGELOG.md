@@ -73,12 +73,15 @@ say so.
   lights flames in empty cells beside fuel, goes out in rain, dies young on
   bare ground and lives forever on netherrack. Flint and steel puts a flame
   only where one can stand. Mobs standing in fire burn.
-- Explosions and flames use bounded queues and spare frame time. Heavy chains
-  can delay TNT detonation and crater completion substantially; in a saturated
-  lab run, sampled admission delays reached 1,270 to 1,274 simulation ticks,
-  and block completion delays reached 714 to 716 ticks after admission. If all
-  32 primed TNT slots are full, TNT that cannot be lit stays in the world,
-  including blocks reached by a chain blast.
+- Explosions and flames use bounded queues and spare frame time. A blast near
+  you now gets most of the frame's spare time instead of a third of it, takes
+  its phases one after another in the same frame, casts its rays from a table
+  and meshes the crater you can see first. One TNT's blocks are gone in about
+  a tenth of a second and the crater is on screen in 0.3 to 0.6 s (it was 2 to
+  3 s). A chain of four finishes in 2.4 to 3.6 s (it was 5 to 9), sixteen in 8
+  to 12 s (it was 15 or more). The first frames of an explosion can run at 12
+  to 20 fps. If all 32 primed TNT slots are full, TNT that cannot be lit stays in the
+  world, including blocks reached by a chain blast.
 - A CONTROLS card lists every button on two pages, in the world and in menus.
   It is on the main menu and in the pause menu (OPTIONS > CONTROLS), and it
   comes up once on your first PLAY. The memory card remembers that it did only
