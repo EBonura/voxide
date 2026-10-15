@@ -112,7 +112,12 @@ fn the_title_tree_has_only_rows_a_title_can_do() {
             assert!(
                 !matches!(
                     row.kind,
-                    Kind::Resume | Kind::Controls | Kind::SaveWorld | Kind::LoadWorld | Kind::Cheats
+                    Kind::Resume
+                        | Kind::Controls
+                        | Kind::SaveWorld
+                        | Kind::LoadWorld
+                        | Kind::SaveQuit
+                        | Kind::Cheats
                 ),
                 "{} needs a world",
                 row.label

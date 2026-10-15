@@ -2797,6 +2797,10 @@ fn main() {
     // buttons. PLAY finishes any remainder behind the plain progress bar
     // (usually nothing is left by the time a human has picked an option).
     world::boot_prepare(spawn_bx, spawn_bz);
+    // One pass of this loop is one visit to the title screen and the world
+    // after it; SAVE AND QUIT TO TITLE ends the pass. (The body is not
+    // indented a level: the gameplay loop's source is left as it was.)
+    loop {
     main_menu(&mut fb, &font);
     music::enter_world();
     tty::println("voxide: world ready");
@@ -2901,6 +2905,9 @@ fn main() {
         let mut rstick = state.sticks.right_centered();
         if save::busy() {
             save_step(&mut pad, previous);
+        }
+        if menus::quit_ready() {
+            break;
         }
         // Safety net for a controller that wasn't ready at the boot handshake
         // (or gets re-plugged): re-assert analog while the pad still reports
@@ -3902,6 +3909,39 @@ fn main() {
         if !(menu == MENU_OPTIONS || menu == MENU_CHEAT || menu == MENU_CONTROLS) {
             day = day.wrapping_add(sim_n); // the pause menu stops the clock too
         }
+    }
+    // SAVE AND QUIT TO TITLE: let the frame the GPU is still drawing finish,
+    // then back to a fresh title screen and the next pass.
+    gpu::submit_linked_list_wait();
+    gpu::draw_sync();
+    quit_to_title(&mut fb, &font, frame);
+    }
+}
+
+/// Leave a world for the title screen. The title shows a freshly seeded
+/// vista, as NEW WORLD does, and PLAY GAME starts that world: the saved one
+/// comes back with LOAD WORLD in the game menu, as it does after a boot.
+#[inline(never)]
+#[optimize(size)] // a menu transition: its bytes are worth more than its cycles
+fn quit_to_title(fb: &mut FrameBuffer, font: &FontAtlas, entropy: u32) {
+    if world::dimension() != world::DIM_OVERWORLD {
+        mob::leave_dimension();
+        enter_dimension(world::DIM_OVERWORLD, 0, 0, fb, font);
+    }
+    menus::quit_done();
+    clear_world_entities();
+    reset_game_state();
+    world::prepare_new_world(entropy as i32 | 1);
+    let (bx, bz) = if SPAWN_GREEN {
+        world::pick_spawn(SPAWN_BX, SPAWN_BZ)
+    } else {
+        (SPAWN_BX, SPAWN_BZ)
+    };
+    unsafe {
+        WORLD_BX = bx;
+        WORLD_BZ = bz;
+        RESPAWN_BX = bx;
+        RESPAWN_BZ = bz;
     }
 }
 
@@ -5149,7 +5189,7 @@ fn save_step(pad: &mut ButtonState, previous: ButtonState) {
     *pad = previous;
     if let Some(o) = save::pump() {
         unsafe {
-            OPT_MSG = match o {
+            OPT_MSG = match &o {
                 save::Outcome::Saved => "SAVED",
                 save::Outcome::NeedFormat => "BLANK CARD: SAVE AGAIN TO FORMAT",
                 save::Outcome::NoCard => "NO MEMORY CARD IN SLOT 1",
@@ -5158,6 +5198,7 @@ fn save_step(pad: &mut ButtonState, previous: ButtonState) {
                 save::Outcome::Failed => "SAVE FAILED - CHECK THE CARD",
             };
         }
+        menus::quit_after(&o);
     }
 }
 

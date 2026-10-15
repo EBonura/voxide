@@ -1,0 +1,222 @@
+# SAVE AND QUIT TO TITLE: the world is saved, the title screen comes back, PLAY
+# starts a fresh world (no edits), and LOAD WORLD in the game menu brings the
+# saved one back. VOXIDE_GATE_STATE offset 20 is the world's block-edit count;
+# VOXIDE_SETTINGS_STATE offset 12 is the menu context (title 1, world 0, pause 4).
+name = "voxide-settings-menu-quit"
+title = "VoXide: SAVE AND QUIT TO TITLE and back"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+memcard = "fresh"
+max_ticks = 12000
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 1800
+[[step.assert]]
+kind = "card_unchanged"
+[[step]]
+label = "PLAY GAME: the first play shows the CONTROLS card"
+press = ["cross"]
+hold = 4
+wait = 150
+[[step]]
+press = ["circle"]
+hold = 4
+wait = 60
+[[step]]
+label = "look down at the ground and place a block, so the world differs from a fresh one"
+rstick = [128, 255]
+hold = 40
+wait = 20
+[[step]]
+press = ["l2"]
+hold = 4
+wait = 30
+[[step]]
+checkpoint = "world-with-an-edit"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"
+[[step]]
+press = ["start"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "zero"
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 5
+[[step]]
+checkpoint = "quit-selected"
+golden = false
+strict = [{ x = 32, y = 103, w = 256, h = 19 }, { x = 32, y = 164, w = 256, h = 14 }]
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 2
+[[step]]
+checkpoint = "saving-to-quit"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 2500
+[[step]]
+wait = 60
+[[step]]
+checkpoint = "quit-at-title"
+golden = false
+[[step.assert]]
+kind = "card_writes"
+min_count = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "zero"
+[[step]]
+label = "PLAY GAME again: the controls card is not shown twice"
+press = ["cross"]
+hold = 4
+wait = 60
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "zero" }
+timeout = 2500
+[[step]]
+wait = 60
+[[step]]
+checkpoint = "fresh-world-after-quit"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"
+[[step]]
+press = ["start"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "zero"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "zero"
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 4
+[[step]]
+label = "LOAD WORLD"
+press = ["cross"]
+hold = 4
+wait = 200
+[[step]]
+press = ["circle"]
+hold = 4
+wait = 60
+[[step]]
+checkpoint = "world-loaded-after-quit"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "eq"
+value = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "zero"

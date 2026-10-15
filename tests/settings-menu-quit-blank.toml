@@ -1,0 +1,98 @@
+# SAVE AND QUIT TO TITLE on an unformatted card asks first, as the world save
+# does: the first X reports a blank card and stays in the menu, the second
+# formats the card, saves, and leaves for the title screen.
+name = "voxide-settings-menu-quit-blank"
+title = "VoXide: SAVE AND QUIT TO TITLE formats a blank card only when asked twice"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+memcard = "fresh"
+max_ticks = 12000
+[card_fixture]
+path = "tests/fixtures/unformatted.mcd"
+sha256 = "fa43239bcee7b97ca62f007cc68487560a39e19f74f3dde7486db3f98df8e471"
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 1800
+[[step.assert]]
+kind = "card_unchanged"
+[[step]]
+label = "PLAY GAME: the first play shows the CONTROLS card"
+press = ["cross"]
+hold = 4
+wait = 150
+[[step]]
+press = ["circle"]
+hold = 4
+wait = 60
+[[step]]
+press = ["start"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 16
+op = "eq"
+value = 5
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 200
+[[step]]
+checkpoint = "blank-card-asks"
+golden = false
+[[step.assert]]
+kind = "card_unchanged"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 4
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 36
+op = "zero"
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 2
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 3000
+[[step]]
+wait = 60
+[[step]]
+checkpoint = "formatted-saved-and-quit"
+golden = false
+[[step.assert]]
+kind = "card_writes"
+min_count = 1
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+op = "eq"
+value = 1

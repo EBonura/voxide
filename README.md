@@ -134,7 +134,9 @@ The layout follows Minecraft Bedrock's PS4/PS5 defaults.
   hand)
 - L3 or double-tap forward: sprint (drops when forward stops)
 - Start: the game menu -- BACK TO GAME, OPTIONS..., CONTROLS (every button on
-  a two-page card), SAVE WORLD and LOAD WORLD (memory card). OPTIONS... opens
+  a two-page card), SAVE WORLD and LOAD WORLD (memory card) and SAVE AND QUIT
+  TO TITLE (saves, then back to the title screen; PLAY GAME there starts a new
+  world, LOAD WORLD in the game menu brings the saved one back). OPTIONS... opens
   VIDEO SETTINGS (brightness, screen position), MUSIC & SOUNDS (the two
   volumes), STICK SETTINGS (look speed, invert, deadzones) and GAMEPLAY (the
   tutorial toggle and CHEATS), then SAVE SETTINGS to keep what you changed.

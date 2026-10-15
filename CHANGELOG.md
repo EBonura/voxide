@@ -6,7 +6,8 @@ Equipment, fire and TNT, a controls card, and settings that save only when you
 say so.
 
 - The pause menu and the settings are nested, as in Java. Start opens the GAME
-  MENU (BACK TO GAME, OPTIONS..., CONTROLS, SAVE WORLD, LOAD WORLD). OPTIONS...
+  MENU (BACK TO GAME, OPTIONS..., CONTROLS, SAVE WORLD, LOAD WORLD, SAVE AND
+  QUIT TO TITLE). OPTIONS...
   holds VIDEO SETTINGS (brightness, screen position), MUSIC & SOUNDS, STICK
   SETTINGS (look speed, invert, deadzones), GAMEPLAY (the tutorial and
   CHEATS...) and SAVE SETTINGS. The main menu's SETTINGS opens the same pages.
@@ -15,6 +16,10 @@ say so.
   16-row list that scrolled, with FLIGHT in it and again on the CHEATS page;
   flight is now only FLY (NO CLIP) on CHEATS. Nothing else about saving
   changed: values still reach the card only through SAVE SETTINGS.
+  SAVE AND QUIT TO TITLE is new: it saves the world, then returns to the title
+  screen (a blank card asks first, and a failed save offers to quit without
+  it). PLAY GAME from there starts a new world; LOAD WORLD brings the saved
+  one back.
 - Music, at last (GitHub issue 1): four pieces of two and a half to three
   minutes from Mulula VGM Loops, Simple Piano Music Vol 1 (Aranha, Melodia, Nulo,
   Pianeta, Side Label, Talher), CC BY 4.0, https://mululavgmloops.itch.io/,

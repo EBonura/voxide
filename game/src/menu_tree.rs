@@ -3,7 +3,7 @@
 //! so the host tests (tools/host-tests) walk it with rustc.
 //!
 //!   GAME MENU (pause only)   BACK TO GAME, OPTIONS..., CONTROLS, SAVE WORLD,
-//!                            LOAD WORLD
+//!                            LOAD WORLD, SAVE AND QUIT TO TITLE
 //!   OPTIONS                  VIDEO SETTINGS..., MUSIC & SOUNDS...,
 //!                            STICK SETTINGS..., GAMEPLAY..., SAVE SETTINGS,
 //!                            DONE
@@ -36,6 +36,8 @@ pub enum Kind {
     Controls,
     SaveWorld,
     LoadWorld,
+    /// Save the world, then back to the title screen.
+    SaveQuit,
     Cheats,
 }
 
@@ -67,12 +69,13 @@ pub const S_SCREEN_Y: usize = 8;
 /// The SAVE SETTINGS row of `setting_value`: the save status.
 pub const S_SAVE: usize = 9;
 
-const PAUSE: [Row; 5] = [
+const PAUSE: [Row; 6] = [
     row("BACK TO GAME", Kind::Resume),
     row("OPTIONS...", Kind::Go(Page::Options)),
     row("CONTROLS", Kind::Controls),
     row("SAVE WORLD", Kind::SaveWorld),
     row("LOAD WORLD", Kind::LoadWorld),
+    apart("SAVE AND QUIT TO TITLE", Kind::SaveQuit),
 ];
 const OPTIONS: [Row; 6] = [
     row("VIDEO SETTINGS...", Kind::Go(Page::Video)),
