@@ -563,8 +563,8 @@ kind = "ram"
 sym = "VOXIDE_GATE_STATE"
 offset = 20
 op = "eq"
-value = 138
-note = "the saved game has the completed crater edits"
+value = 140
+note = "the saved game has the completed crater edits (140 on this route since the SDK repin to 5219afbe moved the route timeline a tick or two, 138 before it; the count follows the sim tick the TNT goes off at, and the world-reloaded step below must read the same number back)"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_GATE_STATE"
@@ -639,7 +639,7 @@ kind = "ram"
 sym = "VOXIDE_GATE_STATE"
 offset = 20
 op = "eq"
-value = 138
+value = 140
 note = "the actual world edit log was restored from card"
 [[step.assert]]
 kind = "ram"
