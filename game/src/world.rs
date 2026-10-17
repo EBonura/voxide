@@ -5576,12 +5576,12 @@ fn plane_in_frustum(
 
 /// Survivors of the per-face cull wait here, in main RAM, across planes and
 /// directions, and `crate::emit_faces` takes them in one call per SURV_CAP
-/// faces (and one at the end of a chunk). A call per plane meant a call per
+/// faces. A call per plane meant a call per
 /// 1.7 survivors on a recorded walk, and the cull loop (with plane_in_frustum)
 /// and the packet builder together are bigger than the instruction cache, so
 /// every call refilled both. Each entry's side word carries the face's
 /// direction in bits SURV_DIR_SHIFT.. (the AO and light bits are below it).
-const SURV_CAP: usize = 256;
+const SURV_CAP: usize = MAX_FACES;
 pub const SURV_DIR_SHIFT: u32 = 11;
 static mut SURV_F: [u32; SURV_CAP] = [0; SURV_CAP];
 static mut SURV_S: [u16; SURV_CAP] = [0; SURV_CAP];
@@ -5634,9 +5634,24 @@ pub fn for_visible_faces(cam: &Camera, count: &mut usize) -> usize {
                 crate::slack::mark();
                 let oxw = cx * CW * BLOCK;
                 let ozw = cz * CW * BLOCK;
-                face_work += unsafe {
-                    FaceStack::run(|| chunk_faces(cam, p, oxw, ozw, plain_lim, side_lim, count))
+                let (work, survivors) = unsafe {
+                    FaceStack::run(|| chunk_faces(cam, p, oxw, ozw, plain_lim, side_lim))
                 };
+                face_work += work;
+                // The cull's stack frame is gone before the packet builder
+                // runs: the two together overflowed the scratchpad.
+                if survivors != 0 {
+                    unsafe {
+                        FaceStack::run(|| {
+                            crate::emit_faces(
+                                core::ptr::addr_of!(SURV_F) as *const u32,
+                                core::ptr::addr_of!(SURV_S) as *const u16,
+                                survivors,
+                                count,
+                            )
+                        })
+                    };
+                }
             }
         }
         s += 1;
@@ -5664,8 +5679,7 @@ fn chunk_faces(
     ozw: i32,
     plain_lim: i32,
     side_lim: i32,
-    count: &mut usize,
-) -> usize {
+) -> (usize, usize) {
     let mut face_work = 0usize;
     // Survivors waiting for emit_faces (see SURV_CAP).
     let mut n = 0usize;
@@ -5804,10 +5818,6 @@ fn chunk_faces(
                     }
                     n += 1;
                     k += 1;
-                    if n == SURV_CAP {
-                        crate::emit_faces(surv_f, surv_s, n, count);
-                        n = 0;
-                    }
                 }
                 plane += 1;
                 continue;
@@ -5898,19 +5908,12 @@ fn chunk_faces(
                     *surv_s.add(n) = *sp.add(k - 1) | ((dir as u16) << SURV_DIR_SHIFT);
                 }
                 n += 1;
-                if n == SURV_CAP {
-                    crate::emit_faces(surv_f, surv_s, n, count);
-                    n = 0;
-                }
             }
             plane += 1;
         }
         dir += 1;
     }
-    if n != 0 {
-        crate::emit_faces(surv_f, surv_s, n, count);
-    }
-    face_work
+    (face_work, n)
 }
 
 /// Iterate visible cross-sprite plants near the camera, calling

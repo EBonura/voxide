@@ -123,6 +123,16 @@ fn neg_if(v: i32, m: i32) -> i32 {
     (v ^ m) - m
 }
 
+/// `AXIS[i]` without the bounds check: `index` of three signs is 0..18, and a
+/// panic path under the seal costs the face pass's scratchpad stack 64 bytes
+/// it does not have.
+#[inline(always)]
+fn axis(i: usize) -> u32 {
+    debug_assert!(i < AXIS.len());
+    // SAFETY: `index` of signs in -1..=1 is below 18 (AXIS.len()).
+    unsafe { *AXIS.get_unchecked(i) }
+}
+
 /// Table index for outward normal signs `p`, `q` and which edge is longer.
 #[inline(always)]
 fn index(p: i32, q: i32, p_longer: bool) -> usize {
@@ -151,8 +161,8 @@ pub fn grow_quad(x: [i32; 4], y: [i32; 4]) -> ([i32; 4], [i32; 4]) {
     // the one along `a` is (-ay, ax) and the one along `b` is (by, -bx).
     let (px, py) = (neg_if(-say, m), neg_if(sax, m));
     let (qx, qy) = (neg_if(sby, m), neg_if(-sbx, m));
-    let ex = AXIS[index(px, qx, a_longer)];
-    let ey = AXIS[index(py, qy, a_longer)];
+    let ex = axis(index(px, qx, a_longer));
+    let ey = axis(index(py, qy, a_longer));
     (
         [
             x[0] + byte(ex, 0),
@@ -216,8 +226,8 @@ pub fn grow_polygon(
         let (n1x, n1y) = (neg_if(s1y, m), neg_if(-s1x, m));
         let (n2x, n2y) = (neg_if(s2y, m), neg_if(-s2x, m));
         let first_longer = e1x.abs() + e1y.abs() >= e2x.abs() + e2y.abs();
-        let dx = byte(AXIS[index(n1x, n2x, first_longer)], 3);
-        let dy = byte(AXIS[index(n1y, n2y, first_longer)], 3);
+        let dx = byte(axis(index(n1x, n2x, first_longer)), 3);
+        let dy = byte(axis(index(n1y, n2y, first_longer)), 3);
         set(i, (cx + dx).clamp(-RAIL_X - 1, RAIL_X), cy + dy);
         prev_x = cx;
         prev_y = cy;

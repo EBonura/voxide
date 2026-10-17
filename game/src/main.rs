@@ -8656,7 +8656,8 @@ fn clip_polygon_plane_c<const P: usize>(
     // old clipper's bounded output policy; interpolation remains Q8.
     unsafe {
         clip_convex_plane::<_, _, true>(
-            &src[..src_n],
+            // SAFETY: src_n <= CLIP_VERT_CAP.
+            core::slice::from_raw_parts(src.as_ptr(), src_n),
             dst,
             &CellPlane::<P>,
             ClipTraversal::PreviousToCurrent,
@@ -8701,7 +8702,8 @@ fn clip_cell_plane_c<'s, const P: usize>(
     let mut any_outside = false;
     let mut scan = 0usize;
     while scan < n {
-        if clip_distance_c::<P>(&a[scan]) >= 0 {
+        // SAFETY: scan < n <= CLIP_VERT_CAP.
+        if clip_distance_c::<P>(unsafe { a.get_unchecked(scan) }) >= 0 {
             any_inside = true;
         } else {
             any_outside = true;
@@ -8781,11 +8783,12 @@ fn clip_line_segment(mut a: ClipVert, mut b: ClipVert) -> Option<(ClipVert, Clip
 }
 
 #[inline]
-fn clip_project(p: ClipVert) -> Proj {
+fn clip_project(p: &ClipVert) -> Proj {
     // Clipping guarantees NEAR_Z <= z <= FAR_Z, so use the renderer's 1/z
     // table just like project_world/clip_quad_near. The former two integer
     // divides per emitted vertex dominated the tessellated close-face path.
-    let r = unsafe { RECIP[p.z as usize] };
+    // SAFETY: clipping keeps NEAR_Z <= z <= FAR_Z and RECIP_LEN = FAR_Z + 1.
+    let r = unsafe { *(core::ptr::addr_of!(RECIP) as *const i32).add(p.z as usize) };
     Proj {
         x: (CX as i32 + ((p.x * r) >> 16)).clamp(0, SCREEN_W as i32) as i16,
         y: (CY as i32 + ((p.y * r) >> 16)).clamp(0, SCREEN_H as i32) as i16,
@@ -8988,19 +8991,24 @@ fn emit_clipped_cell(win: u32, cl_hi: u32, tp_hi: u32, blended: bool, depth_bias
 
     // The farthest depth from any candidate is one of the two extrema.
     // Keep the first minimum exactly as the former all-pairs search did.
-    let mut min_z = a[0].z;
+    // Every index below is under n <= CLIP_VERT_CAP, which no clip raises
+    // (a convex polygon gains one corner per plane at most, from four), so the
+    // reads are unchecked: a panic path under this function costs the face
+    // pass's scratchpad stack 64 bytes it does not have.
+    let az = |i: usize| unsafe { a.get_unchecked(i).z };
+    let mut min_z = az(0);
     let mut max_z = min_z;
     let mut j = 1usize;
     while j < n {
-        min_z = min_z.min(a[j].z);
-        max_z = max_z.max(a[j].z);
+        min_z = min_z.min(az(j));
+        max_z = max_z.max(az(j));
         j += 1;
     }
     let mut pivot = 0usize;
     let mut best = i32::MAX;
     let mut candidate = 0usize;
     while candidate < n {
-        let worst = (a[candidate].z - min_z).max(max_z - a[candidate].z);
+        let worst = (az(candidate) - min_z).max(max_z - az(candidate));
         if worst < best {
             best = worst;
             pivot = candidate;
@@ -9021,7 +9029,7 @@ fn emit_clipped_cell(win: u32, cl_hi: u32, tp_hi: u32, blended: bool, depth_bias
         unsafe { &mut *(clip_p() as *mut [Proj; CLIP_VERT_CAP]) };
     let mut i = 0usize;
     while i < n {
-        pp[i] = clip_project(a[i]);
+        unsafe { *pp.get_unchecked_mut(i) = clip_project(a.get_unchecked(i)) };
         i += 1;
     }
     if !blended {
@@ -9049,18 +9057,25 @@ fn emit_clipped_cell(win: u32, cl_hi: u32, tp_hi: u32, blended: bool, depth_bias
         // runtime `% n` was three divides per triangle).
         let i1 = if pivot + fan >= n { pivot + fan - n } else { pivot + fan };
         let i2 = if pivot + fan + 1 >= n { pivot + fan + 1 - n } else { pivot + fan + 1 };
-        let c0 = &a[pivot];
-        let c1 = &a[i1];
-        let c2 = &a[i2];
-        let p0 = pp[pivot];
-        let p1 = pp[i1];
-        let p2 = pp[i2];
+        // SAFETY: pivot, i1, i2 < n.
+        let (c0, c1, c2, p0, p1, p2) = unsafe {
+            (
+                a.get_unchecked(pivot),
+                a.get_unchecked(i1),
+                a.get_unchecked(i2),
+                *pp.get_unchecked(pivot),
+                *pp.get_unchecked(i1),
+                *pp.get_unchecked(i2),
+            )
+        };
         let area = (p1.x as i32 - p0.x as i32) * (p2.y as i32 - p0.y as i32)
             - (p1.y as i32 - p0.y as i32) * (p2.x as i32 - p0.x as i32);
         if area != 0 {
             let slot = depth_slot(((p0.z + p1.z + p2.z) / 3 - depth_bias).max(NEAR_Z));
             unsafe {
-                let q = &mut NEAR_TRIS[RENDER_ARENA][tri_n];
+                // SAFETY: tri_n < MAX_NEAR_TRIS (checked above), RENDER_ARENA < 2.
+                let q = &mut *(core::ptr::addr_of_mut!(NEAR_TRIS) as *mut TriTexturedGouraud)
+                    .add(RENDER_ARENA * MAX_NEAR_TRIS + tri_n);
                 q.tex_window = win;
                 q.color0_cmd = command | pack_clip_color(c0);
                 q.v0 = p0.x as u16 as u32 | ((p0.y as u16 as u32) << 16);
@@ -9071,7 +9086,8 @@ fn emit_clipped_cell(win: u32, cl_hi: u32, tp_hi: u32, blended: bool, depth_bias
                 q.color2 = pack_clip_color(c2);
                 q.v2 = p2.x as u16 as u32 | ((p2.y as u16 as u32) << 16);
                 q.uv2 = pack_clip_uv(c2);
-                OT[RENDER_ARENA].insert(
+                // depth_slot is 1..=OT_LEN-1.
+                OT[RENDER_ARENA].insert_unchecked(
                     slot,
                     q as *mut TriTexturedGouraud as *mut u32,
                     TriTexturedGouraud::WORDS,
@@ -10951,8 +10967,8 @@ fn draw_pick_outline(cam: &Camera, pick: Pick) {
             ..EMPTY_CLIP_VERT
         };
         if let Some((ca, cb)) = clip_line_segment(va, vb) {
-            let pa = clip_project(ca);
-            let pb = clip_project(cb);
+            let pa = clip_project(&ca);
+            let pb = clip_project(&cb);
             ui_line(pa.x, pa.y, pb.x, pb.y, 12, 12, 14);
         }
     }
