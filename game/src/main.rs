@@ -9478,23 +9478,19 @@ fn emit_near_face(f: u32, side: u16, dir: usize) {
     }
 }
 
-/// One culled batch of faces from world::for_visible_faces, all of one dir.
+/// One culled batch of faces from world::for_visible_faces, each with its dir.
 /// inline(never): the packet builder gets a frame of its own instead of
 /// sharing registers with the cull loop, which used to spill its state around
 /// every iterated face and made the pair twice the size of the I-cache.
 #[inline(never)]
 #[export_name = "voxide_emit_faces"] // placed by game/hot-text.order
-pub(crate) fn emit_faces(
-    faces: *const u32,
-    sides: *const u16,
-    n: usize,
-    dir: usize,
-    count: &mut usize,
-) {
+pub(crate) fn emit_faces(faces: *const u32, sides: *const u16, n: usize, count: &mut usize) {
     let mut i = 0;
     while i < n {
         // SAFETY: for_visible_faces hands over n valid words in each array.
         let (f, side) = unsafe { (*faces.add(i), *sides.add(i)) };
+        // The side word carries the face's direction above its AO and light.
+        let dir = ((side >> world::SURV_DIR_SHIFT) & 7) as usize;
         emit_face(f, side, dir, count);
         i += 1;
     }

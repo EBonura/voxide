@@ -5591,8 +5591,17 @@ fn plane_in_frustum(
 pub const FACE_BATCH_ADDR: usize = 0x1F80_0000;
 pub const FACE_BATCH: usize = 8;
 pub const FACE_BATCH_END: usize = FACE_BATCH_ADDR + FACE_BATCH * 6;
-const BATCH_F: *mut u32 = FACE_BATCH_ADDR as *mut u32;
-const BATCH_S: *mut u16 = (FACE_BATCH_ADDR + FACE_BATCH * 4) as *mut u16;
+/// Survivors of the per-face cull wait here, in main RAM, across planes and
+/// directions, and `crate::emit_faces` takes them in one call per SURV_CAP
+/// faces (and one at the end of a chunk). A call per plane meant a call per
+/// 1.7 survivors on a recorded walk, and the cull loop (with plane_in_frustum)
+/// and the packet builder together are bigger than the instruction cache, so
+/// every call refilled both. Each entry's side word carries the face's
+/// direction in bits SURV_DIR_SHIFT.. (the AO and light bits are below it).
+const SURV_CAP: usize = 256;
+pub const SURV_DIR_SHIFT: u32 = 11;
+static mut SURV_F: [u32; SURV_CAP] = [0; SURV_CAP];
+static mut SURV_S: [u16; SURV_CAP] = [0; SURV_CAP];
 
 /// The stack the per-chunk face pass (chunk_faces, emit_faces and the
 /// near-cell clipper under it) and the plant pass run on: the scratchpad above
@@ -5678,6 +5687,14 @@ fn chunk_faces(
     count: &mut usize,
 ) -> usize {
     let mut face_work = 0usize;
+    // Survivors waiting for emit_faces (see SURV_CAP).
+    let mut n = 0usize;
+    let (surv_f, surv_s) = unsafe {
+        (
+            core::ptr::addr_of_mut!(SURV_F) as *mut u32,
+            core::ptr::addr_of_mut!(SURV_S) as *mut u16,
+        )
+    };
     // Note this chunk's camera-relative origin for emit_face.
     crate::gte_begin_chunk(cam, oxw, ozw);
     // Camera-relative anchor-centre base for the MVMVA cull (the GTE
@@ -5799,11 +5816,22 @@ fn chunk_faces(
             if !FRUSTUM_CULL || plane_vis == 2 {
                 // The whole plane is inside the view: every face
                 // survives, straight from the pool.
-                unsafe { crate::emit_faces(fp.add(start), sp.add(start), end - start, dir, count) };
+                let mut k = start;
+                while k < end {
+                    unsafe {
+                        *surv_f.add(n) = *fp.add(k);
+                        *surv_s.add(n) = *sp.add(k) | ((dir as u16) << SURV_DIR_SHIFT);
+                    }
+                    n += 1;
+                    k += 1;
+                    if n == SURV_CAP {
+                        crate::emit_faces(surv_f, surv_s, n, count);
+                        n = 0;
+                    }
+                }
                 plane += 1;
                 continue;
             }
-            let mut n = 0usize;
             let mut k = start;
             while k < end {
                 let f = unsafe { *fp.add(k) };
@@ -5886,21 +5914,21 @@ fn chunk_faces(
                 // so paying it per iterated face would cost on the
                 // ones we throw away.
                 unsafe {
-                    *BATCH_F.add(n) = f;
-                    *BATCH_S.add(n) = *sp.add(k - 1);
+                    *surv_f.add(n) = f;
+                    *surv_s.add(n) = *sp.add(k - 1) | ((dir as u16) << SURV_DIR_SHIFT);
                 }
                 n += 1;
-                if n == FACE_BATCH {
-                    crate::emit_faces(BATCH_F, BATCH_S, n, dir, count);
+                if n == SURV_CAP {
+                    crate::emit_faces(surv_f, surv_s, n, count);
                     n = 0;
                 }
-            }
-            if n != 0 {
-                crate::emit_faces(BATCH_F, BATCH_S, n, dir, count);
             }
             plane += 1;
         }
         dir += 1;
+    }
+    if n != 0 {
+        crate::emit_faces(surv_f, surv_s, n, count);
     }
     face_work
 }
