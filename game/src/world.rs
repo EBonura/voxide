@@ -5750,9 +5750,11 @@ fn chunk_faces(
         let bx = ccx0 + nx;
         let by = ccy0 + ny;
         let bz = ccz0 + nz;
-        let x_w = if dir >= 2 { -1i32 } else { 0 };
+        // Opaque to LLVM, which would otherwise turn each `hw & mask` below
+        // into a branch on `dir` per face (the R3000 has no conditional move).
+        let x_w = crate::opaque(if dir >= 2 { !0u32 } else { 0 }) as i32;
         let y_w = !x_w;
-        let y_h = if dir >= 4 { -1i32 } else { 0 };
+        let y_h = crate::opaque(if dir >= 4 { !0u32 } else { 0 }) as i32;
         let z_h = !y_h;
         let off = PL_OFF[dir];
         let mut plane = lo as usize;
