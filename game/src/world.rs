@@ -5574,23 +5574,6 @@ fn plane_in_frustum(
     }
 }
 
-/// Faces that survive the per-face cull are gathered here and handed to
-/// `crate::emit_faces` a batch at a time, so the cull loop and the packet
-/// builder each run as their own tight loop. With the builder inlined into the cull loop, its
-/// state spilled around every culled face and the pair spanned twice the
-/// R3000's 4 KB instruction cache. The batch lives at the bottom of the
-/// scratchpad (single-cycle, no RAM stall), below the face pass's stack.
-/// Batching keeps the emission order, so the ordering table is built exactly
-/// as before.
-///
-/// Eight faces, not sixteen: the batch shares the 1 KB scratchpad with the
-/// face pass's stack, which had 4 bytes to spare at sixteen, and a
-/// re-collected PGO profile grew emit_clipped_cell's frame past it (928 of
-/// 908 bytes). At eight the stack has 956 bytes, and the extra flushes cost
-/// nothing measurable (see the commit).
-pub const FACE_BATCH_ADDR: usize = 0x1F80_0000;
-pub const FACE_BATCH: usize = 8;
-pub const FACE_BATCH_END: usize = FACE_BATCH_ADDR + FACE_BATCH * 6;
 /// Survivors of the per-face cull wait here, in main RAM, across planes and
 /// directions, and `crate::emit_faces` takes them in one call per SURV_CAP
 /// faces (and one at the end of a chunk). A call per plane meant a call per
@@ -5604,15 +5587,12 @@ static mut SURV_F: [u32; SURV_CAP] = [0; SURV_CAP];
 static mut SURV_S: [u16; SURV_CAP] = [0; SURV_CAP];
 
 /// The stack the per-chunk face pass (chunk_faces, emit_faces and the
-/// near-cell clipper under it) and the plant pass run on: the scratchpad above
-/// the face batch. Those loops are register-starved; their spill reloads were
-/// the largest main-RAM stall in the frame (about 110K cycles on the train
-/// route). tools/stack_guard.py proves each tree fits after every link.
-pub type FaceStack = psx_rt::scratchpad::ScratchpadStack<{ FACE_BATCH_END - 0x1F80_0000 }, 1024>;
-const _: () = psx_rt::scratchpad::assert_disjoint(&[
-    psx_rt::scratchpad::Region::new(0, FACE_BATCH_END - 0x1F80_0000),
-    FaceStack::REGION,
-]);
+/// near-cell clipper under it) and the plant pass run on: the whole
+/// scratchpad (the survivors list is in main RAM, see SURV_CAP). Those loops
+/// are register-starved; their spill reloads were the largest main-RAM stall
+/// in the frame (about 110K cycles on the train route). The stack guard proves
+/// each tree fits after every link.
+pub type FaceStack = psx_rt::scratchpad::ScratchpadStack<0, 1024>;
 
 /// Emit every cached face of every loaded chunk that passes a cheap distance
 /// + frustum cull, in mesh order, through `crate::emit_faces` (see

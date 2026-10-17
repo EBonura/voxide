@@ -4108,7 +4108,6 @@ fn main() {
         let (_world_quads, _face_work) = render_world(&cam);
         // Cross-sprite plants, depth-sorted into the same OT; on a scratchpad
         // stack for the same reason as the face pass (see world::FaceStack).
-        // The face batch is dead by now, so this one takes the whole 1 KB.
         unsafe { FullStack::run(|| render_plants(&cam)) };
         telemetry::stage_end(ST_R_WORLD);
         telemetry::stage_begin(ST_R_MOBS);
@@ -8605,8 +8604,7 @@ const CLIP_VERT_CAP: usize = 12;
 /// clipper's loads single-cycle; the face pass's STACK is worth more there
 /// (its spill reloads were about 110K cycles of main-RAM stalls a frame
 /// against roughly 24K for these buffers), so they are ordinary RAM now and
-/// the scratchpad holds the face batch and the face pass's stack (see
-/// world::FaceStack).
+/// the scratchpad holds the face pass's stack (see world::FaceStack).
 const CLIP_BYTES: usize = 2 * CLIP_VERT_CAP * core::mem::size_of::<ClipVert>()
     + CLIP_VERT_CAP * core::mem::size_of::<Proj>();
 const _: () = assert!(CLIP_BYTES % 4 == 0 && core::mem::align_of::<ClipVert>() <= 4);
@@ -9485,15 +9483,38 @@ fn emit_near_face(f: u32, side: u16, dir: usize) {
 #[inline(never)]
 #[export_name = "voxide_emit_faces"] // placed by game/hot-text.order
 pub(crate) fn emit_faces(faces: *const u32, sides: *const u16, n: usize, count: &mut usize) {
+    // What every face of the call shares, read once: the statics live in main
+    // RAM (a six-cycle load each, and the packet stores keep the compiler from
+    // trusting a register copy), the locals spill to the scratchpad stack.
+    let chunk = unsafe {
+        FaceChunk {
+            dx: CH_DX,
+            dy: CH_DY,
+            dz: CH_DZ,
+            arena: RENDER_ARENA,
+        }
+    };
+    let mut ao_n = unsafe { AO_N };
+    let mut quads = *count;
     let mut i = 0;
     while i < n {
         // SAFETY: for_visible_faces hands over n valid words in each array.
         let (f, side) = unsafe { (*faces.add(i), *sides.add(i)) };
         // The side word carries the face's direction above its AO and light.
         let dir = ((side >> world::SURV_DIR_SHIFT) & 7) as usize;
-        emit_face(f, side, dir, count);
+        emit_face(f, side, dir, &mut quads, &mut ao_n, &chunk);
         i += 1;
     }
+    unsafe { AO_N = ao_n };
+    *count = quads;
+}
+
+/// The per-chunk values `emit_face` reads from statics (see emit_faces).
+struct FaceChunk {
+    dx: i32,
+    dy: i32,
+    dz: i32,
+    arena: usize,
 }
 
 /// A packed face word's fields (see world::pack): chunk-local anchor cell,
@@ -9573,7 +9594,7 @@ fn screen_xy(x: i32, y: i32) -> u32 {
 
 /// inline(always) into emit_faces, whose loop is the only caller.
 #[inline(always)]
-fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize) {
+fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize, ao_n: &mut usize, chunk: &FaceChunk) {
     if *count >= MAX_QUADS {
         return;
     }
@@ -9587,7 +9608,8 @@ fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize) {
     // Corners go to COP2 CAMERA-RELATIVE (local + chunk-origin-minus-camera):
     // shared border corners get byte-identical values in both chunks, so no
     // cracks (the per-chunk-TR variant rounded differently per chunk).
-    let (chdx, chdy, chdz) = unsafe { (CH_DX, CH_DY, CH_DZ) };
+    let (chdx, chdy, chdz) = (chunk.dx, chunk.dy, chunk.dz);
+    let arena = chunk.arena;
     let lv = |p: (i32, i32, i32)| {
         Vec3I16::new(
             (p.0 + chdx) as i16,
@@ -9670,10 +9692,12 @@ fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize) {
     // only its bounding sphere meets the view, and a wide plate's real corners
     // are often well clear of it (about one emitted face in five on a recorded
     // walk). The wide-margin test further down stays for what the clamps need.
-    if max(max(x0, x1), max(x2, x3)) < -seal::GROW
-        || min(min(x0, x1), min(x2, x3)) >= SCREEN_W as i32 + seal::GROW
-        || max(max(y0, y1), max(y2, y3)) < -seal::GROW
-        || min(min(y0, y1), min(y2, y3)) >= SCREEN_H as i32 + seal::GROW
+    let (pre_min_x, pre_max_x) = (min(min(x0, x1), min(x2, x3)), max(max(x0, x1), max(x2, x3)));
+    let (pre_min_y, pre_max_y) = (min(min(y0, y1), min(y2, y3)), max(max(y0, y1), max(y2, y3)));
+    if pre_max_x < -seal::GROW
+        || pre_min_x >= SCREEN_W as i32 + seal::GROW
+        || pre_max_y < -seal::GROW
+        || pre_min_y >= SCREEN_H as i32 + seal::GROW
     {
         return;
     }
@@ -9698,21 +9722,24 @@ fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize) {
         y3 = gy[3];
     }
 
-    let min_x = min(min(x0, x1), min(x2, x3));
-    let max_x = max(max(x0, x1), max(x2, x3));
-    let min_y = min(min(y0, y1), min(y2, y3));
-    let max_y = max(max(y0, y1), max(y2, y3));
-    if max_x < -80 || min_x > 400 || max_y < -80 || min_y > 320 {
-        return;
-    }
+    // The seal moves a corner by at most GROW on an axis, so the grown box
+    // lies within GROW of the one tested above, which already passed the
+    // screen (+- GROW): the wide-margin box test that used to follow here
+    // (-80..400, -80..320) can never reject, and is gone.
+    //
     // The seal can carry a corner the GTE left at the screen's edge past the
     // GPU's 11-bit vertex range, where it would wrap to the far side. Rare, so
-    // the corners are only clamped when the bounding box says one is out.
-    if max_x > 1023 || min_x < -1024 {
-        x0 = x0.clamp(-1024, 1023);
-        x1 = x1.clamp(-1024, 1023);
-        x2 = x2.clamp(-1024, 1023);
-        x3 = x3.clamp(-1024, 1023);
+    // the corners are only clamped when the bounding box says one is out; the
+    // box before the seal says whether the one after it can be.
+    if pre_max_x > 1023 - seal::GROW || pre_min_x < -1024 + seal::GROW {
+        let min_x = min(min(x0, x1), min(x2, x3));
+        let max_x = max(max(x0, x1), max(x2, x3));
+        if max_x > 1023 || min_x < -1024 {
+            x0 = x0.clamp(-1024, 1023);
+            x1 = x1.clamp(-1024, 1023);
+            x2 = x2.clamp(-1024, 1023);
+            x3 = x3.clamp(-1024, 1023);
+        }
     }
 
     let depth = (z0 + z1 + z2 + z3) >> 2;
@@ -9740,11 +9767,11 @@ fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize) {
     // Past AO_BAND the face is small and fog is already washing it toward the
     // horizon colour, so the shading is not readable and it draws flat.
     if (AO_ON && ao != world::AO_LIT && band < AO_BAND) || spans_fog {
-        let n = unsafe { AO_N };
+        let n = *ao_n;
         if n < MAX_AO_QUADS {
             unsafe {
-                AO_N = n + 1;
-                let q = &mut AO_QUADS[RENDER_ARENA][n];
+                *ao_n = n + 1;
+                let q = &mut AO_QUADS[arena][n];
                 q.tex_window = win;
                 // ccmd is a prepacked FLAT textured-quad header (0x2C/0x2E) with
                 // the face tint in its low 24 bits. Bit 28 promotes it to
@@ -9768,7 +9795,7 @@ fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize) {
                 q.v3 = screen_xy(x3, y3);
                 q.uv3 = (sv << 8) | su;
                 // depth_slot is 1..=OT_LEN-1.
-                OT[RENDER_ARENA].insert_unchecked(
+                OT[arena].insert_unchecked(
                     slot,
                     q as *mut QuadTexturedGouraud as *mut u32,
                     QuadTexturedGouraud::WORDS,
@@ -9782,7 +9809,7 @@ fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize) {
     // Raw in-place packet stores from the prepacked tables: the builder path
     // (window + material + with_material + copy) measured ~600 cyc/face.
     unsafe {
-        let q = &mut QUADS[RENDER_ARENA][*count];
+        let q = &mut QUADS[arena][*count];
         q.tex_window = win;
         q.color_cmd = ccmd;
         q.v0 = screen_xy(x0, y0);
@@ -9793,7 +9820,7 @@ fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize) {
         q.uv2 = sv << 8;
         q.v3 = screen_xy(x3, y3);
         q.uv3 = (sv << 8) | su;
-        OT[RENDER_ARENA].insert_unchecked(
+        OT[arena].insert_unchecked(
             slot,
             q as *mut QuadTexturedMaterial as *mut u32,
             QuadTexturedMaterial::WORDS,
