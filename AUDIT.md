@@ -319,3 +319,64 @@ swings and then hits a mob within the cooldown does less damage; here that
 swing costs nothing. Holding R2 never repeated a swing in either game.
 `tests/distant-mining.toml` asserts no bar after taps and a hold-and-press at
 the far terrain, and that a hotbar switch does show it.
+
+## 2026-10-17: frame time after the SDK repin (0.4.1)
+
+Pinning the SDK (5219afbe, then b5365b18) moved Manny's walk from 15 to 131
+frames longer than two vblanks at the 20 block view distance, the train walk from
+1 to 10: the game sat at about 98 percent of its two-vblank budget at the 20
+blocks and a fraction of a percent more work, or a different code layout, tipped
+frames over. Measured in cycles the cause was never one crate. This pass cut the
+work instead of re-rolling the layout.
+
+Method: `psoxide-pgo measure` on the three tapes for the three-vblank counts
+(frontend bc7c066f, tapes `voxide-2026-10-15.pxtape` c28bb7d8, `pgo/train.pxtape`
+9106aa80, `pgo/unseen.pxtape` 4417f58d); for each code change a lockstep build
+(`--features "emulator-telemetry lockstep"`) of both sides replayed on the three
+tapes with a display hash logged for every frame, and the in-guest loop body
+(stage 50) compared frame for frame. Every commit below but the last has 0
+differing hashes over 1,708 / 1,398 / 1,398 frames.
+
+| change | loop body, Manny / train / unseen (PGO off) |
+|---|---|
+| near-face patches and cells classified on positions before shading | -2.1% / -1.7% / -2.3% |
+| face cull survivors emitted once per chunk, not per plane (the cull loop plus plane test plus packet builder are 5.4 KB hot against a 4 KB cache) | -7.7% / -6.5% / -6.7% |
+| chunk statics read once per call, a dead box test dropped, whole scratchpad for the face stack | -3.1% / -3.0% / -2.9% |
+| direction masks kept arithmetic in the cull loop | -0.5% / -0.6% / -0.6% |
+
+The streaming change is a policy and was measured on the real cadence only: when
+the clock refused a slice six frames running one was forced, and in a heavy scene
+(face loop 850K and up) that slice was the one that pushed the frame past two
+vblanks, a late frame in about six. It now waits for a frame with room for it
+before the true frame limit and goes regardless after 24 starved frames. The
+slices a visible hole or an edit guarantees are untouched. (48 to 38 on Manny's
+tape.)
+
+Result (three-vblank frames of the frames drawn, PGO re-collected on the train and
+unseen tapes for the shipped commit; the 9bb73fc line is the installed build):
+
+| tape | 9bb73fc | this branch |
+|---|---|---|
+| Manny's walk | 131 of 1,734 | 38 |
+| train | 10 of 947 | 1 |
+| unseen | 1 of 947 | 0 |
+
+The 0.4.1 target was 15 and 1; Manny's walk is not there. What is left on it is
+mostly the slices a hole near the player guarantees (3 slices, 100K to 400K cycles
+in one frame) on top of a body that already sits near 0.95M of 1.14M. Before the streaming change the same
+code gave 48 to 68 with different profiles (rebuilds of identical source move the
+count by +-10), so read 38 as a range. Training the profile on Manny's own tape
+did not help (68).
+
+Tried, identical pixels, and slower or no better: plane flags that let the cull
+skip tests per plane (+1.6%), the clip kernel shared out of line (+0.3%), a lean
+emitter for cells inside all six clip planes with a proof that drops cells deeply
+outside a later plane (clipper calls 30 to 16 a frame, but +1.4% overall), column
+spans for the player's collision probe (+0.3 to 0.6%), the `+order` layout (121
+against 131 before these changes), PGO variants other than `hot=500+profi` (all
+within 0.3%).
+
+Constraint worth knowing: the face pass runs on the scratchpad stack and the
+deepest call chain was 1000 of 1004 bytes; any growth of the cull, the packet
+builder, the near-face tessellation or the clipper stopped the link. The cull's
+frame is now gone before the builder runs (800 bytes).

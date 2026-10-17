@@ -24,10 +24,16 @@ half the time, a 20 block view distance and a rendering pass.
   of about 2.7 s; a single TNT is unchanged.
 - The view distance is 20 blocks, up from 16. The outermost ring of chunks is
   drawn as coarse two-block tops with skirts (it already existed for distances
-  above 16). On the recorded walk 6.2 percent of the frames run below 30 fps (it
-  was 1.2 percent at 16); the train and unseen walks 1.1 and 0.3 percent. More
-  optimisation is to come. Faces wholly off the screen and far plants are also
-  dropped before the seal and the projection, about 1 percent of a frame.
+  above 16). On the recorded walk 38 of 1,734 frames (2.2 percent) run below 30
+  fps (it was 1.2 percent at 16); the train and unseen walks 1 and 0 of 947.
+  Behind that: faces wholly off the screen and far plants are dropped before the
+  seal and the projection; the close-range tessellation classifies its patches
+  and cells on their positions before shading them; the face cull hands its
+  survivors to the packet builder once a chunk instead of once a plane (the two
+  together are bigger than the instruction cache, so every hand-over refilled
+  both); and a ring that is starved of streaming slices forces one only on a
+  frame with room for it. Every one of these but the last draws the same
+  picture as before, frame for frame.
 - The dashed sky-coloured lines between terrain faces are gone. A distant floor
   plate or a terrace edge near the side of the screen is a thin slanted sliver,
   and the old seal grew it along its own length instead of sideways, so
