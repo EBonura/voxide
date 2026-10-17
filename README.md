@@ -240,8 +240,10 @@ drive decodes one XA stream at a time, so the overlap cannot happen at run
 time. `assets/music/tracks.txt` lists the pieces, the credits card lines and the
 exact `loop-mixer` command and seed; `make music MUSIC_SRC=<dir of pieces>
 PSX_AUDIO_COOK=<built psx-audio-cook>` cooks them into `assets/music/MUSIC1.XA`
-and `game/src/musicdata.rs`, which are committed. The loops themselves are not in
-the repo. Swapping the music is a change to `tracks.txt`.
+and `game/src/musicdata.rs`, which are committed (a fresh clone and CI build the disc
+from them, with no WAV). The loops themselves are not in the repo; `make music-check`
+with the same arguments cooks again and fails if a single committed byte changes.
+Swapping the music is a change to `tracks.txt`.
 
 ## Provenance
 

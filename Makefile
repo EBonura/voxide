@@ -24,8 +24,8 @@ PSOXIDE_PROFILE_STEPS ?= 900000000
 PSOXIDE_START_PULSE ?= 0x0008@700+60
 
 .DEFAULT_GOAL := build
-.PHONY: help psoxide build compile pack music disc gate-disc gate-symbols install release run smoke profile \
-	pgo-collect pgo-order pgo-choose clean host-tests
+.PHONY: help psoxide build compile pack music music-check disc gate-disc gate-symbols install release run smoke profile \
+	pgo-collect pgo-order pgo-choose clean host-tests music-check
 
 help:
 	@echo "VoXide targets:"
@@ -112,6 +112,11 @@ PSX_AUDIO_COOK ?=
 music:
 	cd tools/voxide-tools && cargo run -q --release --locked --bin convert-music -- \
 		--src "$(MUSIC_SRC)" --cook "$(PSX_AUDIO_COOK)"
+
+# Maintainer check: cook again and fail if the committed files change, i.e.
+# prove assets/music and game/src/musicdata.rs are what the pieces cook to.
+music-check: music
+	@git diff --exit-code -- assets/music game/src/musicdata.rs && echo "music-check: the cook is byte-identical to the committed music"
 
 # The release journey locates its small state block in the exact PS-X EXE
 # packed below. This route never installs into the user's game library.
