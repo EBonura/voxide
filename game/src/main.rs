@@ -1499,6 +1499,17 @@ fn advance_streaming(budgeted: bool) {
             if starved < STREAM_FORCE_AFTER {
                 break;
             }
+            // The forced slice is for a ring that would otherwise starve, not
+            // for a frame already near its limit: on a saturated frame it
+            // is the slice that tips it over the quantum (one late frame in
+            // six in a heavy scene). So it waits for a frame with room for it
+            // before the true frame limit (the tail still has to follow), and
+            // goes anyway once STREAM_FORCE_HARD frames have starved.
+            if starved < STREAM_FORCE_HARD
+                && unsafe { slack::used() + STREAM_EST > FRAME_TICKS - STREAM_TAIL }
+            {
+                break;
+            }
         }
         unsafe { STREAM_STARVED = 0 };
         let t0 = if budgeted { slack::used() } else { 0 };
@@ -1529,6 +1540,11 @@ static mut STREAM_EST: u32 = 18_000;
 /// Consecutive frames whose first slice was held back.
 static mut STREAM_STARVED: u8 = 0;
 const STREAM_FORCE_AFTER: u8 = 6;
+/// Starved frames after which a slice is forced whatever the frame holds, and
+/// the ticks the tail (HUD, held item, particles, the present) needs after
+/// streaming: about 60,000 cycles at its worst, 7,500 ticks, with margin.
+const STREAM_FORCE_HARD: u8 = 24;
+const STREAM_TAIL: u32 = 10_000;
 /// Slices a frame with a visible hole, or with a player's edit in flight, may
 /// take whatever the clock says. An edit's partial rebuild used to finish in two
 /// frames and now takes about five (see world::edit_backlog).
