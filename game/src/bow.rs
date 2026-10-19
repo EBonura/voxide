@@ -129,6 +129,11 @@ pub fn update(selected: bool, usable: bool, pressed: bool, held: bool, ticks: u3
     }
 }
 
+/// Sim ticks the draw has run, for the gate.
+pub fn held_ticks() -> u32 {
+    unsafe { HELD }
+}
+
 /// The draw so far, 0..4096 (for the walk slowdown and the sound).
 pub fn drawn_q12() -> i32 {
     unsafe { HELD.min(FULL_DRAW) as i32 * 4096 / FULL_DRAW as i32 }

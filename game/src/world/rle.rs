@@ -458,32 +458,41 @@ pub(super) fn decode_cols<const FULL: bool>(s: usize, c0: usize, c1: usize, top:
             col += 1;
         }
         if FULL && c1 == CWU * CWU {
-            let mut ly = 0;
-            while ly < CHU {
-                let mut w = 0;
-                while w < 8 {
-                    let mut m = SPEC[ly][w];
-                    while m != 0 {
-                        let col = w * 32 + m.trailing_zeros() as usize;
-                        m &= m - 1;
-                        let b = MESH_SCRATCH[ly * CWU * CWU + col];
-                        let lx = col & (CWU - 1);
-                        let lz = col >> 4;
-                        if MESH_NLIGHT < MAX_SOURCES && is_light_source(b) {
-                            MESH_LIGHT_SOURCES[MESH_NLIGHT] = (lx, ly, lz);
-                            MESH_NLIGHT += 1;
+            // Two passes over the special cells: shaped blocks (a door, a bed, a
+            // slab) first, then the cross-sprite plants. The list is capped, and
+            // a meadow's tufts must not push a house out of it.
+            let mut pass = 0;
+            while pass < 2 {
+                let mut ly = 0;
+                while ly < CHU {
+                    let mut w = 0;
+                    while w < 8 {
+                        let mut m = SPEC[ly][w];
+                        while m != 0 {
+                            let col = w * 32 + m.trailing_zeros() as usize;
+                            m &= m - 1;
+                            let b = MESH_SCRATCH[ly * CWU * CWU + col];
+                            let lx = col & (CWU - 1);
+                            let lz = col >> 4;
+                            if pass == 0 && MESH_NLIGHT < MAX_SOURCES && is_light_source(b) {
+                                MESH_LIGHT_SOURCES[MESH_NLIGHT] = (lx, ly, lz);
+                                MESH_NLIGHT += 1;
+                            }
+                            if MESH_NPLANT < MAX_PLANTS
+                                && if pass == 0 { is_small_block(b) } else { is_cross_plant(b) }
+                            {
+                                MESH_PLANTS[MESH_NPLANT] = lx as u32
+                                    | ((ly as u32) << 4)
+                                    | ((lz as u32) << 10)
+                                    | ((b as u32) << 14);
+                                MESH_NPLANT += 1;
+                            }
                         }
-                        if MESH_NPLANT < MAX_PLANTS && (is_cross_plant(b) || is_small_block(b)) {
-                            MESH_PLANTS[MESH_NPLANT] = lx as u32
-                                | ((ly as u32) << 4)
-                                | ((lz as u32) << 10)
-                                | ((b as u32) << 14);
-                            MESH_NPLANT += 1;
-                        }
+                        w += 1;
                     }
-                    w += 1;
+                    ly += 1;
                 }
-                ly += 1;
+                pass += 1;
             }
         }
     }

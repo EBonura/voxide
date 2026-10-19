@@ -24,8 +24,10 @@
 /// Edits held at once.
 pub const CAP: usize = 4096;
 /// Chunks that can hold edits at once.
-pub const CHUNKS: usize = 512;
-const POS_SLOTS: usize = 2 * CAP;
+pub const CHUNKS: usize = 256;
+/// 11/8 of the edits: a probe is short at that load, and 4,096 u16 slots would
+/// be a store with no empty cell to end a search on.
+const POS_SLOTS: usize = CAP + CAP * 3 / 8;
 const CK_SLOTS: usize = 2 * CHUNKS;
 
 /// The card record sizes: a chunk header, then a record per edit.
@@ -68,7 +70,17 @@ fn pos_slot(ck: usize, idx: u16) -> usize {
     let h = (ck as u32)
         .wrapping_mul(0x9E37_79B1)
         .wrapping_add((idx as u32).wrapping_mul(0x85EB_CA6B));
-    (h >> 15) as usize & (POS_SLOTS - 1)
+    // The top 16 bits scaled onto the table: no modulus, no power of two.
+    (((h >> 16) * POS_SLOTS as u32) >> 16) as usize
+}
+
+#[inline]
+fn pos_next(s: usize) -> usize {
+    if s + 1 == POS_SLOTS {
+        0
+    } else {
+        s + 1
+    }
 }
 
 impl Edits {
@@ -155,7 +167,7 @@ impl Edits {
             if self.ck[i] as usize == ck && self.idx[i] == idx {
                 return (s, Some(i));
             }
-            s = (s + 1) & (POS_SLOTS - 1);
+            s = pos_next(s);
         }
     }
 

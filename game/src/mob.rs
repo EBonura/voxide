@@ -1845,6 +1845,19 @@ pub fn arrow_view(i: usize) -> (bool, i32, i32, i32) {
     (a.alive, a.x >> 8, a.y >> 8, a.z >> 8)
 }
 
+/// Player arrows in flight, for the gate.
+pub fn player_arrows() -> usize {
+    let mut n = 0;
+    let mut i = 0;
+    while i < ARROW_CAP {
+        if unsafe { ARROWS[i] }.alive && unsafe { ARROWS[i] }.from_player {
+            n += 1;
+        }
+        i += 1;
+    }
+    n
+}
+
 /// An arrow's Q8 velocity (world units a sim tick), for drawing it along its flight.
 pub fn arrow_vel(i: usize) -> (i32, i32, i32) {
     let a = unsafe { ARROWS[i] };

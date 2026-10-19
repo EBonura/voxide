@@ -250,7 +250,7 @@ static mut POOL_PLANE_BOUNDS: [[u32; PL_TOTAL]; POOL] = [[0; PL_TOTAL]; POOL];
 // ponytail: 96/chunk ceiling. A player tiling a whole 16x16 chunk with crops
 // hits it and the overflow just isn't drawn -- a farm that dense is an edge
 // case; bump MAX_PLANTS if it bites.
-const MAX_PLANTS: usize = 96;
+const MAX_PLANTS: usize = 128;
 static mut POOL_PLANTS: [[u32; MAX_PLANTS]; POOL] = [[0; MAX_PLANTS]; POOL];
 static mut POOL_NPLANT: [u16; POOL] = [0; POOL];
 static mut MESH_PLANTS: [u32; MAX_PLANTS] = [0; MAX_PLANTS];
@@ -4592,28 +4592,33 @@ fn commit_mesh_inner(s: usize, n: usize, scan_plants: bool) {
             let mut np = 0usize;
             // The SPEC bitmap (layer-major, columns ascending) lists every
             // light, plant and small-block cell, kept in step by decodes and
-            // edits, in the order the full cell scan found them.
-            let mut ly = 0usize;
-            while ly < CHU && np < MAX_PLANTS {
-                let mut w = 0usize;
-                while w < 8 && np < MAX_PLANTS {
-                    let mut m = rle::SPEC[ly][w];
-                    while m != 0 && np < MAX_PLANTS {
-                        let col = w * 32 + m.trailing_zeros() as usize;
-                        m &= m - 1;
-                        let b = MESH_SCRATCH[ly * CWU * CWU + col];
-                        if is_cross_plant(b) || is_small_block(b) {
-                            let (lx, lz) = (col & (CWU - 1), col >> 4);
-                            POOL_PLANTS[p][np] = (lx as u32)
-                                | ((ly as u32) << 4)
-                                | ((lz as u32) << 10)
-                                | ((b as u32) << 14);
-                            np += 1;
+            // edits, in the order the full cell scan found them. Shaped blocks
+            // go in first, then plants, so a full list drops tufts, not doors.
+            let mut pass = 0;
+            while pass < 2 {
+                let mut ly = 0usize;
+                while ly < CHU && np < MAX_PLANTS {
+                    let mut w = 0usize;
+                    while w < 8 && np < MAX_PLANTS {
+                        let mut m = rle::SPEC[ly][w];
+                        while m != 0 && np < MAX_PLANTS {
+                            let col = w * 32 + m.trailing_zeros() as usize;
+                            m &= m - 1;
+                            let b = MESH_SCRATCH[ly * CWU * CWU + col];
+                            if if pass == 0 { is_small_block(b) } else { is_cross_plant(b) } {
+                                let (lx, lz) = (col & (CWU - 1), col >> 4);
+                                POOL_PLANTS[p][np] = (lx as u32)
+                                    | ((ly as u32) << 4)
+                                    | ((lz as u32) << 10)
+                                    | ((b as u32) << 14);
+                                np += 1;
+                            }
                         }
+                        w += 1;
                     }
-                    w += 1;
+                    ly += 1;
                 }
-                ly += 1;
+                pass += 1;
             }
             POOL_NPLANT[p] = np as u16;
         }

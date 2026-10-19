@@ -12,6 +12,16 @@ use crate::{
     PLAYER_HEIGHT, RSTORCH, TORCH, WIRE,
 };
 
+/// What the gate reads back: the cell last placed, its second cell, and the
+/// cell last used (after the use).
+static mut LAST_PLACED: u8 = 0;
+static mut LAST_SECOND: u8 = 0;
+static mut LAST_USED: u8 = 0;
+
+pub fn last() -> (u8, u8, u8) {
+    unsafe { (LAST_PLACED, LAST_SECOND, LAST_USED) }
+}
+
 /// A face something can be fixed to: a whole solid cube. Not leaves, glass or
 /// a cactus, which Java's torches and ladders will not stand on, and not
 /// anything that is only a shape.
@@ -152,8 +162,13 @@ pub fn place_item(player: &Player, pick: &Pick) -> bool {
         return false;
     }
     put(px, py, pz, first);
+    unsafe {
+        LAST_PLACED = first;
+        LAST_SECOND = 0;
+    }
     if let Some((x, y, z, b)) = second {
         put(x, y, z, b);
+        unsafe { LAST_SECOND = b };
     }
     // A door, piston or block of TNT set down beside power reacts at once.
     crate::redstone::poke(px, py, pz);
@@ -179,6 +194,7 @@ pub fn set_door(x: i32, y: i32, z: i32, open: bool) {
         half += 1;
     }
     sfx::door(open);
+    unsafe { LAST_USED = get_block_i32(x, y, z) };
 }
 
 /// L2 on a door.
@@ -198,6 +214,7 @@ pub fn use_lever(x: i32, y: i32, z: i32) {
     let on = !bstate::lever_on(b);
     put(x, y, z, bstate::lever(bstate::mount_of(b), on));
     sfx::lever(on);
+    unsafe { LAST_USED = get_block_i32(x, y, z) };
     crate::redstone::lever_thrown(x, y, z);
 }
 

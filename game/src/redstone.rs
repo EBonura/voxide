@@ -582,6 +582,21 @@ impl Cells for Live {
 }
 
 #[cfg(not(test))]
+/// Doors, pistons and TNT redstone has worked, for the gate.
+static mut WORKED: u32 = 0;
+
+#[cfg(not(test))]
+pub fn worked() -> u32 {
+    unsafe { WORKED }
+}
+
+/// Emitters registered, for the gate.
+#[cfg(not(test))]
+pub fn emitters() -> usize {
+    unsafe { NET.len() }
+}
+
+#[cfg(not(test))]
 pub fn mark_dirty() {
     unsafe { NET.mark_dirty() };
 }
@@ -618,6 +633,7 @@ pub fn wire_links(x: i32, y: i32, z: i32) -> [u8; 4] {
 pub fn tick() {
     let mut fx = [Effect::Tnt(0, 0, 0); EFFECTS];
     let n = unsafe { NET.step(&Live, &mut fx) };
+    unsafe { WORKED += n as u32 };
     let mut i = 0;
     while i < n {
         match fx[i] {
@@ -649,6 +665,7 @@ pub fn lever_thrown(x: i32, y: i32, z: i32) {
     let mut fx = [Effect::Tnt(0, 0, 0); EFFECTS];
     let n = unsafe { NET.react(&Live, x, y, z, &mut fx, 0) };
     unsafe { NET.mark_dirty() };
+    unsafe { WORKED += n as u32 };
     let mut i = 0;
     while i < n {
         match fx[i] {

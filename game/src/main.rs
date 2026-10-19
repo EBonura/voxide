@@ -3565,6 +3565,8 @@ fn main() {
         } else {
             AIR
         };
+        gate_probe(&pick);
+        unsafe { VOXIDE_GATE_STATE[19] = day };
         unsafe {
             // "Press L2 to sleep": aiming at a bed at (or near) nightfall --
             // the same window the bed interaction itself accepts.
@@ -5660,12 +5662,36 @@ fn enter_dimension(dim: u8, bx: i32, bz: i32, fb: &mut FrameBuffer, font: &FontA
 /// Advanced only by world_tick; animations read it instead of a frame count.
 static mut SIM_TICK: u32 = 0;
 /// A versioned, initialized block the journey locates in the exact PS-X EXE.
-/// Layout: magic, version, byte length, sim tick, live TNT, block edits,
-/// pending blasts, player health and completed block blasts. It only mirrors
-/// gameplay state.
+/// Layout (version 2, 80 bytes): magic, version, byte length, sim tick, live
+/// TNT, block edits, pending blasts, player health and completed block blasts,
+/// then what the shaped blocks and the bow report, as cell ids (bstate.rs):
+///   9 the cell the player last placed, 10 its second cell (a door's upper
+///   half, a bed's head; 0 for one cell), 11 the cell last used (a door or a
+///   lever), after the use; 12 redstone emitters registered; 13 the bow's draw
+///   in sim ticks; 14 player arrows in flight; 15 arrows in the pack; 16 how
+///   dark the sleep fade is (0..4); 17 the power of the dust under the
+///   crosshair (0..15); 18 doors, pistons and TNT redstone has worked; 19 the
+///   world clock in sim ticks (the day, DAY_LEN to a turn).
+/// It only mirrors gameplay state.
 #[used]
 #[no_mangle]
-pub static mut VOXIDE_GATE_STATE: [u32; 9] = [u32::from_le_bytes(*b"VOXG"), 1, 36, 0, 0, 0, 0, 0, 0];
+pub static mut VOXIDE_GATE_STATE: [u32; 20] = [
+    u32::from_le_bytes(*b"VOXG"),
+    2,
+    80,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
+/// What is under the crosshair, for the gate (once a frame).
+fn gate_probe(pick: &Pick) {
+    unsafe {
+        VOXIDE_GATE_STATE[17] = if pick.hit {
+            redstone::wire_power(pick.bx, pick.by, pick.bz) as u32
+        } else {
+            0
+        };
+    }
+}
 
 fn gate_snapshot(player: &Player) {
     unsafe {
@@ -5675,6 +5701,16 @@ fn gate_snapshot(player: &Player) {
         VOXIDE_GATE_STATE[6] = world::blasts_pending() as u32;
         VOXIDE_GATE_STATE[7] = player.health as u32;
         VOXIDE_GATE_STATE[8] = world::blasts_completed();
+        let (placed, second, used) = blocks::last();
+        VOXIDE_GATE_STATE[9] = placed as u32;
+        VOXIDE_GATE_STATE[10] = second as u32;
+        VOXIDE_GATE_STATE[11] = used as u32;
+        VOXIDE_GATE_STATE[12] = redstone::emitters() as u32;
+        VOXIDE_GATE_STATE[13] = bow::held_ticks();
+        VOXIDE_GATE_STATE[14] = mob::player_arrows() as u32;
+        VOXIDE_GATE_STATE[15] = INV[ARROW as usize] as u32;
+        VOXIDE_GATE_STATE[16] = sleep::darkness() as u32;
+        VOXIDE_GATE_STATE[18] = redstone::worked();
     }
 }
 /// Frames that took longer than this are not caught up in full: a portal's
@@ -7839,6 +7875,9 @@ const CROSS_PLANTS: bool = true; // false = old cube rendering (A/B knob)
 /// 8 blocks -- beyond that a cross sprite is a few pixels wide.
 const PLANT_SINGLE_D2: i32 = (8 * BLOCK) * (8 * BLOCK);
 const MAX_PLANT_QUADS: usize = 192; // quads a frame across plants, shapes and dust; ponytail cap
+/// Quads kept back from the cross-sprite plants for shaped blocks and dust: a
+/// meadow's tufts, drawn first in chunk order, must not starve a door.
+const SHAPE_RESERVE: usize = 64;
 static mut PLANT_QUADS: [[QuadTexturedMaterial; MAX_PLANT_QUADS]; RENDER_ARENAS] =
     [[EMPTY_QUAD; MAX_PLANT_QUADS], [EMPTY_QUAD; MAX_PLANT_QUADS]];
 static mut PLANT_N: usize = 0;
@@ -7911,7 +7950,7 @@ fn render_plants(cam: &Camera) {
         // shaving the already-tiny distant half of each cross.
         let near_enough = plant_d2 < PLANT_SINGLE_D2;
         let ncross = if near_enough { 2 } else { 1 };
-        if unsafe { PLANT_N } + 2 > MAX_PLANT_QUADS {
+        if unsafe { PLANT_N } + 2 > MAX_PLANT_QUADS - SHAPE_RESERVE {
             return;
         }
         // Sphere-vs-frustum on the cell centre, one GTE MVMVA (the rotation is

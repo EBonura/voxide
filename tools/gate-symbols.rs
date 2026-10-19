@@ -5,8 +5,8 @@ use std::{env, fs, io::Write, path::Path};
 
 const HEADER_LEN: usize = 0x800;
 const MAGIC: &[u8; 4] = b"VOXG";
-const VERSION: u32 = 1;
-const BLOCK_LEN: usize = 36;
+const VERSION: u32 = 2;
+const BLOCK_LEN: usize = 80;
 
 fn word(bytes: &[u8], offset: usize) -> Result<u32, String> {
     let slice = bytes

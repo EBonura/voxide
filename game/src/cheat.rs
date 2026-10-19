@@ -31,7 +31,8 @@ const R_HOME: usize = 7;
 const R_INFERNO: usize = 8;
 const R_VOID: usize = 9;
 const R_OVERWORLD: usize = 10;
-pub const ROWS: [&str; 11] = [
+const R_KIT: usize = 11;
+pub const ROWS: [&str; 12] = [
     "FLY (NO CLIP)",
     "GOD MODE",
     "SHOW XYZ + FPS",
@@ -43,6 +44,7 @@ pub const ROWS: [&str; 11] = [
     "TO INFERNO",
     "TO VOID",
     "TO OVERWORLD",
+    "BUILDING KIT",
 ];
 
 /// Java's clock: sunrise 0, noon 6,000, sunset 12,000, midnight 18,000
@@ -190,6 +192,10 @@ pub fn input(pad: ButtonState, prev: ButtonState, sel: usize, player: &mut Playe
             give_all(player);
             mark("64 OF EVERYTHING, DIAMOND KIT");
         }
+        R_KIT => {
+            build_kit(player);
+            mark("STONE, DOOR, BED, LEVER, DUST...");
+        }
         R_TIME => {
             let (name, t) = TIMES[unsafe { TIME_SEL }];
             mark(name);
@@ -234,6 +240,26 @@ pub fn input(pad: ButtonState, prev: ButtonState, sel: usize, player: &mut Playe
         _ => {}
     }
     Act::None
+}
+
+/// The hotbar laid out for building with the shaped blocks and redstone: stone
+/// to stand things on, a door, a bed, a lever, dust, a redstone torch, a piston,
+/// TNT and the bow, 64 of each (one bow) and 64 arrows in the pack.
+fn build_kit(p: &mut Player) {
+    const KIT: [u8; HOTBAR_VIS] = [STONE, DOOR_C, BED, LEVER, WIRE, RSTORCH, PISTON, TNT, BOW];
+    unsafe {
+        HOTBAR = [AIR; HOTBAR_VIS];
+        let mut i = 0;
+        while i < KIT.len() {
+            INV[KIT[i] as usize] = if KIT[i] == BOW { 1 } else { 64 };
+            HOTBAR[i] = KIT[i];
+            i += 1;
+        }
+        INV[ARROW as usize] = 64;
+        HOTBAR_SEL = 0;
+        p.selected = HOTBAR[0];
+    }
+    hotbar_sync(p);
 }
 
 /// A creative-style stock: 64 of every block and item, the diamond tier of

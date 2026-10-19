@@ -230,32 +230,55 @@ pub fn parts(b: u8, out: &mut [Part; MAX_PARTS]) -> usize {
     n
 }
 
-/// Is `b` drawn from its boxes (and not meshed as a cube or a cross sprite)?
-#[inline]
-pub fn is_shape(b: u8) -> bool {
-    is_shape_kind(kind_of(b))
+// One byte per cell id, built at compile time: bit 0 a shape (drawn from its
+// boxes, not meshed), bits 1..2 what the body does with it. These are asked of
+// every plant entry and every cell a collision test touches, so they are a
+// load, not a chain of compares.
+const SHAPE: u8 = 1;
+const BODY_NO: u8 = 2;
+const BODY_PARTS: u8 = 4;
+
+const fn class_of(b: u8) -> u8 {
+    match bstate::kind_of_c(b) {
+        SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W | DOOR_C | BED | PISTON | PISTON_HEAD => {
+            SHAPE | BODY_PARTS
+        }
+        TORCH | RSTORCH | LEVER | LADDER | WIRE => SHAPE | BODY_NO,
+        // The fence stays a whole solid cell for the body (a fence is 1.5 high
+        // in Java, which the player cannot jump), though it draws as a post.
+        FENCE => SHAPE,
+        _ => 0,
+    }
 }
 
-#[inline]
-const fn is_shape_kind(k: u8) -> bool {
-    matches!(
-        k,
-        SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W | FENCE | DOOR_C | BED | TORCH | RSTORCH
-            | LEVER | LADDER | WIRE | PISTON | PISTON_HEAD
-    )
+const fn class_table() -> [u8; 256] {
+    let mut t = [0u8; 256];
+    let mut i = 0;
+    while i < 256 {
+        t[i] = class_of(i as u8);
+        i += 1;
+    }
+    t
+}
+
+static CLASS: [u8; 256] = class_table();
+
+/// Is `b` drawn from its boxes (and not meshed as a cube or a cross sprite)?
+#[inline(always)]
+pub fn is_shape(b: u8) -> bool {
+    CLASS[b as usize] & SHAPE != 0
 }
 
 /// The whole-kind answer; the ext ids of a family share it.
-#[inline]
+#[inline(always)]
 pub fn solid(b: u8) -> Solid {
-    match kind_of(b) {
-        SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W | DOOR_C | BED | PISTON | PISTON_HEAD => {
-            Solid::Parts
-        }
-        TORCH | RSTORCH | LEVER | LADDER | WIRE => Solid::No,
-        // The fence stays a whole solid cell for the body (a fence is 1.5 high
-        // in Java, which the player cannot jump), though it draws as a post.
-        _ => Solid::Full,
+    let c = CLASS[b as usize];
+    if c & BODY_PARTS != 0 {
+        Solid::Parts
+    } else if c & BODY_NO != 0 {
+        Solid::No
+    } else {
+        Solid::Full
     }
 }
 

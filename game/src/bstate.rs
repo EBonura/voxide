@@ -12,7 +12,7 @@
 //!   run-length store, the edit log, the save, a piston push and a blast with
 //!   no side table to keep in step;
 //! - everything that only cares *which* block this is calls `kind_of`;
-//! - the id space is the only price: 74 of the 128 spare ids at the moment.
+//! - the id space is the only price: 58 of the 128 spare ids at the moment.
 //!
 //! Only state that has to survive a save lives here. Derived state (the power
 //! a redstone wire carries, whether a redstone torch is lit) is recomputed by
@@ -95,12 +95,25 @@ const fn build() -> Tables {
     t
 }
 
-static T: Tables = build();
+const T: Tables = build();
+static KIND: [u8; 128] = T.kind;
+static STATE: [u8; 128] = T.state;
+static FAM_OF: [u8; 128] = T.fam_of;
+static FIRST: [u8; NFAM] = T.first;
 
 /// The kind of a cell: itself below 128, else the family it belongs to. An id
 /// no family hands out (a corrupt save) answers AIR.
 #[inline(always)]
 pub fn kind_of(b: u8) -> u8 {
+    if b < EXT0 {
+        b
+    } else {
+        KIND[(b - EXT0) as usize]
+    }
+}
+
+/// `kind_of` for building tables at compile time.
+pub const fn kind_of_c(b: u8) -> u8 {
     if b < EXT0 {
         b
     } else {
@@ -114,7 +127,7 @@ pub fn state_of(b: u8) -> u8 {
     if b < EXT0 {
         0
     } else {
-        T.state[(b - EXT0) as usize]
+        STATE[(b - EXT0) as usize]
     }
 }
 
@@ -124,11 +137,11 @@ pub fn make(kind: u8, state: u8) -> u8 {
     if state == 0 || kind >= EXT0 {
         return kind;
     }
-    let f = T.fam_of[kind as usize];
+    let f = FAM_OF[kind as usize];
     if f == NONE || state >= FAMILIES[f as usize].states {
         return kind;
     }
-    T.first[f as usize] + state - 1
+    FIRST[f as usize] + state - 1
 }
 
 /// True when `b` is a cell this palette can hold (not an unassigned ext id).
