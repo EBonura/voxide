@@ -7,7 +7,7 @@
 # which the save does not store: the lever's switch is part of its cell, and the
 # power of the dust is worked out again from it.
 #
-#   make gate-disc FEATURES=block-lab
+#   make gate-disc FEATURES=block-lab GATE_DIR=$PWD/build/gate-lab GATE_SYMBOLS=$PWD/build/gate-lab-symbols.txt
 #   psoxide-gate run tests/blocklab-save.toml --disc build/gate-lab/voxide.cue --no-hw
 name = "voxide-blocklab-save"
 title = "VoXide: shaped blocks and a lit circuit saved, rebooted and loaded"

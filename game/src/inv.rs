@@ -941,11 +941,12 @@ const TAB_BLOCKS: [u8; 35] = [
     ENCHANT,
     BED,
     TORCH,
-    RSTORCH,
-    LEVER,
     WIRE,
     PISTON,
     TNT,
+    // After TNT, so the journeys' cursor still lands on it.
+    RSTORCH,
+    LEVER,
 ];
 const TAB_ITEMS: [u8; 21] = [
     BOW,
@@ -1439,6 +1440,13 @@ fn purpose(item: u8) -> &'static str {
     match item {
         BREAD | COOKED_MEAT | RAW_MEAT => "EATEN WHEN YOU GET HUNGRY",
         ARROW => "AMMO FOR THE BOW",
+        BOW => "HOLD L2 TO DRAW. LET GO: SHOOT",
+        LEVER => "L2 PLACES, L2 AGAIN THROWS IT",
+        DOOR_C => "L2 PLACES, L2 AGAIN OPENS IT",
+        BED => "L2 PLACES. L2 AT NIGHT: SLEEP",
+        WIRE => "POWER FADES BY 1 EACH BLOCK",
+        RSTORCH => "POWER SOURCE. TURNS OFF IF FED",
+        PISTON => "WHEN POWERED PUSHES 12 BLOCKS",
         SEEDS => "L2 PLANTS THEM ON SOIL",
         WHEAT_ITEM => "ANIMALS FOLLOW IT. MAKES BREAD",
         _ if fuel_smelts(item) > 0 && !in_placeable(item) => "BURNS AS FURNACE FUEL",

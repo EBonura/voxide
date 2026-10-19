@@ -235,7 +235,7 @@ mask = [{ x = 0, y = 0, w = 9, h = 240 }, { x = 311, y = 0, w = 9, h = 240 }, { 
 kind = "not_flat"
 
 [[step]]
-label = "BLOCKS tab; TNT is the last block (row 4, column 6)"
+label = "BLOCKS tab; TNT is row 4, column 6 (two blocks follow it)"
 press = ["r1"]
 hold = 4
 wait = 30

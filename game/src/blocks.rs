@@ -56,10 +56,11 @@ fn mount_for(nx: i32, ny: i32, nz: i32) -> Option<u8> {
     bstate::facing_of_step(nx, nz).map(|f| 1 + f)
 }
 
-/// Place the selected item at the pick's place cell. True when something was
-/// placed (and one taken from the pack).
+/// Place the selected item at the pick's place cell. The cell it went in (a
+/// door's or a bed's first) when something was placed, and one was taken from
+/// the pack.
 #[inline(never)]
-pub fn place_item(player: &Player, pick: &Pick) -> bool {
+pub fn place_item(player: &Player, pick: &Pick) -> Option<(i32, i32, i32)> {
     let item = player.selected;
     let hit = get_block_i32(pick.bx, pick.by, pick.bz);
     // Tall grass gives way (Java's replaceable plants): aimed at, a block goes
@@ -70,7 +71,7 @@ pub fn place_item(player: &Player, pick: &Pick) -> bool {
         (pick.px, pick.py, pick.pz, pick.px - pick.bx, pick.py - pick.by, pick.pz - pick.bz)
     };
     if !replaceable(get_block_i32(px, py, pz)) {
-        return false;
+        return None;
     }
     // What a thing hangs on is the block under a tuft, not the tuft.
     let hit = if hit == crate::TALL_GRASS { get_block_i32(px, py - 1, pz) } else { hit };
@@ -82,7 +83,7 @@ pub fn place_item(player: &Player, pick: &Pick) -> bool {
             // A door stands on something solid and needs the cell above too.
             if !is_sturdy(get_block_i32(px, py - 1, pz)) || !replaceable(get_block_i32(px, py + 1, pz))
             {
-                return false;
+                return None;
             }
             second = Some((px, py + 1, pz, bstate::door(true, facing, false)));
             bstate::door(false, facing, false)
@@ -91,17 +92,17 @@ pub fn place_item(player: &Player, pick: &Pick) -> bool {
             // Foot where you aim, head one cell on the way you face.
             let (hx, hz) = (px + bstate::FDX[facing as usize], pz + bstate::FDZ[facing as usize]);
             if !replaceable(get_block_i32(hx, py, hz)) {
-                return false;
+                return None;
             }
             second = Some((hx, py, hz, bstate::bed(true, facing)));
             bstate::bed(false, facing)
         }
         TORCH | RSTORCH | LEVER => {
             if !is_sturdy(hit) {
-                return false;
+                return None;
             }
             let Some(m) = mount_for(nx, ny, nz) else {
-                return false;
+                return None;
             };
             match item {
                 LEVER => bstate::lever(m, false),
@@ -111,16 +112,16 @@ pub fn place_item(player: &Player, pick: &Pick) -> bool {
         LADDER => {
             // Hung on the side of a block, facing out.
             if !is_sturdy(hit) {
-                return false;
+                return None;
             }
             let Some(f) = (if ny == 0 { bstate::facing_of_step(nx, nz) } else { None }) else {
-                return false;
+                return None;
             };
             bstate::make(LADDER, f)
         }
         WIRE => {
             if !is_sturdy(get_block_i32(px, py - 1, pz)) {
-                return false;
+                return None;
             }
             WIRE
         }
@@ -150,11 +151,11 @@ pub fn place_item(player: &Player, pick: &Pick) -> bool {
         }
     };
     if !clear(px, py, pz, first) {
-        return false;
+        return None;
     }
     if let Some((x, y, z, b)) = second {
         if !clear(x, y, z, b) {
-            return false;
+            return None;
         }
     }
     // A full store takes no new edits (an edit it could not keep would be lost
@@ -163,10 +164,10 @@ pub fn place_item(player: &Player, pick: &Pick) -> bool {
         || second.map_or(false, |(x, y, z, _)| crate::edit_blocked(x, y, z))
     {
         crate::edit_full_toast();
-        return false;
+        return None;
     }
     if !container_room(item) || !inv_take(item) {
-        return false;
+        return None;
     }
     put(px, py, pz, first);
     unsafe {
@@ -179,7 +180,7 @@ pub fn place_item(player: &Player, pick: &Pick) -> bool {
     }
     // A door, piston or block of TNT set down beside power reacts at once.
     crate::redstone::poke(px, py, pz);
-    true
+    Some((px, py, pz))
 }
 
 // ---- Doors.

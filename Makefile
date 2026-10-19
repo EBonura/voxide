@@ -121,11 +121,14 @@ music-check: music
 # The release journey locates its small state block in the exact PS-X EXE
 # packed below. This route never installs into the user's game library.
 GATE_EXE ?= $(if $(CARGO_TARGET_DIR),$(CARGO_TARGET_DIR)/$(TARGET)/release/voxide.exe,$(EXE))
-GATE_DIR := $(ROOT)/build/gate
+# The block-lab journeys (tests/blocklab*.toml) boot a lab disc beside it:
+#   make gate-disc FEATURES=block-lab GATE_DIR=$PWD/build/gate-lab GATE_SYMBOLS=$PWD/build/gate-lab-symbols.txt
+GATE_DIR ?= $(ROOT)/build/gate
+GATE_SYMBOLS ?= $(ROOT)/build/gate-symbols.txt
 gate-symbols:
 	@mkdir -p "$(ROOT)/build"
 	rustc --edition=2021 "$(ROOT)/tools/gate-symbols.rs" -o "$(ROOT)/build/gate-symbols-tool"
-	"$(ROOT)/build/gate-symbols-tool" "$(GATE_EXE)" > "$(ROOT)/build/gate-symbols.txt"
+	"$(ROOT)/build/gate-symbols-tool" "$(GATE_EXE)" > "$(GATE_SYMBOLS)"
 
 gate-disc:
 	@$(MAKE) --no-print-directory compile

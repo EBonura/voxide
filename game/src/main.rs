@@ -3965,14 +3965,18 @@ fn main() {
                         inv_add(BUCKET);
                         sfx::splash();
                     }
-                } else if in_placeable(player.selected) && blocks::place_item(&player, &pick) {
-                    sfx::place();
-                    if player.selected == CHEST {
-                        chest_register(pick.px, pick.py, pick.pz);
-                    } else if player.selected == FURNACE {
-                        furn_register(pick.px, pick.py, pick.pz);
-                    } else if player.selected == CRAFT_TABLE {
-                        unsafe { TUT_TABLE_PLACED = true };
+                } else if in_placeable(player.selected) {
+                    if let Some((px, py, pz)) = blocks::place_item(&player, &pick) {
+                        sfx::place();
+                        if player.selected == CHEST {
+                            chest_register(px, py, pz);
+                        } else if player.selected == FURNACE {
+                            furn_register(px, py, pz);
+                        } else if player.selected == CRAFT_TABLE {
+                            unsafe { TUT_TABLE_PLACED = true };
+                        }
+                    } else {
+                        sfx::blip(); // nothing placed (empty stack or blocked cell)
                     }
                 } else {
                     sfx::blip(); // nothing placed (empty stack or blocked cell)
@@ -6720,7 +6724,7 @@ fn step_mat(b: u8) -> u32 {
     match kind_of(b) {
         STONE | COBBLE | BRICK | OBSIDIAN | FURNACE | CINDERSTONE | VOID_STONE | SLAB => 1,
         SAND | SINK_SAND | SNOW => 2,
-        WOOD | PLANK | FENCE | CHEST | CRAFT_TABLE => 3,
+        WOOD | PLANK | FENCE | CHEST | CRAFT_TABLE | DOOR_C | LADDER | PISTON_HEAD => 3,
         _ => 0,
     }
 }
