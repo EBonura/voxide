@@ -910,7 +910,7 @@ const CURSOR: (u8, u8, u8) = (0xFF, 0xE0, 0x40);
 
 const TABS: usize = 4;
 const TAB_NAME: [&str; TABS] = ["BLOCKS", "ITEMS", "FOOD", "MATERIALS"];
-const TAB_BLOCKS: [u8; 33] = [
+const TAB_BLOCKS: [u8; 35] = [
     GRASS,
     DIRT,
     STONE,
@@ -941,6 +941,8 @@ const TAB_BLOCKS: [u8; 33] = [
     ENCHANT,
     BED,
     TORCH,
+    RSTORCH,
+    LEVER,
     WIRE,
     PISTON,
     TNT,

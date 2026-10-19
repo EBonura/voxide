@@ -246,9 +246,13 @@ pub fn sapper_hiss() {
 
 // ---- Interaction sounds. ----
 
-/// Door swings.
-pub fn door() {
-    play(S_DOOR, 0x2800, 100);
+/// A door swings open or shut (Java pitches the shut sound a little lower).
+pub fn door(open: bool) {
+    play(S_DOOR, 0x2800, if open { 100 } else { 84 });
+}
+/// A lever is thrown: a click, higher switched on.
+pub fn lever(on: bool) {
+    play(S_CLICK, 0x2800, if on { 120 } else { 92 });
 }
 /// Chest or furnace opened.
 pub fn chest_open() {

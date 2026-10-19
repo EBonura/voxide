@@ -14,7 +14,9 @@
 extern crate psx_rt;
 
 mod blast;
+mod blocks;
 mod bonnie;
+mod bstate;
 mod cheat;
 mod controls;
 mod craft;
@@ -23,6 +25,8 @@ mod grid;
 mod hand;
 #[cfg(feature = "ui-fixture")]
 mod fixture;
+#[cfg(feature = "block-lab")]
+mod blocklab;
 mod flame;
 mod inv;
 mod menu_tree;
@@ -31,9 +35,11 @@ mod mob;
 mod music;
 mod music_plan;
 mod musicdata;
+mod redstone;
 mod save;
 mod seal;
 mod settings_menu;
+mod shape;
 mod sfx;
 mod sfxdata;
 mod slack;
@@ -217,8 +223,11 @@ const SAPLING: u8 = 42; // placeable on soil; grows into a tree (renewable wood)
 const RAW_MEAT: u8 = 43; // item: dropped by passive mobs; furnace-cooks
 const COOKED_MEAT: u8 = 44; // item: best food; smelted from raw meat
 const GUNPOWDER: u8 = 45; // item: dropped by slain sappers; crafts TNT
-const DOOR_C: u8 = 46; // placeable door, closed (solid); R3 opens
-const DOOR_O: u8 = 47; // open door: invisible + walk-through; R3 closes
+const DOOR_C: u8 = 46; // placeable door; the cell carries its half, facing and swing (bstate.rs)
+/// The one-block open door of saves from before doors were doors: an id nothing
+/// places any more, turned into a lower open door by `bstate::migrate`.
+#[allow(dead_code)]
+const DOOR_O: u8 = 47;
 const CACTUS: u8 = 48; // desert plant; hurts on contact
 const CLAY: u8 = 49; // found under shallow water; smelts into brick
 const BRICK: u8 = 50; // placeable brick block (smelted clay)
@@ -300,6 +309,10 @@ const MAGMA_PASTE: u8 = 92;
 /// iron and 1 diamond, slot 0 helmet, 1 chestplate, 2 leggings, 3 boots.
 const ARMOR0: u8 = 94;
 const ARMOR_KINDS: u8 = 8;
+/// Redstone torch: a power source that inverts (a torch is only light now).
+const RSTORCH: u8 = 102;
+/// A lever: a switch you throw, on a wall or the floor.
+const LEVER: u8 = 103;
 
 #[inline]
 fn is_portal(b: u8) -> bool {
@@ -402,7 +415,7 @@ fn portal_frame_ok(ix: i32, iy: i32, iz: i32, ax: i32, az: i32) -> bool {
 /// crafting table) 5 and 20, logs 5 and 5, leaves and wool 30 and 60, TNT
 /// 15 and 100, grass and flowers 60 and 100.
 fn fire_odds(b: u8) -> (u8, u8) {
-    match b {
+    match kind_of(b) {
         WOOD => (5, 5),
         PLANK | FENCE | CRAFT_TABLE => (5, 20),
         LEAVES | WOOL => (30, 60),
@@ -431,7 +444,7 @@ pub(crate) fn fire_cell(b: u8) -> flame::Cell {
             && !is_lava(b)
             && !world::is_cross_plant(b)
             && !is_small_block(b)
-            && !matches!(b, LEAVES | TORCH | WIRE | LADDER | DOOR_C | DOOR_O | BED | CACTUS),
+            && !matches!(b, LEAVES | CACTUS),
         infinite: b == CINDERSTONE,
         tnt: b == TNT,
     }
@@ -467,20 +480,14 @@ fn is_stairs(b: u8) -> bool {
 /// blocks behind them still emit their faces.
 #[inline]
 fn is_small_block(b: u8) -> bool {
-    b == SLAB || b == FENCE || is_stairs(b)
+    shape::is_shape(b)
 }
 
-/// World-unit box of a stair's UPPER step, within the block at `(bx, by, bz)`.
-/// The lower half is a full-footprint slab; this is the half that sits on top.
-fn stair_step_box(blk: u8, bx: i32, by: i32, bz: i32) -> (i32, i32, i32, i32, i32, i32) {
-    let (x, y, z) = (bx * BLOCK, by * BLOCK, bz * BLOCK);
-    let h = BLOCK / 2;
-    match blk {
-        STAIRS_N => (x, y + h, z + h, x + BLOCK, y + BLOCK, z + BLOCK),
-        STAIRS_S => (x, y + h, z, x + BLOCK, y + BLOCK, z + h),
-        STAIRS_E => (x + h, y + h, z, x + BLOCK, y + BLOCK, z + BLOCK),
-        _ => (x, y + h, z, x + h, y + BLOCK, z + BLOCK),
-    }
+/// The block id of a cell without its state: what the inventory, recipes,
+/// hardness and drops talk about (bstate.rs).
+#[inline(always)]
+fn kind_of(b: u8) -> u8 {
+    bstate::kind_of(b)
 }
 
 /// Which stair id to place, given the yaw the player is facing. The high step
@@ -742,7 +749,7 @@ pub(crate) fn tier_full(p: &Player, out: u8, tier: u8) -> bool {
 
 // Blocks the hotbar lets you select and place (building set; ores/fluids excluded).
 // SEEDS is selectable but plants a crop instead of placing a block (see place path).
-const PLACEABLE: [u8; 48] = [
+const PLACEABLE: [u8; 50] = [
     GRASS,
     DIRT,
     STONE,
@@ -779,6 +786,8 @@ const PLACEABLE: [u8; 48] = [
     BED,
     WIRE,
     TORCH,
+    RSTORCH,
+    LEVER,
     PISTON,
     TNT,
     CACTUS,
@@ -1888,6 +1897,7 @@ fn record_edit(wx: i32, wy: i32, wz: i32, b: u8) {
         let (slot, found) = edit_find(x, y, z, d);
         if let Some(i) = found {
             EDIT_B[i] = b;
+            redstone::note(wx, wy, wz, b);
             return;
         }
         if EDIT_N < MAX_EDITS {
@@ -1899,6 +1909,7 @@ fn record_edit(wx: i32, wy: i32, wz: i32, b: u8) {
             EDIT_HASH[slot] = (EDIT_N + 1) as u16;
             EDIT_N += 1;
         }
+        redstone::note(wx, wy, wz, b);
     }
 }
 // RECIP[z] = (PROJ_H << 16) / z, so projection multiplies by 1/z instead of
@@ -2269,7 +2280,7 @@ struct Recipe {
     label: &'static str,
 }
 
-const RECIPES: [Recipe; 56] = [
+const RECIPES: [Recipe; 58] = [
     Recipe {
         in_item: [PLANK, 0],
         in_qty: [4, 0],
@@ -2722,7 +2733,23 @@ const RECIPES: [Recipe; 56] = [
         out_qty: 1,
         label: "ENCHANT TBL",
     },
-];
+    // Redstone: the torch inverts (a lit one is a source), the lever holds a switch.
+    Recipe {
+        in_item: [WIRE, STICK],
+        in_qty: [1, 1],
+        n_in: 2,
+        out: RSTORCH,
+        out_qty: 1,
+        label: "REDSTONE TORCH",
+    },
+    Recipe {
+        in_item: [STICK, COBBLE],
+        in_qty: [1, 1],
+        n_in: 2,
+        out: LEVER,
+        out_qty: 1,
+        label: "LEVER",
+    },];
 
 // Category tabs, the console-edition answer to a long flat recipe list: the
 // legacy console UI grouped recipes into L1/R1-switched tabs and Bedrock's
@@ -2937,7 +2964,7 @@ fn recipe_tab(i: usize) -> usize {
     match RECIPES[i].out {
         CRAFT_PICK | CRAFT_AXE | CRAFT_SHOVEL | CRAFT_SWORD | CRAFT_HELMET..=CRAFT_BOOTS | BOW | ARROW
         | FLINT_STEEL | BUCKET | FISHING_ROD => 1,
-        STICK | WIRE | TORCH | BONEMEAL | VOID_EYE | MAGMA_PASTE => 2,
+        STICK | WIRE | TORCH | RSTORCH | BONEMEAL | VOID_EYE | MAGMA_PASTE => 2,
         BREAD | BOTTLE | POTION_AWKWARD | POTION_SPEED | POTION_STRENGTH | POTION_REGEN
         | POTION_FIRE => 3,
         _ => 0,
@@ -3077,6 +3104,10 @@ fn main() {
     let mut player = spawn_player();
     #[cfg(feature = "ui-fixture")]
     fixture::spawn_pitch(&mut player);
+    #[cfg(feature = "block-lab")]
+    {
+        player.pitch = -240;
+    }
     mob::populate(player.x, player.z);
     // Prime the edge detector with whatever is ACTUALLY held right now, not
     // NONE. The title screen exits on START, world generation then runs for
@@ -3533,7 +3564,7 @@ fn main() {
             // "Press L2 to sleep": aiming at a bed at (or near) nightfall --
             // the same window the bed interaction itself accepts.
             PROMPT_SLEEP = pick.hit
-                && get_block_i32(pick.bx, pick.by, pick.bz) == BED
+                && bstate::is_bed(get_block_i32(pick.bx, pick.by, pick.bz))
                 && bed_time(day);
         }
 
@@ -3555,6 +3586,10 @@ fn main() {
                     pick
                 };
                 fixture::select(&fixture_pick, &mut player);
+            }
+            #[cfg(feature = "block-lab")]
+            if pad.pressed_since(previous, button::SELECT) {
+                blocklab::select(&mut player);
             }
             let use_pressed = pad.pressed_since(previous, button::L2);
             // Held L2 repeats a block placement every USE_REPEAT sim ticks.
@@ -3606,7 +3641,7 @@ fn main() {
                         inv::container_open();
                         sfx::chest_open();
                     }
-                } else if tb == BED {
+                } else if bstate::is_bed(tb) {
                     used = true;
                     // Sleep: set the respawn point here; at night, skip to morning.
                     unsafe {
@@ -3653,13 +3688,12 @@ fn main() {
                     } else {
                         sfx::blip();
                     }
-                } else if tb == DOOR_C || tb == DOOR_O {
+                } else if bstate::is_door(tb) {
                     used = true;
-                    // Toggle the door: closed <-> open (open is invisible + passable).
-                    let nb = if tb == DOOR_C { DOOR_O } else { DOOR_C };
-                    set_block_i32(pick.bx, pick.by, pick.bz, nb);
-                    record_edit(pick.bx, pick.by, pick.bz, nb);
-                    sfx::door();
+                    blocks::use_door(pick.bx, pick.by, pick.bz);
+                } else if kind_of(tb) == LEVER {
+                    used = true;
+                    blocks::use_lever(pick.bx, pick.by, pick.bz);
                 }
             }
 
@@ -3794,6 +3828,7 @@ fn main() {
                         set_block_i32(pick.bx, pick.by, pick.bz, AIR);
                         record_edit(pick.bx, pick.by, pick.bz, AIR);
                         world::wake_fluid(pick.bx, pick.by, pick.bz);
+                        blocks::after_break(pick.bx, pick.by, pick.bz, tb);
                         mine_active = false;
                         mine_progress = 0;
                         mine_den = 0;
@@ -3935,20 +3970,7 @@ fn main() {
                         inv_add(BUCKET);
                         sfx::splash();
                     }
-                } else if in_placeable(player.selected)
-                    && replaceable(get_block_i32(pick.px, pick.py, pick.pz))
-                    && !place_intersects_player(&player, pick.px, pick.py, pick.pz, player.selected)
-                    && container_room(player.selected)
-                    && inv_take(player.selected)
-                {
-                    let put = if player.selected == STAIRS_N {
-                        stairs_for_yaw(player.yaw)
-                    } else {
-                        player.selected
-                    };
-                    set_block_i32(pick.px, pick.py, pick.pz, put);
-                    record_edit(pick.px, pick.py, pick.pz, put);
-                    world::wake_fluid(pick.px, pick.py, pick.pz);
+                } else if in_placeable(player.selected) && blocks::place_item(&player, &pick) {
                     sfx::place();
                     if player.selected == CHEST {
                         chest_register(pick.px, pick.py, pick.pz);
@@ -5023,6 +5045,8 @@ fn reset_game_state() {
         }
         #[cfg(feature = "ui-fixture")]
         fixture::seed();
+        #[cfg(feature = "block-lab")]
+        blocklab::seed();
         edit_log_clear();
         let mut c = 0;
         while c < MAX_CHESTS {
@@ -5661,8 +5685,9 @@ fn gate_snapshot(player: &Player) {
 /// longest in-game hitch measured (a TNT blast's remesh, 21 vblanks), which the
 /// old cap of 4 turned into 17 lost ticks of game time.
 const MAX_CATCHUP: u32 = ms(500) as u32;
-/// Redstone scans the player-edited blocks every 0.27 s (budgeted work).
-const REDSTONE_PERIOD: u32 = ms(267) as u32;
+/// A redstone tick is two game ticks, 0.1 s: a torch re-reads its block once
+/// a tick (redstone.rs).
+const REDSTONE_PERIOD: u32 = units::java_ticks(2) as u32;
 /// Fluids step every 5 game ticks, 0.25 s: Java's water rate (minecraft.wiki
 /// /w/Water#Spreading). Lava steps every 6th of these, Java's 30 ticks, or
 /// every 2nd in the Inferno, the Nether's 10 (world::fluid_tick). Budgeted:
@@ -5707,7 +5732,7 @@ fn world_tick(player: &mut Player, dwell: &mut u16, n: u32) -> bool {
         weather::tick();
         weather::lightning_tick(player);
         if t % REDSTONE_PERIOD == 0 {
-            redstone_tick(); // budgeted: amortized, only over player-edited blocks
+            redstone::tick(); // free until something redstone was disturbed
         }
         if t % FLUID_PERIOD == 0 {
             world::fluid_tick(); // budgeted: only cells woken by a player edit
@@ -6552,15 +6577,11 @@ fn update_player(
                 let bx = world_to_block_x(player.x);
                 let bz = world_to_block_z(player.z);
                 let under = get_block_i32(bx, by, bz);
-                player.y = if under == SLAB {
-                    by * BLOCK + BLOCK / 2
-                } else if is_stairs(under) {
-                    let (sx0, _, sz0, sx1, _, sz1) = stair_step_box(under, bx, by, bz);
-                    if player.x > sx0 && player.x < sx1 && player.z > sz0 && player.z < sz1 {
-                        (by + 1) * BLOCK // standing on the high step
-                    } else {
-                        by * BLOCK + BLOCK / 2
-                    }
+                // The top of the highest box the feet stand over (a slab or a
+                // stair's low half is half a block up); a whole cube's is its roof.
+                player.y = if shape::solid(under) == shape::Solid::Parts {
+                    shape::top_under(under, bx, by, bz, player.x, player.z, PLAYER_HALF_W)
+                        .unwrap_or((by + 1) * BLOCK)
                 } else {
                     (by + 1) * BLOCK
                 };
@@ -6661,7 +6682,7 @@ static mut WAS_WET: bool = false;
 
 /// Which footstep voice a block underfoot gets.
 fn step_mat(b: u8) -> u32 {
-    match b {
+    match kind_of(b) {
         STONE | COBBLE | BRICK | OBSIDIAN | FURNACE | CINDERSTONE | VOID_STONE | SLAB => 1,
         SAND | SINK_SAND | SNOW => 2,
         WOOD | PLANK | FENCE | CHEST | CRAFT_TABLE => 3,
@@ -6682,8 +6703,10 @@ fn aabb_collides(cx: i32, feet: i32, cz: i32) -> bool {
 /// see-through of caves and sky that a long investigation chased as terrain
 /// corruption. Walk-through blocks stay placeable at your feet, as in Java.
 fn place_intersects_player(player: &Player, bx: i32, by: i32, bz: i32, b: u8) -> bool {
-    let passable =
-        b == LADDER || b == DOOR_O || world::is_cross_plant(b) || is_water(b) || is_lava(b);
+    let passable = shape::solid(b) == shape::Solid::No
+        || world::is_cross_plant(b)
+        || is_water(b)
+        || is_lava(b);
     if passable {
         return false;
     }
@@ -6728,8 +6751,8 @@ fn in_water_body(cx: i32, feet: i32, cz: i32) -> bool {
 fn at_ladder(cx: i32, feet: i32, cz: i32) -> bool {
     let bx = world_to_block_x(cx);
     let bz = world_to_block_z(cz);
-    get_block_i32(bx, world_to_block_y(feet + 8), bz) == LADDER
-        || get_block_i32(bx, world_to_block_y(feet + PLAYER_HEIGHT - 8), bz) == LADDER
+    kind_of(get_block_i32(bx, world_to_block_y(feet + 8), bz)) == LADDER
+        || kind_of(get_block_i32(bx, world_to_block_y(feet + PLAYER_HEIGHT - 8), bz)) == LADDER
 }
 
 /// True if an AABB at (centre x, feet y, centre z) with the given half-width and
@@ -6748,34 +6771,24 @@ pub fn aabb_collides_dims(cx: i32, feet: i32, cz: i32, halfw: i32, height: i32) 
             let mut bz = bz0;
             while bz <= bz1 {
                 let b = get_block_i32(bx, by, bz);
-                if b == SLAB || is_stairs(b) {
-                    // Only the bottom half is solid, so you step onto a slab at
-                    // half a block and can walk under one placed overhead.
-                    if feet < by * BLOCK + BLOCK / 2 && feet + height > by * BLOCK {
-                        return true;
-                    }
-                    // A stair adds an upper step over half its footprint.
-                    if is_stairs(b)
-                        && feet < (by + 1) * BLOCK
-                        && feet + height > by * BLOCK + BLOCK / 2
-                    {
-                        let (sx0, _, sz0, sx1, _, sz1) = stair_step_box(b, bx, by, bz);
-                        if cx + halfw > sx0
-                            && cx - halfw < sx1
-                            && cz + halfw > sz0
-                            && cz - halfw < sz1
-                        {
-                            return true;
+                if b != AIR {
+                    match shape::solid(b) {
+                        shape::Solid::No => {}
+                        // Slabs, stairs, doors and beds collide with their boxes
+                        // only: you step onto a slab at half a block, walk under
+                        // one placed overhead, and through an open door.
+                        shape::Solid::Parts => {
+                            if shape::body_hits(b, bx, by, bz, cx, feet, cz, halfw, height) {
+                                return true;
+                            }
+                        }
+                        shape::Solid::Full => {
+                            // Fluids and cross plants are walk-through.
+                            if !is_water(b) && !is_lava(b) && !world::is_cross_plant(b) {
+                                return true;
+                            }
                         }
                     }
-                } else if b != AIR
-                    && !is_water(b)
-                    && !is_lava(b)
-                    && b != LADDER
-                    && b != DOOR_O
-                    && !world::is_cross_plant(b)
-                {
-                    return true; // cross plants/ladders/open doors are walk-through
                 }
                 bz += 1;
             }
@@ -7135,7 +7148,7 @@ fn held_flat(item: u8) -> bool {
     match item {
         FURNACE | BED | PISTON | ENCHANT | FENCE | GLASS | SLAB => false,
         STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W => false,
-        TORCH | LADDER | DOOR_C | DOOR_O | WIRE | SUGAR_CANE => true,
+        TORCH | RSTORCH | LEVER | LADDER | DOOR_C | WIRE | SUGAR_CANE => true,
         _ => world::is_cross_plant(item) || icon_tile(item) != face_tile(item, 0),
     }
 }
@@ -7772,7 +7785,7 @@ const CROSS_PLANTS: bool = true; // false = old cube rendering (A/B knob)
 /// Inside this squared distance a plant draws both diagonals; past it, one.
 /// 8 blocks -- beyond that a cross sprite is a few pixels wide.
 const PLANT_SINGLE_D2: i32 = (8 * BLOCK) * (8 * BLOCK);
-const MAX_PLANT_QUADS: usize = 128; // 2 quads/plant; ponytail cap on visible plants/frame
+const MAX_PLANT_QUADS: usize = 256; // quads a frame across plants, shapes and dust; ponytail cap
 static mut PLANT_QUADS: [[QuadTexturedMaterial; MAX_PLANT_QUADS]; RENDER_ARENAS] =
     [[EMPTY_QUAD; MAX_PLANT_QUADS], [EMPTY_QUAD; MAX_PLANT_QUADS]];
 static mut PLANT_N: usize = 0;
@@ -7810,17 +7823,10 @@ fn render_plants(cam: &Camera) {
         if is_small_block(blk) {
             // Solid shapes, not billboards: no near-cull (you can stand on one)
             // and they draw as far as the terrain does.
-            let (x0, y0, z0, x1, y1, z1, tile, vhi) = small_box_shape(blk, wx, wy, wz);
-            emit_small_box(cam, tile, x0, y0, z0, x1, y1, z1, vhi);
-            if is_stairs(blk) {
-                // The upper step, on top of the slab the call above drew.
-                let (sx0, sy0, sz0, sx1, sy1, sz1) = stair_step_box(
-                    blk,
-                    world_to_block_x(wx),
-                    world_to_block_y(wy),
-                    world_to_block_z(wz),
-                );
-                emit_small_box(cam, tile, sx0, sy0, sz0, sx1, sy1, sz1, 8);
+            if kind_of(blk) == WIRE {
+                emit_wire(cam, wx, wy, wz);
+            } else {
+                emit_shape(cam, blk, wx, wy, wz);
             }
             return;
         }
@@ -8116,115 +8122,243 @@ fn portal_piece(
     Some(z)
 }
 
-/// One textured box for a non-full-block shape, emitted into the same OT and
-/// quad pool as the plants. Not `emit_box`: that one is flat-shaded (it draws
-/// mobs), and a grey cuboid sitting in textured terrain reads as a placeholder.
-///
-/// `vhi` is the bottom of the V range used on the SIDE faces. A half-height slab
-/// takes the tile's top half at native scale rather than squashing the whole
-/// tile into eight pixels.
-#[allow(clippy::too_many_arguments)]
-fn emit_small_box(
-    cam: &Camera,
-    tile: u8,
-    x0: i32,
-    y0: i32,
-    z0: i32,
-    x1: i32,
-    y1: i32,
-    z1: i32,
-    vhi: u8,
-) {
-    let bt = unsafe { BLOCK_TEX };
-    let (tux, tuy) = tex::tile_uv(tile);
-    let win = TextureWindow::power_of_two_tile(tux, tuy, 16, 16);
+/// The parts of the shape being drawn (one at a time: out of the stack, which
+/// is the 1 KB scratchpad under render_plants).
+static mut SHAPE_PARTS: [shape::Part; shape::MAX_PARTS] = [shape::EMPTY; shape::MAX_PARTS];
+
+/// A shaped block (shape.rs: slab, stairs, fence, door, bed, torch, lever,
+/// ladder), drawn part by part into the same OT and quad pool as the plants.
+/// Not `emit_box`: that one is flat-shaded (it draws mobs), and a grey cuboid
+/// sitting in textured terrain reads as a placeholder.
+#[inline(never)]
+fn emit_shape(cam: &Camera, blk: u8, wx: i32, wy: i32, wz: i32) {
+    let ps = unsafe { &mut *(&raw mut SHAPE_PARTS) };
+    let n = shape::parts(blk, ps);
+    // A redstone torch that has been turned off wears the dark head.
+    let off = kind_of(blk) == RSTORCH
+        && !redstone::torch_lit(world_to_block_x(wx), world_to_block_y(wy), world_to_block_z(wz));
+    let mut i = 0;
+    while i < n {
+        if off {
+            let mut d = 0;
+            while d < 6 {
+                if ps[i].tile[d] == tex::T_RSTORCH {
+                    ps[i].tile[d] = tex::T_RSTORCH_OFF;
+                }
+                d += 1;
+            }
+        }
+        emit_part(cam, &ps[i], wx, wy, wz);
+        i += 1;
+    }
+}
+
+/// The texture corners (TL, TR, BL, BR) of a top or bottom face turned `t`
+/// quarter turns: what a rotated block's top wears.
+fn turned_uv(u: (u8, u8), v: (u8, u8), t: u8) -> [(u8, u8); 4] {
+    let tex = [(u.0, v.0), (u.1, v.0), (u.0, v.1), (u.1, v.1)];
+    let order: [usize; 4] = match t & 3 {
+        0 => [0, 1, 2, 3],
+        1 => [1, 3, 0, 2],
+        2 => [3, 2, 1, 0],
+        _ => [2, 0, 3, 1],
+    };
+    [tex[order[0]], tex[order[1]], tex[order[2]], tex[order[3]]]
+}
+
+/// One box of a shape: each face that points at the camera.
+#[inline(never)]
+fn emit_part(cam: &Camera, p: &shape::Part, wx: i32, wy: i32, wz: i32) {
     let mut dir = 0usize;
     while dir < 6 {
-        // Same backface test emit_box uses: keep only the faces pointing at us.
-        let facing = match dir {
-            0 => cam.x > x1 - 8,
-            1 => cam.x < x0 + 8,
-            2 => cam.y > y1 - 8,
-            3 => cam.y < y0 + 8,
-            4 => cam.z > z1 - 8,
-            _ => cam.z < z0 + 8,
-        };
-        if facing && unsafe { PLANT_N } < MAX_PLANT_QUADS {
-            let verts = match dir {
-                0 => [(x1, y1, z0), (x1, y1, z1), (x1, y0, z0), (x1, y0, z1)],
-                1 => [(x0, y1, z1), (x0, y1, z0), (x0, y0, z1), (x0, y0, z0)],
-                2 => [(x0, y1, z0), (x1, y1, z0), (x0, y1, z1), (x1, y1, z1)],
-                3 => [(x0, y0, z1), (x1, y0, z1), (x0, y0, z0), (x1, y0, z0)],
-                4 => [(x0, y1, z1), (x1, y1, z1), (x0, y0, z1), (x1, y0, z1)],
-                _ => [(x1, y1, z0), (x0, y1, z0), (x1, y0, z0), (x0, y0, z0)],
-            };
-            if let Some(p) = project_quad_gte(cam, &verts) {
-                let depth = (p[0].z + p[1].z + p[2].z + p[3].z) >> 2;
-                if depth > 0 && depth < FAR_Z {
-                    // Top and bottom faces read the whole tile; the sides take
-                    // only as much of it as the box is tall.
-                    let v1 = if dir == 2 || dir == 3 { 16 } else { vhi };
-                    let mat =
-                        TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, face_tint(dir))
-                            .with_texture_window(win);
-                    let packet = QuadTexturedMaterial::with_material(
-                        [
-                            (p[0].x, p[0].y),
-                            (p[1].x, p[1].y),
-                            (p[2].x, p[2].y),
-                            (p[3].x, p[3].y),
-                        ],
-                        [(0, 0), (16, 0), (0, v1), (16, v1)],
-                        mat,
-                    );
-                    unsafe {
-                        let n = PLANT_N;
-                        PLANT_QUADS[RENDER_ARENA][n] = packet;
-                        OT[RENDER_ARENA].insert(
-                            depth_slot(depth),
-                            &mut PLANT_QUADS[RENDER_ARENA][n] as *mut QuadTexturedMaterial
-                                as *mut u32,
-                            QuadTexturedMaterial::WORDS,
-                        );
-                        PLANT_N = n + 1;
-                    }
-                }
-            }
+        let tile = p.tile[dir];
+        if tile != shape::NO_TILE {
+            emit_part_face(cam, p, dir, wx, wy, wz);
         }
         dir += 1;
     }
 }
 
-/// Geometry of a small block: `(x0, y0, z0, x1, y1, z1, tile, side V range)`
-/// in world units, relative to the block's corner.
-fn small_box_shape(blk: u8, wx: i32, wy: i32, wz: i32) -> (i32, i32, i32, i32, i32, i32, u8, u8) {
-    match blk {
-        // Half-height, full footprint. Sits on the block grid, so a slab floor
-        // is walkable at half a block up.
-        SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W => (
-            wx,
-            wy,
-            wz,
-            wx + BLOCK,
-            wy + BLOCK / 2,
-            wz + BLOCK,
-            tex::T_COBBLE,
-            8,
-        ),
-        // A post through the middle of the cell. Vanilla adds arms to the
-        // neighbours; ponytail: post only, which still reads as a fence line and
-        // costs one box instead of up to five.
-        _ => (
-            wx + BLOCK * 3 / 8,
-            wy,
-            wz + BLOCK * 3 / 8,
-            wx + BLOCK * 5 / 8,
-            wy + BLOCK,
-            wz + BLOCK * 5 / 8,
-            tex::T_WOOD_SIDE,
-            16,
-        ),
+/// One face of a box, if the camera is on its side of it, cut from its tile.
+#[inline(never)]
+fn emit_part_face(cam: &Camera, p: &shape::Part, dir: usize, wx: i32, wy: i32, wz: i32) {
+    let [bx0, by0, bz0, bx1, by1, bz1] = p.b;
+    let (x0, y0, z0) = (wx + bx0 as i32 * 4, wy + by0 as i32 * 4, wz + bz0 as i32 * 4);
+    let (x1, y1, z1) = (wx + bx1 as i32 * 4, wy + by1 as i32 * 4, wz + bz1 as i32 * 4);
+    // Same backface test the cube pass uses: keep only the faces pointing at us.
+    let facing = match dir {
+        0 => cam.x > x1 - 8,
+        1 => cam.x < x0 + 8,
+        2 => cam.y > y1 - 8,
+        3 => cam.y < y0 + 8,
+        4 => cam.z > z1 - 8,
+        _ => cam.z < z0 + 8,
+    };
+    if !facing {
+        return;
     }
+    let verts = match dir {
+        0 => [(x1, y1, z1), (x1, y1, z0), (x1, y0, z1), (x1, y0, z0)],
+        1 => [(x0, y1, z0), (x0, y1, z1), (x0, y0, z0), (x0, y0, z1)],
+        2 => [(x0, y1, z0), (x1, y1, z0), (x0, y1, z1), (x1, y1, z1)],
+        3 => [(x0, y0, z1), (x1, y0, z1), (x0, y0, z0), (x1, y0, z0)],
+        4 => [(x0, y1, z1), (x1, y1, z1), (x0, y0, z1), (x1, y0, z1)],
+        _ => [(x1, y1, z0), (x0, y1, z0), (x1, y0, z0), (x0, y0, z0)],
+    };
+    // Texels: the face's own extent, or a narrow strip.
+    let (uu, vv): ((u8, u8), (u8, u8)) = match p.uv {
+        shape::Uv::Auto => match dir {
+            0 => ((16 - bz1, 16 - bz0), (16 - by1, 16 - by0)),
+            1 => ((bz0, bz1), (16 - by1, 16 - by0)),
+            2 => ((bx0, bx1), (bz0, bz1)),
+            3 => ((bx0, bx1), (16 - bz1, 16 - bz0)),
+            4 => ((bx0, bx1), (16 - by1, 16 - by0)),
+            _ => ((16 - bx1, 16 - bx0), (16 - by1, 16 - by0)),
+        },
+        shape::Uv::Strip { u0, u1, top_v } => {
+            if dir < 2 || dir > 3 {
+                ((u0, u1), (16 - (by1 - by0), 16))
+            } else {
+                ((u0, u1), (top_v, top_v + (u1 - u0)))
+            }
+        }
+    };
+    let uvs = if dir == 2 || dir == 3 {
+        turned_uv(uu, vv, p.turn)
+    } else {
+        [(uu.0, vv.0), (uu.1, vv.0), (uu.0, vv.1), (uu.1, vv.1)]
+    };
+    let tile = p.tile[dir];
+    // A flame is its own light.
+    let tint = if tile == tex::T_TORCH || tile == tex::T_RSTORCH {
+        (128, 128, 128)
+    } else {
+        face_tint(dir)
+    };
+    push_world_quad(cam, &verts, uvs, tile, tint, 0);
+}
+
+/// One textured world quad into the plant pool and the OT, `bias` units nearer
+/// than its own depth (decals lie on a surface that sorts about as deep).
+#[inline(never)]
+fn push_world_quad(
+    cam: &Camera,
+    verts: &[(i32, i32, i32); 4],
+    uvs: [(u8, u8); 4],
+    tile: u8,
+    tint: (u8, u8, u8),
+    bias: i32,
+) {
+    if unsafe { PLANT_N } >= MAX_PLANT_QUADS {
+        return;
+    }
+    let Some(q) = project_quad_gte(cam, verts) else {
+        return;
+    };
+    let depth = (q[0].z + q[1].z + q[2].z + q[3].z) >> 2;
+    if depth <= 0 || depth >= FAR_Z {
+        return;
+    }
+    let bt = unsafe { BLOCK_TEX };
+    let (tux, tuy) = tex::tile_uv(tile);
+    let win = TextureWindow::power_of_two_tile(tux, tuy, 16, 16);
+    let mat = TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, tint).with_texture_window(win);
+    let packet = QuadTexturedMaterial::with_material(
+        [(q[0].x, q[0].y), (q[1].x, q[1].y), (q[2].x, q[2].y), (q[3].x, q[3].y)],
+        uvs,
+        mat,
+    );
+    unsafe {
+        let n = PLANT_N;
+        PLANT_QUADS[RENDER_ARENA][n] = packet;
+        OT[RENDER_ARENA].insert(
+            depth_slot((depth - bias).max(NEAR_Z)),
+            &mut PLANT_QUADS[RENDER_ARENA][n] as *mut QuadTexturedMaterial as *mut u32,
+            QuadTexturedMaterial::WORDS,
+        );
+        PLANT_N = n + 1;
+    }
+}
+
+/// Redstone dust: a dot and an arm to each side it joins, lying on the floor,
+/// tinted from dark red (no power) to bright red (15) as Java does; a step up
+/// climbs the side of the block it stands against.
+#[inline(never)]
+fn emit_wire(cam: &Camera, wx: i32, wy: i32, wz: i32) {
+    let (bx, by, bz) = (world_to_block_x(wx), world_to_block_y(wy), world_to_block_z(wz));
+    let power = redstone::wire_power(bx, by, bz) as i32;
+    let links = redstone::wire_links(bx, by, bz);
+    // Java: r 0.4 + 0.6 p/15, g (p/15)^2 0.7 - 0.5, b (p/15)^2 0.6 - 0.7.
+    let k = power * 256 / 15;
+    let r = 102 + (154 * k >> 8);
+    let g = ((k * k >> 8) * 179 >> 8) - 128;
+    let b = ((k * k >> 8) * 154 >> 8) - 179;
+    let day = face_tint(2);
+    let lit = |c: i32, d: u8| -> u8 { (c.clamp(0, 255) * d as i32 / 255).min(255) as u8 };
+    let tint = (lit(r, day.0), lit(g, day.1), lit(b, day.2));
+    let y = wy + 1;
+    let (x0, x1, z0, z1) = (wx, wx + BLOCK, wz, wz + BLOCK);
+    let (mx, mz) = (wx + BLOCK / 2, wz + BLOCK / 2);
+    let lone = links == [0; 4];
+    push_world_quad(
+        cam,
+        &[(x0, y, z0), (x1, y, z0), (x0, y, z1), (x1, y, z1)],
+        [(0, 0), (16, 0), (0, 16), (16, 16)],
+        tex::T_WIRE_DOT,
+        tint,
+        40,
+    );
+    let mut d = 0;
+    while d < 4 {
+        if links[d] != 0 {
+            // The arm: the half cell on that side, the band running along it.
+            let along_x = d == 1 || d == 3;
+            let (ax0, ax1, az0, az1) = match d {
+                0 => (x0, x1, mz, z1), // +Z
+                1 => (mx, x1, z0, z1), // +X
+                2 => (x0, x1, z0, mz), // -Z
+                _ => (x0, mx, z0, z1), // -X
+            };
+            let verts = [(ax0, y, az0), (ax1, y, az0), (ax0, y, az1), (ax1, y, az1)];
+            let uvs = if along_x {
+                // u along x: the near half of the tile for -X, the far half for +X.
+                let (ua, ub) = if d == 1 { (8, 16) } else { (0, 8) };
+                [(ua, 0), (ub, 0), (ua, 16), (ub, 16)]
+            } else {
+                // u along z.
+                let (ua, ub) = if d == 0 { (8, 16) } else { (0, 8) };
+                [(ua, 0), (ua, 16), (ub, 0), (ub, 16)]
+            };
+            push_world_quad(cam, &verts, uvs, tex::T_WIRE_LINE, tint, 40);
+            if links[d] == 2 {
+                // Up the side of the block it leans on, one unit off the face.
+                let e = 1;
+                let (vx0, vz0, vx1, vz1) = match d {
+                    0 => (x0, z1 + e, x1, z1 + e),
+                    1 => (x1 + e, z0, x1 + e, z1),
+                    2 => (x0, z0 - e, x1, z0 - e),
+                    _ => (x0 - e, z0, x0 - e, z1),
+                };
+                let verts = [
+                    (vx0, wy + BLOCK, vz0),
+                    (vx1, wy + BLOCK, vz1),
+                    (vx0, wy, vz0),
+                    (vx1, wy, vz1),
+                ];
+                // The line runs up: rows are the tile's u axis.
+                push_world_quad(
+                    cam,
+                    &verts,
+                    [(0, 0), (0, 16), (16, 0), (16, 16)],
+                    tex::T_WIRE_LINE,
+                    tint,
+                    40,
+                );
+            }
+        }
+        d += 1;
+    }
+    let _ = lone;
 }
 
 // ---- Particles: short-lived debris on block break and explosions ----
@@ -8576,7 +8710,7 @@ fn render_particles(cam: &Camera) {
 }
 
 fn block_particle_color(b: u8) -> (u8, u8, u8) {
-    match b {
+    match kind_of(b) {
         GRASS => (96, 150, 72),
         DIRT => (122, 86, 56),
         SAND => (204, 192, 142),
@@ -9144,12 +9278,12 @@ fn camera_space_world(cam: &Camera, p: (i32, i32, i32)) -> (i32, i32, i32) {
 
 #[inline]
 fn near_shell_meshable(b: u8) -> bool {
-    b != AIR && b != DOOR_O && !world::is_cross_plant(b) && !is_small_block(b)
+    b != AIR && !world::is_cross_plant(b) && !is_small_block(b)
 }
 
 #[inline]
 fn near_shell_see_through(b: u8) -> bool {
-    b == AIR || is_water(b) || b == DOOR_O || world::is_cross_plant(b) || is_small_block(b)
+    b == AIR || is_water(b) || world::is_cross_plant(b) || is_small_block(b)
 }
 
 /// Close-range block shell, independent of the greedy mesh.
@@ -10786,16 +10920,29 @@ fn trace_pick(cam: &Camera, fluids: bool, portals: bool) -> Pick {
     while guard <= 3 * (PICK_RANGE / BLOCK + 2) {
         let b = get_block_i32(cell[0], cell[1], cell[2]);
         if b != AIR && (fluids || !(is_water(b) || is_lava(b))) && (portals || !is_portal(b)) {
-            return Pick {
-                hit: true,
-                dist: t_in >> T_FRAC,
-                bx: cell[0],
-                by: cell[1],
-                bz: cell[2],
-                px: place[0],
-                py: place[1],
-                pz: place[2],
-            };
+            // A shaped block is only hit where the ray touches one of its
+            // boxes: the empty half of a slab cell, the gap beside a door
+            // panel or a torch lets the ray go on to what is behind.
+            let mut dist = t_in >> T_FRAC;
+            let mut hit = true;
+            if is_small_block(b) {
+                match shape::ray_hit(b, cell[0], cell[1], cell[2], pos, dir, PICK_RANGE) {
+                    Some(t) => dist = t,
+                    None => hit = false,
+                }
+            }
+            if hit {
+                return Pick {
+                    hit: true,
+                    dist,
+                    bx: cell[0],
+                    by: cell[1],
+                    bz: cell[2],
+                    px: place[0],
+                    py: place[1],
+                    pz: place[2],
+                };
+            }
         }
         let a = if t_wall[0] <= t_wall[1] && t_wall[0] <= t_wall[2] {
             0
@@ -10937,12 +11084,27 @@ fn draw_pick_outline(cam: &Camera, pick: Pick) {
     if !pick.hit {
         return;
     }
+    let b = get_block_i32(pick.bx, pick.by, pick.bz);
+    if is_small_block(b) {
+        // The outline follows the boxes of the shape, as Java's does.
+        let mut ps = [shape::EMPTY; shape::MAX_PARTS];
+        let n = shape::parts(b, &mut ps);
+        let mut i = 0;
+        while i < n {
+            let (x0, y0, z0, x1, y1, z1) = shape::world_box(&ps[i], pick.bx, pick.by, pick.bz);
+            draw_box_outline(cam, x0, y0, z0, x1, y1, z1);
+            i += 1;
+        }
+        return;
+    }
     let x0 = block_to_world_x(pick.bx);
-    let x1 = x0 + BLOCK;
     let y0 = pick.by * BLOCK;
-    let y1 = y0 + BLOCK;
     let z0 = block_to_world_z(pick.bz);
-    let z1 = z0 + BLOCK;
+    draw_box_outline(cam, x0, y0, z0, x0 + BLOCK, y0 + BLOCK, z0 + BLOCK);
+}
+
+/// The twelve edges of a world-unit box, as thin lines.
+fn draw_box_outline(cam: &Camera, x0: i32, y0: i32, z0: i32, x1: i32, y1: i32, z1: i32) {
     let pts = [
         (x0, y0, z0),
         (x1, y0, z0),
@@ -11042,6 +11204,8 @@ fn icon_tile(item: u8) -> u8 {
         WATER_BUCKET => tex::T_I_WATER_BUCKET,
         LAVA_BUCKET => tex::T_I_LAVA_BUCKET,
         TORCH => tex::T_I_TORCH,
+        RSTORCH => tex::T_I_RSTORCH,
+        LEVER => tex::T_I_LEVER,
         FLINT_STEEL => tex::T_I_FLINT,
         BOTTLE => tex::T_I_BOTTLE,
         POTION_AWKWARD => tex::T_I_POT_AWKWARD,
@@ -12273,74 +12437,14 @@ impl core::ops::Deref for Decimal3 {
     }
 }
 
+/// Can a piston move this block? Not another piston, not the things that
+/// hold state in the world outside the cell (chests, furnaces), not fluids.
 fn is_pushable(b: u8) -> bool {
+    let k = kind_of(b);
     b != AIR
-        && !is_small_block(b)
         && !is_water(b)
         && !is_lava(b)
-        && b != PISTON
-        && b != CHEST
-        && b != FURNACE
-        && b != BED
-        && b != WIRE
-        && b != TORCH
-}
-
-fn has_torch_neighbor(x: i32, y: i32, z: i32) -> bool {
-    let mut d = 0;
-    while d < 6 {
-        let dd = DIRS[d];
-        if get_block_i32(x + dd.0, y + dd.1, z + dd.2) == TORCH {
-            return true;
-        }
-        d += 1;
-    }
-    false
-}
-
-/// Powered if a torch is adjacent, or an adjacent wire touches a torch.
-fn piston_powered(x: i32, y: i32, z: i32) -> bool {
-    if has_torch_neighbor(x, y, z) {
-        return true;
-    }
-    let mut d = 0;
-    while d < 6 {
-        let dd = DIRS[d];
-        let (nx, ny, nz) = (x + dd.0, y + dd.1, z + dd.2);
-        if get_block_i32(nx, ny, nz) == WIRE && has_torch_neighbor(nx, ny, nz) {
-            return true;
-        }
-        d += 1;
-    }
-    false
-}
-
-/// Basic redstone: every powered piston pushes the block above it up one cell.
-/// Iterates only player-edited positions (the EDIT log), so it stays cheap and
-/// needs no whole-world scan.
-#[inline(never)]
-fn redstone_tick() {
-    let n = unsafe { EDIT_N };
-    let mut i = 0;
-    while i < n {
-        let b = unsafe { EDIT_B[i] };
-        let (x, y, z) = unsafe { (EDIT_X[i] as i32, EDIT_Y[i] as i32, EDIT_Z[i] as i32) };
-        if b == PISTON {
-            if get_block_i32(x, y, z) == PISTON && piston_powered(x, y, z) {
-                let above = get_block_i32(x, y + 1, z);
-                if is_pushable(above) && get_block_i32(x, y + 2, z) == AIR {
-                    set_block_i32(x, y + 2, z, above);
-                    set_block_i32(x, y + 1, z, AIR);
-                }
-            }
-        } else if b == TNT {
-            // A redstone-powered TNT block lights its fuse.
-            if get_block_i32(x, y, z) == TNT && piston_powered(x, y, z) {
-                ignite_tnt(x, y, z);
-            }
-        }
-        i += 1;
-    }
+        && !matches!(k, PISTON | CHEST | FURNACE | OBSIDIAN | ENCHANT | PORTAL | VOID_PORTAL)
 }
 
 // ---- TNT: a block lit becomes an entity (tnt.rs); the blast's block side is
@@ -12350,7 +12454,7 @@ fn redstone_tick() {
 /// resistance). Fluids, obsidian, the enchanting table and portals' frames
 /// hold against anything a TNT block or sapper can do.
 pub(crate) fn blast_resistance100(b: u8) -> i32 {
-    match b {
+    match kind_of(b) {
         GRASS | CLAY => 60,
         DIRT | SAND | SINK_SAND => 50,
         STONE | COBBLE | BRICK | SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W => 600,
@@ -12359,15 +12463,16 @@ pub(crate) fn blast_resistance100(b: u8) -> i32 {
         COAL_ORE | IRON_ORE | GOLD_ORE | DIAMOND_ORE => 300,
         GLASS | LUMISTONE => 30,
         CHEST | CRAFT_TABLE => 250,
-        PLANK | FENCE | DOOR_C | DOOR_O => 300,
+        PLANK | FENCE | DOOR_C => 300,
         FURNACE => 350,
         PISTON => 150,
+        LEVER => 50,
         WOOL => 80,
         LADDER | CACTUS | CINDERSTONE => 40,
         VOID_STONE => 900,
         ENCHANT | OBSIDIAN => 120_000,
-        WIRE | TORCH | TNT | WHEAT | WHEAT_RIPE | SAPLING | FLOWER_R | FLOWER_Y | TALL_GRASS
-        | SUGAR_CANE | FIRE | PORTAL | EMBER_CAP => 0,
+        WIRE | TORCH | RSTORCH | TNT | WHEAT | WHEAT_RIPE | SAPLING | FLOWER_R | FLOWER_Y
+        | TALL_GRASS | SUGAR_CANE | FIRE | PORTAL | EMBER_CAP => 0,
         VOID_PORTAL => 360_000_000,
         _ if is_water(b) || is_lava(b) => 10_000,
         _ => 300,
@@ -12676,7 +12781,7 @@ fn face_tile(block: u8, dir: usize) -> u8 {
         },
         LEAVES => tex::T_LEAVES,
         SAPLING => tex::T_LEAVES, // young bush look
-        DOOR_C | DOOR_O => tex::T_DOOR,
+        DOOR_C => tex::T_DOOR,
         CACTUS => tex::T_CACTUS,
         CLAY => tex::T_CLAY,
         BRICK => tex::T_BRICK,
@@ -12723,11 +12828,13 @@ fn face_tile(block: u8, dir: usize) -> u8 {
         },
         FURNACE => tex::T_STONE,
         BED => match dir {
-            2 => tex::T_WOOD_TOP,
-            _ => tex::T_WOOD_SIDE,
+            2 => tex::T_BED_FOOT,
+            3 => tex::T_PLANK,
+            _ => tex::T_BED_SIDE,
         },
-        WIRE => tex::T_COAL,  // dark dust stand-in
-        TORCH => tex::T_LAVA, // glowing red/orange
+        WIRE => tex::T_COAL,  // never meshed; the icon is T_I_WIRE
+        TORCH | RSTORCH => tex::T_TORCH, // never meshed; the icons are their own
+        LEVER => tex::T_COBBLE,
         PISTON => tex::T_WOOD_TOP,
         TNT => tex::T_TNT,               // red body with a white band
         WHEAT => tex::T_LEAVES,          // young crop: green
@@ -12910,7 +13017,7 @@ pub(crate) fn block_light(x: i32, y: i32, z: i32) -> i32 {
     unsafe {
         let mut i = 0;
         while i < EDIT_N {
-            if EDIT_B[i] == TORCH && EDIT_D[i] == d {
+            if kind_of(EDIT_B[i]) == TORCH && EDIT_D[i] == d {
                 let t = (EDIT_X[i] as i32 - x).abs()
                     + (EDIT_Y[i] as i32 - y).abs()
                     + (EDIT_Z[i] as i32 - z).abs();
@@ -12928,7 +13035,7 @@ pub(crate) fn block_light(x: i32, y: i32, z: i32) -> i32 {
                 let b = get_block_i32(x + dx, y + dy, z + dz);
                 if is_lava(b) || b == FIRE || b == LUMISTONE {
                     best = best.max(15 - dx.abs() - dy.abs() - dz.abs());
-                } else if b == TORCH {
+                } else if kind_of(b) == TORCH {
                     best = best.max(14 - dx.abs() - dy.abs() - dz.abs());
                 }
                 dx += 1;
@@ -13030,7 +13137,7 @@ const ARMOR_NAMES: [&str; 8] = [
 ];
 
 fn block_name(block: u8) -> &'static str {
-    match block {
+    match kind_of(block) {
         GRASS => "GRASS",
         DIRT => "DIRT",
         STONE => "STONE",
@@ -13101,7 +13208,9 @@ fn block_name(block: u8) -> &'static str {
         RAW_MEAT => "RAW MEAT",
         COOKED_MEAT => "STEAK",
         GUNPOWDER => "POWDER",
-        DOOR_C | DOOR_O => "DOOR",
+        DOOR_C => "DOOR",
+        RSTORCH => "RSTORCH",
+        LEVER => "LEVER",
         CACTUS => "CACTUS",
         CLAY => "CLAY",
         BRICK => "BRICK",
@@ -13114,10 +13223,9 @@ fn block_name(block: u8) -> &'static str {
 
 /// What a mined block yields. Grass gives dirt; leaves/fluids give nothing.
 fn drop_of(block: u8) -> u8 {
-    match block {
+    match kind_of(block) {
         GRASS => DIRT,
         STONE => COBBLE,  // mining smooth stone yields cobblestone (Java)
-        DOOR_O => DOOR_C, // breaking an open door yields the door
         STAIRS_E | STAIRS_S | STAIRS_W => STAIRS_N, // all four facings are one item
         TALL_GRASS => SEEDS, // harvesting grass gives seeds (Java), feeding farming
         LEAVES
@@ -13451,12 +13559,13 @@ fn furn_tick() {
 /// 0 breaks at once, -1 cannot be mined here (fluids, air, portals; bedrock
 /// is refused by layer). Flowers, crops, torches, fire and redstone are 0.
 fn block_hardness100(block: u8) -> i32 {
-    match block {
-        WIRE | TORCH | WHEAT | WHEAT_RIPE | SAPLING | FLOWER_R | FLOWER_Y | TALL_GRASS | FIRE
+    match kind_of(block) {
+        WIRE | TORCH | RSTORCH | WHEAT | WHEAT_RIPE | SAPLING | FLOWER_R | FLOWER_Y | TALL_GRASS | FIRE
         | SUGAR_CANE | TNT | EMBER_CAP => 0,
         LEAVES | SNOW | BED => 20,
         GLASS | LUMISTONE => 30,
         LADDER | CACTUS | CINDERSTONE => 40,
+        LEVER => 50,
         DIRT | SAND | SINK_SAND => 50,
         GRASS | CLAY => 60,
         WOOL => 80,
@@ -13464,7 +13573,7 @@ fn block_hardness100(block: u8) -> i32 {
         WOOD | PLANK | COBBLE | BRICK | FENCE => 200,
         SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W => 200, // cobblestone slab and stairs
         CHEST | CRAFT_TABLE => 250,
-        COAL_ORE | IRON_ORE | GOLD_ORE | DIAMOND_ORE | VOID_STONE | DOOR_C | DOOR_O => 300,
+        COAL_ORE | IRON_ORE | GOLD_ORE | DIAMOND_ORE | VOID_STONE | DOOR_C => 300,
         FURNACE => 350,
         ENCHANT => 500,
         OBSIDIAN => 5000,
@@ -13483,7 +13592,7 @@ const TOOL_SPEED: [i32; 5] = [1, 2, 4, 6, 8];
 /// obsidian diamond); a snow block needs a shovel. Everything else harvests
 /// by hand.
 fn can_harvest(p: &Player, block: u8) -> bool {
-    match block {
+    match kind_of(block) {
         STONE | COBBLE | BRICK | SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W | FURNACE
         | ENCHANT | CINDERSTONE | VOID_STONE | COAL_ORE | IRON_ORE | GOLD_ORE | DIAMOND_ORE
         | OBSIDIAN => p.pick >= mine_min_tier(block).max(1),
@@ -13528,7 +13637,7 @@ fn break_ticks(p: &Player, block: u8, h100: i32, wet_head: bool, grounded: bool)
 /// gold/diamond ore iron (3). Below tier, the block still breaks but drops
 /// nothing. ponytail: one generic tool, so tier stands in for tool class.
 fn mine_min_tier(block: u8) -> u8 {
-    match block {
+    match kind_of(block) {
         STONE | COBBLE | PISTON | FURNACE | COAL_ORE | ENCHANT => 1,
         IRON_ORE => 2,
         GOLD_ORE | DIAMOND_ORE => 3,
@@ -13603,11 +13712,11 @@ const TOOL_SWORD: u8 = 4;
 /// disagreed. Nobody noticed because the old bare-hands rule in `mine_speed`
 /// handed tool-less blocks a speed bonus that took stairs most of the way back.
 fn tool_for(block: u8) -> u8 {
-    match block {
+    match kind_of(block) {
         STONE | COBBLE | BRICK | OBSIDIAN | FURNACE | ENCHANT | SLAB | STAIRS_N | STAIRS_E
         | STAIRS_S | STAIRS_W | PISTON | CINDERSTONE | VOID_STONE | COAL_ORE
         | IRON_ORE | GOLD_ORE | DIAMOND_ORE => TOOL_PICK,
-        WOOD | PLANK | FENCE | CHEST | CRAFT_TABLE | DOOR_C | DOOR_O | LADDER | BED => TOOL_AXE,
+        WOOD | PLANK | FENCE | CHEST | CRAFT_TABLE | DOOR_C | LADDER | BED => TOOL_AXE,
         GRASS | DIRT | SAND | SINK_SAND | SNOW | CLAY => TOOL_SHOVEL,
         _ => TOOL_NONE,
     }

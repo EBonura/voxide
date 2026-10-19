@@ -18,6 +18,10 @@ lockstep = []
 # Headless UI captures only (src/fixture.rs): a stocked inventory and SELECT
 # to build a table/chest/furnace at the crosshair. Never ship.
 ui-fixture = []
+# Headless captures of the shaped blocks only (src/blocklab.rs): the first SELECT
+# builds a proving ground of doors, beds, torches, levers, ladders and dust, and
+# each later one moves the camera to the next view. Never ship.
+block-lab = []
 # Headless portal captures only (src/fixture.rs): SELECT builds two lit
 # portals (nether on X, void on Z) by the spawn and then steps through a fixed set
 # of views of them. Never ship.

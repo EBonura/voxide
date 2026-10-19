@@ -8,7 +8,7 @@
 //! only chunks that pass a cheap distance + horizontal-frustum cull.
 
 use crate::{
-    floor_div, Camera, AIR, BLOCK, CACTUS, CLAY, COAL_ORE, DIAMOND_ORE, DIRS, DIRT, DOOR_O,
+    floor_div, Camera, AIR, BLOCK, CACTUS, CLAY, COAL_ORE, DIAMOND_ORE, DIRS, DIRT,
     FAR_SIDE_Z, FAR_TREE_SIDE_Z, FAR_Z, FLOWER_R, FLOWER_Y, GOLD_ORE, GRASS, IRON_ORE, LAVA, LEAVES, PROJ_H, SAND,
     SAPLING, SNOW, STONE, TALL_GRASS, WATER, WHEAT, WHEAT_RIPE, WOOD,
 };
@@ -542,7 +542,7 @@ fn torch_lit(lx: usize, ly: usize, lz: usize) -> bool {
 
 #[inline]
 fn is_light_source(b: u8) -> bool {
-    b == TORCH || b == LUMISTONE || b == FIRE || is_lava(b)
+    crate::kind_of(b) == TORCH || b == LUMISTONE || b == FIRE || is_lava(b)
 }
 
 /// Light bucket for a chunk-local cell: lit by sky OR by a nearby source.
@@ -1799,7 +1799,9 @@ fn replay_edits(s: usize, cx: i32, cz: i32) {
             let y = unsafe { crate::EDIT_Y[i] as i32 };
             if y >= 0 && y < CH {
                 let idx = lidx((x - x0) as usize, y as usize, (z - z0) as usize);
-                rset(s, idx, unsafe { crate::EDIT_B[i] });
+                let b = crate::bstate::migrate(unsafe { crate::EDIT_B[i] });
+                rset(s, idx, b);
+                crate::redstone::note(x, y, z, b);
             }
         }
         i += 1;
@@ -3310,6 +3312,8 @@ pub fn fluid_reset() {
         FIRE_N = 0;
     }
     blast_reset();
+    // The redstone net is rebuilt from the replayed edits.
+    crate::redstone::reset();
 }
 
 /// Set a block without remeshing (for bulk apply, e.g. loading a save).
@@ -3545,7 +3549,7 @@ fn pack(
 /// (`is_cross_plant` alone was six comparisons a cell).
 ///   bit 0 MESHABLE  -- this block emits faces at all
 ///   bit 1 SEE_THRU  -- a neighbour of this kind leaves the face behind it visible
-static mut BCLASS: [u8; 128] = [0; 128];
+static mut BCLASS: [u8; 256] = [0; 256];
 const CLS_MESH: u8 = 1;
 const CLS_SEE: u8 = 2;
 /// Light source, cross plant or small block: the decode records these per
@@ -3555,17 +3559,17 @@ const CLS_SPECIAL: u8 = 4;
 fn init_block_class() {
     unsafe {
         let mut i = 0usize;
-        while i < 128 {
+        while i < 256 {
             let b = i as u8;
-            // An OPEN door is invisible (never meshed) but stays a real block so
-            // the pick ray can target it. Cross-sprite plants are the same: they
-            // render as X-billboards in the plant pass, never as cube faces.
-            let meshable = b != AIR && b != DOOR_O && !is_cross_plant(b) && !is_small_block(b);
+            // A cell no palette entry names (a corrupt save) is air.
+            let air = crate::kind_of(b) == AIR;
+            // Cross-sprite plants and shaped blocks (doors, beds, slabs, torches)
+            // render in the plant pass, never as cube faces.
+            let meshable = !air && !is_cross_plant(b) && !is_small_block(b);
             // A face shows against a SEE-THROUGH neighbour, not just air, so the
             // sea floor under water gets meshed and the ground under a plant
             // still draws.
-            let see =
-                b == AIR || is_water(b) || b == DOOR_O || is_cross_plant(b) || is_small_block(b);
+            let see = air || is_water(b) || is_cross_plant(b) || is_small_block(b);
             let special = is_light_source(b) || is_cross_plant(b) || is_small_block(b);
             BCLASS[i] = (meshable as u8) | ((see as u8) << 1) | ((special as u8) << 2);
             i += 1;
@@ -5956,7 +5960,7 @@ pub fn for_plants<F: FnMut(u8, i32, i32, i32)>(cam: &Camera, sprite_far: i32, mu
                         let lx = (e & 15) as i32;
                         let ly = ((e >> 4) & 63) as i32;
                         let lz = ((e >> 10) & 15) as i32;
-                        let b = ((e >> 14) & 127) as u8;
+                        let b = ((e >> 14) & 255) as u8;
                         let (wx, wz) = (ox + lx * BLOCK, oz + lz * BLOCK);
                         k += 1;
                         // A cross sprite farther than `sprite_far` on either axis is

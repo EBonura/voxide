@@ -17,7 +17,7 @@ const TILES_PER_ROW: usize = 16;
 // per tile stack one row apart, so 112 tiles reach y=479 and 128 would reach
 // y=511, the floor of VRAM. Everything here stays clear of the framebuffers
 // (x<320) and the font page (x=320).
-pub const TILE_COUNT: usize = 116;
+pub const TILE_COUNT: usize = 126;
 const ATLAS_W: usize = TILE * TILES_PER_ROW; // 256 texels wide
 
 // Tile indices into the shared page. Row 0 = tiles 0..15, row 1 = 16..31.
@@ -196,6 +196,22 @@ pub const T_I_HELMET: u8 = 110;
 pub const T_I_LEGGINGS: u8 = 111;
 pub const T_I_BOOTS: u8 = 112;
 const ICON2_LAST: u8 = T_I_BOOTS;
+
+// Tiles for the shaped blocks (bstate.rs, shape.rs). Index 0 is transparent in
+// the ones that are not a whole square (panel gaps, dust, torch strips).
+pub const T_DOOR_LO: u8 = 113; // lower half of a door: two recessed panels
+pub const T_DOOR_UP: u8 = 114; // upper half: four window panes
+pub const T_BED_FOOT: u8 = 115; // top of the foot half: red blanket
+pub const T_BED_HEAD: u8 = 116; // top of the head half: blanket and pillow
+pub const T_BED_SIDE: u8 = 117; // sides and ends: blanket edge over a wooden frame
+pub const T_WIRE_DOT: u8 = 118; // dust with no neighbours, tinted by its power
+pub const T_WIRE_LINE: u8 = 119; // a run of dust across the cell
+pub const T_TORCH: u8 = 120; // torch strip (stick and flame), columns 7 and 8
+pub const T_RSTORCH: u8 = 121; // the same, lit red
+pub const T_RSTORCH_OFF: u8 = 122; // and dark
+pub const T_LADDER_W: u8 = 123; // ladder rails and rungs with see-through gaps
+pub const T_I_LEVER: u8 = 124; // lever icon
+pub const T_I_RSTORCH: u8 = 125; // redstone torch icon
 
 // VRAM placement: framebuffers own x<320, the font page sits at x=320, so the
 // next free 4-bit page column is x=384. CLUTs live in the band at y=256.
@@ -763,6 +779,66 @@ fn palette_for(tile: u8) -> [(u8, u8, u8); 16] {
                 ],
             );
         }
+        // ---- The shaped blocks. Index 0 stays (0,0,0): transparent where a
+        // tile is not a whole square.
+        T_DOOR_LO | T_DOOR_UP => {
+            fill(&mut p, 0, (176, 136, 86), (128, 94, 56), 8); // planks
+            p[8] = (96, 68, 40); // recess shadow
+            p[9] = (196, 158, 104); // recess light
+            p[10] = (84, 60, 36); // frame
+            p[11] = (60, 42, 26); // frame edge
+            p[12] = (190, 190, 198); // handle
+            p[13] = (64, 92, 124); // glass
+            p[14] = (150, 190, 220); // glass highlight
+            p[15] = (34, 48, 66); // glass edge
+        }
+        T_BED_FOOT | T_BED_HEAD | T_BED_SIDE => {
+            fill(&mut p, 0, (206, 52, 48), (150, 28, 30), 6); // blanket
+            p[6] = (120, 20, 24); // hem
+            p[7] = (230, 82, 70); // blanket light
+            p[8] = (238, 238, 244); // pillow
+            p[9] = (196, 198, 210); // pillow shade
+            p[10] = (170, 132, 84); // frame
+            p[11] = (112, 82, 50); // frame dark
+            p[12] = (80, 58, 36);
+        }
+        T_WIRE_DOT | T_WIRE_LINE => {
+            // Greys, tinted red by the power at draw time.
+            p[1] = (255, 255, 255);
+            p[2] = (214, 214, 214);
+            p[3] = (168, 168, 168);
+        }
+        T_TORCH | T_RSTORCH | T_RSTORCH_OFF | T_I_RSTORCH => {
+            p[1] = (160, 116, 64); // stick
+            p[2] = (108, 74, 40); // stick shade
+            p[3] = (70, 48, 26);
+            if tile == T_TORCH {
+                p[4] = (255, 236, 120); // flame
+                p[5] = (255, 176, 52);
+                p[6] = (232, 108, 28);
+            } else if tile == T_RSTORCH_OFF {
+                p[4] = (120, 36, 30);
+                p[5] = (88, 24, 22);
+                p[6] = (58, 16, 16);
+            } else {
+                p[4] = (255, 120, 96);
+                p[5] = (236, 52, 40);
+                p[6] = (170, 24, 24);
+            }
+            p[7] = (255, 255, 255);
+        }
+        T_LADDER_W => {
+            fill(&mut p, 1, (176, 136, 82), (104, 76, 44), 8);
+            p[9] = (60, 42, 26);
+        }
+        T_I_LEVER => {
+            p[1] = (176, 176, 182); // cobble base
+            p[2] = (120, 120, 126);
+            p[3] = (70, 70, 76);
+            p[4] = (170, 128, 78); // stick
+            p[5] = (110, 80, 46);
+            p[6] = (230, 230, 236);
+        }
         T_I_COAL..=T_I_BOW | T_I_BUCKET..=ICON2_LAST => {
             if let Some(icon) = icon_of(tile) {
                 let mut i = 0;
@@ -942,6 +1018,167 @@ fn texel(tile: u8, x: usize, y: usize) -> u8 {
     let xi = x as i32;
     let yi = y as i32;
     match tile {
+        T_DOOR_LO | T_DOOR_UP => {
+            let (xu, yu) = (x as i32, y as i32);
+            if xu == 0 || xu == 15 || yu == 0 || yu == 15 {
+                return if xu == 0 || yu == 0 { 10 } else { 11 };
+            }
+            if tile == T_DOOR_UP {
+                // Four panes in a cross of frame.
+                let px = (2..=6).contains(&xu) || (9..=13).contains(&xu);
+                let py = (2..=6).contains(&yu) || (9..=13).contains(&yu);
+                if px && py {
+                    let edge = xu == 2 || xu == 9 || yu == 2 || yu == 9;
+                    return if edge {
+                        15
+                    } else if (xu + yu) % 5 == 0 {
+                        14
+                    } else {
+                        13
+                    };
+                }
+                return 10 + (hash(xi, yi, 71) % 2) as u8;
+            }
+            // Two recessed panels, light on the upper left edges.
+            let panel = |y0: i32, y1: i32| (3..=12).contains(&xu) && yu >= y0 && yu <= y1;
+            if panel(2, 6) || panel(9, 13) {
+                let (a, b) = if panel(2, 6) { (2, 6) } else { (9, 13) };
+                return if xu == 3 || yu == a {
+                    8
+                } else if xu == 12 || yu == b {
+                    9
+                } else {
+                    clampu((hash(xi, yi, 72) % 6) as i32, 0, 6)
+                };
+            }
+            if (xu == 12 || xu == 13) && (yu == 7 || yu == 8) {
+                return 12; // handle
+            }
+            clampu((hash(xi, yi, 73) % 6) as i32 + 1, 0, 7)
+        }
+        T_BED_FOOT | T_BED_HEAD => {
+            let (xu, yu) = (x as i32, y as i32);
+            // The foot end is row 0, the head end row 15 (v runs with +z).
+            if xu == 0 || xu == 15 {
+                return 6;
+            }
+            if tile == T_BED_FOOT {
+                if yu == 0 || yu == 1 {
+                    return 6;
+                }
+            } else {
+                if yu == 15 {
+                    return 6;
+                }
+                if (2..=13).contains(&xu) && (8..=14).contains(&yu) {
+                    return if xu == 2 || yu == 14 { 9 } else { 8 };
+                }
+            }
+            if yu % 5 == 3 {
+                return 7;
+            }
+            clampu((hash(xi, yi, 74) % 5) as i32, 0, 5)
+        }
+        T_BED_SIDE => {
+            let yu = y as i32;
+            // Rows 7..15 are what a 9/16 bed wears: blanket over a frame.
+            if yu < 12 {
+                if yu == 11 {
+                    return 6;
+                }
+                return clampu((hash(xi, yi, 75) % 5) as i32, 0, 5);
+            }
+            if yu == 12 {
+                return 11;
+            }
+            if yu >= 14 && (x < 3 || x > 12) {
+                return 12;
+            }
+            10 + (hash(xi, yi, 76) % 2) as u8
+        }
+        T_WIRE_DOT => {
+            let (xu, yu) = (x as i32, y as i32);
+            let d = (xu - 8).abs().max((yu - 8).abs());
+            if d <= 2 {
+                if d == 2 {
+                    3
+                } else if (xu + yu) % 3 == 0 {
+                    2
+                } else {
+                    1
+                }
+            } else {
+                0
+            }
+        }
+        T_WIRE_LINE => {
+            let yu = y as i32;
+            if (6..=9).contains(&yu) {
+                if yu == 6 || yu == 9 {
+                    3
+                } else if (x + y) % 3 == 0 {
+                    2
+                } else {
+                    1
+                }
+            } else {
+                0
+            }
+        }
+        T_TORCH | T_RSTORCH | T_RSTORCH_OFF => {
+            // Columns 7 and 8 are the strip a torch box reads: flame rows 6..8
+            // (it gets its top from rows 6..8 too), then the stick.
+            if x == 7 || x == 8 {
+                if y >= 6 && y <= 8 {
+                    return if y == 6 { 6 } else if x == 7 { 5 } else { 4 };
+                }
+                if y >= 9 {
+                    return if x == 7 { 2 } else { 1 };
+                }
+            }
+            0
+        }
+        T_I_RSTORCH => {
+            // The icon: a stick up the middle with a bright head.
+            let (xu, yu) = (x as i32, y as i32);
+            if (7..=8).contains(&xu) && (6..=14).contains(&yu) {
+                return if xu == 7 { 2 } else { 1 };
+            }
+            let dh = (xu - 8).abs().max((yu - 4).abs());
+            if dh <= 2 {
+                return if dh == 2 { 6 } else if dh == 1 { 5 } else { 4 };
+            }
+            0
+        }
+        T_LADDER_W => {
+            let (xu, yu) = (x as i32, y as i32);
+            if xu == 2 || xu == 3 || xu == 12 || xu == 13 {
+                return if xu == 2 || xu == 12 { 1 + (hash(xi, yi, 77) % 3) as u8 } else { 5 + (hash(xi, yi, 78) % 3) as u8 };
+            }
+            if xu > 3 && xu < 12 && (yu % 5 == 1 || yu % 5 == 2) {
+                return if yu % 5 == 1 { 3 } else { 6 };
+            }
+            0
+        }
+        T_I_LEVER => {
+            let (xu, yu) = (x as i32, y as i32);
+            // Base plate at the bottom.
+            if (3..=12).contains(&xu) && (11..=14).contains(&yu) {
+                return if yu == 11 { 1 } else if yu == 14 { 3 } else { 2 };
+            }
+            // The handle leans up and to the right from the middle of the base.
+            let t = 11 - yu;
+            if t >= 0 && t <= 8 {
+                let hx = 7 + t / 2;
+                if xu == hx || xu == hx + 1 {
+                    return if xu == hx { 4 } else { 5 };
+                }
+            }
+            if (9..=11).contains(&xu) && (1..=3).contains(&yu) {
+                return 6; // knob
+            }
+            0
+        }
         T_I_COAL..=T_I_BOW | T_I_BUCKET..=ICON2_LAST => match icon_of(tile) {
             Some(icon) => {
                 let b = icon.px[y * 8 + x / 2];
