@@ -1,0 +1,402 @@
+# Placing the shaped blocks with the controller, on the world the game spawns
+# in: the BUILDING KIT cheat lays the hotbar out (stone, door, bed, lever, dust,
+# redstone torch, piston, TNT, bow), the crosshair is lowered onto the ground
+# and L2 places what is in hand.
+#
+#   psoxide-gate run tests/blocks.toml --disc build/gate/voxide.cue --no-hw
+#
+# What went down is read back from VOXIDE_GATE_STATE (offset 36 the cell last
+# placed, 40 its second cell, 44 the cell last used; cell ids are bstate.rs's:
+# a lower closed door facing +Z is 46 and its upper half 135, open 128; a bed's
+# foot is 20 and its head 146; a floor lever 103, thrown 162; a piston facing
+# the way the player looked, 170 and up) and from the frames.
+name = "voxide-blocks"
+title = "VoXide: placing a door, a bed, a lever and a piston by hand, and opening the door"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+max_ticks = 6000
+
+[card_fixture]
+path = "tests/cards/legacy-controls-seen.mcd"
+sha256 = "a0bc97a529dc33cdda8c438ec8e06a5ebc19e119fad846128d8827131c4a2f08"
+
+[[step]]
+label = "menu appears over the generated world"
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 208, w = 125, h = 18 }, min_count = 500 }
+timeout = 1500
+
+[[step]]
+label = "PLAY GAME goes directly to the world"
+press = ["cross"]
+hold = 4
+
+[[step]]
+label = "normal world ticks"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 12, op = "ge", value = 10 }
+timeout = 800
+
+[[step]]
+wait = 120
+
+# ---- the building kit (OPTIONS > GAMEPLAY > CHEATS > BUILDING KIT, the last row)
+
+[[step]]
+label = "Start opens the GAME MENU; OPTIONS is its second row"
+press = ["start"]
+hold = 4
+wait = 30
+
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+
+[[step]]
+label = "GAMEPLAY is the fourth row of OPTIONS, CHEATS the second of GAMEPLAY"
+press = ["down"]
+hold = 4
+wait = 12
+repeat = 3
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+label = "BUILDING KIT is the twelfth row"
+press = ["down"]
+hold = 4
+wait = 12
+repeat = 11
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "kit-menu"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "back out of CHEATS, GAMEPLAY, OPTIONS and the GAME MENU"
+press = ["circle"]
+hold = 4
+wait = 30
+repeat = 4
+
+[[step]]
+checkpoint = "kit-hotbar"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+# ---- a door -----------------------------------------------------------------
+
+[[step]]
+label = "look down at the ground ahead"
+rstick = [128, 255]
+hold = 20
+wait = 20
+
+[[step]]
+label = "the door is the second slot"
+press = ["r1"]
+hold = 4
+wait = 12
+
+[[step]]
+label = "L2 places it"
+press = ["l2"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "door-placed"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 36
+op = "eq"
+value = 46
+note = "a lower, closed door facing +Z (the way the player looks)"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 40
+op = "eq"
+value = 135
+note = "with its upper half over it"
+
+[[step]]
+label = "L2 on the door opens it"
+press = ["l2"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "door-opened"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 44
+op = "eq"
+value = 128
+note = "the door used is open"
+
+# ---- a bed, a lever, dust, a redstone torch and a piston, each on its own cell:
+# the view is turned a little between them so the crosshair lands on a fresh
+# cell of the ground.
+
+[[step]]
+label = "turn left and take the bed (third slot)"
+rstick = [0, 128]
+hold = 16
+wait = 10
+
+[[step]]
+press = ["r1"]
+hold = 4
+wait = 12
+
+[[step]]
+label = "L2 places it: foot where the crosshair is, head one cell on"
+press = ["l2"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "bed-placed"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 36
+op = "eq"
+value = 20
+note = "a bed's foot, facing +Z"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 40
+op = "eq"
+value = 146
+note = "and its head"
+
+[[step]]
+label = "turn right and take the lever (fourth slot)"
+rstick = [255, 128]
+hold = 32
+wait = 10
+
+[[step]]
+press = ["r1"]
+hold = 4
+wait = 12
+
+[[step]]
+label = "L2 places it on the ground"
+press = ["l2"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "lever-placed"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 36
+op = "eq"
+value = 103
+note = "a lever on the floor, off"
+
+[[step]]
+label = "L2 on the lever throws it"
+press = ["l2"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "lever-thrown"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 44
+op = "eq"
+value = 162
+note = "the lever used is on"
+
+[[step]]
+label = "turn right and take the dust (fifth slot)"
+rstick = [255, 128]
+hold = 16
+wait = 10
+
+[[step]]
+press = ["r1"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["l2"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "dust-placed"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 36
+op = "eq"
+value = 21
+note = "redstone dust"
+
+[[step]]
+label = "turn right and take the redstone torch (sixth slot)"
+rstick = [255, 128]
+hold = 16
+wait = 10
+
+[[step]]
+press = ["r1"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["l2"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "redstone-torch-placed"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 36
+op = "eq"
+value = 102
+note = "a redstone torch on the floor (its own block, not the light torch)"
+
+[[step]]
+label = "turn right and take the piston (seventh slot)"
+rstick = [255, 128]
+hold = 16
+wait = 10
+
+[[step]]
+press = ["r1"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["l2"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "piston-placed"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 36
+op = "eq"
+value = 174
+note = "a piston facing the player, back toward -X"
+
+# ---- the bow, by hand -------------------------------------------------------
+
+[[step]]
+label = "the bow is the ninth slot"
+press = ["r1"]
+hold = 4
+wait = 12
+repeat = 2
+
+[[step]]
+label = "look up to the horizon, so the arrow has somewhere to fly"
+rstick = [128, 0]
+hold = 22
+wait = 10
+
+[[step]]
+checkpoint = "bow-in-hand"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 60
+op = "eq"
+value = 64
+note = "64 arrows in the pack (the kit)"
+
+[[step]]
+label = "a tap of L2 is too weak a draw: no arrow leaves"
+press = ["l2"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "bow-tap"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 60
+op = "eq"
+value = 64
+note = "no arrow used"
+
+[[step]]
+label = "hold L2 for 60 ticks, a full draw, and let go"
+press = ["l2"]
+hold = 60
+wait = 6
+
+[[step]]
+checkpoint = "bow-loosed"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 60
+op = "eq"
+value = 63
+note = "one arrow used"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 56
+op = "ge"
+value = 1
+note = "and it is in flight"
+
+[[step]]
+label = "the arrow lands"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 56, op = "eq", value = 0 }
+timeout = 200

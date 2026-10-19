@@ -61,12 +61,19 @@ fn mount_for(nx: i32, ny: i32, nz: i32) -> Option<u8> {
 #[inline(never)]
 pub fn place_item(player: &Player, pick: &Pick) -> bool {
     let item = player.selected;
-    let (px, py, pz) = (pick.px, pick.py, pick.pz);
+    let hit = get_block_i32(pick.bx, pick.by, pick.bz);
+    // Tall grass gives way (Java's replaceable plants): aimed at, a block goes
+    // where the tuft is, on the ground under it, not in front of it.
+    let (px, py, pz, nx, ny, nz) = if hit == crate::TALL_GRASS {
+        (pick.bx, pick.by, pick.bz, 0, 1, 0)
+    } else {
+        (pick.px, pick.py, pick.pz, pick.px - pick.bx, pick.py - pick.by, pick.pz - pick.bz)
+    };
     if !replaceable(get_block_i32(px, py, pz)) {
         return false;
     }
-    let (nx, ny, nz) = (px - pick.bx, py - pick.by, pz - pick.bz);
-    let hit = get_block_i32(pick.bx, pick.by, pick.bz);
+    // What a thing hangs on is the block under a tuft, not the tuft.
+    let hit = if hit == crate::TALL_GRASS { get_block_i32(px, py - 1, pz) } else { hit };
     let facing = bstate::facing_of_yaw(player.yaw);
     // The cell that carries it: lower door half, the bed's foot, the lot.
     let mut second: Option<(i32, i32, i32, u8)> = None;

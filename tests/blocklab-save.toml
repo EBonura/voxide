@@ -1,0 +1,197 @@
+# A world with doors, dust and a lever, saved and loaded. The lab builds the
+# proving ground (src/blocklab.rs), the lever at the start of the circuit is
+# thrown by L2, the game is saved, the console reboots, the world is loaded
+# from the card, and what has to come back is read from VOXIDE_GATE_STATE and
+# the frame: every edit (2,880: the ground is a cobble floor and a clear room
+# over it), every emitter of redstone registered again, and the dust lit,
+# which the save does not store: the lever's switch is part of its cell, and the
+# power of the dust is worked out again from it.
+#
+#   make gate-disc FEATURES=block-lab
+#   psoxide-gate run tests/blocklab-save.toml --disc build/gate-lab/voxide.cue --no-hw
+name = "voxide-blocklab-save"
+title = "VoXide: shaped blocks and a lit circuit saved, rebooted and loaded"
+disc = ["build/gate-lab/voxide.cue"]
+symbols = ["build/gate-lab-symbols.txt"]
+max_ticks = 9000
+
+[card_fixture]
+path = "tests/cards/legacy-controls-seen.mcd"
+sha256 = "a0bc97a529dc33cdda8c438ec8e06a5ebc19e119fad846128d8827131c4a2f08"
+
+[[step]]
+label = "menu appears over the generated world"
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 208, w = 125, h = 18 }, min_count = 500 }
+timeout = 1500
+
+[[step]]
+label = "PLAY GAME goes directly to the world"
+press = ["cross"]
+hold = 4
+
+[[step]]
+label = "normal world ticks"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 12, op = "ge", value = 10 }
+timeout = 800
+
+[[step]]
+wait = 120
+
+[[step]]
+label = "SELECT builds the proving ground"
+press = ["select"]
+hold = 4
+wait = 900
+
+[[step]]
+label = "eight views on: the lever of the circuit is under the crosshair (view 7)"
+press = ["select"]
+hold = 4
+wait = 10
+repeat = 8
+
+[[step]]
+label = "L2 throws the lever"
+press = ["l2"]
+hold = 4
+wait = 20
+
+[[step]]
+label = "the dust carries it: the door and the piston are worked"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 72, op = "ge", value = 2 }
+timeout = 240
+
+[[step]]
+wait = 40
+
+[[step]]
+checkpoint = "before-save"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "eq"
+value = 2880
+note = "the ground's edits"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 48
+op = "eq"
+value = 17
+note = "17 emitters"
+
+[[step]]
+label = "open the GAME MENU and SAVE WORLD (the fourth row)"
+press = ["start"]
+hold = 4
+wait = 30
+
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+repeat = 3
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 900
+
+[[step]]
+checkpoint = "world-saved"
+golden = false
+[[step.assert]]
+kind = "card_writes"
+min_count = 1
+note = "committed card sectors"
+
+[[step]]
+card = { action = "snapshot" }
+
+[[step]]
+card = { action = "reboot" }
+
+[[step]]
+label = "fresh boot reaches PLAY GAME with the persisted card"
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 208, w = 125, h = 18 }, min_count = 500 }
+timeout = 1500
+
+[[step]]
+label = "PLAY GAME: straight into the world"
+press = ["cross"]
+hold = 4
+wait = 60
+
+[[step]]
+checkpoint = "fresh-before-load"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "eq"
+value = 0
+note = "a fresh boot has no edits yet"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 48
+op = "eq"
+value = 0
+note = "and no redstone"
+
+[[step]]
+press = ["start"]
+hold = 4
+wait = 30
+
+[[step]]
+label = "LOAD WORLD, the fifth row of the GAME MENU"
+press = ["down"]
+hold = 4
+wait = 12
+repeat = 4
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 600
+
+[[step]]
+label = "close the menu"
+press = ["circle"]
+hold = 4
+wait = 120
+
+[[step]]
+label = "look down at the floor, where the line of dust runs"
+rstick = [128, 255]
+hold = 12
+wait = 60
+
+[[step]]
+checkpoint = "world-reloaded"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 20
+op = "eq"
+value = 2880
+note = "every edit came back from the card"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 48
+op = "eq"
+value = 17
+note = "every emitter registered again"
+[[step.assert]]
+kind = "pixels"
+color = [240, 20, 10]
+color_tol = 60
+region = { x = 0, y = 0, w = 320, h = 240 }
+min_count = 300
+note = "the dust is lit again, worked out from the lever the save kept"

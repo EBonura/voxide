@@ -1,0 +1,496 @@
+# VoXide's shaped blocks, redstone, bed and bow on a proving ground. Built with
+#
+#   make gate-disc FEATURES=block-lab   (the lab disc: build/gate-lab/voxide.cue)
+#   psoxide-gate run tests/blocklab.toml --disc build/gate-lab/voxide.cue --no-hw
+#
+# The first SELECT builds the ground in front of the spawn (src/blocklab.rs); each
+# later SELECT stands the player at the next place and aims the crosshair at the
+# next target. Everything the journey then does is real input: L2 opens a door
+# and throws a lever, L2 held draws the bow and letting go shoots. What it checks
+# is read back from VOXIDE_GATE_STATE (cell ids of bstate.rs: a lower closed door
+# is 46, open 128, an upper closed half 135; a floor lever off 103, on 162; a
+# bed's foot 20 and head 146) and from the frames, which the report keeps as the
+# proof pictures.
+#
+# Gate state offsets used here: 36 cell last placed, 44 cell last used, 48
+# redstone emitters, 52 bow draw, 56 player arrows in flight, 60 arrows in the
+# pack, 64 sleep fade, 68 dust power under the crosshair, 72 doors, pistons and
+# TNT worked by redstone, 76 the world clock.
+name = "voxide-blocklab"
+title = "VoXide: doors, levers, dust, a piston, a bed and the bow on a proving ground"
+disc = ["build/gate-lab/voxide.cue"]
+symbols = ["build/gate-lab-symbols.txt"]
+max_ticks = 16000
+
+[card_fixture]
+path = "tests/cards/legacy-controls-seen.mcd"
+sha256 = "a0bc97a529dc33cdda8c438ec8e06a5ebc19e119fad846128d8827131c4a2f08"
+
+# ---- into the world -------------------------------------------------------
+
+[[step]]
+label = "menu appears over the generated world"
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 208, w = 125, h = 18 }, min_count = 500 }
+timeout = 1500
+
+[[step]]
+label = "PLAY GAME goes directly to the world"
+press = ["cross"]
+hold = 4
+
+[[step]]
+label = "normal world ticks"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 12, op = "ge", value = 10 }
+timeout = 800
+
+[[step]]
+wait = 120
+
+# ---- the ground -----------------------------------------------------------
+
+[[step]]
+label = "SELECT builds the proving ground (three thousand edits, remeshed in the background); every dust, lever and torch registers"
+press = ["select"]
+hold = 4
+wait = 900
+
+[[step]]
+checkpoint = "ground-built"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 48
+op = "eq"
+value = 17
+note = "17 emitters: 10 dust, 5 levers, 2 redstone torches"
+
+[[step]]
+label = "view 0: the whole ground"
+press = ["select"]
+hold = 4
+wait = 60
+
+[[step]]
+checkpoint = "overview"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+# ---- a door, by L2 --------------------------------------------------------
+
+[[step]]
+label = "view 1: the first door, closed, at the crosshair"
+press = ["select"]
+hold = 4
+wait = 40
+
+[[step]]
+checkpoint = "door-closed"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "L2 opens it"
+press = ["l2"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "door-open"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 44
+op = "eq"
+value = 128
+note = "the door under the crosshair is now a lower, open, facing-0 door"
+
+[[step]]
+label = "view 2: the panel of the open door, on the hinge edge"
+press = ["select"]
+hold = 4
+wait = 40
+
+[[step]]
+label = "L2 shuts it again"
+press = ["l2"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "door-shut-again"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 44
+op = "eq"
+value = 46
+note = "and a lower closed door again"
+
+# ---- the beds, torches, levers and ladder --------------------------------
+
+[[step]]
+label = "view 3: the beds from above"
+press = ["select"]
+hold = 4
+wait = 40
+
+[[step]]
+checkpoint = "beds"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "view 4: torches and levers on the wall"
+press = ["select"]
+hold = 4
+wait = 40
+
+[[step]]
+checkpoint = "torches-levers"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "view 5: the ladder"
+press = ["select"]
+hold = 4
+wait = 40
+
+[[step]]
+checkpoint = "ladder"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+# ---- redstone: a lever, dust, a door and a piston ------------------------
+
+[[step]]
+label = "view 6: the piston and the block in front of it, with no power yet"
+press = ["select"]
+hold = 4
+wait = 40
+
+[[step]]
+checkpoint = "piston-retracted"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "view 7: the lever of the circuit"
+press = ["select"]
+hold = 4
+wait = 40
+
+[[step]]
+checkpoint = "circuit-off"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 72
+op = "eq"
+value = 0
+note = "nothing worked yet"
+
+[[step]]
+label = "L2 throws the lever"
+press = ["l2"]
+hold = 4
+wait = 20
+
+[[step]]
+label = "the dust carries it: the door and the piston are worked"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 72, op = "ge", value = 2 }
+timeout = 240
+
+[[step]]
+checkpoint = "lever-thrown"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 44
+op = "eq"
+value = 128
+note = "the last door used is open (by the dust: a lower, open, facing-0 door)"
+
+[[step]]
+label = "view 8: aimed at the third dust of the line"
+press = ["select"]
+hold = 4
+wait = 40
+
+[[step]]
+checkpoint = "dust-powered"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 68
+op = "eq"
+value = 13
+note = "dust 15 beside the stone the lever powers, 14, then 13 at the third"
+
+[[step]]
+label = "view 9: the door the line ends at, opened by the dust"
+press = ["select"]
+hold = 4
+wait = 40
+
+[[step]]
+checkpoint = "door-by-dust"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "view 10: the piston again, extended, with the block it pushed"
+press = ["select"]
+hold = 4
+wait = 40
+
+[[step]]
+checkpoint = "piston-extended"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "view 11: dust climbing a step from a lever that is already on"
+press = ["select"]
+hold = 4
+wait = 40
+
+[[step]]
+checkpoint = "dust-step"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 68
+op = "eq"
+value = 14
+note = "the dust beside the lever has 15, the one a step up the block 14"
+
+# ---- a bed at night: sleep through to the morning -------------------------
+# The time is set to midnight from the cheat menu first (START, OPTIONS,
+# GAMEPLAY, CHEATS; TIME is the fifth row and starts on NOON, two to the right).
+
+[[step]]
+label = "START opens the GAME MENU; OPTIONS is its second row"
+press = ["start"]
+hold = 4
+wait = 30
+
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+
+[[step]]
+label = "GAMEPLAY is the fourth row of OPTIONS, CHEATS the second of GAMEPLAY"
+press = ["down"]
+hold = 4
+wait = 12
+repeat = 3
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["down"]
+hold = 4
+wait = 12
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+label = "TIME is the fifth row; NOON, then SUNSET, then MIDNIGHT"
+press = ["down"]
+hold = 4
+wait = 12
+repeat = 4
+
+[[step]]
+press = ["right"]
+hold = 4
+wait = 12
+repeat = 2
+
+[[step]]
+press = ["cross"]
+hold = 4
+wait = 30
+
+[[step]]
+label = "back out of CHEATS, GAMEPLAY, OPTIONS and the GAME MENU"
+press = ["circle"]
+hold = 4
+wait = 30
+repeat = 4
+
+[[step]]
+label = "view 12: the head of the first bed, at midnight"
+press = ["select"]
+hold = 4
+wait = 60
+
+[[step]]
+checkpoint = "bed-night"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 76
+op = "between"
+value = 54000
+value_hi = 55000
+note = "it is midnight (18,000 of Java's 24,000 ticks)"
+
+[[step]]
+label = "L2 on the bed: the respawn point is set and the player goes to sleep"
+press = ["l2"]
+hold = 4
+
+[[step]]
+label = "the screen fades to black"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 64, op = "eq", value = 4 }
+timeout = 300
+
+[[step]]
+checkpoint = "asleep"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [0, 0, 0]
+color_tol = 2
+region = { x = 20, y = 20, w = 280, h = 160 }
+min_count = 40000
+note = "the world is black (the HUD stays)"
+
+[[step]]
+label = "and comes back"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 64, op = "eq", value = 0 }
+timeout = 400
+
+[[step]]
+wait = 30
+
+[[step]]
+checkpoint = "morning"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 76
+op = "between"
+value = 72000
+value_hi = 73500
+note = "the clock ran on to the next sunrise"
+[[step.assert]]
+kind = "not_flat"
+
+# ---- the bow ----------------------------------------------------------------
+
+[[step]]
+label = "view 13: the bow in hand, looking back down the ground"
+press = ["select"]
+hold = 4
+wait = 40
+
+[[step]]
+checkpoint = "bow-in-hand"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 60
+op = "eq"
+value = 48
+note = "arrows in the pack before any shot"
+
+[[step]]
+label = "a tap of L2 is too weak a draw (under Java's 0.1): no arrow leaves"
+press = ["l2"]
+hold = 4
+wait = 30
+
+[[step]]
+checkpoint = "bow-tap"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 60
+op = "eq"
+value = 48
+note = "no arrow used"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 56
+op = "eq"
+value = 0
+note = "none in flight"
+
+[[step]]
+label = "hold L2 for 45 ticks (three quarters of a full draw) and let go"
+press = ["l2"]
+hold = 45
+wait = 6
+
+[[step]]
+checkpoint = "bow-loosed"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 60
+op = "eq"
+value = 47
+note = "one arrow used"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 56
+op = "ge"
+value = 1
+note = "and it is flying"
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 52
+op = "eq"
+value = 0
+note = "the draw is over"
+
+[[step]]
+label = "the arrow lands and is gone"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 56, op = "eq", value = 0 }
+timeout = 200
+
+[[step]]
+checkpoint = "bow-landed"
+golden = false
+[[step.assert]]
+kind = "not_flat"

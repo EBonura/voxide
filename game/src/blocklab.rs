@@ -186,10 +186,10 @@ fn take_bow(p: &mut Player) {
 
 /// Number of views. 0 overview, 1 the first door, 2 the same door open (aimed
 /// at its panel, now on the hinge edge), 3 the beds from above, 4 the torches
-/// and levers, 5 the ladder, 6 the lever of the circuit, 7 dust on the line, 8
-/// the door the circuit ends at, 9 the piston, 10 the dust step, 11 the head of
-/// the first bed, 12 the bow range.
-pub const VIEWS: usize = 13;
+/// and levers, 5 the ladder, 6 the piston (unpowered), 7 the lever of the
+/// circuit, 8 dust on the line, 9 the door the circuit ends at, 10 the piston
+/// again, 11 the dust step, 12 the head of the first bed, 13 the bow range.
+pub const VIEWS: usize = 14;
 
 pub fn select(p: &mut Player) {
     unsafe {
@@ -216,18 +216,18 @@ pub fn select(p: &mut Player) {
             }
             4 => stand(p, 3, 6, 4, 2, 8, 24),
             5 => stand(p, 6, 6, 8, 1, 8, 32),
+            // The piston and the block in front of it, before any power.
+            6 | 10 => stand(p, 7, 15, 4, 1, 15, 32),
             // The lever of the circuit, from two blocks off.
-            6 => stand(p, 1, 10, 1, 2, 12, 8),
+            7 => stand(p, 1, 10, 1, 2, 12, 8),
             // The dust at (4, 12), from beside the wall.
-            7 => stand(p, 4, 10, 4, 1, 12, 2),
+            8 => stand(p, 4, 10, 4, 1, 12, 2),
             // The door at the end of the line.
-            8 => stand(p, 8, 10, 8, 1, 12, 32),
-            // The piston and the block in front of it.
-            9 => stand(p, 7, 15, 4, 1, 15, 32),
+            9 => stand(p, 8, 10, 8, 1, 12, 32),
             // Dust climbing the step.
-            10 => stand(p, 13, 10, 14, 2, 12, 2),
+            11 => stand(p, 13, 10, 14, 2, 12, 2),
             // The head of the first bed, from two cells off.
-            11 => stand(p, 3, 6, 1, 1, 6, 20),
+            12 => stand(p, 3, 6, 1, 1, 6, 20),
             _ => {
                 p.x = block_to_world_x(ORIGIN.0 + 14) + BLOCK / 2;
                 p.z = block_to_world_z(ORIGIN.2 + 17) + BLOCK / 2;

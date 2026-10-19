@@ -13522,7 +13522,7 @@ fn chest_find_in(x: i32, y: i32, z: i32, d: u8) -> Option<usize> {
 /// blocks replace. The crosshair now aims through fluids, so this is what
 /// lets you build underwater.
 fn replaceable(b: u8) -> bool {
-    b == AIR || is_water(b) || is_lava(b)
+    b == AIR || is_water(b) || is_lava(b) || b == TALL_GRASS
 }
 
 /// Room for one more chest or furnace. The registries are fixed (16 chests,

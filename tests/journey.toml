@@ -432,14 +432,14 @@ kind = "ram"
 sym = "VOXIDE_GATE_STATE"
 offset = 4
 op = "eq"
-value = 1
+value = 2
 note = "gate-state layout version"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_GATE_STATE"
 offset = 8
 op = "eq"
-value = 36
+value = 80
 note = "gate-state byte length"
 [[step.assert]]
 kind = "ram"
