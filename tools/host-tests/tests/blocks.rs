@@ -18,6 +18,7 @@ pub const STAIRS_N: u8 = 63;
 pub const STAIRS_E: u8 = 64;
 pub const STAIRS_S: u8 = 65;
 pub const STAIRS_W: u8 = 66;
+pub const PISTON_HEAD: u8 = 104;
 pub const RSTORCH: u8 = 102;
 pub const LEVER: u8 = 103;
 pub const STONE: u8 = 3;

@@ -259,6 +259,11 @@ pub fn bow_shoot(power_q12: i32) {
 pub fn arrow_hit(dist_blocks: i32) {
     play(S_ARROW_HIT, vol_at(0x2800, dist_blocks), 100);
 }
+/// A piston pushes out or draws in (Java's piston sounds, here the block
+/// placing sound pitched down).
+pub fn piston(out: bool) {
+    play(S_PLACE, 0x3000, if out { 62 } else { 52 });
+}
 /// A lever is thrown: a click, higher switched on.
 pub fn lever(on: bool) {
     play(S_CLICK, 0x2800, if on { 120 } else { 92 });

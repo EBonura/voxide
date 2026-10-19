@@ -6,9 +6,10 @@
 
 use crate::bstate::{self, kind_of};
 use crate::{
-    get_block_i32, inv_take, is_lava, is_water, place_intersects_player, record_edit, replaceable,
-    set_block_i32, sfx, shape, world, Pick, Player, AIR, BED, CACTUS, DOOR_C, GLASS, LADDER, LAVA,
-    LEAVES, LEVER, RSTORCH, TORCH, WIRE, container_room, PLAYER_HALF_W, PLAYER_HEIGHT,
+    container_room, get_block_i32, inv_take, is_lava, is_pushable, is_water, place_intersects_player,
+    record_edit, replaceable, set_block_i32, sfx, shape, world, Pick, Player, AIR, BED, BLOCK,
+    CACTUS, DOOR_C, GLASS, LADDER, LAVA, LEAVES, LEVER, PISTON, PISTON_HEAD, PLAYER_HALF_W,
+    PLAYER_HEIGHT, RSTORCH, TORCH, WIRE,
 };
 
 /// A face something can be fixed to: a whole solid cube. Not leaves, glass or
@@ -107,6 +108,20 @@ pub fn place_item(player: &Player, pick: &Pick) -> bool {
             WIRE
         }
         crate::STAIRS_N => crate::stairs_for_yaw(player.yaw),
+        PISTON => {
+            // The face of a piston points at the player who set it (Java): the
+            // opposite of the nearest direction they are looking in, straight
+            // up or down past 45 degrees of pitch.
+            let sp = crate::sincos::sin_q12((player.pitch as i32 & 0x0FFF) as u16);
+            let look = if sp > 2896 {
+                2
+            } else if sp < -2896 {
+                3
+            } else {
+                [4u8, 0, 5, 1][facing as usize]
+            };
+            bstate::piston(look ^ 1, false)
+        }
         _ => item,
     };
     // The body must be clear of what goes in the cell(s).
@@ -140,6 +155,8 @@ pub fn place_item(player: &Player, pick: &Pick) -> bool {
     if let Some((x, y, z, b)) = second {
         put(x, y, z, b);
     }
+    // A door, piston or block of TNT set down beside power reacts at once.
+    crate::redstone::poke(px, py, pz);
     true
 }
 
@@ -243,6 +260,8 @@ pub fn after_break(x: i32, y: i32, z: i32, was: u8) {
         if bstate::is_bed(get_block_i32(ox, y, oz)) {
             pop(ox, y, oz, false);
         }
+    } else if matches!(crate::kind_of(was), PISTON | PISTON_HEAD) {
+        piston_partner(x, y, z, was);
     }
     settle(x, y, z);
     crate::redstone::mark_dirty();
@@ -279,7 +298,122 @@ pub fn settle(x: i32, y: i32, z: i32) {
 
 // ---- Pistons.
 
+/// The most blocks a piston pushes (Java's).
+const PUSH_LIMIT: i32 = 12;
+
+/// Is the player's body in this cell? (A piston will not shove a block into it.)
+fn body_in(x: i32, y: i32, z: i32) -> bool {
+    let (px, py, pz) = unsafe { crate::tnt::PLAYER_POS };
+    let (x0, y0, z0) = (x * BLOCK, y * BLOCK, z * BLOCK);
+    px + PLAYER_HALF_W > x0
+        && px - PLAYER_HALF_W < x0 + BLOCK
+        && py + PLAYER_HEIGHT > y0
+        && py < y0 + BLOCK
+        && pz + PLAYER_HALF_W > z0
+        && pz - PLAYER_HALF_W < z0 + BLOCK
+}
+
+/// A cell a pushed line can end in: nothing there, or something a piston
+/// destroys (fluid, a plant, dust, a torch, a lever, a ladder).
+fn gives_way(b: u8) -> bool {
+    b == AIR
+        || is_water(b)
+        || is_lava(b)
+        || world::is_cross_plant(b)
+        || shape::solid(b) == shape::Solid::No
+}
+
 /// A powered piston pushes (or lets go).
 pub fn drive_piston(x: i32, y: i32, z: i32, on: bool) {
-    let _ = (x, y, z, on);
+    let b = get_block_i32(x, y, z);
+    if crate::kind_of(b) != PISTON {
+        return;
+    }
+    let d = bstate::piston_dir(b);
+    if on && !bstate::piston_extended(b) {
+        extend(x, y, z, d);
+    } else if !on && bstate::piston_extended(b) {
+        retract(x, y, z, d);
+    }
+}
+
+/// Push the line of blocks in front of the piston one cell on and put the
+/// arm in the cell it leaves. Nothing moves if the line is longer than 12, ends
+/// in something a piston cannot move, or would shove a block into the player.
+fn extend(x: i32, y: i32, z: i32, d: u8) {
+    let (dx, dy, dz) = crate::DIRS[d as usize];
+    let (sx, sy, sz) = (x + dx, y + dy, z + dz);
+    // How many blocks are in the line, and what ends it.
+    let mut n = 0;
+    loop {
+        let c = get_block_i32(sx + dx * n, sy + dy * n, sz + dz * n);
+        if gives_way(c) {
+            break;
+        }
+        if !is_pushable(c) || n >= PUSH_LIMIT {
+            return;
+        }
+        n += 1;
+    }
+    // The cell the far end moves into, and the cells it fills on the way.
+    let mut i = 0;
+    while i <= n {
+        if body_in(sx + dx * i, sy + dy * i, sz + dz * i)
+            && shape::solid(get_block_i32(sx + dx * (i.max(1) - 1), sy + dy * (i.max(1) - 1), sz + dz * (i.max(1) - 1)))
+                != shape::Solid::No
+        {
+            return;
+        }
+        i += 1;
+    }
+    if crate::edit_blocked(sx + dx * n, sy + dy * n, sz + dz * n) {
+        crate::edit_full_toast();
+        return;
+    }
+    // What it ends in is destroyed, with its item.
+    let end = get_block_i32(sx + dx * n, sy + dy * n, sz + dz * n);
+    if end != AIR && !is_water(end) && !is_lava(end) {
+        pop(sx + dx * n, sy + dy * n, sz + dz * n, true);
+    }
+    // Far block first, so each lands on the cell the last one left.
+    let mut i = n;
+    while i > 0 {
+        let from = get_block_i32(sx + dx * (i - 1), sy + dy * (i - 1), sz + dz * (i - 1));
+        put(sx + dx * i, sy + dy * i, sz + dz * i, from);
+        i -= 1;
+    }
+    put(sx, sy, sz, bstate::piston_head(d));
+    put(x, y, z, bstate::piston(d, true));
+    sfx::piston(true);
+}
+
+/// Take the arm back in. The blocks it pushed stay where they are.
+fn retract(x: i32, y: i32, z: i32, d: u8) {
+    let (dx, dy, dz) = crate::DIRS[d as usize];
+    let h = get_block_i32(x + dx, y + dy, z + dz);
+    if crate::kind_of(h) == PISTON_HEAD && bstate::piston_dir(h) == d {
+        put(x + dx, y + dy, z + dz, AIR);
+    }
+    put(x, y, z, bstate::piston(d, false));
+    sfx::piston(false);
+}
+
+/// The other half of a piston that was broken: the arm of a body, the body of
+/// an arm (left retracted).
+fn piston_partner(x: i32, y: i32, z: i32, was: u8) {
+    let d = bstate::piston_dir(was);
+    let (dx, dy, dz) = crate::DIRS[d as usize];
+    if crate::kind_of(was) == PISTON {
+        if bstate::piston_extended(was) {
+            let h = get_block_i32(x + dx, y + dy, z + dz);
+            if crate::kind_of(h) == PISTON_HEAD {
+                pop(x + dx, y + dy, z + dz, false);
+            }
+        }
+    } else {
+        let p = get_block_i32(x - dx, y - dy, z - dz);
+        if bstate::piston_extended(p) {
+            put(x - dx, y - dy, z - dz, bstate::piston(d, false));
+        }
+    }
 }

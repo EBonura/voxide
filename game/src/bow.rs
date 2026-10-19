@@ -138,11 +138,11 @@ pub fn drawn_q12() -> i32 {
 
 /// Half the length of the bow, and how far its tips sit toward the archer when
 /// the string is straight (all in model units, about screen pixels).
-const HALF: i32 = 54;
-const TIP: i32 = 16;
+const HALF: i32 = 64;
+const TIP: i32 = 24;
 const SEG: usize = 6;
 /// The arrow's length.
-const ARROW: i32 = 88;
+const ARROW: i32 = 96;
 
 /// A model point to the screen: the model is turned about its vertical axis
 /// by `yaw`, rolled by `roll` (Q12 angles), seen from `D` units away at focal
@@ -189,9 +189,9 @@ pub fn draw_held(light: u32, tick: u32, kick: i32) {
     // with the idle bob and a kick back after the shot.
     let bob = (sin_q12(((tick * 18) & 0x0FFF) as u16) >> 10) as i32;
     let after = if !drawing && since < RING_TICKS { (RING_TICKS - since) as i32 } else { 0 };
-    let gx = 284 - 52 * p / 4096 + after / 2;
-    let gy = 170 + bob + kick - 26 * p / 4096 + after / 3;
-    let yaw = (4096 - (50 * 4096 / 360) + (14 * 4096 / 360) * p / 4096) as u16 & 0x0FFF;
+    let gx = 276 - 38 * p / 4096 + after / 2;
+    let gy = 178 + bob + kick - 28 * p / 4096 + after / 3;
+    let yaw = (4096 - (62 * 4096 / 360)) as u16 & 0x0FFF;
     let roll = (4096 + (10 * 4096 / 360)) as u16 & 0x0FFF;
     let shade = (60 + light * 90 / 255).min(150) as i32;
     let wood = |c: i32| -> u8 { (c * shade / 128).clamp(0, 255) as u8 };

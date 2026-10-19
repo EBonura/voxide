@@ -489,6 +489,25 @@ impl Net {
         count
     }
 
+    /// What the door, piston or TNT at (x, y, z) should do right now, judged
+    /// from the power beside it: for a block just set down.
+    pub fn cell_effect<W: Cells>(&self, w: &W, x: i32, y: i32, z: i32) -> Option<Effect> {
+        let cb = w.block(x, y, z);
+        if bstate::is_door(cb) {
+            let low = if bstate::door_upper(cb) { y - 1 } else { y };
+            let on = self.component_powered(w, x, low, z) || self.component_powered(w, x, low + 1, z);
+            // Only an unpowered door has nothing to do; a powered one opens.
+            return if on { Some(Effect::Door(x, y, z, true)) } else { None };
+        }
+        if kind_of(cb) == crate::PISTON && self.component_powered(w, x, y, z) {
+            return Some(Effect::Piston(x, y, z, true));
+        }
+        if kind_of(cb) == crate::TNT && self.component_powered(w, x, y, z) {
+            return Some(Effect::Tnt(x, y, z));
+        }
+        None
+    }
+
     /// An emitter at (x, y, z) switched: ask the things it can reach.
     pub fn react<W: Cells>(
         &self,
@@ -607,6 +626,19 @@ pub fn tick() {
             Effect::Tnt(x, y, z) => crate::ignite_tnt(x, y, z),
         }
         i += 1;
+    }
+}
+
+/// A door, piston or TNT was just set down at a cell: let it react to power
+/// already beside it.
+#[cfg(not(test))]
+pub fn poke(x: i32, y: i32, z: i32) {
+    let e = unsafe { NET.cell_effect(&Live, x, y, z) };
+    match e {
+        Some(Effect::Door(x, y, z, open)) => crate::blocks::set_door(x, y, z, open),
+        Some(Effect::Piston(x, y, z, on)) => crate::blocks::drive_piston(x, y, z, on),
+        Some(Effect::Tnt(x, y, z)) => crate::ignite_tnt(x, y, z),
+        None => {}
     }
 }
 

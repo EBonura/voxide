@@ -15,8 +15,8 @@
 use crate::bstate::{self, kind_of, state_of};
 use crate::tex;
 use crate::{
-    BED, DOOR_C, FENCE, LADDER, LEVER, RSTORCH, SLAB, STAIRS_E, STAIRS_N, STAIRS_S, STAIRS_W,
-    TORCH, WIRE,
+    BED, DOOR_C, FENCE, LADDER, LEVER, PISTON, PISTON_HEAD, RSTORCH, SLAB, STAIRS_E, STAIRS_N,
+    STAIRS_S, STAIRS_W, TORCH, WIRE,
 };
 
 pub const MAX_PARTS: usize = 3;
@@ -105,6 +105,23 @@ fn turned(p: Part, f: u8) -> Part {
     }
 }
 
+/// A part laid out facing up, turned to face `dir` (+X -X +Y -Y +Z -Z). Pistons
+/// are symmetric about their axis, so a swap of axes does for a turn.
+fn aimed(p: Part, dir: u8) -> Part {
+    let [x0, y0, z0, x1, y1, z1] = p.b;
+    let t = p.tile;
+    // Faces: 0 +X, 1 -X, 2 +Y, 3 -Y, 4 +Z, 5 -Z.
+    let (b, tile) = match dir {
+        2 => return p,
+        3 => ([x0, 16 - y1, z0, x1, 16 - y0, z1], [t[0], t[1], t[3], t[2], t[4], t[5]]),
+        4 => ([x0, z0, y0, x1, z1, y1], [t[0], t[1], t[4], t[5], t[2], t[3]]),
+        5 => ([x0, z0, 16 - y1, x1, z1, 16 - y0], [t[0], t[1], t[5], t[4], t[3], t[2]]),
+        0 => ([y0, x0, z0, y1, x1, z1], [t[2], t[3], t[0], t[1], t[4], t[5]]),
+        _ => ([16 - y1, x0, z0, 16 - y0, x1, z1], [t[3], t[2], t[0], t[1], t[4], t[5]]),
+    };
+    Part { b, tile, uv: p.uv, turn: 0 }
+}
+
 fn push(out: &mut [Part; MAX_PARTS], n: &mut usize, p: Part) {
     if *n < MAX_PARTS {
         out[*n] = p;
@@ -188,6 +205,22 @@ pub fn parts(b: u8, out: &mut [Part; MAX_PARTS]) -> usize {
             let p = part([0, 0, 0, 16, 16, 2], [NO_TILE, NO_TILE, NO_TILE, NO_TILE, t, t]);
             push(out, &mut n, turned(p, bstate::ladder_facing(b)));
         }
+        PISTON | PISTON_HEAD => {
+            // Laid out facing up: a stone body and a wooden face plate, or for the
+            // arm, the plate and a shaft back to the piston.
+            let d = bstate::piston_dir(b);
+            let body = all(tex::T_COBBLE);
+            let plate = [tex::T_WOOD_SIDE, tex::T_WOOD_SIDE, tex::T_PLANK, tex::T_COBBLE, tex::T_WOOD_SIDE, tex::T_WOOD_SIDE];
+            if k == PISTON {
+                push(out, &mut n, aimed(part([0, 0, 0, 16, 12, 16], body), d));
+                if !bstate::piston_extended(b) {
+                    push(out, &mut n, aimed(part([0, 12, 0, 16, 16, 16], plate), d));
+                }
+            } else {
+                push(out, &mut n, aimed(part([0, 12, 0, 16, 16, 16], plate), d));
+                push(out, &mut n, aimed(part([6, 0, 6, 10, 12, 10], all(tex::T_WOOD_SIDE)), d));
+            }
+        }
         WIRE => {
             // Only the box the crosshair aims at; dust is drawn by its own pass.
             push(out, &mut n, part([0, 0, 0, 16, 1, 16], all(NO_TILE)));
@@ -208,7 +241,7 @@ const fn is_shape_kind(k: u8) -> bool {
     matches!(
         k,
         SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W | FENCE | DOOR_C | BED | TORCH | RSTORCH
-            | LEVER | LADDER | WIRE
+            | LEVER | LADDER | WIRE | PISTON | PISTON_HEAD
     )
 }
 
@@ -216,7 +249,9 @@ const fn is_shape_kind(k: u8) -> bool {
 #[inline]
 pub fn solid(b: u8) -> Solid {
     match kind_of(b) {
-        SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W | DOOR_C | BED => Solid::Parts,
+        SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W | DOOR_C | BED | PISTON | PISTON_HEAD => {
+            Solid::Parts
+        }
         TORCH | RSTORCH | LEVER | LADDER | WIRE => Solid::No,
         // The fence stays a whole solid cell for the body (a fence is 1.5 high
         // in Java, which the player cannot jump), though it draws as a post.

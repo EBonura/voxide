@@ -123,6 +123,21 @@ const VIEWS: [(i32, i32, i32, i32); 8] = [
     (2, 14, 0x800, -200), // looking back down the line
 ];
 
+/// SELECT after the last view: take the bow in hand, looking down the range.
+fn take_bow(player: &mut Player) {
+    unsafe {
+        let mut i = 0;
+        while i < HOTBAR_VIS {
+            if HOTBAR[i] == BOW {
+                HOTBAR_SEL = i;
+                player.selected = BOW;
+            }
+            i += 1;
+        }
+    }
+    player.pitch = -60;
+}
+
 pub fn select(player: &mut Player) {
     let (bx, bz) = (world_to_block_x(player.x), world_to_block_z(player.z));
     unsafe {
@@ -135,7 +150,11 @@ pub fn select(player: &mut Player) {
             return;
         }
         let (ox, oy, oz) = ORIGIN;
-        let v = VIEWS[VIEW.min(VIEWS.len() - 1)];
+        if VIEW >= VIEWS.len() {
+            take_bow(player);
+            return;
+        }
+        let v = VIEWS[VIEW];
         // View 6 throws the lever the circuit starts at.
         if VIEW == 6 {
             blocks::use_lever(ox + 1, oy + 2, oz + 12);

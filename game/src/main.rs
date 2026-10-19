@@ -47,6 +47,7 @@ mod shape;
 mod sfx;
 mod sfxdata;
 mod slack;
+mod sleep;
 mod telemetry;
 mod tex;
 mod texdata;
@@ -317,6 +318,8 @@ const ARMOR_KINDS: u8 = 8;
 const RSTORCH: u8 = 102;
 /// A lever: a switch you throw, on a wall or the floor.
 const LEVER: u8 = 103;
+/// The arm of an extended piston: a block in the world, never an item.
+const PISTON_HEAD: u8 = 104;
 
 #[inline]
 fn is_portal(b: u8) -> bool {
@@ -3452,7 +3455,7 @@ fn main() {
         let paused = menu == MENU_OPTIONS || menu == MENU_CHEAT || menu == MENU_CONTROLS;
         if !paused && menu != MENU_DEAD {
             // In a GUI the pad drives the GUI, not the player.
-            let (spad, sprev, sl, sr) = if menu == 0 {
+            let (spad, sprev, sl, sr) = if menu == 0 && !sleep::active() {
                 (pad, previous, lstick, rstick)
             } else {
                 (ButtonState::NONE, ButtonState::NONE, (0, 0), (0, 0))
@@ -3485,6 +3488,7 @@ fn main() {
                 }
                 if player.health < hp_before {
                     sfx::hurt();
+                    sleep::cancel();
                 }
                 if player.health <= 0 {
                     // Death: hold on the YOU DIED screen; CROSS respawns.
@@ -3515,6 +3519,17 @@ fn main() {
         // and the day below take sim_n as well.
         if world_tick(&mut player, &mut portal_dwell, if paused { 0 } else { sim_n }) {
             portal_travel(&mut player, &mut fb, &font);
+        }
+        sleep::tick(sim_n);
+        if sleep::take_skip() {
+            // In the dark, the night is over: Java resets the weather cycle
+            // when a night is slept through in rain (ServerLevel.resetWeatherCycle),
+            // and only the world clock skips (`frame` keeps counting the
+            // frames that actually happened).
+            if weather::raining() {
+                weather::sleep_clear();
+            }
+            day += DAY_LEN - day % DAY_LEN;
         }
 
         if VISTA_VIEW {
@@ -3562,7 +3577,7 @@ fn main() {
         if menu != 0 {
             bow::reset();
         }
-        if menu == 0 {
+        if menu == 0 && !sleep::active() {
             // "Use" is ONE button, L2, as on Bedrock: a mob in front takes it
             // first (bone tames a wolf, wheat trades with a villager), then the
             // block under the crosshair (chest, furnace, bed, enchant table,
@@ -3636,24 +3651,7 @@ fn main() {
                     }
                 } else if bstate::is_bed(tb) {
                     used = true;
-                    // Sleep: set the respawn point here; at night, skip to morning.
-                    unsafe {
-                        RESPAWN_BX = pick.bx;
-                        RESPAWN_BZ = pick.bz;
-                    }
-                    let dt = day % DAY_LEN;
-                    if bed_time(dt) {
-                        // Java resets the weather cycle when the night is
-                        // slept through in rain (ServerLevel.resetWeatherCycle).
-                        if weather::raining() {
-                            weather::sleep_clear();
-                        }
-
-                        // Only the world clock skips. `frame` keeps counting
-                        // the frames that actually happened.
-                        day += DAY_LEN - dt;
-                    }
-                    sfx::confirm();
+                    use_bed(pick.bx, pick.by, pick.bz, day);
                 } else if tb == ENCHANT {
                     used = true;
                     // Spend XP levels at the table. Java rolls a random
@@ -5010,6 +5008,8 @@ fn menu_button_now(font: &FontAtlas, y: i16, label: &str, sel: bool, enabled: bo
 fn reset_game_state() {
     tut_reset();
     weather::reset();
+    sleep::cancel();
+    bow::reset();
     unsafe {
         let mut i = 0;
         while i < BLOCK_KINDS {
@@ -6978,6 +6978,11 @@ fn draw_held_item(selected: u8, tool: (u8, u8), tick: u32, swing: i32) {
     // lit fist under the block; drawn first so the block sits on the hand.
     let (wx, wy) = (cx + 6, cyt + h - 2); // wrist, tucked behind the block
     let al = unsafe { LIGHT } as u32;
+    if selected == BOW {
+        // The bow first, so the fist closes over its grip. It is a small 3D
+        // model with a string and an arrow, not a flat icon (bow.rs).
+        bow::draw_held(al * 2, tick, unsafe { BOW_KICK });
+    }
     let arm = |c: u32| ((c * (48 + al * 80 / 128)) / 128).clamp(20, 255) as u8;
     // The arm used to be two flat skin quads meeting at a hard diagonal with no
     // sleeve and no outline, which a blind comparison called "a flat untextured
@@ -7085,9 +7090,7 @@ fn draw_held_item(selected: u8, tool: (u8, u8), tick: u32, swing: i32) {
     }
     let l = unsafe { LIGHT } as u32;
     if selected == BOW {
-        // Held as a bow with a string and an arrow, not a flat icon.
-        bow::draw_held(l * 2, tick, unsafe { BOW_KICK });
-        return;
+        return; // drawn under the arm, above
     }
     if held_flat(selected) {
         // Java holds items, and the blocks whose item form is a sprite
@@ -11958,6 +11961,24 @@ const MC_LABEL_OFF: (u8, u8, u8) = (0x9E, 0x9E, 0x9E);
 /// Half-blend black over the whole frame. Vanilla darkens the world rather than
 /// hiding it behind an opaque panel, and the frozen world is still legible
 /// through it.
+/// The screen going dark and light again around a night's sleep (sleep.rs):
+/// half, three quarters, seven eighths, black, by stacking the half blend.
+fn sleep_fade() {
+    let d = sleep::darkness();
+    if d == 0 {
+        return;
+    }
+    if d >= 4 {
+        rect(0, 0, SCREEN_W as i16, SCREEN_H as i16, 0, 0, 0);
+        return;
+    }
+    let mut k = 0;
+    while k < d {
+        dim_screen();
+        k += 1;
+    }
+}
+
 fn dim_screen() {
     let (w, h) = (SCREEN_W as i16, SCREEN_H as i16);
     ui_tri_blend([(0, 0), (w, 0), (0, h)], 0, 0, 0);
@@ -12201,6 +12222,7 @@ fn screen_tint(player: &Player) {
 /// tipped over first.
 #[inline(never)]
 fn draw_all_hud(font: &FontAtlas, player: Player, menu: u8, tool: (u8, u8)) {
+    sleep_fade();
     if menu == 0 {
         // Vanilla drops the crosshair whenever a GUI is up; ours used to sit in
         // the middle of every menu.
@@ -12487,6 +12509,30 @@ impl core::ops::Deref for Decimal3 {
     }
 }
 
+/// L2 on a bed: the respawn point is set beside it, and at night, with no
+/// monster near, the player goes to sleep (sleep.rs).
+#[inline(never)]
+fn use_bed(bx: i32, by: i32, bz: i32, day: u32) {
+    let (rx, rz) = sleep::respawn_beside(bx, by, bz);
+    unsafe {
+        RESPAWN_BX = rx;
+        RESPAWN_BZ = rz;
+    }
+    let msg = if !bed_time(day % DAY_LEN) {
+        "RESPAWN POINT SET"
+    } else if sleep::monsters_near(bx, by, bz) {
+        "NOT NOW, MONSTERS NEARBY"
+    } else {
+        sleep::begin();
+        "RESPAWN POINT SET"
+    };
+    unsafe {
+        EQUIP_MSG = msg;
+        EQUIP_T = 100;
+    }
+    sfx::confirm();
+}
+
 /// The bow, once a frame: draw, hold, loose (bow.rs). Out of line: the gameplay
 /// loop cannot take more.
 #[inline(never)]
@@ -12507,7 +12553,7 @@ fn bow_use(player: &mut Player, cam: &Camera, used: bool, pressed: bool, held: b
         }
         bow::Event::Drew | bow::Event::Cancel | bow::Event::None => {}
     }
-    unsafe { BOW_KICK = BOW_KICK.saturating_sub(1) };
+    unsafe { BOW_KICK = (BOW_KICK - 1).max(0) };
 }
 
 /// Frames of recoil left on the held bow after a shot.
@@ -12520,7 +12566,8 @@ fn is_pushable(b: u8) -> bool {
     b != AIR
         && !is_water(b)
         && !is_lava(b)
-        && !matches!(k, PISTON | CHEST | FURNACE | OBSIDIAN | ENCHANT | PORTAL | VOID_PORTAL)
+        && !bstate::piston_extended(b)
+        && !matches!(k, PISTON_HEAD | CHEST | FURNACE | OBSIDIAN | ENCHANT | PORTAL | VOID_PORTAL)
 }
 
 // ---- TNT: a block lit becomes an entity (tnt.rs); the blast's block side is
@@ -12541,7 +12588,7 @@ pub(crate) fn blast_resistance100(b: u8) -> i32 {
         CHEST | CRAFT_TABLE => 250,
         PLANK | FENCE | DOOR_C => 300,
         FURNACE => 350,
-        PISTON => 150,
+        PISTON | PISTON_HEAD => 150,
         LEVER => 50,
         WOOL => 80,
         LADDER | CACTUS | CINDERSTONE => 40,
@@ -13260,7 +13307,7 @@ fn block_name(block: u8) -> &'static str {
         BED => "BED",
         WIRE => "WIRE",
         TORCH => "TORCH",
-        PISTON => "PISTON",
+        PISTON | PISTON_HEAD => "PISTON",
         TNT => "TNT",
         WHEAT | WHEAT_RIPE | WHEAT_ITEM => "WHEAT",
         SEEDS => "SEEDS",
@@ -13304,7 +13351,8 @@ fn drop_of(block: u8) -> u8 {
         STONE => COBBLE,  // mining smooth stone yields cobblestone (Java)
         STAIRS_E | STAIRS_S | STAIRS_W => STAIRS_N, // all four facings are one item
         TALL_GRASS => SEEDS, // harvesting grass gives seeds (Java), feeding farming
-        LEAVES
+        PISTON_HEAD
+        | LEAVES
         | WATER
         | WATER_F1..=WATER_F7
         | LAVA
@@ -13645,7 +13693,7 @@ fn block_hardness100(block: u8) -> i32 {
         DIRT | SAND | SINK_SAND => 50,
         GRASS | CLAY => 60,
         WOOL => 80,
-        STONE | PISTON => 150,
+        STONE | PISTON | PISTON_HEAD => 150,
         WOOD | PLANK | COBBLE | BRICK | FENCE => 200,
         SLAB | STAIRS_N | STAIRS_E | STAIRS_S | STAIRS_W => 200, // cobblestone slab and stairs
         CHEST | CRAFT_TABLE => 250,
@@ -13714,7 +13762,7 @@ fn break_ticks(p: &Player, block: u8, h100: i32, wet_head: bool, grounded: bool)
 /// nothing. ponytail: one generic tool, so tier stands in for tool class.
 fn mine_min_tier(block: u8) -> u8 {
     match kind_of(block) {
-        STONE | COBBLE | PISTON | FURNACE | COAL_ORE | ENCHANT => 1,
+        STONE | COBBLE | PISTON | PISTON_HEAD | FURNACE | COAL_ORE | ENCHANT => 1,
         IRON_ORE => 2,
         GOLD_ORE | DIAMOND_ORE => 3,
         OBSIDIAN => 4, // diamond only, as in Java
@@ -13790,7 +13838,7 @@ const TOOL_SWORD: u8 = 4;
 fn tool_for(block: u8) -> u8 {
     match kind_of(block) {
         STONE | COBBLE | BRICK | OBSIDIAN | FURNACE | ENCHANT | SLAB | STAIRS_N | STAIRS_E
-        | STAIRS_S | STAIRS_W | PISTON | CINDERSTONE | VOID_STONE | COAL_ORE
+        | STAIRS_S | STAIRS_W | PISTON | PISTON_HEAD | CINDERSTONE | VOID_STONE | COAL_ORE
         | IRON_ORE | GOLD_ORE | DIAMOND_ORE => TOOL_PICK,
         WOOD | PLANK | FENCE | CHEST | CRAFT_TABLE | DOOR_C | LADDER | BED => TOOL_AXE,
         GRASS | DIRT | SAND | SINK_SAND | SNOW | CLAY => TOOL_SHOVEL,

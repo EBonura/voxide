@@ -12,7 +12,7 @@
 //!   run-length store, the edit log, the save, a piston push and a blast with
 //!   no side table to keep in step;
 //! - everything that only cares *which* block this is calls `kind_of`;
-//! - the id space is the only price: 58 of the 128 spare ids at the moment.
+//! - the id space is the only price: 74 of the 128 spare ids at the moment.
 //!
 //! Only state that has to survive a save lives here. Derived state (the power
 //! a redstone wire carries, whether a redstone torch is lit) is recomputed by
@@ -21,7 +21,7 @@
 //! Plain data with no dependencies beyond the kind constants, so the host
 //! tests include this file as it is.
 
-use crate::{BED, DOOR_C, LADDER, LEVER, RSTORCH, TORCH};
+use crate::{BED, DOOR_C, LADDER, LEVER, PISTON, PISTON_HEAD, RSTORCH, TORCH};
 
 /// First id past the kinds.
 pub const EXT0: u8 = 128;
@@ -33,7 +33,7 @@ pub struct Family {
     pub states: u8,
 }
 
-pub const FAMILIES: [Family; 6] = [
+pub const FAMILIES: [Family; 8] = [
     // bit 0 open, bits 1..2 facing, bit 3 upper half
     Family { kind: DOOR_C, states: 16 },
     // bits 0..1 facing (the way from the foot to the head), bit 2 head
@@ -45,6 +45,10 @@ pub const FAMILIES: [Family; 6] = [
     Family { kind: LEVER, states: 10 },
     // 0..3 facing (the way the panel looks, away from its wall)
     Family { kind: LADDER, states: 4 },
+    // direction (see `piston`) + 6 when extended
+    Family { kind: PISTON, states: 12 },
+    // the head of an extended piston, by direction
+    Family { kind: PISTON_HEAD, states: 6 },
 ];
 
 const NFAM: usize = FAMILIES.len();
@@ -225,6 +229,27 @@ pub fn bed_head(b: u8) -> bool {
 #[inline]
 pub fn bed_facing(b: u8) -> u8 {
     state_of(b) & 3
+}
+
+// ---- Pistons: a direction in the order of `crate::DIRS` (+X -X +Y -Y +Z -Z),
+// stored from up so that state 0, the kind itself, is a retracted piston facing up.
+
+#[inline]
+pub fn piston(dir: u8, extended: bool) -> u8 {
+    make(PISTON, (dir + 4) % 6 + if extended { 6 } else { 0 })
+}
+#[inline]
+pub fn piston_head(dir: u8) -> u8 {
+    make(PISTON_HEAD, (dir + 4) % 6)
+}
+/// The way a piston or its head faces.
+#[inline]
+pub fn piston_dir(b: u8) -> u8 {
+    (state_of(b) % 6 + 2) % 6
+}
+#[inline]
+pub fn piston_extended(b: u8) -> bool {
+    kind_of(b) == PISTON && state_of(b) >= 6
 }
 
 // ---- Wall-mounted things: torches, levers, ladders.
