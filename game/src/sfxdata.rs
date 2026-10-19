@@ -46,8 +46,10 @@ pub const S_HISS: usize = 21;
 pub const S_SPLASH: usize = 22;
 pub const S_EAT: usize = 23;
 pub const S_EXPLODE: usize = 24;
+pub const S_BOW: usize = 25;
+pub const S_ARROW_HIT: usize = 26;
 
-pub static SAMPLES: [Sample; 25] = [
+pub static SAMPLES: [Sample; 27] = [
     Sample {
         off: 0,
         rate: 22050,
@@ -173,4 +175,14 @@ pub static SAMPLES: [Sample; 25] = [
         rate: 11025,
         blocks: 453,
     }, // explode
+    Sample {
+        off: 86416,
+        rate: 22050,
+        blocks: 331,
+    }, // bow
+    Sample {
+        off: 91728,
+        rate: 22050,
+        blocks: 158,
+    }, // arrow_hit
 ];

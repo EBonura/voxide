@@ -14,7 +14,7 @@ use std::path::Path;
 const BLOCK_BYTES: usize = 16;
 
 /// Fixed order: the generated `S_*` consts index `SAMPLES`.
-pub const SOUNDS: [&str; 25] = [
+pub const SOUNDS: [&str; 27] = [
     "step_grass",
     "step_stone",
     "step_sand",
@@ -40,6 +40,8 @@ pub const SOUNDS: [&str; 25] = [
     "splash",
     "eat",
     "explode",
+    "bow",
+    "arrow_hit",
 ];
 
 /// The five SPU predictor filters as (k0, k1) in 1/64ths.

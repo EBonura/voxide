@@ -73,6 +73,7 @@ dependencies = [
 name = "voxide-host-tests"
 version = "0.1.0"
 dependencies = [
+ "psx-math",
  "psx-mc",
  "psx-pad",
  "psx-settings",

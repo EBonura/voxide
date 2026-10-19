@@ -16,15 +16,19 @@ extern crate psx_rt;
 mod blast;
 mod blocks;
 mod bonnie;
+mod bow;
 mod bstate;
 mod cheat;
 mod controls;
 mod craft;
+mod edits;
 mod equip;
 mod grid;
 mod hand;
 #[cfg(feature = "ui-fixture")]
 mod fixture;
+#[cfg(feature = "edit-lab")]
+mod edit_lab;
 #[cfg(feature = "block-lab")]
 mod blocklab;
 mod flame;
@@ -1810,107 +1814,93 @@ static mut HOTBAR: [u8; HOTBAR_VIS] = [AIR; HOTBAR_VIS];
 static mut HOTBAR_SEL: usize = 0;
 
 // Edited-block deltas vs the seeded terrain. This is not just the memory-card
-// payload any more: world::publish_chunk replays it into every chunk it
-// generates, which is what makes a build survive leaving the loaded ring.
+// payload: world::publish_chunk replays a chunk's edits into it as it is
+// generated, which is what makes a build survive leaving the loaded ring (a
+// chunk that leaves it is thrown away, so this is the only record a build has).
 //
-// 1024, up from 240. Chunks outside the 5x5 ring are thrown away rather than
-// stored, so this log is the ONLY record a build has, and 240 blocks is a hut.
-// The cost is 7 bytes each in RAM and 8 on the card, so 1024 is ~7 KiB and a
-// two-block save file.
-// ponytail: a flat log with a hard cap -- past 1024 edits new ones are simply
-// dropped and will not come back. Per-chunk delta stores are the real answer
-// and a much bigger change; do that when players hit this rather than before.
-pub const MAX_EDITS: usize = 1024;
-pub static mut EDIT_X: [i16; MAX_EDITS] = [0; MAX_EDITS];
-pub static mut EDIT_Y: [i16; MAX_EDITS] = [0; MAX_EDITS];
-pub static mut EDIT_Z: [i16; MAX_EDITS] = [0; MAX_EDITS];
-pub static mut EDIT_B: [u8; MAX_EDITS] = [0; MAX_EDITS];
-/// Which dimension the edit belongs to. All three share one coordinate space
-/// and one chunk ring, so without this the replay would stamp your overworld
-/// house into the Inferno.
-pub static mut EDIT_D: [u8; MAX_EDITS] = [0; MAX_EDITS];
-pub static mut EDIT_N: usize = 0;
+// edits.rs holds them per chunk, 4,096 of them. It used to be one flat log of
+// 1,024 that dropped every edit past the cap in silence, and a TNT chain's
+// craters reached it. Now a full store refuses the edit and says so.
+pub const MAX_EDITS: usize = edits::CAP;
+pub static mut EDITS: edits::Edits = edits::Edits::new();
 
-/// Where each edit sits in the log, by position: open addressing, slot value
-/// 0 empty, else log index + 1. A blast records hundreds of holes, and a scan
-/// of the whole log for each was the second-largest cost of its break phase.
-const EDIT_SLOTS: usize = 2048;
-static mut EDIT_HASH: [u16; EDIT_SLOTS] = [0; EDIT_SLOTS];
-
-#[inline(always)]
-fn edit_slot(x: i16, y: i16, z: i16, d: u8) -> usize {
-    let h = (x as u32)
-        .wrapping_mul(0x9E37_79B1)
-        .wrapping_add((z as u32).wrapping_mul(0x85EB_CA6B))
-        .wrapping_add(((y as u32) << 2 | d as u32).wrapping_mul(0xC2B2_AE35));
-    (h >> 21) as usize & (EDIT_SLOTS - 1)
+/// Edits held.
+pub fn edit_count() -> usize {
+    unsafe { EDITS.len() }
 }
 
-/// The log index of the edit at a position, or the empty slot it would take.
-#[inline(always)]
-fn edit_find(x: i16, y: i16, z: i16, d: u8) -> (usize, Option<usize>) {
-    unsafe {
-        let mut s = edit_slot(x, y, z, d);
-        loop {
-            let v = EDIT_HASH[s] as usize;
-            if v == 0 {
-                return (s, None);
-            }
-            let i = v - 1;
-            if EDIT_X[i] == x && EDIT_Y[i] == y && EDIT_Z[i] == z && EDIT_D[i] == d {
-                return (s, Some(i));
-            }
-            s = (s + 1) & (EDIT_SLOTS - 1);
-        }
-    }
-}
-
-/// Index the log's first `EDIT_N` entries (after a load wrote them in bulk);
-/// a position listed twice keeps its first entry, as the scan did.
-pub fn edit_index_rebuild() {
-    unsafe {
-        EDIT_HASH = [0; EDIT_SLOTS];
-        let mut i = 0;
-        while i < EDIT_N {
-            let (s, found) = edit_find(EDIT_X[i], EDIT_Y[i], EDIT_Z[i], EDIT_D[i]);
-            if found.is_none() {
-                EDIT_HASH[s] = (i + 1) as u16;
-            }
-            i += 1;
-        }
-    }
+/// Edits that still fit.
+pub fn edit_room() -> usize {
+    unsafe { EDITS.room() }
 }
 
 /// Forget every edit.
 pub fn edit_log_clear() {
-    unsafe {
-        EDIT_N = 0;
-        EDIT_HASH = [0; EDIT_SLOTS];
+    unsafe { EDITS.clear() };
+    torch_forget();
+}
+
+/// Would an edit of the cell at (x, y, z) be lost for want of room? A cell
+/// already edited always fits.
+pub fn edit_blocked(x: i32, y: i32, z: i32) -> bool {
+    unsafe { EDITS.room() == 0 && EDITS.get(world::dimension(), x, y, z).is_none() }
+}
+
+/// `edit_blocked` turned around, with the toast: may the player edit this cell?
+fn edit_ok(x: i32, y: i32, z: i32) -> bool {
+    if edit_blocked(x, y, z) {
+        edit_full_toast();
+        false
+    } else {
+        true
     }
 }
 
-/// Record a player block edit (last-write-wins per position; capped region).
-fn record_edit(wx: i32, wy: i32, wz: i32, b: u8) {
-    let (x, y, z) = (wx as i16, wy as i16, wz as i16);
-    let d = world::dimension();
+/// The toast a full store puts up when it refuses an edit.
+pub(crate) fn edit_full_toast() {
     unsafe {
-        let (slot, found) = edit_find(x, y, z, d);
-        if let Some(i) = found {
-            EDIT_B[i] = b;
-            redstone::note(wx, wy, wz, b);
-            return;
-        }
-        if EDIT_N < MAX_EDITS {
-            EDIT_X[EDIT_N] = x;
-            EDIT_Y[EDIT_N] = y;
-            EDIT_Z[EDIT_N] = z;
-            EDIT_B[EDIT_N] = b;
-            EDIT_D[EDIT_N] = d;
-            EDIT_HASH[slot] = (EDIT_N + 1) as u16;
-            EDIT_N += 1;
-        }
-        redstone::note(wx, wy, wz, b);
+        EQUIP_MSG = "WORLD EDIT LIMIT";
+        EQUIP_T = 100;
     }
+    sfx::blip();
+}
+
+/// Torches placed by the player, for mob-spawn light: the world is only read
+/// near the player, so the light of a torch farther off is found here. A ring:
+/// the oldest are forgotten past TORCHES, and only mob spawning notices.
+const TORCHES: usize = 64;
+static mut TORCH_POS: [(i16, i16, i16, u8); TORCHES] = [(0, 0, 0, 0); TORCHES];
+static mut TORCH_N: usize = 0;
+
+fn torch_forget() {
+    unsafe { TORCH_N = 0 };
+}
+
+fn torch_note(x: i32, y: i32, z: i32, d: u8) {
+    let t = (x as i16, y as i16, z as i16, d);
+    unsafe {
+        let mut i = 0;
+        while i < TORCH_N.min(TORCHES) {
+            if TORCH_POS[i] == t {
+                return;
+            }
+            i += 1;
+        }
+        TORCH_POS[TORCH_N % TORCHES] = t;
+        TORCH_N += 1;
+    }
+}
+
+/// Record a player block edit (last write wins per position). False when the
+/// store has no room for it.
+fn record_edit(wx: i32, wy: i32, wz: i32, b: u8) -> bool {
+    let d = world::dimension();
+    let ok = unsafe { EDITS.record(d, wx, wy, wz, b) };
+    if kind_of(b) == TORCH {
+        torch_note(wx, wy, wz, d);
+    }
+    redstone::note(wx, wy, wz, b);
+    ok
 }
 // RECIP[z] = (PROJ_H << 16) / z, so projection multiplies by 1/z instead of
 // dividing (R3000 div stalls ~36 cycles; projection is the render hot loop).
@@ -3569,6 +3559,9 @@ fn main() {
         }
 
         let mut mine_den: u32 = 0;
+        if menu != 0 {
+            bow::reset();
+        }
         if menu == 0 {
             // "Use" is ONE button, L2, as on Bedrock: a mob in front takes it
             // first (bone tames a wolf, wheat trades with a villager), then the
@@ -3730,7 +3723,13 @@ fn main() {
             if pick.hit && pad.is_held(button::R2) {
                 let tb = get_block_i32(pick.bx, pick.by, pick.bz);
                 let hard = block_hardness100(tb);
-                if hard >= 0 && pick.by != 0 {
+                if hard >= 0 && pick.by != 0 && edit_blocked(pick.bx, pick.by, pick.bz) {
+                    // The store is full: nothing may be broken that it cannot
+                    // remember. Said once per press, not every frame.
+                    if pad.pressed_since(previous, button::R2) {
+                        edit_full_toast();
+                    }
+                } else if hard >= 0 && pick.by != 0 {
                     let head = get_block_i32(
                         world_to_block_x(player.x),
                         world_to_block_y(player.y + EYE_HEIGHT),
@@ -3839,18 +3838,10 @@ fn main() {
                 mine_progress = 0;
             }
 
-            // Bow: tap L2 to loose an arrow along the look direction (needs no
-            // block target). Player arrows damage mobs, not the player.
-            if !used && player.selected == BOW && use_pressed {
-                if inv_take(ARROW) {
-                    let fx = (cam.sy * cam.cp) >> 12;
-                    let fy = cam.sp;
-                    let fz = (cam.cy * cam.cp) >> 12;
-                    mob::player_shoot(cam.x, cam.y, cam.z, fx, fy, fz);
-                    wear_item(&mut player, BOW);
-                    sfx::place(); // bow twang stand-in
-                }
-            }
+            // Bow: hold L2 to draw, let go to loose the arrow along the look
+            // direction (needs no block target; bow.rs has Java's rules).
+            // Player arrows damage mobs, not the player.
+            bow_use(&mut player, &cam, used, use_pressed, pad.is_held(button::L2), sim_n);
 
             // Feed: L2 on the animal under the crosshair with its food puts it
             // in love mode (two fed animals breed); meat heals a tamed wolf.
@@ -3875,6 +3866,7 @@ fn main() {
                     let below = get_block_i32(pick.px, pick.py - 1, pick.pz);
                     if (below == GRASS || below == DIRT)
                         && get_block_i32(pick.px, pick.py, pick.pz) == AIR
+                        && edit_ok(pick.px, pick.py, pick.pz)
                         && inv_take(SEEDS)
                     {
                         set_block_i32(pick.px, pick.py, pick.pz, WHEAT);
@@ -3887,6 +3879,7 @@ fn main() {
                     let below = get_block_i32(pick.px, pick.py - 1, pick.pz);
                     if (below == GRASS || below == DIRT)
                         && get_block_i32(pick.px, pick.py, pick.pz) == AIR
+                        && edit_ok(pick.px, pick.py, pick.pz)
                         && inv_take(SAPLING)
                     {
                         set_block_i32(pick.px, pick.py, pick.pz, SAPLING);
@@ -3948,7 +3941,7 @@ fn main() {
                     } else {
                         AIR
                     };
-                    if filled != AIR && inv_take(BUCKET) {
+                    if filled != AIR && edit_ok(pick.bx, pick.by, pick.bz) && inv_take(BUCKET) {
                         set_block_i32(pick.bx, pick.by, pick.bz, AIR);
                         record_edit(pick.bx, pick.by, pick.bz, AIR);
                         world::wake_fluid(pick.bx, pick.by, pick.bz);
@@ -3962,7 +3955,9 @@ fn main() {
                     } else {
                         LAVA
                     };
-                    if get_block_i32(pick.px, pick.py, pick.pz) == AIR && inv_take(player.selected)
+                    if get_block_i32(pick.px, pick.py, pick.pz) == AIR
+                        && edit_ok(pick.px, pick.py, pick.pz)
+                        && inv_take(player.selected)
                     {
                         set_block_i32(pick.px, pick.py, pick.pz, fluid);
                         record_edit(pick.px, pick.py, pick.pz, fluid);
@@ -4092,6 +4087,8 @@ fn main() {
             menu = 1;
             menu_sel = 0;
         }
+        #[cfg(feature = "edit-lab")]
+        edit_lab::tick(&mut player, frame);
         if PLACE_TEST && frame == 5 {
             // A row of the once-corrupted placeables 5 blocks ahead (+Z).
             let bx = world_to_block_x(player.x);
@@ -5674,7 +5671,7 @@ fn gate_snapshot(player: &Player) {
     unsafe {
         VOXIDE_GATE_STATE[3] = SIM_TICK;
         VOXIDE_GATE_STATE[4] = tnt::live_count();
-        VOXIDE_GATE_STATE[5] = EDIT_N as u32;
+        VOXIDE_GATE_STATE[5] = edit_count() as u32;
         VOXIDE_GATE_STATE[6] = world::blasts_pending() as u32;
         VOXIDE_GATE_STATE[7] = player.health as u32;
         VOXIDE_GATE_STATE[8] = world::blasts_completed();
@@ -6347,7 +6344,7 @@ fn update_player(
     if !fwd_now || (player.food <= 6 && !player.fly) {
         player.sprint_latch = false;
     }
-    let sprinting = !sneaking && player.sprint_latch && fwd_now;
+    let sprinting = !sneaking && player.sprint_latch && fwd_now && !bow::drawing();
     // Full speed for the medium, Q8 units a tick.
     let wet_now = in_water_body(player.x, player.y, player.z);
     let mut speed = if player.fly {
@@ -6386,8 +6383,10 @@ fn update_player(
     }
     player.sprinting = sprinting;
     // Q8 units a tick along each axis.
-    let forward = forward * speed / 127;
-    let strafe = strafe * speed / 127;
+    // Drawing a bow slows you to a fifth, as using any item does in Java.
+    let slow = if bow::drawing() { 5 } else { 1 };
+    let forward = forward * speed / 127 / slow;
+    let strafe = strafe * speed / 127 / slow;
 
     let sy = sincos::sin_q12(player.yaw);
     let cy = sincos::cos_q12(player.yaw);
@@ -7085,6 +7084,11 @@ fn draw_held_item(selected: u8, tool: (u8, u8), tick: u32, swing: i32) {
         return; // otherwise: just the arm, like the original
     }
     let l = unsafe { LIGHT } as u32;
+    if selected == BOW {
+        // Held as a bow with a string and an arrow, not a flat icon.
+        bow::draw_held(l * 2, tick, unsafe { BOW_KICK });
+        return;
+    }
     if held_flat(selected) {
         // Java holds items, and the blocks whose item form is a sprite
         // (torch, ladder, door, plants, dust, sugar cane), as a flat icon in
@@ -7730,6 +7734,62 @@ fn emit_face_box(
     emit_head_box_dir(cam, x0, y0, z0, x1, y1, z1, base, tile, dir, count);
 }
 
+/// An arrow in flight: a shaft along its velocity with a grey head, a thin
+/// strip on the screen between where its tail and its tip project.
+#[inline(never)]
+fn emit_arrow(cam: &Camera, at: (i32, i32, i32), v: (i32, i32, i32), count: &mut usize) {
+    let (vx, vy, vz) = (v.0 >> 8, v.1 >> 8, v.2 >> 8);
+    let len = psx_math::int32::isqrt_i32(vx * vx + vy * vy + vz * vz).max(1);
+    // A shaft 22 units long, the point at the arrow's own position.
+    let (dx, dy, dz) = (vx * 22 / len, vy * 22 / len, vz * 22 / len);
+    let Some(t) = project_world(cam, (at.0 - dx, at.1 - dy, at.2 - dz)) else {
+        return;
+    };
+    let Some(h) = project_world(cam, at) else {
+        return;
+    };
+    let (sx, sy) = ((h.x - t.x) as i32, (h.y - t.y) as i32);
+    let n = (sx.abs() + sy.abs()).max(1);
+    // A pixel and a half either side, two when it is close.
+    let w = if h.z < 6 * BLOCK { 2 } else { 1 };
+    let (px, py) = (-sy * w / n, sx * w / n);
+    let depth = (t.z + h.z) >> 1;
+    if depth <= 0 || depth >= FAR_Z || *count + 2 > MAX_MOB_QUADS {
+        return;
+    }
+    let (sr, _, _) = face_tint(2);
+    let s = sr as u32;
+    let shade = |c: (u32, u32, u32)| ((c.0 * s / 128) as u8, (c.1 * s / 128) as u8, (c.2 * s / 128) as u8);
+    // The head is the last fifth of the shaft.
+    let (mx, my) = (h.x as i32 - sx / 5, h.y as i32 - sy / 5);
+    let mut k = 0;
+    while k < 2 {
+        let (ax, ay, bx, by, col) = if k == 0 {
+            (t.x as i32, t.y as i32, mx, my, shade((150, 112, 66)))
+        } else {
+            (mx, my, h.x as i32, h.y as i32, shade((196, 196, 204)))
+        };
+        let e = if k == 0 { 0 } else { 1 };
+        let pk = [
+            ((ax + px) as i16, (ay + py) as i16),
+            ((bx + px * (1 + e)) as i16, (by + py * (1 + e)) as i16),
+            ((ax - px) as i16, (ay - py) as i16),
+            ((bx - px * (1 + e)) as i16, (by - py * (1 + e)) as i16),
+        ];
+        let packet = QuadFlat::new(pk, col.0, col.1, col.2);
+        unsafe {
+            MOB_QUADS[RENDER_ARENA][*count] = packet;
+            OT[RENDER_ARENA].insert(
+                depth_slot(depth - k),
+                &mut MOB_QUADS[RENDER_ARENA][*count] as *mut QuadFlat as *mut u32,
+                QuadFlat::WORDS,
+            );
+        }
+        *count += 1;
+        k += 1;
+    }
+}
+
 /// Render all live mobs as cuboid models into the OT./// Render all live mobs as cuboid models into the OT.
 #[inline(never)]
 fn render_mobs(cam: &Camera, tick: u32) {
@@ -7761,17 +7821,7 @@ fn render_mobs(cam: &Camera, tick: u32) {
             let dx = (ax - cam.x).abs();
             let dz = (az - cam.z).abs();
             if dx + dz <= FAR_Z + 4 * BLOCK {
-                emit_box(
-                    cam,
-                    ax - 5,
-                    ay - 5,
-                    az - 5,
-                    ax + 5,
-                    ay + 5,
-                    az + 5,
-                    (50, 38, 24),
-                    &mut count,
-                );
+                emit_arrow(cam, (ax, ay, az), mob::arrow_vel(j), &mut count);
             }
         }
         j += 1;
@@ -7785,7 +7835,7 @@ const CROSS_PLANTS: bool = true; // false = old cube rendering (A/B knob)
 /// Inside this squared distance a plant draws both diagonals; past it, one.
 /// 8 blocks -- beyond that a cross sprite is a few pixels wide.
 const PLANT_SINGLE_D2: i32 = (8 * BLOCK) * (8 * BLOCK);
-const MAX_PLANT_QUADS: usize = 256; // quads a frame across plants, shapes and dust; ponytail cap
+const MAX_PLANT_QUADS: usize = 192; // quads a frame across plants, shapes and dust; ponytail cap
 static mut PLANT_QUADS: [[QuadTexturedMaterial; MAX_PLANT_QUADS]; RENDER_ARENAS] =
     [[EMPTY_QUAD; MAX_PLANT_QUADS], [EMPTY_QUAD; MAX_PLANT_QUADS]];
 static mut PLANT_N: usize = 0;
@@ -12437,6 +12487,32 @@ impl core::ops::Deref for Decimal3 {
     }
 }
 
+/// The bow, once a frame: draw, hold, loose (bow.rs). Out of line: the gameplay
+/// loop cannot take more.
+#[inline(never)]
+fn bow_use(player: &mut Player, cam: &Camera, used: bool, pressed: bool, held: bool, ticks: u32) {
+    let usable = !used && unsafe { INV[ARROW as usize] } > 0;
+    match bow::update(player.selected == BOW, usable, pressed, held, ticks) {
+        bow::Event::Loose(power) => {
+            if inv_take(ARROW) {
+                let fx = (cam.sy * cam.cp) >> 12;
+                let fy = cam.sp;
+                let fz = (cam.cy * cam.cp) >> 12;
+                mob::player_shoot(cam.x, cam.y, cam.z, fx, fy, fz, power);
+                wear_item(player, BOW);
+                sfx::bow_shoot(power);
+                // The shot jolts the arm like a swing.
+                unsafe { BOW_KICK = 6 };
+            }
+        }
+        bow::Event::Drew | bow::Event::Cancel | bow::Event::None => {}
+    }
+    unsafe { BOW_KICK = BOW_KICK.saturating_sub(1) };
+}
+
+/// Frames of recoil left on the held bow after a shot.
+static mut BOW_KICK: i32 = 0;
+
 /// Can a piston move this block? Not another piston, not the things that
 /// hold state in the world outside the cell (chests, furnaces), not fluids.
 fn is_pushable(b: u8) -> bool {
@@ -12659,16 +12735,13 @@ fn regrow_from_edits() {
             SAP_T[k] = 0;
             k += 1;
         }
-        let mut i = 0;
-        while i < EDIT_N {
-            let (x, y, z) = (EDIT_X[i] as i32, EDIT_Y[i] as i32, EDIT_Z[i] as i32);
-            if EDIT_B[i] == WHEAT {
-                plant_crop_in(x, y, z, EDIT_D[i]);
-            } else if EDIT_B[i] == SAPLING {
-                plant_sapling_in(x, y, z, EDIT_D[i]);
+        EDITS.for_each(|d, x, y, z, b| {
+            if b == WHEAT {
+                plant_crop_in(x, y, z, d);
+            } else if b == SAPLING {
+                plant_sapling_in(x, y, z, d);
             }
-            i += 1;
-        }
+        });
     }
 }
 
@@ -13008,7 +13081,7 @@ fn day_light(t: u32, rain: i32, thunder: i32) -> u8 {
 /// Block light at a cell for mob spawning, Java's rule: an emitter's level
 /// less its taxicab distance (minecraft.wiki/w/Light#Block light), torches 14
 /// and lava, fire and lumistone (glowstone) 15. Player-placed torches are
-/// found in the edit log wherever they are; the other emitters only within
+/// found in a short list wherever they are; the other emitters only within
 /// 3 blocks, because scanning Java's full 15-block reach is 29^3 block reads
 /// per attempt. Walls do not stop the light here.
 pub(crate) fn block_light(x: i32, y: i32, z: i32) -> i32 {
@@ -13016,12 +13089,15 @@ pub(crate) fn block_light(x: i32, y: i32, z: i32) -> i32 {
     let mut best = 0;
     unsafe {
         let mut i = 0;
-        while i < EDIT_N {
-            if kind_of(EDIT_B[i]) == TORCH && EDIT_D[i] == d {
-                let t = (EDIT_X[i] as i32 - x).abs()
-                    + (EDIT_Y[i] as i32 - y).abs()
-                    + (EDIT_Z[i] as i32 - z).abs();
-                best = best.max(14 - t);
+        while i < TORCH_N.min(TORCHES) {
+            let (tx, ty, tz, td) = TORCH_POS[i];
+            if td == d {
+                let t = (tx as i32 - x).abs() + (ty as i32 - y).abs() + (tz as i32 - z).abs();
+                // Only a torch near enough to matter is worth looking up, and
+                // it may have been broken since.
+                if t < 14 && kind_of(get_block_i32(tx as i32, ty as i32, tz as i32)) == TORCH {
+                    best = best.max(14 - t);
+                }
             }
             i += 1;
         }

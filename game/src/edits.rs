@@ -10,7 +10,7 @@
 //!
 //! - a chunk's replay reads that chunk's edits and nothing else (it scanned the
 //!   whole log per generated chunk);
-//! - the store holds `CAP` edits (8,192) in about 100 KB, and when it is full
+//! - the store holds `CAP` edits (4,096) in about 50 KB, and when it is full
 //!   `record` says so, which the callers turn into a refused edit and a message
 //!   instead of a silent loss;
 //! - the card gets the edits grouped by chunk, 3 bytes an edit plus 7 for the
@@ -22,9 +22,9 @@
 //! Plain data with no dependencies, so the host tests include this file as it is.
 
 /// Edits held at once.
-pub const CAP: usize = 8192;
+pub const CAP: usize = 4096;
 /// Chunks that can hold edits at once.
-pub const CHUNKS: usize = 1024;
+pub const CHUNKS: usize = 512;
 const POS_SLOTS: usize = 2 * CAP;
 const CK_SLOTS: usize = 2 * CHUNKS;
 
@@ -300,6 +300,40 @@ impl Edits {
         at
     }
 
+    /// Check the bytes of a card layout without keeping anything: their length
+    /// if they are whole and fit the store (chunk count, edits in all, cells in
+    /// range), else None. A load asks first, so a damaged file changes nothing.
+    pub fn validate_card(src: &[u8]) -> Option<usize> {
+        let get16 = |at: usize| -> Option<usize> {
+            Some(*src.get(at)? as usize | (*src.get(at + 1)? as usize) << 8)
+        };
+        let chunks = get16(0)?;
+        if chunks > CHUNKS {
+            return None;
+        }
+        let (mut at, mut total) = (2, 0);
+        let mut c = 0;
+        while c < chunks {
+            let dim = *src.get(at)?;
+            let n = get16(at + 5)?;
+            at += CHUNK_REC;
+            total += n;
+            if dim > 2 || total > CAP || at + n * EDIT_REC > src.len() {
+                return None;
+            }
+            let mut k = 0;
+            while k < n {
+                if get16(at + k * EDIT_REC)? >= 64 * 256 {
+                    return None;
+                }
+                k += 1;
+            }
+            at += n * EDIT_REC;
+            c += 1;
+        }
+        Some(at)
+    }
+
     /// Read what `write_card` wrote, adding to this store (blocks go through
     /// `fix`, which maps a saved id to the cell it is now). None, with the store
     /// possibly part filled, if the bytes are short, name a cell outside a
@@ -408,7 +442,8 @@ mod tests {
     fn totals_match_between_the_chains_and_the_walk() {
         let mut e = Box::new(Edits::new());
         for i in 0..3000i32 {
-            e.record((i % 3) as u8, i * 7 % 500 - 250, i % 64, i * 13 % 500 - 250, (i % 120) as u8);
+            // A few dozen chunks per dimension, as a world with builds in it.
+            e.record((i % 3) as u8, i * 7 % 120 - 60, i % 64, i * 13 % 120 - 60, (i % 120) as u8);
         }
         let mut by_chunk = 0usize;
         e.for_each_chunk(|_, _, _, n| by_chunk += n, |_, _| {});
@@ -433,12 +468,15 @@ mod tests {
         assert_eq!(back.len(), e.len());
         e.for_each(|d, x, y, z, b| assert_eq!(back.get(d, x, y, z), Some(b)));
         // Short, and a cell outside the chunk.
+        assert_eq!(Edits::validate_card(&buf[..n]), Some(n));
+        assert_eq!(Edits::validate_card(&buf[..n - 1]), None);
         let mut again = Box::new(Edits::new());
         assert_eq!(again.read_card(&buf[..n - 1], |b| b), None);
         let mut bad = buf[..n].to_vec();
         bad[2 + 5] = 255;
         bad[2 + 6] = 255; // first chunk claims 65,535 edits
         assert_eq!(Box::new(Edits::new()).read_card(&bad, |b| b), None);
+        assert_eq!(Edits::validate_card(&bad), None);
     }
 
     #[test]

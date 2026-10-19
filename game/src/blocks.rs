@@ -125,6 +125,14 @@ pub fn place_item(player: &Player, pick: &Pick) -> bool {
             return false;
         }
     }
+    // A full store takes no new edits (an edit it could not keep would be lost
+    // the first time the chunk streams out).
+    if crate::edit_blocked(px, py, pz)
+        || second.map_or(false, |(x, y, z, _)| crate::edit_blocked(x, y, z))
+    {
+        crate::edit_full_toast();
+        return false;
+    }
     if !container_room(item) || !inv_take(item) {
         return false;
     }

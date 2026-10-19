@@ -46,6 +46,8 @@ pub mod shape;
 pub mod redstone;
 #[path = "../../../game/src/edits.rs"]
 pub mod edits;
+#[path = "../../../game/src/bow.rs"]
+pub mod bow;
 
 use redstone::{Cells, Effect, Net, EFFECTS};
 use std::collections::HashMap;

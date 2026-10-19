@@ -29,8 +29,8 @@ use crate::bstate::{self, kind_of, FDX, FDZ};
 use crate::{LEVER, RSTORCH, WIRE};
 
 /// Emitters registered at once.
-pub const CAP: usize = 512;
-const HASH: usize = 2048;
+pub const CAP: usize = 256;
+const HASH: usize = 1024;
 
 /// What the rules need to know of the world.
 pub trait Cells {

@@ -22,6 +22,9 @@ ui-fixture = []
 # builds a proving ground of doors, beds, torches, levers, ladders and dust, and
 # each later one moves the camera to the next view. Never ship.
 block-lab = []
+# Headless edit-persistence check only (src/edit_lab.rs): 1,500 edits, a walk
+# 150 blocks away and back, and a count of what survived. Never ship.
+edit-lab = []
 # Headless portal captures only (src/fixture.rs): SELECT builds two lit
 # portals (nether on X, void on Z) by the spawn and then steps through a fixed set
 # of views of them. Never ship.

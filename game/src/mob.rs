@@ -294,6 +294,8 @@ struct Arrow {
     vz: i32,
     life: u16,
     from_player: bool, // player arrows hit mobs; skeleton arrows hit the player
+    /// Loosed at a full draw: a critical hit (Java adds up to half again).
+    crit: bool,
 }
 
 const NO_ARROW: Arrow = Arrow {
@@ -306,6 +308,7 @@ const NO_ARROW: Arrow = Arrow {
     vz: 0,
     life: 0,
     from_player: false,
+    crit: false,
 };
 
 static mut MOBS: [Mob; CAP] = [DEAD; CAP];
@@ -1403,12 +1406,18 @@ pub fn set_tamed(list: &[Parked]) {
 
 #[inline]
 fn solid(wx: i32, wy: i32, wz: i32) -> bool {
-    let b = world::get(
-        world_to_block_x(wx),
-        world_to_block_y(wy),
-        world_to_block_z(wz),
-    );
-    b != crate::AIR && b != crate::WATER && b != crate::LAVA
+    let (bx, by, bz) = (world_to_block_x(wx), world_to_block_y(wy), world_to_block_z(wz));
+    let b = world::get(bx, by, bz);
+    if b == crate::AIR || b == crate::WATER || b == crate::LAVA {
+        return false;
+    }
+    // A shaped block stops a flying thing only where one of its boxes is: an
+    // arrow goes through an open door and past a torch.
+    if crate::is_small_block(b) {
+        return crate::shape::solid(b) != crate::shape::Solid::No
+            && crate::shape::point_in(b, bx, by, bz, wx, wy, wz);
+    }
+    true
 }
 
 fn free_arrow() -> Option<usize> {
@@ -1444,13 +1453,15 @@ fn shoot_arrow(sx: i32, sy: i32, sz: i32, px: i32, py: i32, pz: i32) {
             vz: dz * SKEL_Q8 / len,
             life: ARROW_LIFE,
             from_player: false,
+            crit: false,
         };
     }
 }
 
 /// Fire an arrow from the player's eye along a Q12 look direction (the camera
-/// forward vector, unit length). Player arrows damage mobs, not the player.
-pub fn player_shoot(ex: i32, ey: i32, ez: i32, dx: i32, dy: i32, dz: i32) {
+/// forward vector, unit length) at `power` (Q12, 4096 a full draw: bow.rs).
+/// Player arrows damage mobs, not the player.
+pub fn player_shoot(ex: i32, ey: i32, ez: i32, dx: i32, dy: i32, dz: i32, power: i32) {
     let a = match free_arrow() {
         Some(a) => a,
         None => return,
@@ -1461,11 +1472,12 @@ pub fn player_shoot(ex: i32, ey: i32, ez: i32, dx: i32, dy: i32, dz: i32) {
             x: ex << 8,
             y: ey << 8,
             z: ez << 8,
-            vx: dx * BOW_Q8 >> 12,
-            vy: dy * BOW_Q8 >> 12,
-            vz: dz * BOW_Q8 >> 12,
+            vx: (dx * BOW_Q8 >> 12) * power >> 12,
+            vy: (dy * BOW_Q8 >> 12) * power >> 12,
+            vz: (dz * BOW_Q8 >> 12) * power >> 12,
             life: ARROW_LIFE,
             from_player: true,
+            crit: power >= 4096,
         };
     }
 }
@@ -1608,7 +1620,7 @@ fn arrow_damage(a: &Arrow) -> i16 {
     let v2 = (a.vx >> 4) * (a.vx >> 4) + (a.vy >> 4) * (a.vy >> 4) + (a.vz >> 4) * (a.vz >> 4);
     let v = psx_math::int32::isqrt_i32(v2) << 4; // Q8 units a sim tick
     // blocks a game tick = v * 3 / (64 * 256); x 2, rounded up.
-    ((v * 6 + 16383) / 16384) as i16
+    crate::bow::damage_for(v) as i16
 }
 
 fn update_arrows(px: i32, py: i32, pz: i32) {
@@ -1633,10 +1645,17 @@ fn update_arrows(px: i32, py: i32, pz: i32) {
                 let (ax, ay, az) = (a.x >> 8, a.y >> 8, a.z >> 8);
                 if solid(ax, ay, az) {
                     dead = true;
+                    if a.from_player {
+                        crate::sfx::arrow_hit(((ax - px).abs() + (az - pz).abs()) / BLOCK);
+                    }
                 } else if a.from_player {
-                    // Player arrow: damage the first mob it overlaps.
-                    if arrow_hit_mob(ax, ay, az, arrow_damage(&a)) {
+                    // Player arrow: damage the first mob it overlaps. A full draw
+                    // crits for up to half again, Java's random extra.
+                    let base = arrow_damage(&a);
+                    let dmg = if a.crit { base + (rng() % (base as u32 / 2 + 2)) as i16 } else { base };
+                    if arrow_hit_mob(ax, ay, az, dmg) {
                         dead = true;
+                        crate::sfx::arrow_hit(((ax - px).abs() + (az - pz).abs()) / BLOCK);
                     }
                 } else if (ax - px).abs() < PLAYER_HALF_W + 8
                     && (az - pz).abs() < PLAYER_HALF_W + 8
@@ -1824,6 +1843,12 @@ pub const fn arrow_cap() -> usize {
 pub fn arrow_view(i: usize) -> (bool, i32, i32, i32) {
     let a = unsafe { ARROWS[i] };
     (a.alive, a.x >> 8, a.y >> 8, a.z >> 8)
+}
+
+/// An arrow's Q8 velocity (world units a sim tick), for drawing it along its flight.
+pub fn arrow_vel(i: usize) -> (i32, i32, i32) {
+    let a = unsafe { ARROWS[i] };
+    (a.vx, a.vy, a.vz)
 }
 
 /// Q8 velocity of length `speed` along (dx, dz). The length is the

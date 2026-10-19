@@ -9,6 +9,7 @@ description = "Host tests that compile slices of the no_std game source with rus
 [workspace]
 
 [dev-dependencies]
+psx-math = { path = "../../.psoxide/sdk/crates/psx-math" }
 psx-mc = { path = "../../.psoxide/sdk/crates/psx-mc" }
 psx-pad = { path = "../../.psoxide/sdk/crates/psx-pad" }
 psx-settings = { path = "../../.psoxide/sdk/crates/psx-settings" }

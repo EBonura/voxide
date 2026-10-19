@@ -13,7 +13,7 @@ use crate::sfxdata::{
     Sample, SAMPLES, SFX_CHUNK_ID, S_BARK, S_BONES, S_BREAK, S_CHEST, S_CHICKEN, S_CLICK,
     S_CONFIRM, S_COW, S_DIG_SOFT, S_DIG_STONE, S_DIG_WOOD, S_DOOR, S_EAT, S_EXPLODE, S_HISS,
     S_HURT, S_PIG, S_PLACE, S_SHEEP, S_SPLASH, S_STEP_GRASS, S_STEP_SAND, S_STEP_STONE,
-    S_STEP_WOOD, S_ZOMBIE,
+    S_STEP_WOOD, S_ZOMBIE, S_BOW, S_ARROW_HIT,
 };
 use psx_pack::cd::{self, SectorReader, SECTOR_WORDS};
 use psx_pack::SECTOR_BYTES;
@@ -249,6 +249,15 @@ pub fn sapper_hiss() {
 /// A door swings open or shut (Java pitches the shut sound a little lower).
 pub fn door(open: bool) {
     play(S_DOOR, 0x2800, if open { 100 } else { 84 });
+}
+/// The arrow leaves the bow: Java's pitch is 1 / (random x 0.4 + 1.2) + pull x
+/// 0.5, so a weak draw sounds lower and slower than a full one.
+pub fn bow_shoot(power_q12: i32) {
+    play(S_BOW, 0x3000, 85 + (power_q12.clamp(0, 4096) as u32) * 25 / 4096);
+}
+/// An arrow lands in a block or a creature.
+pub fn arrow_hit(dist_blocks: i32) {
+    play(S_ARROW_HIT, vol_at(0x2800, dist_blocks), 100);
 }
 /// A lever is thrown: a click, higher switched on.
 pub fn lever(on: bool) {

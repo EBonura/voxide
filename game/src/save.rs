@@ -11,10 +11,11 @@
 
 use crate::{
     Player, AIR, BLOCK_KINDS, CHEST, CHEST_D, CHEST_INV, CHEST_USED, CHEST_X, CHEST_Y, CHEST_Z,
-    EDIT_B, EDIT_D, EDIT_N, EDIT_X, EDIT_Y, EDIT_Z, FURNACE, FURN_D, FURN_FUEL, FURN_IN, FURN_IN_N,
+    EDITS, FURNACE, FURN_D, FURN_FUEL, FURN_IN, FURN_IN_N,
     FURN_OUT, FURN_OUT_N, FURN_PROG, FURN_USED, FURN_X, FURN_Y, FURN_Z, HOTBAR, HOTBAR_SEL,
     HOTBAR_VIS, INV, MAX_CHESTS, MAX_EDITS, MAX_FURNACES, PLACEABLE,
 };
+use crate::bstate;
 use psx_mc::{
     queue_frames, Card, CardJob, Error as McError, HardwareCard, Slot, Staged, Step,
     FORMAT_FRAMES,
@@ -28,7 +29,7 @@ const MAGIC_V1: [u8; 4] = *b"MCPX";
 /// VERSION and teaches `layout` where its sections moved; every older version
 /// still loads.
 const MAGIC: [u8; 4] = *b"VOXS";
-const VERSION: u16 = 12;
+const VERSION: u16 = 13;
 /// BIOS file names: region+product code + label, 20 ASCII chars max. A save
 /// is written under the name the card does not hold yet and the old one is
 /// deleted after it, so pulling the card mid-save leaves the last save
@@ -52,7 +53,8 @@ const V1_HDR: usize = V1_PROGRESS + 9; // armor u8, efficiency u8, xp i32, 3 too
 //  41 hotbar selection u8, 42 hotbar slots [u8; 9], 51 pad
 //  52 inventory counts [u16; BLOCK_KINDS], full 16-bit
 // 308 chest count u8, furnace count u8, edit count u16
-// 312 chests (CHEST_REC each), then furnaces (FURN_REC), then edits (EDIT_STRIDE)
+// 312 chests (CHEST_REC each), then furnaces (FURN_REC), then edits (EDIT_STRIDE;
+// grouped by chunk from version 13, see below)
 //
 // Version 3 inserts the player extras at 308 (sharpness u8, protection u8,
 // pad u16, food_items i32), moving the counts to 316 and the records to 320.
@@ -91,6 +93,12 @@ const V1_HDR: usize = V1_PROGRESS + 9; // armor u8, efficiency u8, xp i32, 3 too
 // 32 (the old whole-set armour tier) is written 0 from here on. A save from
 // before it loads wearing the pieces of the tier it had, its wear kept, and
 // swinging the sword if it owns one.
+// Version 13 stores the edits grouped by chunk (edits.rs): a u16 chunk count,
+// then per chunk its dimension u8, chunk x and z i16 and edit count u16, then
+// per edit its cell in the chunk u16 and its block u8. That is 3 bytes an edit
+// where the flat records took 8, and the store holds 4,096 of them. The edit
+// count in the header is the total, for a glance. A block byte is a cell of
+// the palette (bstate.rs), so a door's swing and a lever's switch are saved.
 const OFF_HOTBAR_SEL: usize = 41;
 const OFF_HOTBAR: usize = 42;
 const OFF_INV: usize = 52;
@@ -120,6 +128,8 @@ struct Layout {
     weather: bool,
     /// The equipment follows the weather.
     equip: bool,
+    /// The edits are grouped by chunk (version 13); before, flat 8-byte records.
+    grouped: bool,
 }
 
 const fn layout(version: u16) -> Layout {
@@ -129,6 +139,7 @@ const fn layout(version: u16) -> Layout {
     let world = version >= 10;
     let weather = version >= 11;
     let equip = version >= 12;
+    let grouped = version >= 13;
     let counts = OFF_EXTRA
         + if extras { 8 } else { 0 }
         + if hunger { 8 } else { 0 }
@@ -149,6 +160,7 @@ const fn layout(version: u16) -> Layout {
         world,
         weather,
         equip,
+        grouped,
     }
 }
 
@@ -208,11 +220,16 @@ const fn chest_rec(l: Layout) -> usize {
 const fn furn_rec(l: Layout) -> usize {
     l.pos + 10
 }
+/// The flat edit record of versions 1 to 12.
 const EDIT_STRIDE: usize = 8;
-const MAX_PAYLOAD: usize =
-    CUR.hdr + MAX_CHESTS * chest_rec(CUR) + MAX_FURNACES * furn_rec(CUR) + MAX_EDITS * EDIT_STRIDE;
+/// The flat records the older layouts could hold at most (their log was 1,024).
+const FLAT_MAX_EDITS: usize = 1024;
+const MAX_PAYLOAD: usize = CUR.hdr
+    + MAX_CHESTS * chest_rec(CUR)
+    + MAX_FURNACES * furn_rec(CUR)
+    + crate::edits::CARD_MAX;
 const _: () = assert!(HOTBAR_VIS <= OFF_INV - OFF_HOTBAR);
-const _: () = assert!(MAX_PAYLOAD >= V1_HDR + MAX_EDITS * EDIT_STRIDE);
+const _: () = assert!(MAX_PAYLOAD >= V1_HDR + FLAT_MAX_EDITS * EDIT_STRIDE);
 
 // Serialization scratch (BSS, not stack: the payload is ~12.5 KiB at most).
 static mut BUF: [u8; MAX_PAYLOAD] = [0; MAX_PAYLOAD];
@@ -448,22 +465,11 @@ fn serialize(p: &Player, day: u32) -> usize {
         }
         i += 1;
     }
-    let n = unsafe { EDIT_N }.min(MAX_EDITS);
+    let n = crate::edit_count().min(MAX_EDITS);
     buf[CUR.counts] = chests;
     buf[CUR.counts + 1] = furnaces;
     put_u16(buf, CUR.counts + 2, n as u16);
-    let mut idx = 0;
-    while idx < n {
-        unsafe {
-            put_i16(buf, off, EDIT_X[idx]);
-            put_i16(buf, off + 2, EDIT_Y[idx]);
-            put_i16(buf, off + 4, EDIT_Z[idx]);
-            buf[off + 6] = EDIT_B[idx];
-            buf[off + 7] = EDIT_D[idx];
-        }
-        off += EDIT_STRIDE;
-        idx += 1;
-    }
+    off += unsafe { EDITS.write_card(&mut buf[off..]) };
 
     off
 }
@@ -835,7 +841,7 @@ fn load_v1(p: &mut Player, buf: &[u8]) {
     p.offhand = AIR;
     crate::full_durability(p);
     let n = (get_u16(buf, V1_EDIT_COUNT) as usize)
-        .min(MAX_EDITS)
+        .min(FLAT_MAX_EDITS)
         .min((buf.len() - V1_HDR) / EDIT_STRIDE);
     read_edits(buf, V1_HDR, n);
     // A version 1 save has no container state: its chests and furnaces come
@@ -843,24 +849,15 @@ fn load_v1(p: &mut Player, buf: &[u8]) {
     // would not even open), and the hotbar is laid out again from what is
     // owned, the item in hand first.
     clear_containers();
-    let mut i = 0;
-    while i < n {
+    unsafe {
         // Each edit knows its dimension, so a rebuilt container does too.
-        let (x, y, z, b, d) = unsafe {
-            (
-                EDIT_X[i] as i32,
-                EDIT_Y[i] as i32,
-                EDIT_Z[i] as i32,
-                EDIT_B[i],
-                EDIT_D[i],
-            )
-        };
-        if b == CHEST {
-            crate::chest_register_in(x, y, z, d);
-        } else if b == FURNACE {
-            crate::furn_register_in(x, y, z, d);
-        }
-        i += 1;
+        EDITS.for_each(|d, x, y, z, b| {
+            if b == CHEST {
+                crate::chest_register_in(x, y, z, d);
+            } else if b == FURNACE {
+                crate::furn_register_in(x, y, z, d);
+            }
+        });
     }
     unsafe {
         HOTBAR = [AIR; HOTBAR_VIS];
@@ -885,11 +882,15 @@ fn load_versioned(p: &mut Player, buf: &[u8], l: Layout) -> bool {
     let furnaces = buf[l.counts + 1] as usize;
     let edits = get_u16(buf, l.counts + 2) as usize;
     // Refuse a truncated or out-of-range file before changing any state.
-    if chests > MAX_CHESTS
-        || furnaces > MAX_FURNACES
-        || edits > MAX_EDITS
-        || buf.len() < l.hdr + chests * chest_rec(l) + furnaces * furn_rec(l) + edits * EDIT_STRIDE
-    {
+    let at = l.hdr + chests * chest_rec(l) + furnaces * furn_rec(l);
+    if chests > MAX_CHESTS || furnaces > MAX_FURNACES {
+        return false;
+    }
+    if l.grouped {
+        if crate::edits::Edits::validate_card(buf.get(at..).unwrap_or(&[])).is_none() {
+            return false;
+        }
+    } else if edits > FLAT_MAX_EDITS || buf.len() < at + edits * EDIT_STRIDE {
         return false;
     }
     p.x = get_i32(buf, 8);
@@ -1004,29 +1005,57 @@ fn load_versioned(p: &mut Player, buf: &[u8], l: Layout) -> bool {
         off += furn_rec(l);
         i += 1;
     }
-    read_edits(buf, off, edits);
+    if l.grouped {
+        unsafe {
+            EDITS.clear();
+            // Checked whole above, so this fills the store or something is badly wrong.
+            if EDITS.read_card(&buf[off..], bstate::migrate).is_none() {
+                EDITS.clear();
+            }
+        }
+        crate::torch_forget();
+        unsafe {
+            EDITS.for_each(|d, x, y, z, b| {
+                if crate::kind_of(b) == crate::TORCH {
+                    crate::torch_note(x, y, z, d);
+                }
+            });
+        }
+    } else {
+        read_edits(buf, off, edits);
+    }
     true
 }
 
+/// The flat edit records of versions 1 to 12: x y z i16, block, dimension.
 #[inline(never)]
 #[optimize(size)] // card I/O dominates; keep the bytes
 fn read_edits(buf: &[u8], base: usize, n: usize) {
+    unsafe { EDITS.clear() };
     let mut idx = 0;
     while idx < n {
         let off = base + idx * EDIT_STRIDE;
+        // The record's last byte was pad before dimensions existed; it reads
+        // back 0 (= overworld) on saves written before them.
         unsafe {
-            EDIT_X[idx] = get_i16(buf, off);
-            EDIT_Y[idx] = get_i16(buf, off + 2);
-            EDIT_Z[idx] = get_i16(buf, off + 4);
-            EDIT_B[idx] = kind(buf[off + 6]);
-            // The record's last byte was pad before dimensions existed; it
-            // reads back 0 (= overworld) on saves written before them.
-            EDIT_D[idx] = buf[off + 7];
+            EDITS.record(
+                buf[off + 7].min(2),
+                get_i16(buf, off) as i32,
+                get_i16(buf, off + 2) as i32,
+                get_i16(buf, off + 4) as i32,
+                bstate::migrate(buf[off + 6]),
+            );
         }
         idx += 1;
     }
-    unsafe { EDIT_N = n };
-    crate::edit_index_rebuild();
+    crate::torch_forget();
+    unsafe {
+        EDITS.for_each(|d, x, y, z, b| {
+            if crate::kind_of(b) == crate::TORCH {
+                crate::torch_note(x, y, z, d);
+            }
+        });
+    }
 }
 
 /// Forget every chest and furnace. Loading replaces the session's containers
@@ -1041,26 +1070,16 @@ fn clear_containers() {
     }
 }
 
-/// Apply the loaded edit log to the world (raw sets + one remesh per chunk).
+/// Apply the loaded edits to the world (raw sets + one remesh per chunk).
 pub fn apply_edits() {
-    let n = unsafe { EDIT_N };
     let dim = crate::world::dimension();
-    let mut i = 0;
-    while i < n {
-        let (x, y, z, b, d) = unsafe {
-            (
-                EDIT_X[i] as i32,
-                EDIT_Y[i] as i32,
-                EDIT_Z[i] as i32,
-                EDIT_B[i],
-                EDIT_D[i],
-            )
-        };
-        let _ = AIR;
-        if d == dim {
-            crate::world::set_raw_pub(x, y, z, b);
-        }
-        i += 1;
+    unsafe {
+        EDITS.for_each(|d, x, y, z, b| {
+            if d == dim {
+                crate::world::set_raw_pub(x, y, z, b);
+                crate::redstone::note(x, y, z, b);
+            }
+        });
     }
     crate::world::remesh_loaded();
 }

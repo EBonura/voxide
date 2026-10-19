@@ -1782,29 +1782,24 @@ fn publish_chunk(s: usize, cx: i32, cz: i32) {
 /// re-derives it from noise -- and everything built there was gone. Walk far
 /// enough that one side of a build leaves the ring, come back, and half of it
 /// has reverted to terrain, which is exactly what an itch player reported
-/// happening to their house. The edit log already existed for the memory card;
-/// this makes it authoritative for streaming too.
+/// happening to their house. The edit store already existed for the memory
+/// card; this makes it authoritative for streaming too.
 ///
 /// Runs on the frame a chunk completes, which already carries the last gen
-/// tick. A full scan of the log is a few thousand cycles against that tick's
-/// ~40K, and only chunk completions pay it.
+/// tick. It reads that chunk's edits only (edits.rs keeps them per chunk), not
+/// the whole world's.
 fn replay_edits(s: usize, cx: i32, cz: i32) {
     let dim = unsafe { DIM };
     let (x0, z0) = (cx * CW, cz * CW);
-    let n = unsafe { crate::EDIT_N };
-    let mut i = 0;
-    while i < n {
-        let (x, z) = unsafe { (crate::EDIT_X[i] as i32, crate::EDIT_Z[i] as i32) };
-        if unsafe { crate::EDIT_D[i] } == dim && x >= x0 && x < x0 + CW && z >= z0 && z < z0 + CW {
-            let y = unsafe { crate::EDIT_Y[i] as i32 };
-            if y >= 0 && y < CH {
-                let idx = lidx((x - x0) as usize, y as usize, (z - z0) as usize);
-                let b = crate::bstate::migrate(unsafe { crate::EDIT_B[i] });
-                rset(s, idx, b);
-                crate::redstone::note(x, y, z, b);
+    unsafe {
+        crate::EDITS.for_chunk(dim, cx, cz, |lx, ly, lz, b| {
+            let b = crate::bstate::migrate(b);
+            rset(s, lidx(lx, ly, lz), b);
+            crate::redstone::note(x0 + lx as i32, ly as i32, z0 + lz as i32, b);
+            if crate::kind_of(b) == crate::TORCH {
+                crate::torch_note(x0 + lx as i32, ly as i32, z0 + lz as i32, dim);
             }
-        }
-        i += 1;
+        });
     }
 }
 
@@ -2251,8 +2246,10 @@ pub fn blast_tick() {
                 // Log the holes only if all of them fit with room to spare: a
                 // partly logged crater would come back half filled on a
                 // reload, and a full log loses the player's own building.
-                BJ_LOG = crate::EDIT_N + (*(&raw const BCUBE)).count() as usize + 128
-                    <= crate::MAX_EDITS;
+                BJ_LOG = crate::edit_room() >= (*(&raw const BCUBE)).count() as usize + 128;
+                if !BJ_LOG {
+                    crate::edit_full_toast();
+                }
             }
             crate::telemetry::stage_begin(38);
             let more = blast_break(&job);
