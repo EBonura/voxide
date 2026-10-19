@@ -563,8 +563,8 @@ kind = "ram"
 sym = "VOXIDE_GATE_STATE"
 offset = 20
 op = "eq"
-value = 140
-note = "the saved game has the completed crater edits (140 on this route since the frame retune of 2026-10-17 moved the route timeline again; 136 after the repin to SDK b5365b18 and editor c096eee0, which moved it a tick or two; 140 on SDK 5219afbe, 138 before it; the count follows the sim tick the TNT goes off at, and the world-reloaded step below must read the same number back)"
+value = 136
+note = "the saved game has the completed crater edits (136 on this route since the TNT lands in the tall-grass tuft it is aimed at, as in Java, 2026-10-19; 140 before that, and 140 since the frame retune of 2026-10-17 moved the route timeline again; 136 after the repin to SDK b5365b18 and editor c096eee0, which moved it a tick or two; 140 on SDK 5219afbe, 138 before it; the count follows the sim tick the TNT goes off at, and the world-reloaded step below must read the same number back)"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_GATE_STATE"
@@ -639,7 +639,7 @@ kind = "ram"
 sym = "VOXIDE_GATE_STATE"
 offset = 20
 op = "eq"
-value = 140
+value = 136
 note = "the actual world edit log was restored from card"
 [[step.assert]]
 kind = "ram"

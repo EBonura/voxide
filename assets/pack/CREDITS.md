@@ -48,6 +48,12 @@ From freesound.org, all CC0:
 | `eat` | "Crunch" by qubodup, freesound.org/s/816237/ |
 | `explode` | "Explosion, short" by qubodup, freesound.org/s/171971/ |
 
+`bow` (the string let go) and `arrow_hit` (an arrow landing) are not recordings:
+`synth-sfx` (in `tools/voxide-tools`) writes them from a plucked-string model and
+a falling sine with a noise burst, deterministically, into `assets/sfx/`, and
+`convert-sfx` cooks them with the rest. They are this project's own and need no
+credit.
+
 ## Music
 
 Mulula VGM Loops, Simple Piano Music Vol 1 (the loops Aranha, Melodia, Nulo,

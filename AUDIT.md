@@ -5,6 +5,33 @@ VoXide matches Minecraft Java Edition values. Each fix below cites minecraft.wik
 `mob::update` runs on the 60 Hz sim tick, and `units::java_ticks(n)` converts Java
 game ticks (20 a second) to it, so a 20 TPS constant cannot run at 60 Hz by accident.
 
+## 2026-10-19: the bow, bed, door, redstone and piston values
+
+Rules and numbers of the shaped blocks, from the pages named (W: as above).
+A value marked "to confirm" was written from memory of the game and has not
+been checked against the page; one that is not on the wiki is named as ours.
+
+| Item | Code | Java value | Result |
+|---|---|---|---|
+| Bow draw | `bow::power_q12`: f = (t^2 + 2t) / 3, t = held / 20 game ticks, capped at 1 | W:Bow, same curve | matches |
+| Shortest shot | no arrow and no use below f = 0.1 (9 sim ticks, 3 game ticks) | 0.1 (W:Bow) | matches |
+| Arrow speed | 3 blocks a game tick x f; gravity 0.05, drag 0.99 (existing) | 3.0 at full draw (W:Arrow) | matches |
+| Arrow damage | ceil(2 x speed in blocks a game tick), full draw 6; a full draw is critical, up to half again | W:Arrow | matches |
+| Drawing slows the player | movement x 1/5, sprint stops | W:Walking, from memory of the game: using an item 0.2 (to confirm) | matches |
+| Drawn string | 40 units back over the 1 s draw; rings out in 14 sim ticks | our own: the animation, not a value | n/a |
+| Bow shoot sound | pitch 0.85 to 1.10 by pull (Java: 1 / (random x 0.4 + 1.2) + f x 0.5) | W:Sounds, from memory (to confirm) | deterministic, no random |
+| Sleep | allowed when sky light is 11 or less or in a thunderstorm; refused with a hostile within 8 blocks sideways, 5 up or down | W:Bed | matches |
+| Respawn point | set beside the bed on any use, daytime too | W:Bed, from memory of the game: any use sets it (to confirm) | matches |
+| Sleep length | fade out 1 s, dark 0.7 s, fade in 1 s | ours; Java's sleep is a longer wait (to confirm) | ours |
+| Door | 2 blocks, 3/16 thick panel on the near edge, opens to the hinge edge | W:Door | matches (no hinge side: always the placer's left) |
+| Door needs | a solid block under it; breaking one half takes both | W:Door | matches |
+| Torch, lever, ladder | hang on a solid face or stand on one, drop when it goes | W:Torch, W:Lever, W:Ladder | matches |
+| Dust power | 15 at a source, 1 less a block; steps up and down | W:Redstone_Dust | matches |
+| Redstone tick | torches re-read every 2 game ticks (0.1 s) | W:Redstone_Torch | matches |
+| Piston push limit | 12 blocks | W:Piston | matches |
+| Piston face | toward the player who placed it | W:Piston | matches |
+| Not in: | repeaters, comparators, buttons, pressure plates, sticky pistons, torch burnout, quasi-connectivity, door hinge sides, iron doors, trapdoors | | open |
+
 ## 2026-10-15: hunger and mob attack speed (GitHub issue 1)
 
 The issue was filed on 2026-08-30 against 0.1.11, before the Java parity pass

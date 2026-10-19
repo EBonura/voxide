@@ -26,6 +26,9 @@ than a 3x3 grid at the table, because placing items into a grid with a d-pad is
 worse than picking what you want to make; Minecraft's own console editions made
 the same call. You choose the weapon you swing at mobs, and the game still
 picks the tool that suits the block you're aiming at. Music follows Java too: a piece plays, then silence for 10 to 20 minutes.
+Doors, beds, levers, redstone dust and torches, pistons and ladders are real
+shaped blocks (a door is two blocks that face and swing, a bed is a foot and a
+head, dust carries power 15 blocks and fades), and a block can carry state.
 Structures, falling sand, boats and rails, hoppers and signs aren't in yet.
 
 Detailed terrain
@@ -125,8 +128,9 @@ The layout follows Minecraft Bedrock's PS4/PS5 defaults.
   Circle puts the stack in hand back, or closes the screen when the hand is
   empty
 - L2: use -- interact with the targeted mob or block (chest, furnace, bed,
-  enchant table, door), otherwise place/use the held block or item (bow,
-  bucket, wheat, ...); sneak + L2 force-places
+  enchant table, door, lever), otherwise place/use the held block or item
+  (bucket, wheat, ...); sneak + L2 force-places. With the bow in hand L2 is
+  held to draw and let go to shoot
 - R2: tap to attack the mob under the crosshair, hold to mine the targeted
   block (time scales with hardness and tool). As in Java, a mob in front of
   a block takes the crosshair: no block outline or cracks show behind it

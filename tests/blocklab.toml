@@ -1,7 +1,7 @@
 # VoXide's shaped blocks, redstone, bed and bow on a proving ground. Built with
 #
-#   make gate-disc FEATURES=block-lab GATE_DIR=$PWD/build/gate-lab GATE_SYMBOLS=$PWD/build/gate-lab-symbols.txt
-#   psoxide-gate run tests/blocklab.toml --disc build/gate-lab/voxide.cue --no-hw
+#   make gate-disc FEATURES=block-lab GATE_DIR=$PWD/build/gate-blocks GATE_SYMBOLS=$PWD/build/gate-blocks-symbols.txt
+#   psoxide-gate run tests/blocklab.toml --disc build/gate-blocks/voxide.cue --no-hw
 #
 # The first SELECT builds the ground in front of the spawn (src/blocklab.rs); each
 # later SELECT stands the player at the next place and aims the crosshair at the
@@ -18,8 +18,8 @@
 # TNT worked by redstone, 76 the world clock.
 name = "voxide-blocklab"
 title = "VoXide: doors, levers, dust, a piston, a bed and the bow on a proving ground"
-disc = ["build/gate-lab/voxide.cue"]
-symbols = ["build/gate-lab-symbols.txt"]
+disc = ["build/gate-blocks/voxide.cue"]
+symbols = ["build/gate-blocks-symbols.txt"]
 max_ticks = 16000
 
 [card_fixture]

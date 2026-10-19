@@ -1,5 +1,67 @@
 # Changelog
 
+## Unreleased
+
+Blocks that carry state and have shapes: real doors, beds, levers, redstone
+dust and torches, pistons and ladders, a bow that is drawn and let go, and an
+edit store that no longer forgets a build.
+
+- A block can carry state. A cell is still one byte; ids below 128 are what the
+  inventory and recipes talk about, and a kind that needs state (a door's swing
+  and facing, a bed's head or foot, a torch's wall, a lever's switch, a ladder's
+  facing, a piston's direction and arm) takes the ids from 128 up
+  (`game/src/bstate.rs`). The state travels with the cell through the world, the
+  edit store, the save, a piston and a blast. What is derived (the power of a
+  wire, whether a redstone torch is lit) is worked out again, never saved.
+- Blocks that are not whole cubes have one table of boxes (`game/src/shape.rs`).
+  What the player sees, what the crosshair ray hits, what the body collides with
+  and where it lands come from the same boxes, so a door cannot look open and
+  block like a closed one. Slabs, stairs and fences moved onto it, and the
+  crosshair now passes through the empty half of a slab's cell and the gap beside
+  a door.
+- Doors are two blocks tall, a thin panel on the edge of the cell facing the way
+  you placed them, and swing to the hinge edge when opened (L2, or power). Shutting
+  and opening have their own pitch. Breaking either half takes both.
+- Beds are two blocks, a foot and a head, with their own models and textures. L2
+  on one sets the respawn point beside it (any time of day); at night with no
+  monster within 8 blocks it puts you to sleep: the screen fades to black, the
+  clock runs on to morning (and a storm blows over), and it fades back in. A hit
+  wakes you.
+- Redstone works as it does in Java, cut down to what is in the game. A lever and
+  a lit redstone torch give power 15; dust carries it and loses 1 a block, steps
+  up and down blocks, connects to its neighbours and shows its power from dark red
+  to bright red; a redstone torch is lit unless the block it stands on or is fixed
+  to is powered and re-reads that every 0.1 s, so a ring of them is a clock; doors,
+  pistons and TNT react when the power beside them changes. The torch (light) and
+  the redstone torch are separate blocks; the lever and the redstone torch are new
+  items with recipes.
+- Pistons face the player who placed them, push up to 12 blocks, stop at
+  something that cannot move (obsidian, chests, furnaces, another extended
+  piston) and are drawn with their arm.
+- Torches, levers and ladders hang on the side of a block or stand on one, and drop
+  as items when it goes. Dust needs a solid block under it, a door needs a floor.
+  A block placed onto tall grass replaces it, as in Java.
+- The bow is held as a bow, not an icon: hold L2 to draw (the string comes back, the
+  limbs bend, an arrow is nocked), let go to shoot (the string rings out and the
+  bow kicks). The draw is Java's: f = (t^2 + 2t) / 3 over a second, nothing under
+  0.1, the arrow leaves at 3 blocks a tick times f and does ceil(2 x speed), with
+  a critical on a full draw. You walk at a fifth of the speed while you draw. Arrows
+  are drawn along their flight. The bow's twang and an arrow landing are new
+  sounds.
+- The world edits are stored per chunk, 4,096 of them, and saved grouped by chunk
+  at 3 bytes an edit (the flat log held 1,024 and dropped every edit after the
+  1,024th without a word, so a big build or a TNT chain was forgotten when its
+  chunks left the loaded ring: 1,500 placed blocks came back as 1,024). When the
+  store is full an edit is refused and a toast says so. Saves are format 13; every
+  older save still loads. A save from before this one has its one-block open doors
+  turned into open doors.
+- The cheat menu has a BUILDING KIT row that lays the hotbar out for these blocks.
+- Journeys: `tests/blocks.toml` places a door, a bed, a lever, dust, a redstone
+  torch and a piston and shoots the bow with the controller;
+  `tests/blocklab.toml` (a lab disc, `--features block-lab`) throws a lever that
+  opens a door and extends a piston down a line of dust, and sleeps a night;
+  `tests/blocklab-save.toml` saves and loads that world.
+
 ## 0.4.1 | TBD
 
 Equipment, fire and TNT, a controls card, and settings that save only when you

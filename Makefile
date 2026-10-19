@@ -122,7 +122,7 @@ music-check: music
 # packed below. This route never installs into the user's game library.
 GATE_EXE ?= $(if $(CARGO_TARGET_DIR),$(CARGO_TARGET_DIR)/$(TARGET)/release/voxide.exe,$(EXE))
 # The block-lab journeys (tests/blocklab*.toml) boot a lab disc beside it:
-#   make gate-disc FEATURES=block-lab GATE_DIR=$PWD/build/gate-lab GATE_SYMBOLS=$PWD/build/gate-lab-symbols.txt
+#   make gate-disc FEATURES=block-lab GATE_DIR=$PWD/build/gate-blocks GATE_SYMBOLS=$PWD/build/gate-blocks-symbols.txt
 GATE_DIR ?= $(ROOT)/build/gate
 GATE_SYMBOLS ?= $(ROOT)/build/gate-symbols.txt
 gate-symbols:
