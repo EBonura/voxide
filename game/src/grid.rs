@@ -40,15 +40,45 @@ struct Shape {
 
 const SHAPES: [Shape; 5] = [
     // One log, anywhere: four planks.
-    Shape { w: 1, h: 1, cells: [WOOD, AIR, AIR, AIR], out: PLANK, qty: 4 },
+    Shape {
+        w: 1,
+        h: 1,
+        cells: [WOOD, AIR, AIR, AIR],
+        out: PLANK,
+        qty: 4,
+    },
     // Two planks one above the other: four sticks.
-    Shape { w: 1, h: 2, cells: [PLANK, PLANK, AIR, AIR], out: STICK, qty: 4 },
+    Shape {
+        w: 1,
+        h: 2,
+        cells: [PLANK, PLANK, AIR, AIR],
+        out: STICK,
+        qty: 4,
+    },
     // Four planks: the crafting table.
-    Shape { w: 2, h: 2, cells: [PLANK, PLANK, PLANK, PLANK], out: CRAFT_TABLE, qty: 1 },
+    Shape {
+        w: 2,
+        h: 2,
+        cells: [PLANK, PLANK, PLANK, PLANK],
+        out: CRAFT_TABLE,
+        qty: 1,
+    },
     // Coal over a stick: four torches.
-    Shape { w: 1, h: 2, cells: [COAL_ORE, STICK, AIR, AIR], out: TORCH, qty: 4 },
+    Shape {
+        w: 1,
+        h: 2,
+        cells: [COAL_ORE, STICK, AIR, AIR],
+        out: TORCH,
+        qty: 4,
+    },
     // A bone: three bone meal.
-    Shape { w: 1, h: 1, cells: [BONE, AIR, AIR, AIR], out: BONEMEAL, qty: 3 },
+    Shape {
+        w: 1,
+        h: 1,
+        cells: [BONE, AIR, AIR, AIR],
+        out: BONEMEAL,
+        qty: 3,
+    },
 ];
 
 pub fn kind(c: usize) -> u8 {

@@ -34,11 +34,11 @@ const STEP_LOSS: i32 = 225;
 
 /// A hash to a roll, for the rays' 0.7 to 1.3.
 pub fn mix(seed: u32, k: u32) -> u32 {
-    let mut h = seed ^ k.wrapping_mul(0x9E37_79B1);
+    let mut h = seed ^ k.wrapping_mul(0x9e37_79b1);
     h ^= h >> 15;
-    h = h.wrapping_mul(0x85EB_CA6B);
+    h = h.wrapping_mul(0x85eb_ca6b);
     h ^= h >> 13;
-    h = h.wrapping_mul(0xC2B2_AE35);
+    h = h.wrapping_mul(0xc2b2_ae35);
     h ^ (h >> 16)
 }
 
@@ -94,12 +94,22 @@ pub struct RayDir {
 pub static RAY_DIRS: [RayDir; RAYS as usize] = ray_dirs();
 
 const fn ray_dirs() -> [RayDir; RAYS as usize] {
-    let mut out = [RayDir { k: 0, sx: 0, sy: 0, sz: 0 }; RAYS as usize];
+    let mut out = [RayDir {
+        k: 0,
+        sx: 0,
+        sy: 0,
+        sz: 0,
+    }; RAYS as usize];
     let mut k = 0;
     let mut n = 0;
     while k < GRID_POINTS {
         if let Some((x, y, z)) = ray_step(k) {
-            out[n] = RayDir { k: k as u16, sx: x as i16, sy: y as i16, sz: z as i16 };
+            out[n] = RayDir {
+                k: k as u16,
+                sx: x as i16,
+                sy: y as i16,
+                sz: z as i16,
+            };
             n += 1;
         }
         k += 1;
@@ -136,7 +146,7 @@ pub fn column_layers(column: &[u8]) -> u32 {
         let w = u32::from_le_bytes([column[k], column[k + 1], column[k + 2], column[k + 3]]);
         if w != 0 {
             // The top bit of each byte that is not zero, down to bit 0 of each.
-            let hi = ((((w & 0x7F7F_7F7F) + 0x7F7F_7F7F) | w) & 0x8080_8080) >> 7;
+            let hi = ((((w & 0x7f7f_7f7f) + 0x7f7f_7f7f) | w) & 0x8080_8080) >> 7;
             m |= (hi.wrapping_mul(0x1020_4080) >> 28) << k;
         }
         k += 4;
@@ -179,7 +189,9 @@ pub struct Cube {
 
 impl Cube {
     pub const fn new() -> Cube {
-        Cube { bits: [0; WORDS + 1] }
+        Cube {
+            bits: [0; WORDS + 1],
+        }
     }
 
     pub fn clear(&mut self) {
@@ -234,7 +246,11 @@ impl Cube {
         let i = col * SIDE;
         let (w, sh) = (i >> 5, i & 31);
         let lo = self.bits[w] >> sh;
-        let hi = if sh == 0 { 0 } else { self.bits[w + 1] << (32 - sh) };
+        let hi = if sh == 0 {
+            0
+        } else {
+            self.bits[w + 1] << (32 - sh)
+        };
         (lo | hi) & ((1 << SIDE) - 1)
     }
 }
@@ -293,10 +309,14 @@ pub fn trace(scene: &mut Scene, frac: (i32, i32, i32), step: (i32, i32, i32), po
         if nx != cx || ny != cy || nz != cz {
             const R: i32 = REACH_CELLS;
             const SIDE_I: i32 = SIDE as i32;
-            if (nx + R) as u32 > 2 * R as u32 || (ny + R) as u32 > 2 * R as u32 || (nz + R) as u32 > 2 * R as u32 {
+            if (nx + R) as u32 > 2 * R as u32
+                || (ny + R) as u32 > 2 * R as u32
+                || (nz + R) as u32 > 2 * R as u32
+            {
                 return;
             }
-            idx = (idx as i32 + (nx - cx) * SIDE_I + (ny - cy) + (nz - cz) * SIDE_I * SIDE_I) as usize;
+            idx = (idx as i32 + (nx - cx) * SIDE_I + (ny - cy) + (nz - cz) * SIDE_I * SIDE_I)
+                as usize;
             cx = nx;
             cy = ny;
             cz = nz;
@@ -343,7 +363,11 @@ pub fn exposure_q8<S: FnMut(i32, i32, i32) -> bool>(
     while h < 3 {
         let mut s = 0;
         while s < 2 {
-            let p = (entity.0 + spots[s].0, entity.1 + heights[h], entity.2 + spots[s].1);
+            let p = (
+                entity.0 + spots[s].0,
+                entity.1 + heights[h],
+                entity.2 + spots[s].1,
+            );
             if clear_line(centre, p, solid) {
                 seen += 1;
             }
@@ -435,7 +459,10 @@ mod tests {
         while k < GRID_POINTS {
             if let Some((x, y, z)) = ray_step(k) {
                 let d = RAY_DIRS[n];
-                assert_eq!((d.k as u32, d.sx as i32, d.sy as i32, d.sz as i32), (k, x, y, z));
+                assert_eq!(
+                    (d.k as u32, d.sx as i32, d.sy as i32, d.sz as i32),
+                    (k, x, y, z)
+                );
                 n += 1;
             }
             k += 1;
@@ -448,7 +475,8 @@ mod tests {
         let mut k = 0;
         while k < GRID_POINTS {
             if let Some((x, y, z)) = ray_step(k) {
-                let len = isqrt((x as i64 * x as i64 + y as i64 * y as i64 + z as i64 * z as i64) as u32);
+                let len =
+                    isqrt((x as i64 * x as i64 + y as i64 * y as i64 + z as i64 * z as i64) as u32);
                 // 0.3 of a block, 19,661 in Q16, within a part in a hundred.
                 assert!((len as i32 - 19_661).abs() < 200, "k={k} len={len}");
             }
@@ -483,7 +511,12 @@ mod tests {
 
     /// The ray as it was before the index followed the steps: rebuilt from the
     /// position at every cell change, and run to the end even outside the cube.
-    fn trace_reference(scene: &mut Scene, frac: (i32, i32, i32), step: (i32, i32, i32), power_k: i32) {
+    fn trace_reference(
+        scene: &mut Scene,
+        frac: (i32, i32, i32),
+        step: (i32, i32, i32),
+        power_k: i32,
+    ) {
         let (mut px, mut py, mut pz) = frac;
         let mut left = power_k;
         let mut last = i32::MAX;
@@ -537,7 +570,11 @@ mod tests {
         for round in 0..6 {
             // Round 0 is open air; the rest scatter blocks of rising density.
             for c in snap.iter_mut() {
-                *c = if round == 0 || next(10) >= round as u32 + 1 { 0 } else { (1 + next(4)) as u8 };
+                *c = if round == 0 || next(10) >= round as u32 + 1 {
+                    0
+                } else {
+                    (1 + next(4)) as u8
+                };
             }
             // The centre cell is where the blast stands: open.
             snap[Cube::index(0, 0, 0)] = 0;
@@ -553,11 +590,19 @@ mod tests {
                     _ => 6 * (700 + next(600) as i32),
                 };
                 {
-                    let mut a = Scene { snap: &snap, res: &res, cube: &mut fast };
+                    let mut a = Scene {
+                        snap: &snap,
+                        res: &res,
+                        cube: &mut fast,
+                    };
                     trace(&mut a, frac, step, power_k);
                 }
                 {
-                    let mut b = Scene { snap: &snap, res: &res, cube: &mut slow };
+                    let mut b = Scene {
+                        snap: &snap,
+                        res: &res,
+                        cube: &mut slow,
+                    };
                     trace_reference(&mut b, frac, step, power_k);
                 }
                 checked += 1;
@@ -577,7 +622,7 @@ mod tests {
         res[1] = 50;
         res[2] = 600;
         res[3] = 120_000;
-        let mut rng = 0x9E37_79B9u32;
+        let mut rng = 0x9e37_79b9u32;
         let mut next = |m: u32| {
             rng ^= rng << 13;
             rng ^= rng >> 17;
@@ -615,7 +660,10 @@ mod tests {
                         }
                     }
                 }
-                _ => snap[Cube::index(next(9) as i32 - 4, next(9) as i32 - 4, next(9) as i32 - 4)] = 2,
+                _ => {
+                    snap[Cube::index(next(9) as i32 - 4, next(9) as i32 - 4, next(9) as i32 - 4)] =
+                        2
+                }
             }
             snap[Cube::index(0, 0, 0)] = 0;
             // The layers of the columns within the reach, as the game works them out.
@@ -630,27 +678,38 @@ mod tests {
             let steps = max_steps(power);
             let mut full = Cube::new();
             let mut banded = Cube::new();
-            let seed = 0xABCD_0000 + round;
+            let seed = 0xabcd_0000 + round;
             for k in 0..GRID_POINTS {
                 let Some(step) = ray_step(k) else { continue };
                 let p = ray_power(power, seed, k);
-                let mut a = Scene { snap: &snap, res: &res, cube: &mut full };
+                let mut a = Scene {
+                    snap: &snap,
+                    res: &res,
+                    cube: &mut full,
+                };
                 trace(&mut a, frac, step, p);
                 if band_is_air(layers, frac.1, step.1, steps) {
                     skipped_total += 1;
                 } else {
-                    let mut b = Scene { snap: &snap, res: &res, cube: &mut banded };
+                    let mut b = Scene {
+                        snap: &snap,
+                        res: &res,
+                        cube: &mut banded,
+                    };
                     trace(&mut b, frac, step, p);
                 }
             }
             assert_eq!(full.bits, banded.bits, "round {round} power {power}");
         }
-        assert!(skipped_total > 1000, "the test must skip some rays: {skipped_total}");
+        assert!(
+            skipped_total > 1000,
+            "the test must skip some rays: {skipped_total}"
+        );
     }
 
     #[test]
     fn column_layers_flags_every_block() {
-        let mut rng = 0x1357_9BDFu32;
+        let mut rng = 0x1357_9bdfu32;
         for _ in 0..2000 {
             let mut col = [0u8; SIDE];
             for c in col.iter_mut() {
@@ -673,7 +732,10 @@ mod tests {
             // The longest ray, in cells from the centre, at the strongest roll.
             let steps = power * 1299 / STEP_LOSS + 1;
             let reach = (steps as i64 * 19_661 + 65_535) / 65_536 + 1;
-            assert!(reach_of(power) as i64 >= reach.min(REACH_CELLS as i64), "power {power}");
+            assert!(
+                reach_of(power) as i64 >= reach.min(REACH_CELLS as i64),
+                "power {power}"
+            );
         }
     }
 

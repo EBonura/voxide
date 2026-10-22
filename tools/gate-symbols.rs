@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //! Locate the versioned journey state in the exact PS-X EXE to be packed.
 
-use std::{env, fs, io::Write, path::Path};
+use std::io::Write;
+use std::path::Path;
+use std::{env, fs};
 
 const HEADER_LEN: usize = 0x800;
 const MAGIC: &[u8; 4] = b"VOXG";
@@ -21,7 +23,13 @@ fn symbol_address(path: &Path) -> Result<u32, String> {
     block_address(path, MAGIC, VERSION, BLOCK_LEN, "VOXIDE_GATE_STATE")
 }
 
-fn block_address(path: &Path, magic: &[u8; 4], version: u32, block_len: usize, name: &str) -> Result<u32, String> {
+fn block_address(
+    path: &Path,
+    magic: &[u8; 4],
+    version: u32,
+    block_len: usize,
+    name: &str,
+) -> Result<u32, String> {
     let bytes = fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     if bytes.get(..8) != Some(b"PS-X EXE") {
         return Err("input is not a PS-X EXE".into());
@@ -65,12 +73,22 @@ fn main() {
         Ok(addr) => {
             writeln!(std::io::stdout(), "{addr:#010x} VOXIDE_GATE_STATE").expect("write address");
             match block_address(Path::new(&exe), b"VSET", 3, 84, "VOXIDE_SETTINGS_STATE") {
-                Ok(settings) => writeln!(std::io::stdout(), "{settings:#010x} VOXIDE_SETTINGS_STATE").expect("write settings address"),
-                Err(error) => { eprintln!("gate-symbols: {error}"); std::process::exit(1); }
+                Ok(settings) => {
+                    writeln!(std::io::stdout(), "{settings:#010x} VOXIDE_SETTINGS_STATE")
+                        .expect("write settings address")
+                }
+                Err(error) => {
+                    eprintln!("gate-symbols: {error}");
+                    std::process::exit(1);
+                }
             }
             match block_address(Path::new(&exe), b"VMUS", 1, 64, "VOXIDE_MUSIC_STATE") {
-                Ok(music) => writeln!(std::io::stdout(), "{music:#010x} VOXIDE_MUSIC_STATE").expect("write music address"),
-                Err(error) => { eprintln!("gate-symbols: {error}"); std::process::exit(1); }
+                Ok(music) => writeln!(std::io::stdout(), "{music:#010x} VOXIDE_MUSIC_STATE")
+                    .expect("write music address"),
+                Err(error) => {
+                    eprintln!("gate-symbols: {error}");
+                    std::process::exit(1);
+                }
             }
         }
         Err(error) => {
@@ -93,7 +111,10 @@ mod tests {
         block[8..12].copy_from_slice(&84u32.to_le_bytes());
         let path = env::temp_dir().join(format!("vox-settings-symbol-{}", std::process::id()));
         fs::write(&path, &bytes).unwrap();
-        assert_eq!(block_address(&path, b"VSET", 3, 84, "VOXIDE_SETTINGS_STATE").unwrap(), 0x8001_0180);
+        assert_eq!(
+            block_address(&path, b"VSET", 3, 84, "VOXIDE_SETTINGS_STATE").unwrap(),
+            0x8001_0180
+        );
         assert!(block_address(&path, b"VSET", 3, 40, "VOXIDE_SETTINGS_STATE").is_err());
         assert!(block_address(&path, b"VSET", 2, 84, "VOXIDE_SETTINGS_STATE").is_err());
         fs::remove_file(path).unwrap();

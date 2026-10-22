@@ -14,11 +14,11 @@ const X0: i16 = HOTBAR_X0;
 const STRIP_Y: i16 = 72;
 const SLOT: i16 = 18;
 const COLS: usize = 9;
-const CURSOR: (u8, u8, u8) = (0xFF, 0xE0, 0x40);
-const LABEL: (u8, u8, u8) = (0xE0, 0xE0, 0xE0);
-const GREY: (u8, u8, u8) = (0xA8, 0xA8, 0xA8);
-const GREEN: (u8, u8, u8) = (0x50, 0xB0, 0x50);
-const RED: (u8, u8, u8) = (0xE0, 0x60, 0x60);
+const CURSOR: (u8, u8, u8) = (0xff, 0xe0, 0x40);
+const LABEL: (u8, u8, u8) = (0xe0, 0xe0, 0xe0);
+const GREY: (u8, u8, u8) = (0xa8, 0xa8, 0xa8);
+const GREEN: (u8, u8, u8) = (0x50, 0xb0, 0x50);
+const RED: (u8, u8, u8) = (0xe0, 0x60, 0x60);
 
 const TAB_NAME: [&str; CRAFT_TABS] = ["BLOCKS", "GEAR", "ITEMS", "FOOD"];
 const TAB_TILES: [u8; CRAFT_TABS] = [tex::T_PLANK, tex::T_PICK, tex::T_I_STICK, tex::T_I_BREAD];
@@ -74,8 +74,7 @@ fn makeable(i: usize, p: &Player) -> bool {
     let t = r.out_qty as u8;
     let have = have_tier(p, r.out);
     // A lower tier is never worth it; the same tier only replaces a worn one.
-    craftable_here(i)
-        && !(tiered(r.out) && (t < have || (t == have && tier_full(p, r.out, t))))
+    craftable_here(i) && !(tiered(r.out) && (t < have || (t == have && tier_full(p, r.out, t))))
 }
 
 /// The recipes of one column: every tier of a tiered output (in RECIPES
@@ -468,7 +467,13 @@ pub fn draw_crafting(font: &FontAtlas, p: &Player) {
             let mut hb = [0u8; 5];
             let kind = armor_item(r.out_qty as usize - 1, slot);
             ui_text(font, 166, 156, "YOU HAVE", GREY);
-            ui_text(font, 238, 156, number(unsafe { INV[kind as usize] }, &mut hb), GREY);
+            ui_text(
+                font,
+                238,
+                156,
+                number(unsafe { INV[kind as usize] }, &mut hb),
+                GREY,
+            );
         } else {
             let have = have_tier(p, r.out) as usize;
             let word = TIER_WORD[have.min(4)];

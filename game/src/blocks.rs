@@ -6,10 +6,10 @@
 
 use crate::bstate::{self, kind_of};
 use crate::{
-    container_room, get_block_i32, inv_take, is_lava, is_pushable, is_water, place_intersects_player,
-    record_edit, replaceable, set_block_i32, sfx, shape, world, Pick, Player, AIR, BED, BLOCK,
-    CACTUS, DOOR_C, GLASS, LADDER, LAVA, LEAVES, LEVER, PISTON, PISTON_HEAD, PLAYER_HALF_W,
-    PLAYER_HEIGHT, RSTORCH, TORCH, WIRE,
+    container_room, get_block_i32, inv_take, is_lava, is_pushable, is_water,
+    place_intersects_player, record_edit, replaceable, set_block_i32, sfx, shape, world, Pick,
+    Player, AIR, BED, BLOCK, CACTUS, DOOR_C, GLASS, LADDER, LAVA, LEAVES, LEVER, PISTON,
+    PISTON_HEAD, PLAYER_HALF_W, PLAYER_HEIGHT, RSTORCH, TORCH, WIRE,
 };
 
 /// What the gate reads back: the cell last placed, its second cell, and the
@@ -68,20 +68,32 @@ pub fn place_item(player: &Player, pick: &Pick) -> Option<(i32, i32, i32)> {
     let (px, py, pz, nx, ny, nz) = if hit == crate::TALL_GRASS {
         (pick.bx, pick.by, pick.bz, 0, 1, 0)
     } else {
-        (pick.px, pick.py, pick.pz, pick.px - pick.bx, pick.py - pick.by, pick.pz - pick.bz)
+        (
+            pick.px,
+            pick.py,
+            pick.pz,
+            pick.px - pick.bx,
+            pick.py - pick.by,
+            pick.pz - pick.bz,
+        )
     };
     if !replaceable(get_block_i32(px, py, pz)) {
         return None;
     }
     // What a thing hangs on is the block under a tuft, not the tuft.
-    let hit = if hit == crate::TALL_GRASS { get_block_i32(px, py - 1, pz) } else { hit };
+    let hit = if hit == crate::TALL_GRASS {
+        get_block_i32(px, py - 1, pz)
+    } else {
+        hit
+    };
     let facing = bstate::facing_of_yaw(player.yaw);
     // The cell that carries it: lower door half, the bed's foot, the lot.
     let mut second: Option<(i32, i32, i32, u8)> = None;
     let first = match item {
         DOOR_C => {
             // A door stands on something solid and needs the cell above too.
-            if !is_sturdy(get_block_i32(px, py - 1, pz)) || !replaceable(get_block_i32(px, py + 1, pz))
+            if !is_sturdy(get_block_i32(px, py - 1, pz))
+                || !replaceable(get_block_i32(px, py + 1, pz))
             {
                 return None;
             }
@@ -90,7 +102,10 @@ pub fn place_item(player: &Player, pick: &Pick) -> Option<(i32, i32, i32)> {
         }
         BED => {
             // Foot where you aim, head one cell on the way you face.
-            let (hx, hz) = (px + bstate::FDX[facing as usize], pz + bstate::FDZ[facing as usize]);
+            let (hx, hz) = (
+                px + bstate::FDX[facing as usize],
+                pz + bstate::FDZ[facing as usize],
+            );
             if !replaceable(get_block_i32(hx, py, hz)) {
                 return None;
             }
@@ -114,7 +129,11 @@ pub fn place_item(player: &Player, pick: &Pick) -> Option<(i32, i32, i32)> {
             if !is_sturdy(hit) {
                 return None;
             }
-            let Some(f) = (if ny == 0 { bstate::facing_of_step(nx, nz) } else { None }) else {
+            let Some(f) = (if ny == 0 {
+                bstate::facing_of_step(nx, nz)
+            } else {
+                None
+            }) else {
                 return None;
             };
             bstate::make(LADDER, f)
@@ -130,7 +149,7 @@ pub fn place_item(player: &Player, pick: &Pick) -> Option<(i32, i32, i32)> {
             // The face of a piston points at the player who set it (Java): the
             // opposite of the nearest direction they are looking in, straight
             // up or down past 45 degrees of pitch.
-            let sp = crate::sincos::sin_q12((player.pitch as i32 & 0x0FFF) as u16);
+            let sp = crate::sincos::sin_q12((player.pitch as i32 & 0x0fff) as u16);
             let look = if sp > 2896 {
                 2
             } else if sp < -2896 {
@@ -145,7 +164,17 @@ pub fn place_item(player: &Player, pick: &Pick) -> Option<(i32, i32, i32)> {
     // The body must be clear of what goes in the cell(s).
     let clear = |x: i32, y: i32, z: i32, b: u8| -> bool {
         if shape::solid(b) == shape::Solid::Parts {
-            !shape::body_hits(b, x, y, z, player.x, player.y, player.z, PLAYER_HALF_W, PLAYER_HEIGHT)
+            !shape::body_hits(
+                b,
+                x,
+                y,
+                z,
+                player.x,
+                player.y,
+                player.z,
+                PLAYER_HALF_W,
+                PLAYER_HEIGHT,
+            )
         } else {
             !place_intersects_player(player, x, y, z, b)
         }
@@ -197,7 +226,12 @@ pub fn set_door(x: i32, y: i32, z: i32, open: bool) {
         let cy = low + half;
         let c = get_block_i32(x, cy, z);
         if bstate::is_door(c) {
-            put(x, cy, z, bstate::door(half == 1, bstate::door_facing(c), open));
+            put(
+                x,
+                cy,
+                z,
+                bstate::door(half == 1, bstate::door_facing(c), open),
+            );
         }
         half += 1;
     }
@@ -273,7 +307,11 @@ fn pop(x: i32, y: i32, z: i32, drop_item: bool) {
 #[inline(never)]
 pub fn after_break(x: i32, y: i32, z: i32, was: u8) {
     if bstate::is_door(was) {
-        let oy = if bstate::door_upper(was) { y - 1 } else { y + 1 };
+        let oy = if bstate::door_upper(was) {
+            y - 1
+        } else {
+            y + 1
+        };
         if bstate::is_door(get_block_i32(x, oy, z)) {
             pop(x, oy, z, false);
         }
@@ -384,8 +422,11 @@ fn extend(x: i32, y: i32, z: i32, d: u8) {
     let mut i = 0;
     while i <= n {
         if body_in(sx + dx * i, sy + dy * i, sz + dz * i)
-            && shape::solid(get_block_i32(sx + dx * (i.max(1) - 1), sy + dy * (i.max(1) - 1), sz + dz * (i.max(1) - 1)))
-                != shape::Solid::No
+            && shape::solid(get_block_i32(
+                sx + dx * (i.max(1) - 1),
+                sy + dy * (i.max(1) - 1),
+                sz + dz * (i.max(1) - 1),
+            )) != shape::Solid::No
         {
             return;
         }

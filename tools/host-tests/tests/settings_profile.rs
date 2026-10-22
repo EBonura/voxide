@@ -57,7 +57,7 @@ fn a_fresh_profile_and_the_other_flags_are_untouched() {
     assert_eq!(round_trip(&fresh), fresh);
 
     let mut other = profile();
-    other.flags = FLAG_INVERT_Y | 0xA0;
+    other.flags = FLAG_INVERT_Y | 0xa0;
     other.look_speed_percent = 140;
     assert_eq!(round_trip(&other), other);
 }

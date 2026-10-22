@@ -45,7 +45,12 @@ fn pieces_are_a_few_minutes_each_and_fit_the_interleave() {
     for t in TRACKS.iter() {
         assert!(t.file >= 1 && t.file as usize <= FILES);
         assert!(t.channel < 4);
-        assert!((120_000..=200_000).contains(&t.length_ms), "{} {} ms", t.name, t.length_ms);
+        assert!(
+            (120_000..=200_000).contains(&t.length_ms),
+            "{} {} ms",
+            t.name,
+            t.length_ms
+        );
     }
 }
 

@@ -28,7 +28,11 @@ const BY: i32 = 50; // platform block y; you stand at (BY + 1) * BLOCK
 
 /// The `tnt-lab` build runs only the three timing phases below; the others
 /// move out of reach.
-const OLD: i32 = if cfg!(feature = "tnt-lab") { 1_000_000 } else { 0 };
+const OLD: i32 = if cfg!(feature = "tnt-lab") {
+    1_000_000
+} else {
+    0
+};
 const P_SINGLE: i32 = 30 + OLD;
 const P_CHAIN: i32 = 700 + OLD;
 const P_CUBE: i32 = 1700 + OLD;
@@ -198,7 +202,10 @@ fn stage(ox: i32, oz: i32, x0: i32, z0: i32, w: i32, h: i32, d: i32) {
 #[cfg(feature = "tnt-lab")]
 fn view_pending(p: &Player) -> i32 {
     let chunk_r = 12 * BLOCK;
-    let (pcx, pcz) = (world_to_block_x(p.x).div_euclid(world::CW), world_to_block_z(p.z).div_euclid(world::CW));
+    let (pcx, pcz) = (
+        world_to_block_x(p.x).div_euclid(world::CW),
+        world_to_block_z(p.z).div_euclid(world::CW),
+    );
     let mut n = 0;
     let mut cz = pcz - 2;
     while cz <= pcz + 2 {

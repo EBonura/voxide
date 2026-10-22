@@ -39,7 +39,10 @@ pub fn piece(rng: &mut Rng, lengths: &[f64], max_seconds: f64) -> Piece {
             while out.iter().any(|s| s.loop_index == l) {
                 l = rng.below(lengths.len());
             }
-            out.push(Segment { loop_index: l, repeats });
+            out.push(Segment {
+                loop_index: l,
+                repeats,
+            });
         }
         if seconds(&out, lengths) <= max_seconds {
             return out;
@@ -49,7 +52,9 @@ pub fn piece(rng: &mut Rng, lengths: &[f64], max_seconds: f64) -> Piece {
 
 /// The laps' total length.
 pub fn seconds(p: &Piece, lengths: &[f64]) -> f64 {
-    p.iter().map(|s| s.repeats as f64 * lengths[s.loop_index]).sum()
+    p.iter()
+        .map(|s| s.repeats as f64 * lengths[s.loop_index])
+        .sum()
 }
 
 /// `count` pieces from `seed`: every loop is used somewhere, no two pieces are
@@ -58,9 +63,15 @@ pub fn seconds(p: &Piece, lengths: &[f64]) -> f64 {
 pub fn set(seed: u64, lengths: &[f64], count: usize, max_seconds: f64) -> Vec<Piece> {
     let mut rng = Rng::new(seed);
     loop {
-        let pieces: Vec<Piece> = (0..count).map(|_| piece(&mut rng, lengths, max_seconds)).collect();
-        let all_used = (0..lengths.len()).all(|l| pieces.iter().flatten().any(|s| s.loop_index == l));
-        let distinct = pieces.iter().enumerate().all(|(i, p)| !pieces[..i].contains(p));
+        let pieces: Vec<Piece> = (0..count)
+            .map(|_| piece(&mut rng, lengths, max_seconds))
+            .collect();
+        let all_used =
+            (0..lengths.len()).all(|l| pieces.iter().flatten().any(|s| s.loop_index == l));
+        let distinct = pieces
+            .iter()
+            .enumerate()
+            .all(|(i, p)| !pieces[..i].contains(p));
         if all_used && distinct {
             return pieces;
         }

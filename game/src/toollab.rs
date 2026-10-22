@@ -21,8 +21,20 @@ use crate::*;
 pub static mut TOOL_LAB: [i32; 400] = [0; 400];
 
 const MINE_BLOCKS: [u8; 14] = [
-    DIRT, SAND, GRASS, WOOD, PLANK, STONE, COBBLE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE,
-    OBSIDIAN, LUMISTONE, SNOW,
+    DIRT,
+    SAND,
+    GRASS,
+    WOOD,
+    PLANK,
+    STONE,
+    COBBLE,
+    COAL_ORE,
+    IRON_ORE,
+    GOLD_ORE,
+    DIAMOND_ORE,
+    OBSIDIAN,
+    LUMISTONE,
+    SNOW,
 ];
 const MINE_AT: usize = 8;
 const MELEE_AT: usize = MINE_AT + 14 * 5;
@@ -203,7 +215,7 @@ pub fn frame(frame: u32, player: &mut Player, ls: &mut (i16, i16), rs: &mut (i16
     player.pitch = -1000;
     player.health = MAX_HEALTH;
     player.food = MAX_FOOD;
-    unsafe { TOOL_LAB[0] = 0x544F4F4C };
+    unsafe { TOOL_LAB[0] = 0x544f4f4c };
     if frame == 3 {
         let mut copy = *player;
         table(&mut copy);

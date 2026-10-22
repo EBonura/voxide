@@ -10,15 +10,13 @@
 //! saves (one-byte counts, no containers or hotbar) still load.
 
 use crate::{
-    Player, AIR, BLOCK_KINDS, CHEST, CHEST_D, CHEST_INV, CHEST_USED, CHEST_X, CHEST_Y, CHEST_Z,
-    EDITS, FURNACE, FURN_D, FURN_FUEL, FURN_IN, FURN_IN_N,
-    FURN_OUT, FURN_OUT_N, FURN_PROG, FURN_USED, FURN_X, FURN_Y, FURN_Z, HOTBAR, HOTBAR_SEL,
-    HOTBAR_VIS, INV, MAX_CHESTS, MAX_EDITS, MAX_FURNACES, PLACEABLE,
+    bstate, Player, AIR, BLOCK_KINDS, CHEST, CHEST_D, CHEST_INV, CHEST_USED, CHEST_X, CHEST_Y,
+    CHEST_Z, EDITS, FURNACE, FURN_D, FURN_FUEL, FURN_IN, FURN_IN_N, FURN_OUT, FURN_OUT_N,
+    FURN_PROG, FURN_USED, FURN_X, FURN_Y, FURN_Z, HOTBAR, HOTBAR_SEL, HOTBAR_VIS, INV, MAX_CHESTS,
+    MAX_EDITS, MAX_FURNACES, PLACEABLE,
 };
-use crate::bstate;
 use psx_mc::{
-    queue_frames, Card, CardJob, Error as McError, HardwareCard, Slot, Staged, Step,
-    FORMAT_FRAMES,
+    queue_frames, Card, CardJob, Error as McError, HardwareCard, Slot, Staged, Step, FORMAT_FRAMES,
 };
 
 /// Version 1: the original layout. No version field; counts were one byte
@@ -224,10 +222,8 @@ const fn furn_rec(l: Layout) -> usize {
 const EDIT_STRIDE: usize = 8;
 /// The flat records the older layouts could hold at most (their log was 1,024).
 const FLAT_MAX_EDITS: usize = 1024;
-const MAX_PAYLOAD: usize = CUR.hdr
-    + MAX_CHESTS * chest_rec(CUR)
-    + MAX_FURNACES * furn_rec(CUR)
-    + crate::edits::CARD_MAX;
+const MAX_PAYLOAD: usize =
+    CUR.hdr + MAX_CHESTS * chest_rec(CUR) + MAX_FURNACES * furn_rec(CUR) + crate::edits::CARD_MAX;
 const _: () = assert!(HOTBAR_VIS <= OFF_INV - OFF_HOTBAR);
 const _: () = assert!(MAX_PAYLOAD >= V1_HDR + FLAT_MAX_EDITS * EDIT_STRIDE);
 
@@ -805,7 +801,11 @@ fn read_equip(p: &mut Player, buf: &[u8]) {
     }
     p.offhand = kind(buf[OFF_EQUIP + 4]);
     let w = buf[OFF_EQUIP + 5];
-    p.weapon = if crate::equip::WEAPONS.contains(&w) { w } else { crate::TOOL_NONE };
+    p.weapon = if crate::equip::WEAPONS.contains(&w) {
+        w
+    } else {
+        crate::TOOL_NONE
+    };
     let mut spare = [0u16; crate::ARMOR_KINDS as usize];
     k = 0;
     while k < spare.len() {
@@ -837,7 +837,11 @@ fn load_v1(p: &mut Player, buf: &[u8]) {
     p.axe = buf[V1_PROGRESS + 6];
     p.shovel = buf[V1_PROGRESS + 7];
     p.sword = buf[V1_PROGRESS + 8];
-    p.weapon = if p.sword > 0 { crate::TOOL_SWORD } else { crate::TOOL_NONE };
+    p.weapon = if p.sword > 0 {
+        crate::TOOL_SWORD
+    } else {
+        crate::TOOL_NONE
+    };
     p.offhand = AIR;
     crate::full_durability(p);
     let n = (get_u16(buf, V1_EDIT_COUNT) as usize)
@@ -946,7 +950,11 @@ fn load_versioned(p: &mut Player, buf: &[u8], l: Layout) -> bool {
             }
             k += 1;
         }
-        p.weapon = if p.sword > 0 { crate::TOOL_SWORD } else { crate::TOOL_NONE };
+        p.weapon = if p.sword > 0 {
+            crate::TOOL_SWORD
+        } else {
+            crate::TOOL_NONE
+        };
         p.offhand = AIR;
         crate::equip::spare_set([0; crate::ARMOR_KINDS as usize]);
     }

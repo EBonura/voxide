@@ -177,7 +177,7 @@ fn holes(grow: &dyn Fn(&[P]) -> Vec<P>, quads: &[Vec<P>], whole: &[P], margin: f
 }
 
 fn survey(grow: &dyn Fn(&[P]) -> Vec<P>, end_to_end: bool) -> (usize, usize) {
-    let mut rng = Rng(0x5EA1);
+    let mut rng = Rng(0x5ea1);
     let (mut total, mut shapes_with_holes) = (0, 0);
     for k in 0..400 {
         let len = 40.0 + rng.unit() * 160.0;
@@ -321,7 +321,7 @@ fn grown_polygons_leave_no_crack_between_slanted_slivers() {
 
 #[test]
 fn the_table_matches_the_rule_written_out() {
-    let mut rng = Rng(0xA11CE);
+    let mut rng = Rng(0xa11ce);
     for _ in 0..20000 {
         let mut p = |lo: i32, hi: i32| lo + (rng.next() % (hi - lo + 1) as u32) as i32;
         // A random convex-ish quad, possibly degenerate.

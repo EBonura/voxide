@@ -8,14 +8,16 @@ use psx_mc::{Card, RamCard};
 fn build() -> Vec<u8> {
     let mut card = Card::new(RamCard::new());
     card.format().unwrap();
-    let payload = [0x5Au8; 100];
+    let payload = [0x5au8; 100];
     for i in 0..psx_mc::DATA_BLOCKS {
         let name = format!("BESLES-00000FULL{i:02}");
         card.write(&name, "Other game", &payload).unwrap();
     }
     card.validate_filesystem().unwrap();
     // No room left for even a one-block file.
-    assert!(card.write("BESLES-00000VOXEL1X", "VoXide", &payload).is_err());
+    assert!(card
+        .write("BESLES-00000VOXEL1X", "VoXide", &payload)
+        .is_err());
     card.into_inner().image().to_vec()
 }
 

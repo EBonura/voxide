@@ -15,7 +15,9 @@ impl Biquad {
         let (mut x1, mut x2, mut y1, mut y2) = (0.0, 0.0, 0.0, 0.0);
         x.iter()
             .map(|&x0| {
-                let y0 = self.b[0] * x0 + self.b[1] * x1 + self.b[2] * x2 - self.a[0] * y1 - self.a[1] * y2;
+                let y0 = self.b[0] * x0 + self.b[1] * x1 + self.b[2] * x2
+                    - self.a[0] * y1
+                    - self.a[1] * y2;
                 x2 = x1;
                 x1 = x0;
                 y2 = y1;
@@ -29,13 +31,21 @@ impl Biquad {
 /// The two K-weighting stages for sample rate `fs`: a high shelf (+4 dB above
 /// about 1.7 kHz, the head's acoustic effect) and the 38 Hz high-pass.
 fn k_weighting(fs: f64) -> [Biquad; 2] {
-    let (f0, gain_db, q) = (1_681.974_450_955_533, 3.999_843_853_973_347, 0.707_175_236_955_419_6);
+    let (f0, gain_db, q) = (
+        1_681.974_450_955_533,
+        3.999_843_853_973_347,
+        0.707_175_236_955_419_6,
+    );
     let k = (std::f64::consts::PI * f0 / fs).tan();
     let vh = 10f64.powf(gain_db / 20.0);
     let vb = vh.powf(0.499_666_774_154_541_6);
     let a0 = 1.0 + k / q + k * k;
     let shelf = Biquad {
-        b: [(vh + vb * k / q + k * k) / a0, 2.0 * (k * k - vh) / a0, (vh - vb * k / q + k * k) / a0],
+        b: [
+            (vh + vb * k / q + k * k) / a0,
+            2.0 * (k * k - vh) / a0,
+            (vh - vb * k / q + k * k) / a0,
+        ],
         a: [2.0 * (k * k - 1.0) / a0, (1.0 - k / q + k * k) / a0],
     };
     let (f0, q) = (38.135_470_876_024_44, 0.500_327_037_323_877_3);
@@ -52,19 +62,29 @@ fn k_weighting(fs: f64) -> [Biquad; 2] {
 /// an absolute gate at -70 LUFS and a relative gate 10 LU under what passes it.
 pub fn integrated_lufs(ch: [&[f64]; 2], fs: u32) -> f64 {
     let stages = k_weighting(fs as f64);
-    let weighted: Vec<Vec<f64>> = ch.iter().map(|c| stages[1].run(&stages[0].run(c))).collect();
+    let weighted: Vec<Vec<f64>> = ch
+        .iter()
+        .map(|c| stages[1].run(&stages[0].run(c)))
+        .collect();
     let block = (0.4 * fs as f64) as usize;
     let step = (0.1 * fs as f64) as usize;
     let n = weighted[0].len();
     let mut energies = Vec::new();
     let mut at = 0;
     while at + block <= n {
-        let z: f64 = weighted.iter().map(|w| w[at..at + block].iter().map(|v| v * v).sum::<f64>() / block as f64).sum();
+        let z: f64 = weighted
+            .iter()
+            .map(|w| w[at..at + block].iter().map(|v| v * v).sum::<f64>() / block as f64)
+            .sum();
         energies.push(z);
         at += step;
     }
     let lufs = |z: f64| -0.691 + 10.0 * z.log10();
-    let above: Vec<f64> = energies.iter().copied().filter(|&z| lufs(z) > -70.0).collect();
+    let above: Vec<f64> = energies
+        .iter()
+        .copied()
+        .filter(|&z| lufs(z) > -70.0)
+        .collect();
     if above.is_empty() {
         return f64::NEG_INFINITY;
     }

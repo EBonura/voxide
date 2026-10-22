@@ -44,7 +44,8 @@ fn second_press_formats_the_blank_card_and_saves() {
 fn a_formatted_card_saves_at_once_and_keeps_its_other_files() {
     let mut card = Card::new(RamCard::new());
     card.format().unwrap();
-    card.write("BESLES-00000OTHER01", "OTHER", b"keep me").unwrap();
+    card.write("BESLES-00000OTHER01", "OTHER", b"keep me")
+        .unwrap();
     assert_eq!(
         save_to_card(&mut card, FILE, TITLE, &profile(), false),
         CardSave::Saved

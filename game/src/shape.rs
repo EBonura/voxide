@@ -13,15 +13,14 @@
 //! file as it is.
 
 use crate::bstate::{self, kind_of, state_of};
-use crate::tex;
 use crate::{
-    BED, DOOR_C, FENCE, LADDER, LEVER, PISTON, PISTON_HEAD, RSTORCH, SLAB, STAIRS_E, STAIRS_N,
+    tex, BED, DOOR_C, FENCE, LADDER, LEVER, PISTON, PISTON_HEAD, RSTORCH, SLAB, STAIRS_E, STAIRS_N,
     STAIRS_S, STAIRS_W, TORCH, WIRE,
 };
 
 pub const MAX_PARTS: usize = 3;
 /// Marks a face that is not drawn.
-pub const NO_TILE: u8 = 0xFF;
+pub const NO_TILE: u8 = 0xff;
 
 /// How the texture sits on a part's side faces.
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -46,7 +45,12 @@ pub struct Part {
     pub turn: u8,
 }
 
-pub const EMPTY: Part = Part { b: [0; 6], tile: [NO_TILE; 6], uv: Uv::Auto, turn: 0 };
+pub const EMPTY: Part = Part {
+    b: [0; 6],
+    tile: [NO_TILE; 6],
+    uv: Uv::Auto,
+    turn: 0,
+};
 
 /// What the player's body does with the block.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -60,7 +64,12 @@ pub enum Solid {
 }
 
 const fn part(b: [u8; 6], tile: [u8; 6]) -> Part {
-    Part { b, tile, uv: Uv::Auto, turn: 0 }
+    Part {
+        b,
+        tile,
+        uv: Uv::Auto,
+        turn: 0,
+    }
 }
 
 /// All six faces wear `t`.
@@ -113,13 +122,33 @@ fn aimed(p: Part, dir: u8) -> Part {
     // Faces: 0 +X, 1 -X, 2 +Y, 3 -Y, 4 +Z, 5 -Z.
     let (b, tile) = match dir {
         2 => return p,
-        3 => ([x0, 16 - y1, z0, x1, 16 - y0, z1], [t[0], t[1], t[3], t[2], t[4], t[5]]),
-        4 => ([x0, z0, y0, x1, z1, y1], [t[0], t[1], t[4], t[5], t[2], t[3]]),
-        5 => ([x0, z0, 16 - y1, x1, z1, 16 - y0], [t[0], t[1], t[5], t[4], t[3], t[2]]),
-        0 => ([y0, x0, z0, y1, x1, z1], [t[2], t[3], t[0], t[1], t[4], t[5]]),
-        _ => ([16 - y1, x0, z0, 16 - y0, x1, z1], [t[3], t[2], t[0], t[1], t[4], t[5]]),
+        3 => (
+            [x0, 16 - y1, z0, x1, 16 - y0, z1],
+            [t[0], t[1], t[3], t[2], t[4], t[5]],
+        ),
+        4 => (
+            [x0, z0, y0, x1, z1, y1],
+            [t[0], t[1], t[4], t[5], t[2], t[3]],
+        ),
+        5 => (
+            [x0, z0, 16 - y1, x1, z1, 16 - y0],
+            [t[0], t[1], t[5], t[4], t[3], t[2]],
+        ),
+        0 => (
+            [y0, x0, z0, y1, x1, z1],
+            [t[2], t[3], t[0], t[1], t[4], t[5]],
+        ),
+        _ => (
+            [16 - y1, x0, z0, 16 - y0, x1, z1],
+            [t[3], t[2], t[0], t[1], t[4], t[5]],
+        ),
     };
-    Part { b, tile, uv: p.uv, turn: 0 }
+    Part {
+        b,
+        tile,
+        uv: p.uv,
+        turn: 0,
+    }
 }
 
 fn push(out: &mut [Part; MAX_PARTS], n: &mut usize, p: Part) {
@@ -147,10 +176,18 @@ pub fn parts(b: u8, out: &mut [Part; MAX_PARTS]) -> usize {
             };
             push(out, &mut n, part(step, all(tex::T_COBBLE)));
         }
-        FENCE => push(out, &mut n, part([6, 0, 6, 10, 16, 10], all(tex::T_WOOD_SIDE))),
+        FENCE => push(
+            out,
+            &mut n,
+            part([6, 0, 6, 10, 16, 10], all(tex::T_WOOD_SIDE)),
+        ),
         DOOR_C => {
             let f = bstate::door_facing(b);
-            let tile = if bstate::door_upper(b) { tex::T_DOOR_UP } else { tex::T_DOOR_LO };
+            let tile = if bstate::door_upper(b) {
+                tex::T_DOOR_UP
+            } else {
+                tex::T_DOOR_LO
+            };
             let edge = tex::T_WOOD_SIDE;
             // Laid out for facing 0, the placer looking along +Z: the closed
             // panel on the near (-Z) edge, the open one on the hinge side
@@ -164,20 +201,45 @@ pub fn parts(b: u8, out: &mut [Part; MAX_PARTS]) -> usize {
         }
         BED => {
             let f = bstate::bed_facing(b);
-            let top = if bstate::bed_head(b) { tex::T_BED_HEAD } else { tex::T_BED_FOOT };
+            let top = if bstate::bed_head(b) {
+                tex::T_BED_HEAD
+            } else {
+                tex::T_BED_FOOT
+            };
             let side = tex::T_BED_SIDE;
-            let p = part([0, 0, 0, 16, 9, 16], [side, side, top, tex::T_PLANK, side, side]);
+            let p = part(
+                [0, 0, 0, 16, 9, 16],
+                [side, side, top, tex::T_PLANK, side, side],
+            );
             push(out, &mut n, turned(p, f));
         }
         TORCH | RSTORCH => {
-            let t = if k == TORCH { tex::T_TORCH } else { tex::T_RSTORCH };
-            let strip = Uv::Strip { u0: 7, u1: 9, top_v: 6 };
+            let t = if k == TORCH {
+                tex::T_TORCH
+            } else {
+                tex::T_RSTORCH
+            };
+            let strip = Uv::Strip {
+                u0: 7,
+                u1: 9,
+                top_v: 6,
+            };
             if s == 0 {
-                push(out, &mut n, Part { uv: strip, ..part([7, 0, 7, 9, 10, 9], all(t)) });
+                push(
+                    out,
+                    &mut n,
+                    Part {
+                        uv: strip,
+                        ..part([7, 0, 7, 9, 10, 9], all(t))
+                    },
+                );
             } else {
                 // On a wall facing s - 1: laid out for facing 0, against the
                 // -Z wall, then turned.
-                let p = Part { uv: strip, ..part([7, 3, 0, 9, 13, 2], all(t)) };
+                let p = Part {
+                    uv: strip,
+                    ..part([7, 3, 0, 9, 13, 2], all(t))
+                };
                 push(out, &mut n, turned(p, s - 1));
             }
         }
@@ -185,16 +247,38 @@ pub fn parts(b: u8, out: &mut [Part; MAX_PARTS]) -> usize {
             let on = bstate::lever_on(b);
             let m = bstate::mount_of(b);
             let base = all(tex::T_COBBLE);
-            let stick = Uv::Strip { u0: 7, u1: 9, top_v: 0 };
+            let stick = Uv::Strip {
+                u0: 7,
+                u1: 9,
+                top_v: 0,
+            };
             if m == 0 {
                 push(out, &mut n, part([4, 0, 5, 12, 3, 11], base));
-                let h = if on { [7, 3, 8, 9, 11, 10] } else { [7, 3, 6, 9, 11, 8] };
-                push(out, &mut n, Part { uv: stick, ..part(h, all(tex::T_WOOD_SIDE)) });
+                let h = if on {
+                    [7, 3, 8, 9, 11, 10]
+                } else {
+                    [7, 3, 6, 9, 11, 8]
+                };
+                push(
+                    out,
+                    &mut n,
+                    Part {
+                        uv: stick,
+                        ..part(h, all(tex::T_WOOD_SIDE))
+                    },
+                );
             } else {
                 let f = m - 1;
                 let plate = part([5, 4, 0, 11, 12, 3], base);
-                let h = if on { [7, 8, 3, 9, 15, 5] } else { [7, 1, 3, 9, 8, 5] };
-                let hp = Part { uv: stick, ..part(h, all(tex::T_WOOD_SIDE)) };
+                let h = if on {
+                    [7, 8, 3, 9, 15, 5]
+                } else {
+                    [7, 1, 3, 9, 8, 5]
+                };
+                let hp = Part {
+                    uv: stick,
+                    ..part(h, all(tex::T_WOOD_SIDE))
+                };
                 push(out, &mut n, turned(plate, f));
                 push(out, &mut n, turned(hp, f));
             }
@@ -202,7 +286,10 @@ pub fn parts(b: u8, out: &mut [Part; MAX_PARTS]) -> usize {
         LADDER => {
             // Laid out for facing 0, against the -Z wall: a thin panel.
             let t = tex::T_LADDER_W;
-            let p = part([0, 0, 0, 16, 16, 2], [NO_TILE, NO_TILE, NO_TILE, NO_TILE, t, t]);
+            let p = part(
+                [0, 0, 0, 16, 16, 2],
+                [NO_TILE, NO_TILE, NO_TILE, NO_TILE, t, t],
+            );
             push(out, &mut n, turned(p, bstate::ladder_facing(b)));
         }
         PISTON | PISTON_HEAD => {
@@ -210,7 +297,14 @@ pub fn parts(b: u8, out: &mut [Part; MAX_PARTS]) -> usize {
             // arm, the plate and a shaft back to the piston.
             let d = bstate::piston_dir(b);
             let body = all(tex::T_COBBLE);
-            let plate = [tex::T_WOOD_SIDE, tex::T_WOOD_SIDE, tex::T_PLANK, tex::T_COBBLE, tex::T_WOOD_SIDE, tex::T_WOOD_SIDE];
+            let plate = [
+                tex::T_WOOD_SIDE,
+                tex::T_WOOD_SIDE,
+                tex::T_PLANK,
+                tex::T_COBBLE,
+                tex::T_WOOD_SIDE,
+                tex::T_WOOD_SIDE,
+            ];
             if k == PISTON {
                 push(out, &mut n, aimed(part([0, 0, 0, 16, 12, 16], body), d));
                 if !bstate::piston_extended(b) {
@@ -218,7 +312,11 @@ pub fn parts(b: u8, out: &mut [Part; MAX_PARTS]) -> usize {
                 }
             } else {
                 push(out, &mut n, aimed(part([0, 12, 0, 16, 16, 16], plate), d));
-                push(out, &mut n, aimed(part([6, 0, 6, 10, 12, 10], all(tex::T_WOOD_SIDE)), d));
+                push(
+                    out,
+                    &mut n,
+                    aimed(part([6, 0, 6, 10, 12, 10], all(tex::T_WOOD_SIDE)), d),
+                );
             }
         }
         WIRE => {
@@ -284,7 +382,17 @@ pub fn solid(b: u8) -> Solid {
 
 /// True if the box `part` of the block at cell (bx, by, bz) overlaps the body
 /// box (centre x/z, feet y, half width, height), all in world units.
-pub fn part_hits(p: &Part, bx: i32, by: i32, bz: i32, cx: i32, feet: i32, cz: i32, hw: i32, h: i32) -> bool {
+pub fn part_hits(
+    p: &Part,
+    bx: i32,
+    by: i32,
+    bz: i32,
+    cx: i32,
+    feet: i32,
+    cz: i32,
+    hw: i32,
+    h: i32,
+) -> bool {
     let (x0, y0, z0, x1, y1, z1) = world_box(p, bx, by, bz);
     cx + hw > x0 && cx - hw < x1 && feet + h > y0 && feet < y1 && cz + hw > z0 && cz - hw < z1
 }
@@ -306,7 +414,17 @@ pub fn world_box(p: &Part, bx: i32, by: i32, bz: i32) -> (i32, i32, i32, i32, i3
 
 /// Does the body overlap block `b` standing at cell (bx, by, bz)? For
 /// `Solid::Parts` blocks only the boxes count.
-pub fn body_hits(b: u8, bx: i32, by: i32, bz: i32, cx: i32, feet: i32, cz: i32, hw: i32, h: i32) -> bool {
+pub fn body_hits(
+    b: u8,
+    bx: i32,
+    by: i32,
+    bz: i32,
+    cx: i32,
+    feet: i32,
+    cz: i32,
+    hw: i32,
+    h: i32,
+) -> bool {
     let mut ps = [EMPTY; MAX_PARTS];
     let n = parts(b, &mut ps);
     let mut i = 0;
@@ -328,7 +446,11 @@ pub fn top_under(b: u8, bx: i32, by: i32, bz: i32, cx: i32, cz: i32, hw: i32) ->
     let mut i = 0;
     while i < n {
         let (x0, _, z0, x1, y1, z1) = world_box(&ps[i], bx, by, bz);
-        if cx + hw > x0 && cx - hw < x1 && cz + hw > z0 && cz - hw < z1 && best.map_or(true, |v| y1 > v)
+        if cx + hw > x0
+            && cx - hw < x1
+            && cz + hw > z0
+            && cz - hw < z1
+            && best.map_or(true, |v| y1 > v)
         {
             best = Some(y1);
         }
@@ -355,7 +477,15 @@ pub fn point_in(b: u8, bx: i32, by: i32, bz: i32, x: i32, y: i32, z: i32) -> boo
 /// The nearest distance along the ray `o + d * t` (d a Q12 direction, t in
 /// world units) at which it enters a part of block `b` at (bx, by, bz), no
 /// further than `reach`. A ray that starts inside a part enters it at 0.
-pub fn ray_hit(b: u8, bx: i32, by: i32, bz: i32, o: [i32; 3], d: [i32; 3], reach: i32) -> Option<i32> {
+pub fn ray_hit(
+    b: u8,
+    bx: i32,
+    by: i32,
+    bz: i32,
+    o: [i32; 3],
+    d: [i32; 3],
+    reach: i32,
+) -> Option<i32> {
     let mut ps = [EMPTY; MAX_PARTS];
     let n = parts(b, &mut ps);
     let mut best: Option<i32> = None;
@@ -440,7 +570,7 @@ mod tests {
         // A body in the middle of the doorway cell, standing on the floor.
         let (cx, cz) = (32, 32);
         assert!(!body_hits(closed, 0, 0, 0, cx, 0, cz, 12, 56)); // panel z 0..12, body z 20..44
-        // Against the near edge the closed panel stops it...
+                                                                 // Against the near edge the closed panel stops it...
         assert!(body_hits(closed, 0, 0, 0, 32, 0, 6, 12, 56));
         // ...and the open door does not (the panel is at x 52..64).
         assert!(!body_hits(open, 0, 0, 0, 32, 0, 6, 12, 56));

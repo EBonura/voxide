@@ -18,7 +18,10 @@ const ALL: [Page; PAGES] = [
 
 /// Every page of one tree (pause or title), root first.
 fn tree(at_title: bool) -> Vec<Page> {
-    ALL.iter().copied().filter(|&p| !(at_title && p == Page::Pause)).collect()
+    ALL.iter()
+        .copied()
+        .filter(|&p| !(at_title && p == Page::Pause))
+        .collect()
 }
 
 #[test]
@@ -30,7 +33,11 @@ fn no_label_appears_twice_in_a_tree() {
                 if row.kind == Kind::Done {
                     continue; // one DONE per page, as in Java
                 }
-                assert!(!seen.contains(&row.label), "{} shows twice (title: {at_title})", row.label);
+                assert!(
+                    !seen.contains(&row.label),
+                    "{} shows twice (title: {at_title})",
+                    row.label
+                );
                 seen.push(row.label);
             }
         }
@@ -43,7 +50,11 @@ fn flight_is_one_row_in_the_whole_game() {
     for at_title in [false, true] {
         for page in tree(at_title) {
             for row in rows(page, at_title) {
-                assert!(!row.label.contains("FLIGHT") && !row.label.contains("FLY"), "{}", row.label);
+                assert!(
+                    !row.label.contains("FLIGHT") && !row.label.contains("FLY"),
+                    "{}",
+                    row.label
+                );
             }
         }
     }
@@ -61,7 +72,11 @@ fn every_sub_page_ends_in_done_and_the_first_pages_differ() {
         for page in tree(at_title) {
             let last = rows(page, at_title).last().unwrap();
             if page == first(at_title) && !at_title {
-                assert_ne!(last.kind, Kind::Done, "the pause page leaves by BACK TO GAME");
+                assert_ne!(
+                    last.kind,
+                    Kind::Done,
+                    "the pause page leaves by BACK TO GAME"
+                );
             } else {
                 assert_eq!(last.kind, Kind::Done, "{page:?}");
             }
@@ -173,7 +188,11 @@ fn pages_fit_the_panel_and_the_rows_fit_their_buttons() {
                     Kind::Set(_) | Kind::SaveSettings | Kind::Tutorial => 12 * 8,
                     _ => 0,
                 };
-                assert!(row.label.len() * 8 + value <= 252 - 16, "{} does not fit", row.label);
+                assert!(
+                    row.label.len() * 8 + value <= 252 - 16,
+                    "{} does not fit",
+                    row.label
+                );
             }
         }
     }

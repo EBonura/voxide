@@ -23,7 +23,14 @@ pub const RSTORCH: u8 = 102;
 pub const LEVER: u8 = 103;
 pub const STONE: u8 = 3;
 pub const GLASS: u8 = 14;
-pub const DIRS: [(i32, i32, i32); 6] = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)];
+pub const DIRS: [(i32, i32, i32); 6] = [
+    (1, 0, 0),
+    (-1, 0, 0),
+    (0, 1, 0),
+    (0, -1, 0),
+    (0, 0, 1),
+    (0, 0, -1),
+];
 
 pub mod tex {
     pub const T_COBBLE: u8 = 16;
@@ -39,16 +46,16 @@ pub mod tex {
     pub const T_LADDER_W: u8 = 123;
 }
 
-#[path = "../../../game/src/bstate.rs"]
-pub mod bstate;
-#[path = "../../../game/src/shape.rs"]
-pub mod shape;
-#[path = "../../../game/src/redstone.rs"]
-pub mod redstone;
-#[path = "../../../game/src/edits.rs"]
-pub mod edits;
 #[path = "../../../game/src/bow.rs"]
 pub mod bow;
+#[path = "../../../game/src/bstate.rs"]
+pub mod bstate;
+#[path = "../../../game/src/edits.rs"]
+pub mod edits;
+#[path = "../../../game/src/redstone.rs"]
+pub mod redstone;
+#[path = "../../../game/src/shape.rs"]
+pub mod shape;
 
 use redstone::{Cells, Effect, Net, EFFECTS};
 use std::collections::HashMap;
@@ -167,7 +174,11 @@ fn a_lever_beside_a_door_works_it_without_dust() {
     let n = net_of(&g);
     let mut fx = [Effect::Tnt(0, 0, 0); EFFECTS];
     let k = n.react(&g, 1, 1, 0, &mut fx, 0);
-    assert!(fx[..k].contains(&Effect::Door(2, 1, 0, true)), "{:?}", &fx[..k]);
+    assert!(
+        fx[..k].contains(&Effect::Door(2, 1, 0, true)),
+        "{:?}",
+        &fx[..k]
+    );
 }
 
 #[test]
@@ -228,7 +239,11 @@ fn two_torches_in_a_ring_make_a_clock() {
     let mut states = Vec::new();
     for _ in 0..8 {
         run(&mut n, &g, 1);
-        states.push((n.torch_lit(1, 0, 0), n.torch_lit(4, 0, 0), n.torch_lit(7, 0, 0)));
+        states.push((
+            n.torch_lit(1, 0, 0),
+            n.torch_lit(4, 0, 0),
+            n.torch_lit(7, 0, 0),
+        ));
     }
     // A chain of inverters from an undriven first block: torch 0 stays lit,
     // torch 1 is put out by its dust (fed by torch 0), torch 2 relights.

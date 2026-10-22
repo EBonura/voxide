@@ -45,7 +45,7 @@ pub fn frame(frame: u32, player: &mut Player, ls: &mut (i16, i16), rs: &mut (i16
     if frame == PIN_FRAME {
         // Put the pig's middle (28 units over its feet) on the view ray,
         // assuming the ground there is level with the player's feet.
-        let pa = (PITCH as i32 & 0x0FFF) as u16;
+        let pa = (PITCH as i32 & 0x0fff) as u16;
         let sp = -sincos::sin_q12(pa);
         let cp = sincos::cos_q12(pa);
         let d = (EYE_HEIGHT - 28) * cp / sp;

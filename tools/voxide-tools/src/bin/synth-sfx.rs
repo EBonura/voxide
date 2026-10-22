@@ -47,7 +47,7 @@ fn wav(samples: &[f64]) -> Vec<u8> {
 /// short low "thwip" of air under both.
 fn bow() -> Vec<f64> {
     let n = (RATE as f64 * 0.42) as usize;
-    let mut noise = Noise(0x0B0B_0B0B);
+    let mut noise = Noise(0x0b0b_0b0b);
     let period = (RATE as f64 / 170.0).round() as usize;
     let mut line: Vec<f64> = (0..period).map(|_| noise.next()).collect();
     // Take the top off the initial burst so the string rings, not hisses.
@@ -67,13 +67,21 @@ fn bow() -> Vec<f64> {
         *o = v * (1.0 - t / 0.42).max(0.0).powi(2);
     }
     // The slap: a few milliseconds of noise.
-    for (i, o) in out.iter_mut().take((RATE as f64 * 0.012) as usize).enumerate() {
+    for (i, o) in out
+        .iter_mut()
+        .take((RATE as f64 * 0.012) as usize)
+        .enumerate()
+    {
         let t = i as f64 / (RATE as f64 * 0.012);
         *o += noise.next() * 0.7 * (1.0 - t);
     }
     // The rush of air: low noise, a swell and fall over 90 ms.
     let mut lp = 0.0;
-    for (i, o) in out.iter_mut().take((RATE as f64 * 0.09) as usize).enumerate() {
+    for (i, o) in out
+        .iter_mut()
+        .take((RATE as f64 * 0.09) as usize)
+        .enumerate()
+    {
         let t = i as f64 / (RATE as f64 * 0.09);
         lp += (noise.next() - lp) * 0.12;
         *o += lp * 1.4 * (PI * t).sin();
@@ -85,7 +93,7 @@ fn bow() -> Vec<f64> {
 /// decay) over a short burst of band-limited noise for the impact.
 fn arrow_hit() -> Vec<f64> {
     let n = (RATE as f64 * 0.2) as usize;
-    let mut noise = Noise(0x1234_ABCD);
+    let mut noise = Noise(0x1234_abcd);
     let mut out = vec![0.0; n];
     let mut phase = 0.0;
     let mut lp = 0.0;

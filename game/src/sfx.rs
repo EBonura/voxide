@@ -10,10 +10,10 @@
 #![allow(dead_code)]
 
 use crate::sfxdata::{
-    Sample, SAMPLES, SFX_CHUNK_ID, S_BARK, S_BONES, S_BREAK, S_CHEST, S_CHICKEN, S_CLICK,
-    S_CONFIRM, S_COW, S_DIG_SOFT, S_DIG_STONE, S_DIG_WOOD, S_DOOR, S_EAT, S_EXPLODE, S_HISS,
-    S_HURT, S_PIG, S_PLACE, S_SHEEP, S_SPLASH, S_STEP_GRASS, S_STEP_SAND, S_STEP_STONE,
-    S_STEP_WOOD, S_ZOMBIE, S_BOW, S_ARROW_HIT,
+    Sample, SAMPLES, SFX_CHUNK_ID, S_ARROW_HIT, S_BARK, S_BONES, S_BOW, S_BREAK, S_CHEST,
+    S_CHICKEN, S_CLICK, S_CONFIRM, S_COW, S_DIG_SOFT, S_DIG_STONE, S_DIG_WOOD, S_DOOR, S_EAT,
+    S_EXPLODE, S_HISS, S_HURT, S_PIG, S_PLACE, S_SHEEP, S_SPLASH, S_STEP_GRASS, S_STEP_SAND,
+    S_STEP_STONE, S_STEP_WOOD, S_ZOMBIE,
 };
 use psx_pack::cd::{self, SectorReader, SECTOR_WORDS};
 use psx_pack::SECTOR_BYTES;
@@ -161,7 +161,7 @@ pub fn dig(mat: u32, n: u32) {
 }
 /// A block finished breaking.
 pub fn break_block() {
-    play(S_BREAK, 0x2C00, 100);
+    play(S_BREAK, 0x2c00, 100);
 }
 /// A block was placed.
 pub fn place() {
@@ -214,13 +214,13 @@ fn vol_at(base: i16, dist_blocks: i32) -> i16 {
 }
 
 pub fn pig(d: i32) {
-    play(S_PIG, vol_at(0x2C00, d), 100);
+    play(S_PIG, vol_at(0x2c00, d), 100);
 }
 pub fn cow(d: i32) {
-    play(S_COW, vol_at(0x2C00, d), 100);
+    play(S_COW, vol_at(0x2c00, d), 100);
 }
 pub fn sheep(d: i32) {
-    play(S_SHEEP, vol_at(0x2A00, d), 100);
+    play(S_SHEEP, vol_at(0x2a00, d), 100);
 }
 pub fn chicken(d: i32) {
     play(S_CHICKEN, vol_at(0x2600, d), 100);
@@ -233,15 +233,15 @@ pub fn skeleton(d: i32) {
     play(S_BONES, vol_at(0x2400, d), 100);
 }
 pub fn wolf(d: i32) {
-    play(S_BARK, vol_at(0x2A00, d), 100);
+    play(S_BARK, vol_at(0x2a00, d), 100);
 }
 /// Spider: the rattle again, faster and quieter -- a chitter.
 pub fn spider(d: i32) {
-    play(S_BONES, vol_at(0x1C00, d), 135);
+    play(S_BONES, vol_at(0x1c00, d), 135);
 }
 /// Sapper fuse lit: the dreaded hiss.
 pub fn sapper_hiss() {
-    play(S_HISS, 0x2C00, 100);
+    play(S_HISS, 0x2c00, 100);
 }
 
 // ---- Interaction sounds. ----
@@ -253,7 +253,11 @@ pub fn door(open: bool) {
 /// The arrow leaves the bow: Java's pitch is 1 / (random x 0.4 + 1.2) + pull x
 /// 0.5, so a weak draw sounds lower and slower than a full one.
 pub fn bow_shoot(power_q12: i32) {
-    play(S_BOW, 0x3000, 85 + (power_q12.clamp(0, 4096) as u32) * 25 / 4096);
+    play(
+        S_BOW,
+        0x3000,
+        85 + (power_q12.clamp(0, 4096) as u32) * 25 / 4096,
+    );
 }
 /// An arrow lands in a block or a creature.
 pub fn arrow_hit(dist_blocks: i32) {
@@ -315,7 +319,7 @@ struct Synth {
 impl Synth {
     const fn new() -> Self {
         Self {
-            seed: 0x7C3A_91E5,
+            seed: 0x7c3a_91e5,
             crack: 0,
             lp1: 0,
             lp2: 0,
@@ -432,7 +436,7 @@ fn adpcm_block(s: &[i32; 28], p1: &mut i32, p2: &mut i32, out: &mut [u8]) {
         let dec = ((q << step) + pred).clamp(-32_768, 32_767);
         *p2 = *p1;
         *p1 = dec;
-        let nib = (q & 0xF) as u8;
+        let nib = (q & 0xf) as u8;
         if i % 2 == 0 {
             out[2 + i / 2] = nib;
         } else {
@@ -621,7 +625,7 @@ struct RainSynth {
 impl RainSynth {
     const fn new() -> Self {
         Self {
-            seed: 0x51A7_2C03,
+            seed: 0x51a7_2c03,
             lp: 0,
             drop: 0,
         }
@@ -636,7 +640,7 @@ impl RainSynth {
         self.lp += ((w - self.lp) * 8_000) >> 15;
         let hiss = (w - self.lp) >> 2;
         if (self.seed >> 7) % 37 == 0 {
-            self.drop = 6_000 + ((self.seed >> 3) & 0x3FFF) as i32;
+            self.drop = 6_000 + ((self.seed >> 3) & 0x3fff) as i32;
         }
         self.drop = self.drop * 29 / 32;
         hiss + ((self.drop * w) >> 15)
