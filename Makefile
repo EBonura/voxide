@@ -254,3 +254,9 @@ release: disc
 	@mkdir -p "$(ROOT)/release"
 	cp "$(DIST)/voxide.bin" "$(DIST)/voxide.cue" "$(ROOT)/release/"
 	@echo "RELEASE -> $(ROOT)/release (commit + push to deploy)"
+
+.PHONY: fmt fmt-check
+fmt:
+	tools/style-fmt.sh
+fmt-check:
+	tools/style-fmt.sh --check
