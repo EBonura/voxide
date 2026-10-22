@@ -169,7 +169,7 @@ pub fn spawn(x: i32, y: i32, z: i32, fuse: i32) -> bool {
     let mut i = 0;
     while i < MAX_TNT {
         if !unsafe { USED[i] } {
-            let a = (rnd() & 0xfff) as u16; // 4096 to the turn
+            let a = (rnd() & 0xFFF) as u16; // 4096 to the turn
             let (s, c) = (sincos::sin_q12(a), sincos::cos_q12(a));
             unsafe {
                 USED[i] = true;
@@ -216,7 +216,9 @@ fn mark_pending(i: usize) {
 
 fn try_pending(i: usize) {
     unsafe {
-        if slack::room_for(DETONATE_COST) && detonate_at(PEND_X[i], PEND_Y[i] + 4, PEND_Z[i], i) {
+        if slack::room_for(DETONATE_COST)
+            && detonate_at(PEND_X[i], PEND_Y[i] + 4, PEND_Z[i], i)
+        {
             #[cfg(feature = "fire-lab")]
             {
                 VOXIDE_LAB_TNT_COUNTS[1] += 1;
@@ -306,15 +308,7 @@ fn step(i: usize) {
         }
         // A wisp of smoke over the fuse, a few times a second.
         if FUSE[i] % 20 == 0 {
-            spawn_particles(
-                X[i],
-                Y[i] + HEIGHT + 8,
-                Z[i],
-                (70, 70, 70),
-                1,
-                i as u32 + FUSE[i] as u32,
-                6,
-            );
+            spawn_particles(X[i], Y[i] + HEIGHT + 8, Z[i], (70, 70, 70), 1, i as u32 + FUSE[i] as u32, 6);
         }
         if FUSE[i] > 1 {
             FUSE[i] -= 1;
@@ -348,28 +342,12 @@ fn detonate_at(x: i32, y: i32, z: i32, skip: usize) -> bool {
 pub fn explosion_effects(x: i32, y: i32, z: i32, power: i32, skip: usize) {
     sfx::explode();
     // A fireball's orange and white at the core, then the dust and smoke.
-    spawn_particles(
-        x,
-        y + BLOCK / 2,
-        z,
-        (250, 190, 70),
-        12,
-        (x ^ z) as u32 ^ 0x55,
-        30,
-    );
+    spawn_particles(x, y + BLOCK / 2, z, (250, 190, 70), 12, (x ^ z) as u32 ^ 0x55, 30);
     spawn_particles(x, y + BLOCK / 2, z, (96, 84, 72), 26, (x ^ z) as u32, 46);
     mob::blast_mobs(x, y, z, power);
     // The player, through the hazard path the sappers use (armour, i-frames).
     let p = unsafe { PLAYER_POS };
-    if let Some(h) = hit_on(
-        power,
-        (x, y, z),
-        (p.0, p.1, p.2),
-        PLAYER_HALF_W,
-        PLAYER_HEIGHT,
-        EYE_HEIGHT,
-        true,
-    ) {
+    if let Some(h) = hit_on(power, (x, y, z), (p.0, p.1, p.2), PLAYER_HALF_W, PLAYER_HEIGHT, EYE_HEIGHT, true) {
         mob::blast_hazard(h.dmg);
         unsafe {
             KICK.0 += h.kx;

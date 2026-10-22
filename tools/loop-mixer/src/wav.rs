@@ -9,14 +9,10 @@ pub struct Audio {
 }
 
 fn le16(b: &[u8], at: usize) -> Result<u16, String> {
-    Ok(u16::from_le_bytes(
-        b.get(at..at + 2).ok_or("short WAV")?.try_into().unwrap(),
-    ))
+    Ok(u16::from_le_bytes(b.get(at..at + 2).ok_or("short WAV")?.try_into().unwrap()))
 }
 fn le32(b: &[u8], at: usize) -> Result<u32, String> {
-    Ok(u32::from_le_bytes(
-        b.get(at..at + 4).ok_or("short WAV")?.try_into().unwrap(),
-    ))
+    Ok(u32::from_le_bytes(b.get(at..at + 4).ok_or("short WAV")?.try_into().unwrap()))
 }
 
 /// Read a 16, 24 or 32-bit integer PCM WAV with one or two channels (a mono
@@ -40,16 +36,14 @@ pub fn read(bytes: &[u8]) -> Result<Audio, String> {
     let fmt = fmt.ok_or("no fmt chunk")?;
     let data = data.ok_or("no data chunk")?;
     let mut format = le16(fmt, 0)?;
-    if format == 0xfffe && fmt.len() >= 26 {
+    if format == 0xFFFE && fmt.len() >= 26 {
         format = le16(fmt, 24)?;
     }
     let channels = le16(fmt, 2)? as usize;
     let rate = le32(fmt, 4)?;
     let bits = le16(fmt, 14)? as usize;
     if format != 1 || !(channels == 1 || channels == 2) || ![16, 24, 32].contains(&bits) {
-        return Err(format!(
-            "unsupported WAV: format {format}, {channels} channels, {bits} bits"
-        ));
+        return Err(format!("unsupported WAV: format {format}, {channels} channels, {bits} bits"));
     }
     let width = bits / 8;
     let frames = data.len() / (width * channels);
@@ -61,12 +55,7 @@ pub fn read(bytes: &[u8]) -> Result<Audio, String> {
             let o = (f * channels + c) * width;
             let s = match bits {
                 16 => i16::from_le_bytes([data[o], data[o + 1]]) as i32,
-                24 => {
-                    ((data[o] as i32) << 8
-                        | (data[o + 1] as i32) << 16
-                        | (data[o + 2] as i32) << 24)
-                        >> 8
-                }
+                24 => ((data[o] as i32) << 8 | (data[o + 1] as i32) << 16 | (data[o + 2] as i32) << 24) >> 8,
                 _ => i32::from_le_bytes([data[o], data[o + 1], data[o + 2], data[o + 3]]),
             };
             v[c] = s as f64 * scale;

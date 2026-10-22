@@ -57,12 +57,7 @@ impl Ink for Now {
     }
     fn frame(&self, font: &FontAtlas, title: &str) {
         panel_now(MENU_PANEL_X, MENU_PANEL_Y, MENU_PANEL_W, MENU_PANEL_H);
-        font.draw_text(
-            (SCREEN_W as i16 - title.len() as i16 * 8) / 2,
-            12,
-            title,
-            MC_INK,
-        );
+        font.draw_text((SCREEN_W as i16 - title.len() as i16 * 8) / 2, 12, title, MC_INK);
     }
     fn button(&self, y: i16, sel: bool) {
         row_button_now(y, sel);
@@ -140,7 +135,7 @@ const MENUS: [Row; 12] = [
 
 const TEXT_X: i16 = 74;
 /// A continuation line: dimmer than the rows, still readable on the panel.
-const DIM: (u8, u8, u8) = (0x3c, 0x3c, 0x48);
+const DIM: (u8, u8, u8) = (0x3C, 0x3C, 0x48);
 
 /// Draw the card: panel, title, the page's rows and the buttons that turn
 /// it. `y` of a row is its text line.

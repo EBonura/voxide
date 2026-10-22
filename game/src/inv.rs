@@ -222,22 +222,14 @@ fn chest_slot(idx: usize) -> (Zone, u8, u16) {
             }
         }
     };
-    (
-        if pane == 0 { Zone::Mine } else { Zone::Theirs },
-        item,
-        count,
-    )
+    (if pane == 0 { Zone::Mine } else { Zone::Theirs }, item, count)
 }
 
 #[optimize(size)]
 fn chest_spot(idx: usize) -> Spot {
     let (zone, item, count) = chest_slot(idx);
     let from = unsafe { CARRY_FROM };
-    let other = if zone == Zone::Mine {
-        from == FROM_BOX
-    } else {
-        from == FROM_MINE
-    };
+    let other = if zone == Zone::Mine { from == FROM_BOX } else { from == FROM_MINE };
     spot(zone, item, count, item != AIR && count > 0, other)
 }
 
@@ -473,11 +465,7 @@ fn furn_place(idx: usize, zone: Zone, want: u16) {
         let m = if zone == Zone::MineFurnace {
             let y = if CARRY_FROM == FROM_FIN { F_IN } else { F_OUT };
             let m = furn_pull(idx, y, want);
-            let left = if y == F_IN {
-                FURN_IN_N[idx]
-            } else {
-                FURN_OUT_N[idx]
-            };
+            let left = if y == F_IN { FURN_IN_N[idx] } else { FURN_OUT_N[idx] };
             if left == 0 {
                 CARRY_N = m; // the slot is empty: this was all of it
             }
@@ -554,6 +542,7 @@ pub fn furnace_input(idx: usize, pad: ButtonState, previous: ButtonState) {
         }
     }
 }
+
 
 /// A pane of kinds with counts from `counts`, and its page marker.
 #[optimize(size)]
@@ -794,7 +783,7 @@ pub fn draw_furnace(font: &FontAtlas, idx: usize, player: &Player) {
     rect(F_SLOT_X + 7, F_IN_Y + 20, 4, 2, lit.0, lit.1, lit.2);
     // Arrow: grey track filling orange with the smelt progress.
     let (ax, ay, aw) = (F_SLOT_X + 24, F_OUT_Y + 6, 38i16);
-    rect(ax, ay, aw, 5, 0x8b, 0x8b, 0x8b);
+    rect(ax, ay, aw, 5, 0x8B, 0x8B, 0x8B);
     let w = prog as i16 * aw / SMELT_TIME as i16;
     if w > 0 {
         rect(ax, ay, w, 5, 230, 140, 40);
@@ -833,14 +822,7 @@ pub fn draw_furnace(font: &FontAtlas, idx: usize, player: &Player) {
             "O PUTS IT BACK"
         } else if y == F_OUT {
             "THE OUTPUT ONLY GIVES"
-        } else if !furn_fits(
-            if y == F_FUEL {
-                Zone::FurnFuel
-            } else {
-                Zone::FurnIn
-            },
-            hand,
-        ) {
+        } else if !furn_fits(if y == F_FUEL { Zone::FurnFuel } else { Zone::FurnIn }, hand) {
             if y == F_FUEL {
                 "THAT WILL NOT BURN"
             } else {
@@ -924,7 +906,7 @@ const ROWS: usize = 4;
 const PER_PAGE: usize = COLS * ROWS;
 /// The cursor's fifth row is the hotbar itself.
 const HOT_ROW: usize = ROWS;
-const CURSOR: (u8, u8, u8) = (0xff, 0xe0, 0x40);
+const CURSOR: (u8, u8, u8) = (0xFF, 0xE0, 0x40);
 
 const TABS: usize = 4;
 const TAB_NAME: [&str; TABS] = ["BLOCKS", "ITEMS", "FOOD", "MATERIALS"];
@@ -1318,11 +1300,7 @@ pub fn inventory_input(pad: ButtonState, previous: ButtonState, player: &mut Pla
     if pressed(button::CROSS) {
         unsafe { NOTE_T = 0 }; // a new action replaces the last note
         match hand::decide(s, Btn::Cross) {
-            Act::Take => lift(
-                kind,
-                unsafe { INV[kind as usize] },
-                if hot { cx as i8 } else { FROM_GRID },
-            ),
+            Act::Take => lift(kind, unsafe { INV[kind as usize] }, if hot { cx as i8 } else { FROM_GRID }),
             Act::Place | Act::Swap => drop_on_hotbar(cx, player),
             _ => why_not(hot, item),
         }
@@ -1364,19 +1342,9 @@ pub fn inventory_input(pad: ButtonState, previous: ButtonState, player: &mut Pla
 /// stack to act on.
 #[optimize(size)]
 fn item_spot(hot: bool, kind: u8) -> Spot {
-    let count = if kind == AIR {
-        0
-    } else {
-        unsafe { INV[kind as usize] }
-    };
+    let count = if kind == AIR { 0 } else { unsafe { INV[kind as usize] } };
     let full = kind != AIR && (hot || (count > 0 && holdable(kind)));
-    spot(
-        if hot { Zone::Hotbar } else { Zone::Grid },
-        kind,
-        count,
-        full,
-        false,
-    )
+    spot(if hot { Zone::Hotbar } else { Zone::Grid }, kind, count, full, false)
 }
 
 /// Why a button did nothing on a grid kind that looks like a stack.
@@ -1399,9 +1367,9 @@ fn why_not(hot: bool, item: u8) {
 #[optimize(size)]
 pub fn panel(x: i16, y: i16, w: i16, h: i16) {
     rect(x, y, w, h, 0, 0, 0);
-    rect(x + 1, y + 1, w - 2, h - 2, 0xc6, 0xc6, 0xc6);
-    rect(x + 1, y + 1, w - 3, 1, 0xff, 0xff, 0xff);
-    rect(x + 1, y + 1, 1, h - 3, 0xff, 0xff, 0xff);
+    rect(x + 1, y + 1, w - 2, h - 2, 0xC6, 0xC6, 0xC6);
+    rect(x + 1, y + 1, w - 3, 1, 0xFF, 0xFF, 0xFF);
+    rect(x + 1, y + 1, 1, h - 3, 0xFF, 0xFF, 0xFF);
     rect(x + 2, y + h - 2, w - 3, 1, 0x55, 0x55, 0x55);
     rect(x + w - 2, y + 2, 1, h - 3, 0x55, 0x55, 0x55);
 }
@@ -1438,11 +1406,11 @@ pub fn tabs(font: &FontAtlas, y: i16, tiles: &[u8], sel: usize) {
         let x = x0 + i as i16 * 24;
         if i == sel {
             rect(x, y - 2, 22, 22, 0, 0, 0);
-            rect(x + 1, y - 1, 20, 20, 0xe6, 0xe6, 0xe6);
+            rect(x + 1, y - 1, 20, 20, 0xE6, 0xE6, 0xE6);
             draw_tile(x + 3, y + 1, tiles[i], (128, 128, 128));
         } else {
             rect(x, y, 22, 20, 0, 0, 0);
-            rect(x + 1, y + 1, 20, 18, 0x8b, 0x8b, 0x8b);
+            rect(x + 1, y + 1, 20, 18, 0x8B, 0x8B, 0x8B);
             draw_tile(x + 3, y + 2, tiles[i], (70, 70, 70));
         }
         i += 1;
@@ -1496,8 +1464,8 @@ const TAB_TILES: [u8; TABS] = [
     tex::T_I_BREAD,
     tex::T_I_COAL,
 ];
-const LABEL: (u8, u8, u8) = (0xe0, 0xe0, 0xe0);
-const GREY: (u8, u8, u8) = (0xa8, 0xa8, 0xa8);
+const LABEL: (u8, u8, u8) = (0xE0, 0xE0, 0xE0);
+const GREY: (u8, u8, u8) = (0xA8, 0xA8, 0xA8);
 
 #[inline(never)]
 #[optimize(size)]
@@ -1567,11 +1535,7 @@ pub fn draw_inventory(font: &FontAtlas, player: &Player) {
     // Info strip: what is under (or on) the cursor, and what X will do.
     mc_slot(16, 130, 288, 34);
     let hot = cy == HOT_ROW;
-    let shown_kind = if hot {
-        unsafe { HOTBAR[cx] }
-    } else {
-        cursor_item(&list, n)
-    };
+    let shown_kind = if hot { unsafe { HOTBAR[cx] } } else { cursor_item(&list, n) };
     let shown = if carry != AIR { carry } else { shown_kind };
     if shown != AIR {
         draw_icon(22, 135, shown, 128);
@@ -1591,9 +1555,15 @@ pub fn draw_inventory(font: &FontAtlas, player: &Player) {
     }
     let (note_t, note_s) = unsafe { (NOTE_T, NOTE) };
     if note_t > 0 {
-        ui_text(font, 42, 148, note_s, (0xf0, 0xe0, 0x80));
+        ui_text(font, 42, 148, note_s, (0xF0, 0xE0, 0x80));
     } else if carry != AIR {
-        ui_text(font, 42, 148, "CHOOSE A HOTBAR SLOT. O: BACK", GREY);
+        ui_text(
+            font,
+            42,
+            148,
+            "CHOOSE A HOTBAR SLOT. O: BACK",
+            GREY,
+        );
     } else if shown != AIR {
         let p = purpose(shown);
         ui_text(font, 42, 148, p, GREY);
@@ -1624,14 +1594,7 @@ pub fn draw_inventory(font: &FontAtlas, player: &Player) {
     if np > 1 {
         hint_item(font, x, 180, "L2R2", PS_KEY, "PAGE");
     }
-    hint_item(
-        font,
-        16,
-        192,
-        "SEL",
-        PS_KEY,
-        if all { "SHOW OWNED" } else { "SHOW ALL" },
-    );
+    hint_item(font, 16, 192, "SEL", PS_KEY, if all { "SHOW OWNED" } else { "SHOW ALL" });
 
     // The live hotbar is the grid's fifth row, drawn over the dimming.
     draw_hotbar(hud_tool(player, AIR));
@@ -1711,93 +1674,25 @@ fn stock(out: &mut [u8; STOCK_N]) -> usize {
 fn pmove(z: usize, i: usize, d: usize, ns: usize) -> (usize, usize) {
     let last = ns.max(1) - 1;
     match (z, d) {
-        (Z_ARMOR, 0) => {
-            if i > 0 {
-                (Z_ARMOR, i - 1)
-            } else {
-                (Z_HOT, 0)
-            }
-        }
-        (Z_ARMOR, 1) => {
-            if i < 3 {
-                (Z_ARMOR, i + 1)
-            } else {
-                (Z_STOCK, 0)
-            }
-        }
-        (Z_ARMOR, 3) => {
-            if i == 3 {
-                (Z_OFF, 0)
-            } else {
-                (Z_WEAP, 0)
-            }
-        }
+        (Z_ARMOR, 0) => if i > 0 { (Z_ARMOR, i - 1) } else { (Z_HOT, 0) },
+        (Z_ARMOR, 1) => if i < 3 { (Z_ARMOR, i + 1) } else { (Z_STOCK, 0) },
+        (Z_ARMOR, 3) => if i == 3 { (Z_OFF, 0) } else { (Z_WEAP, 0) },
         (Z_OFF, 0) => (Z_ARMOR, 1),
         (Z_OFF, 1) => (Z_STOCK, 0),
         (Z_OFF, 2) => (Z_ARMOR, 3),
         (Z_OFF, 3) => (Z_WEAP, 0),
-        (Z_WEAP, 0) => {
-            if i >= 3 {
-                (Z_GRID, 2)
-            } else {
-                (Z_ARMOR, 0)
-            }
-        }
+        (Z_WEAP, 0) => if i >= 3 { (Z_GRID, 2) } else { (Z_ARMOR, 0) },
         (Z_WEAP, 1) => (Z_STOCK, i.min(last)),
-        (Z_WEAP, 2) => {
-            if i > 0 {
-                (Z_WEAP, i - 1)
-            } else {
-                (Z_OFF, 0)
-            }
-        }
-        (Z_WEAP, 3) => {
-            if i < 4 {
-                (Z_WEAP, i + 1)
-            } else {
-                (Z_GRID, 2)
-            }
-        }
-        (Z_GRID, 0) => {
-            if i >= 2 {
-                (Z_GRID, i - 2)
-            } else {
-                (Z_HOT, 4)
-            }
-        }
-        (Z_GRID, 1) => {
-            if i < 2 {
-                (Z_HOT, 5)
-            } else {
-                (Z_STOCK, 5 + i - 2)
-            }
-        }
-        (Z_GRID, 2) => {
-            if i % 2 == 1 {
-                (Z_GRID, i - 1)
-            } else {
-                (Z_WEAP, 4)
-            }
-        }
-        (Z_GRID, 3) => {
-            if i % 2 == 0 {
-                (Z_GRID, i + 1)
-            } else {
-                (Z_OUT, 0)
-            }
-        }
+        (Z_WEAP, 2) => if i > 0 { (Z_WEAP, i - 1) } else { (Z_OFF, 0) },
+        (Z_WEAP, 3) => if i < 4 { (Z_WEAP, i + 1) } else { (Z_GRID, 2) },
+        (Z_GRID, 0) => if i >= 2 { (Z_GRID, i - 2) } else { (Z_HOT, 4) },
+        (Z_GRID, 1) => if i < 2 { (Z_HOT, 5) } else { (Z_STOCK, 5 + i - 2) },
+        (Z_GRID, 2) => if i % 2 == 1 { (Z_GRID, i - 1) } else { (Z_WEAP, 4) },
+        (Z_GRID, 3) => if i % 2 == 0 { (Z_GRID, i + 1) } else { (Z_OUT, 0) },
         (Z_OUT, 0) => (Z_HOT, 7),
         (Z_OUT, 1) => (Z_STOCK, 7),
         (Z_OUT, 2) => (Z_GRID, 1),
-        (Z_STOCK, 0) => {
-            if i < 2 {
-                (Z_ARMOR, 3)
-            } else if i >= 5 {
-                (Z_GRID, 2 + (i >= 7) as usize)
-            } else {
-                (Z_WEAP, (i - 2).min(4))
-            }
-        }
+        (Z_STOCK, 0) => if i < 2 { (Z_ARMOR, 3) } else if i >= 5 { (Z_GRID, 2 + (i >= 7) as usize) } else { (Z_WEAP, (i - 2).min(4)) },
         (Z_STOCK, 1) => (Z_HOT, i),
         (Z_STOCK, 2) => (Z_STOCK, (i + STOCK_N - 1) % STOCK_N),
         (Z_STOCK, 3) => (Z_STOCK, (i + 1) % STOCK_N),
@@ -1828,35 +1723,19 @@ fn put_in_offhand(p: &mut Player) {
 /// What the player page's cursor is on, for the prompt table.
 #[optimize(size)]
 fn player_spot(z: usize, i: usize, p: &Player, ns: usize, st: &[u8; STOCK_N]) -> Spot {
-    let owned = |k: u8| {
-        if k == AIR {
-            0
-        } else {
-            unsafe { INV[k as usize] }
-        }
-    };
+    let owned = |k: u8| if k == AIR { 0 } else { unsafe { INV[k as usize] } };
     let (zone, kind, count, full) = match z {
         Z_ARMOR => (Zone::Armor, p.worn[i], 1, p.worn[i] != AIR),
         Z_OFF => (Zone::Off, p.offhand, owned(p.offhand), p.offhand != AIR),
         Z_WEAP => {
             let class = equip::WEAPONS[i];
-            (
-                Zone::Weapon,
-                AIR,
-                0,
-                class == TOOL_NONE || tool_tier(p, class) > 0,
-            )
+            (Zone::Weapon, AIR, 0, class == TOOL_NONE || tool_tier(p, class) > 0)
         }
         Z_STOCK => {
             let k = if i < ns { st[i] } else { AIR };
             (Zone::Pack, k, owned(k), i < ns)
         }
-        Z_GRID => (
-            Zone::Cell,
-            grid::kind(i),
-            grid::count(i),
-            grid::kind(i) != AIR,
-        ),
+        Z_GRID => (Zone::Cell, grid::kind(i), grid::count(i), grid::kind(i) != AIR),
         Z_OUT => (Zone::Result, AIR, 0, grid::output().is_some()),
         _ => {
             let k = unsafe { HOTBAR[i] };
@@ -2150,11 +2029,7 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
         diamond |= matches!(armor_piece(p.worn[k]), Some((1, _)));
         k += 1;
     }
-    let fill = if diamond {
-        (28, 150, 160)
-    } else {
-        (84, 88, 104)
-    };
+    let fill = if diamond { (28, 150, 160) } else { (84, 88, 104) };
     let mut j = 0i16;
     while j < 10 {
         let x = WX + j * 8;
@@ -2172,21 +2047,9 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
     ui_text(font, WX, AY + 10, "DEFENSE", MC_INK);
     ui_text(font, WX + 64, AY + 10, number(pts as u16, &mut nb), MC_INK);
     ui_text(font, WX, AY + 20, "TOUGH", MC_INK);
-    ui_text(
-        font,
-        WX + 64,
-        AY + 20,
-        number(tough as u16, &mut nc),
-        MC_INK,
-    );
+    ui_text(font, WX + 64, AY + 20, number(tough as u16, &mut nc), MC_INK);
     ui_text(font, WX, AY + 30, "10 HIT", MC_INK);
-    ui_text(
-        font,
-        WX + 64,
-        AY + 30,
-        number(armored(10, p) as u16, &mut nd),
-        MC_INK,
-    );
+    ui_text(font, WX + 64, AY + 30, number(armored(10, p) as u16, &mut nd), MC_INK);
 
     // The 2x2 crafting grid, its arrow and the output slot.
     let mut c = 0;
@@ -2228,7 +2091,7 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
             draw_tile(x + 1, WY + 1, tool_tile(class), c);
         }
         if class == wc {
-            rect(x - 1, WY + 17, 19, 2, 0xff, 0xe0, 0x40);
+            rect(x - 1, WY + 17, 19, 2, 0xFF, 0xE0, 0x40);
         }
         w += 1;
     }
@@ -2236,13 +2099,7 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
     let mut b1 = [0u8; 8];
     let mut b2 = [0u8; 8];
     ui_text(font, WX, WY + 22, "DMG", MC_INK);
-    ui_text(
-        font,
-        WX + 32,
-        WY + 22,
-        tenths((dmg + 5) / 10, &mut b1),
-        MC_INK,
-    );
+    ui_text(font, WX + 32, WY + 22, tenths((dmg + 5) / 10, &mut b1), MC_INK);
     ui_text(font, WX + 72, WY + 22, "SPEED", MC_INK);
     ui_text(font, WX + 120, WY + 22, tenths(spd, &mut b2), MC_INK);
 
@@ -2357,13 +2214,7 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
     }
     let (note_t, note_s) = unsafe { (NOTE_T, NOTE) };
     let l2 = if carry != AIR { "O PUTS IT BACK" } else { l2 };
-    ui_text(
-        font,
-        40,
-        172,
-        if note_t > 0 { note_s } else { l2 },
-        if note_t > 0 { (0xf0, 0xe0, 0x80) } else { GREY },
-    );
+    ui_text(font, 40, 172, if note_t > 0 { note_s } else { l2 }, if note_t > 0 { (0xF0, 0xE0, 0x80) } else { GREY });
 
     // The prompt bar: what each button does for the slot under the cursor.
     let nx = prompt_bar(font, 188, 199, player_spot(z, i, p, ns, &st));

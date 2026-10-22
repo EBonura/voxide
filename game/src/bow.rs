@@ -188,28 +188,16 @@ fn limb(i: usize, pull: i32) -> (i32, i32) {
 pub fn draw_held(light: u32, tick: u32, kick: i32) {
     let (held, drawing, since, from) = unsafe { (HELD, DRAWING, SINCE, FROM) };
     // 0 at rest, 4096 at full draw, for the pose.
-    let p = if drawing {
-        held.min(FULL_DRAW) as i32 * 4096 / FULL_DRAW as i32
-    } else {
-        0
-    };
-    let pull = if drawing {
-        pull_units(held)
-    } else {
-        ring_units(from, since)
-    };
+    let p = if drawing { held.min(FULL_DRAW) as i32 * 4096 / FULL_DRAW as i32 } else { 0 };
+    let pull = if drawing { pull_units(held) } else { ring_units(from, since) };
     // Bow pose: lower right at rest, lifted toward the middle as it is drawn,
     // with the idle bob and a kick back after the shot.
-    let bob = (sin_q12(((tick * 18) & 0x0fff) as u16) >> 10) as i32;
-    let after = if !drawing && since < RING_TICKS {
-        (RING_TICKS - since) as i32
-    } else {
-        0
-    };
+    let bob = (sin_q12(((tick * 18) & 0x0FFF) as u16) >> 10) as i32;
+    let after = if !drawing && since < RING_TICKS { (RING_TICKS - since) as i32 } else { 0 };
     let gx = 276 - 38 * p / 4096 + after / 2;
     let gy = 178 + bob + kick - 28 * p / 4096 + after / 3;
-    let yaw = (4096 - (62 * 4096 / 360)) as u16 & 0x0fff;
-    let roll = (4096 + (10 * 4096 / 360)) as u16 & 0x0fff;
+    let yaw = (4096 - (62 * 4096 / 360)) as u16 & 0x0FFF;
+    let roll = (4096 + (10 * 4096 / 360)) as u16 & 0x0FFF;
     let shade = (60 + light * 90 / 255).min(150) as i32;
     let wood = |c: i32| -> u8 { (c * shade / 128).clamp(0, 255) as u8 };
 
@@ -272,12 +260,7 @@ pub fn draw_held(light: u32, tick: u32, kick: i32) {
         let s1a = project(0, 2, tipz, yaw, roll, gx, gy);
         let s1b = project(0, -2, tipz, yaw, roll, gx, gy);
         crate::ui_quad_flat(
-            [
-                (s0a.0, s0a.1),
-                (s1a.0, s1a.1),
-                (s0b.0, s0b.1),
-                (s1b.0, s1b.1),
-            ],
+            [(s0a.0, s0a.1), (s1a.0, s1a.1), (s0b.0, s0b.1), (s1b.0, s1b.1)],
             wood(160),
             wood(120),
             wood(70),

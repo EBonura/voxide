@@ -35,17 +35,9 @@ pub fn resample(input: &[f64], from: u32, to: u32) -> Vec<f64> {
             let mut k: Vec<f64> = (0..2 * HALF)
                 .map(|j| {
                     let x = (j as f64 - (HALF as f64 - 1.0)) - frac;
-                    let sinc = if x == 0.0 {
-                        2.0 * fc
-                    } else {
-                        (2.0 * PI * fc * x).sin() / (PI * x)
-                    };
+                    let sinc = if x == 0.0 { 2.0 * fc } else { (2.0 * PI * fc * x).sin() / (PI * x) };
                     let r = x / HALF as f64;
-                    let w = if r.abs() >= 1.0 {
-                        0.0
-                    } else {
-                        i0(BETA * (1.0 - r * r).sqrt()) / i0(BETA)
-                    };
+                    let w = if r.abs() >= 1.0 { 0.0 } else { i0(BETA * (1.0 - r * r).sqrt()) / i0(BETA) };
                     sinc * w
                 })
                 .collect();

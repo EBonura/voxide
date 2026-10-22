@@ -369,18 +369,18 @@ type PortalView = (i32, i32, i32, u16, i16);
 /// its top merges with the sill into one plate, the case that sorted over
 /// the old sheet.
 const PORTAL_VIEWS: [PortalView; 12] = [
-    (4, 0, -14, 0, 0),       // A head-on, 3.5 blocks out
-    (-3, 0, -6, 466, -150),  // A close, from the left and above (Manny's view)
-    (12, 0, -7, 3623, -100), // A close, from the right
-    (4, 0, -40, 0, 0),       // A head-on, 10 blocks out
-    (4, 0, -60, 0, 0),       // A head-on, 15 blocks out
-    (4, 12, -8, 0, -580),    // A from above
-    (10, 0, 16, 2312, 0),    // A from behind, oblique
-    (-10, 0, -2, 842, 0),    // A at a grazing angle
-    (4, 0, -4, 0, 0),        // A head-on, under a block out
-    (-6, 0, -8, 3072, 0),    // B head-on from +X
-    (-36, 0, 2, 1422, -100), // B oblique from -X
-    (4, 0, 2, 0, 0),         // standing in A (travels after 4 s)
+    (4, 0, -14, 0, 0),         // A head-on, 3.5 blocks out
+    (-3, 0, -6, 466, -150),    // A close, from the left and above (Manny's view)
+    (12, 0, -7, 3623, -100),   // A close, from the right
+    (4, 0, -40, 0, 0),         // A head-on, 10 blocks out
+    (4, 0, -60, 0, 0),         // A head-on, 15 blocks out
+    (4, 12, -8, 0, -580),      // A from above
+    (10, 0, 16, 2312, 0),      // A from behind, oblique
+    (-10, 0, -2, 842, 0),      // A at a grazing angle
+    (4, 0, -4, 0, 0),          // A head-on, under a block out
+    (-6, 0, -8, 3072, 0),      // B head-on from +X
+    (-36, 0, 2, 1422, -100),   // B oblique from -X
+    (4, 0, 2, 0, 0),           // standing in A (travels after 4 s)
 ];
 
 static mut PORTAL_VIEW_N: usize = 0;
@@ -452,12 +452,7 @@ fn portal_frame(ix: i32, iy: i32, iz: i32, ax: i32, az: i32) {
         let mut h = -1;
         while h <= 3 {
             let edge = w == -1 || w == 2 || h == -1 || h == 3;
-            set_block_i32(
-                ix + ax * w,
-                iy + h,
-                iz + az * w,
-                if edge { OBSIDIAN } else { AIR },
-            );
+            set_block_i32(ix + ax * w, iy + h, iz + az * w, if edge { OBSIDIAN } else { AIR });
             h += 1;
         }
         w += 1;

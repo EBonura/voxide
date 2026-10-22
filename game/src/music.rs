@@ -16,8 +16,8 @@
 //! Anything that ever does must `stop` first and let the scheduler start the
 //! next piece at its own delay.
 
-use crate::music_plan as plan;
 use crate::musicdata::{FILES, TRACKS};
+use crate::music_plan as plan;
 use psx_fmv::iso;
 use psx_fx::rng::LcgRng;
 use psx_io::cd::xa::{DriveSpeed, Event, File, Player};
@@ -89,7 +89,7 @@ static mut MUSIC: Music = Music {
     phase: Phase::Off,
     files: [None; FILES],
     player: Player::new(unsafe { Cd::steal() }),
-    rng: LcgRng::new(0x4d55_5349),
+    rng: LcgRng::new(0x4D55_5349),
     volume: 100,
     until: 0,
     started: 0,
@@ -116,19 +116,7 @@ pub static mut VOXIDE_MUSIC_STATE: [u32; 16] = [
     u32::from_le_bytes(*b"VMUS"),
     1,
     64,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
 fn m() -> &'static mut Music {
@@ -144,8 +132,7 @@ pub fn set_volume_pct(percent: i32) {
     if x.phase == Phase::Off {
         return;
     }
-    x.player
-        .set_volume(plan::mixer_level(x.volume), plan::mixer_level(x.volume));
+    x.player.set_volume(plan::mixer_level(x.volume), plan::mixer_level(x.volume));
     if x.volume == 0 && x.phase == Phase::Playing {
         // Java stops a song the slider takes to zero, and the delay to the
         // next one starts.
@@ -174,8 +161,7 @@ pub fn init() {
         return;
     }
     x.phase = Phase::Idle;
-    x.player
-        .set_volume(plan::mixer_level(x.volume), plan::mixer_level(x.volume));
+    x.player.set_volume(plan::mixer_level(x.volume), plan::mixer_level(x.volume));
     publish();
 }
 
@@ -201,17 +187,7 @@ fn find_song_files() -> [Option<File>; FILES] {
     };
     let mut n = 0;
     while n < FILES {
-        let name = [
-            b'M',
-            b'U',
-            b'S',
-            b'I',
-            b'C',
-            b'1' + n as u8,
-            b'.',
-            b'X',
-            b'A',
-        ];
+        let name = [b'M', b'U', b'S', b'I', b'C', b'1' + n as u8, b'.', b'X', b'A'];
         if let Ok(name) = core::str::from_utf8(&name) {
             files[n] = iso::find_in_directory(directory, name).map(|(lba, size)| {
                 File::from_directory_entry(lba, size, n as u8 + 1, DriveSpeed::Single)
@@ -251,7 +227,7 @@ pub fn enter_title() {
     if x.phase == Phase::Playing {
         x.player.stop();
     }
-    x.rng = LcgRng::new(0x4d55_5349 ^ now);
+    x.rng = LcgRng::new(0x4D55_5349 ^ now);
     let d = plan::delay_vblanks(plan::MENU_DELAY, x.rng.next_mixed());
     wait(now, d);
     publish();
@@ -270,7 +246,7 @@ pub fn enter_world() {
     if x.phase == Phase::Playing {
         x.player.stop();
     }
-    x.rng = LcgRng::new(0x4d55_5349 ^ now.rotate_left(7));
+    x.rng = LcgRng::new(0x4D55_5349 ^ now.rotate_left(7));
     wait(now, plan::START_DELAY * 3);
     publish();
 }

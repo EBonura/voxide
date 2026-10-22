@@ -321,18 +321,12 @@ pub fn draw_hud(font: &FontAtlas, p: &Player, fps: u32) {
         n = put_int(&mut buf, n, v);
     }
     let xyz = unsafe { core::str::from_utf8_unchecked(&buf[..n]) };
-    ui_text(font, 6, 30, "XYZ", (0xe0, 0xe0, 0x60));
-    ui_text(font, 38, 30, xyz, (0xe0, 0xe0, 0x60));
+    ui_text(font, 6, 30, "XYZ", (0xE0, 0xE0, 0x60));
+    ui_text(font, 38, 30, xyz, (0xE0, 0xE0, 0x60));
     let mut fb = [0u8; 4];
     let k = put_int(&mut fb, 0, fps as i32);
-    ui_text(font, 6, 40, "FPS", (0xe0, 0xe0, 0x60));
-    ui_text(
-        font,
-        38,
-        40,
-        unsafe { core::str::from_utf8_unchecked(&fb[..k]) },
-        (0xe0, 0xe0, 0x60),
-    );
+    ui_text(font, 6, 40, "FPS", (0xE0, 0xE0, 0x60));
+    ui_text(font, 38, 40, unsafe { core::str::from_utf8_unchecked(&fb[..k]) }, (0xE0, 0xE0, 0x60));
 }
 
 /// Append `v` in decimal at `n`; returns the new length.
@@ -385,7 +379,7 @@ pub fn draw(font: &FontAtlas, sel: usize, player: &Player) {
         };
         if let Some(on) = on {
             let (label, tint) = if on {
-                ("ON", (0x70, 0xe0, 0x70))
+                ("ON", (0x70, 0xE0, 0x70))
             } else {
                 ("OFF", MC_LABEL_OFF)
             };
@@ -398,12 +392,12 @@ pub fn draw(font: &FontAtlas, sel: usize, player: &Player) {
             } else {
                 MOBS[unsafe { MOB_SEL }].0
             };
-            ui_text(font, 278 - v.len() as i16 * 8, y, v, (0x70, 0xe0, 0x70));
+            ui_text(font, 278 - v.len() as i16 * 8, y, v, (0x70, 0xE0, 0x70));
         }
         j += 1;
     }
     let msg = unsafe { MSG };
     if !msg.is_empty() {
-        draw_centered(font, 170, msg, (0xf0, 0xe0, 0x80));
+        draw_centered(font, 170, msg, (0xF0, 0xE0, 0x80));
     }
 }

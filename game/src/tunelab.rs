@@ -367,40 +367,36 @@ pub fn step(p: &mut Player) {
         Some(i) => unsafe { (FURN_OUT_N[i] as i32, FURN_PROG[i] as i32) },
         None => (0, 0),
     };
-    let census = if t % 60 == 0 {
-        mob::lab_census()
-    } else {
-        unsafe { CENSUS }
-    };
+    let census = if t % 60 == 0 { mob::lab_census() } else { unsafe { CENSUS } };
     unsafe { CENSUS = census };
     unsafe {
         T = t + 1;
         core::ptr::write_volatile(
             &raw mut VOXIDE_LAB_P,
             [
-                t,
-                F,
-                phase(t),
-                p.x,
-                p.y,
-                p.z,
-                p.vy,
-                p.health,
-                p.air,
-                p.food,
-                p.burn,
-                p.hurt_cd,
-                p.exhaustion,
-                target as i32,
-                TOPUPS,
-                p.on_ground as i32 | (p.sprinting as i32) << 1 | (p.sneaking as i32) << 2,
-                furn.0,
-                furn.1,
-                p.eff_speed as i32,
-                SIM_TICK as i32,
-                census.0,
-                census.1,
-                census.2,
+            t,
+            F,
+            phase(t),
+            p.x,
+            p.y,
+            p.z,
+            p.vy,
+            p.health,
+            p.air,
+            p.food,
+            p.burn,
+            p.hurt_cd,
+            p.exhaustion,
+            target as i32,
+            TOPUPS,
+            p.on_ground as i32 | (p.sprinting as i32) << 1 | (p.sneaking as i32) << 2,
+            furn.0,
+            furn.1,
+            p.eff_speed as i32,
+            SIM_TICK as i32,
+            census.0,
+            census.1,
+            census.2,
             ],
         );
     }

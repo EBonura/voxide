@@ -1,8 +1,6 @@
 //! Piece planning, the mix and the resampler.
 
-use loop_mixer::resample::resample;
-use loop_mixer::rng::Rng;
-use loop_mixer::{mix, plan, wav};
+use loop_mixer::{mix, plan, resample::resample, rng::Rng, wav};
 
 const LENGTHS: [f64; 6] = [57.313, 51.2, 53.333, 53.333, 52.603, 56.471];
 
@@ -14,18 +12,12 @@ fn a_set_uses_every_loop_never_repeats_a_loop_in_a_piece_and_differs() {
         assert!(plan::seconds(p, &LENGTHS) <= 168.0);
         assert!(p.len() >= 2);
         for (i, s) in p.iter().enumerate() {
-            assert!(
-                p[..i].iter().all(|o| o.loop_index != s.loop_index),
-                "a loop twice in one piece"
-            );
+            assert!(p[..i].iter().all(|o| o.loop_index != s.loop_index), "a loop twice in one piece");
         }
         assert!(p.iter().all(|s| (1..=3).contains(&s.repeats)));
     }
     for l in 0..6 {
-        assert!(
-            pieces.iter().flatten().any(|s| s.loop_index == l),
-            "loop {l} unused"
-        );
+        assert!(pieces.iter().flatten().any(|s| s.loop_index == l), "loop {l} unused");
     }
     for (i, p) in pieces.iter().enumerate() {
         assert!(!pieces[..i].contains(p));
@@ -42,9 +34,7 @@ fn a_seed_names_the_set() {
 #[test]
 fn resampling_keeps_a_tone_and_its_level() {
     let n = 44_100;
-    let tone: Vec<f64> = (0..n)
-        .map(|i| 0.5 * (2.0 * std::f64::consts::PI * 1000.0 * i as f64 / 44_100.0).sin())
-        .collect();
+    let tone: Vec<f64> = (0..n).map(|i| 0.5 * (2.0 * std::f64::consts::PI * 1000.0 * i as f64 / 44_100.0).sin()).collect();
     let out = resample(&tone, 44_100, 37_800);
     assert_eq!(out.len(), 37_800);
     for (i, v) in out.iter().enumerate().skip(200).take(37_000) {
@@ -56,25 +46,16 @@ fn resampling_keeps_a_tone_and_its_level() {
 #[test]
 fn resampling_removes_what_the_new_rate_cannot_hold() {
     let n = 44_100;
-    let tone: Vec<f64> = (0..n)
-        .map(|i| (2.0 * std::f64::consts::PI * 20_000.0 * i as f64 / 44_100.0).sin())
-        .collect();
+    let tone: Vec<f64> = (0..n).map(|i| (2.0 * std::f64::consts::PI * 20_000.0 * i as f64 / 44_100.0).sin()).collect();
     let out = resample(&tone, 44_100, 37_800);
-    let peak = out[200..out.len() - 200]
-        .iter()
-        .fold(0.0f64, |m, v| m.max(v.abs()));
+    let peak = out[200..out.len() - 200].iter().fold(0.0f64, |m, v| m.max(v.abs()));
     assert!(peak < 0.003, "20 kHz leaked through at {peak}");
 }
 
 fn loop_of(freq: f64, secs: usize) -> wav::Audio {
     let n = 44_100 * secs;
-    let ch: Vec<f64> = (0..n)
-        .map(|i| 0.4 * (2.0 * std::f64::consts::PI * freq * i as f64 / 44_100.0).sin())
-        .collect();
-    wav::Audio {
-        rate: 44_100,
-        ch: [ch.clone(), ch],
-    }
+    let ch: Vec<f64> = (0..n).map(|i| 0.4 * (2.0 * std::f64::consts::PI * freq * i as f64 / 44_100.0).sin()).collect();
+    wav::Audio { rate: 44_100, ch: [ch.clone(), ch] }
 }
 
 #[test]
@@ -82,14 +63,8 @@ fn crossfades_are_equal_power_and_the_ends_fade() {
     // Two loops that are whole-cycle tones, joined once.
     let loops = [loop_of(200.0, 10), loop_of(300.0, 10)];
     let piece = vec![
-        plan::Segment {
-            loop_index: 0,
-            repeats: 1,
-        },
-        plan::Segment {
-            loop_index: 1,
-            repeats: 1,
-        },
+        plan::Segment { loop_index: 0, repeats: 1 },
+        plan::Segment { loop_index: 1, repeats: 1 },
     ];
     let out = mix::mix(&piece, &loops);
     assert_eq!(out[0].len(), 20 * 44_100);
@@ -109,9 +84,7 @@ fn crossfades_are_equal_power_and_the_ends_fade() {
 
 fn stereo_tone(freq: f64, dbfs: f64, secs: usize, rate: u32) -> Vec<f64> {
     let amp = 10f64.powf(dbfs / 20.0);
-    (0..rate as usize * secs)
-        .map(|i| amp * (2.0 * std::f64::consts::PI * freq * i as f64 / rate as f64).sin())
-        .collect()
+    (0..rate as usize * secs).map(|i| amp * (2.0 * std::f64::consts::PI * freq * i as f64 / rate as f64).sin()).collect()
 }
 
 #[test]
@@ -137,9 +110,7 @@ fn loudness_gates_out_silence() {
 fn true_peak_sees_what_the_samples_miss() {
     // A tone at a quarter of the sample rate, offset so no sample lands on the crest.
     let n = 4_000;
-    let t: Vec<f64> = (0..n)
-        .map(|i| (std::f64::consts::FRAC_PI_2 * i as f64 + std::f64::consts::FRAC_PI_4).sin())
-        .collect();
+    let t: Vec<f64> = (0..n).map(|i| (std::f64::consts::FRAC_PI_2 * i as f64 + std::f64::consts::FRAC_PI_4).sin()).collect();
     let sample_peak = t.iter().fold(0.0f64, |m, v| m.max(v.abs()));
     assert!((sample_peak - 0.7071).abs() < 1e-3);
     let tp = loop_mixer::loudness::true_peak([&t[..], &t[..]], 37_800);
@@ -149,17 +120,8 @@ fn true_peak_sees_what_the_samples_miss() {
 #[test]
 fn render_turns_a_loud_piece_down_to_minus_16_lufs_and_never_turns_one_up() {
     // loud: a -6 dBFS tone
-    let loud = wav::Audio {
-        rate: 44_100,
-        ch: [
-            stereo_tone(440.0, -6.0, 30, 44_100),
-            stereo_tone(440.0, -6.0, 30, 44_100),
-        ],
-    };
-    let piece = vec![plan::Segment {
-        loop_index: 0,
-        repeats: 1,
-    }];
+    let loud = wav::Audio { rate: 44_100, ch: [stereo_tone(440.0, -6.0, 30, 44_100), stereo_tone(440.0, -6.0, 30, 44_100)] };
+    let piece = vec![plan::Segment { loop_index: 0, repeats: 1 }];
     let r = mix::render(&piece, std::slice::from_ref(&loud), &mut Rng::new(1));
     assert!(r.gain < 1.0 && r.lufs > -16.0);
     let back: Vec<f64> = r.left.iter().map(|v| *v as f64 / 32768.0).collect();
@@ -167,13 +129,7 @@ fn render_turns_a_loud_piece_down_to_minus_16_lufs_and_never_turns_one_up() {
     assert!((l - -16.0).abs() < 0.3, "{l}");
     assert!(r.peak_db <= -1.7 + 1e-9);
     // quiet: -40 dBFS stays as it is
-    let quiet = wav::Audio {
-        rate: 44_100,
-        ch: [
-            stereo_tone(440.0, -40.0, 30, 44_100),
-            stereo_tone(440.0, -40.0, 30, 44_100),
-        ],
-    };
+    let quiet = wav::Audio { rate: 44_100, ch: [stereo_tone(440.0, -40.0, 30, 44_100), stereo_tone(440.0, -40.0, 30, 44_100)] };
     let r = mix::render(&piece, std::slice::from_ref(&quiet), &mut Rng::new(1));
     assert_eq!(r.gain, 1.0);
     assert_eq!(r.left.len(), 30 * 37_800);

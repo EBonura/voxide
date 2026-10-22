@@ -86,7 +86,7 @@ mod tests {
         // 4.32 blocks/s (Java walks 4.317) is 4.61 units a tick: 1180/256.
         assert_eq!(cbps_q8(432), 1180);
         assert_eq!(cbps_q8(100), 273); // 1 block/s
-                                       // 60 blocks/s is a block a tick.
+        // 60 blocks/s is a block a tick.
         assert_eq!(cbps_q8(6000), BLOCK * 256);
         // The player's quarter units: 26.25 blocks/s is 28 units a tick.
         assert_eq!(cbps_q2(2625), 112);

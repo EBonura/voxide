@@ -16,30 +16,10 @@ pub struct Track {
 pub const FILES: usize = 1;
 
 pub const TRACKS: [Track; 4] = [
-    Track {
-        name: "Piece 1",
-        file: 1,
-        channel: 0,
-        length_ms: 159269,
-    },
-    Track {
-        name: "Piece 2",
-        file: 1,
-        channel: 1,
-        length_ms: 159269,
-    },
-    Track {
-        name: "Piece 3",
-        file: 1,
-        channel: 2,
-        length_ms: 161004,
-    },
-    Track {
-        name: "Piece 4",
-        file: 1,
-        channel: 3,
-        length_ms: 164984,
-    },
+    Track { name: "Piece 1", file: 1, channel: 0, length_ms: 159269 },
+    Track { name: "Piece 2", file: 1, channel: 1, length_ms: 159269 },
+    Track { name: "Piece 3", file: 1, channel: 2, length_ms: 161004 },
+    Track { name: "Piece 4", file: 1, channel: 3, length_ms: 164984 },
 ];
 
 /// Lines of the credits card.

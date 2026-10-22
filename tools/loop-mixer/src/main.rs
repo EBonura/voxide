@@ -30,10 +30,7 @@ fn run() -> Result<(), String> {
             _ => names.push(a),
         }
     }
-    let (src, out) = (
-        src.ok_or("--src DIR is required")?,
-        out.ok_or("--out DIR is required")?,
-    );
+    let (src, out) = (src.ok_or("--src DIR is required")?, out.ok_or("--out DIR is required")?);
     if names.is_empty() {
         return Err("name the loop WAVs".into());
     }
@@ -46,31 +43,21 @@ fn run() -> Result<(), String> {
         }
         loops.push(a);
     }
-    let lengths: Vec<f64> = loops
-        .iter()
-        .map(|a| a.ch[0].len() as f64 / a.rate as f64)
-        .collect();
+    let lengths: Vec<f64> = loops.iter().map(|a| a.ch[0].len() as f64 / a.rate as f64).collect();
     let mut pieces = plan::set(seed, &lengths, count, max);
     pieces.sort_by(|a, b| plan::seconds(a, &lengths).total_cmp(&plan::seconds(b, &lengths)));
     std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
-    let mut dither = loop_mixer::rng::Rng::new(seed ^ 0xd17e_d17e);
+    let mut dither = loop_mixer::rng::Rng::new(seed ^ 0xD17E_D17E);
     let mut total = 0.0;
     for (i, p) in pieces.iter().enumerate() {
         let r = mix::render(p, &loops, &mut dither);
         let secs = r.left.len() as f64 / mix::OUT_RATE as f64;
         total += secs;
         let path = out.join(format!("piece-{}.wav", i + 1));
-        std::fs::write(&path, wav::write16(mix::OUT_RATE, &r.left, &r.right))
-            .map_err(|e| e.to_string())?;
+        std::fs::write(&path, wav::write16(mix::OUT_RATE, &r.left, &r.right)).map_err(|e| e.to_string())?;
         let recipe: Vec<String> = p
             .iter()
-            .map(|s| {
-                format!(
-                    "{} x{}",
-                    names[s.loop_index].trim_end_matches(".wav"),
-                    s.repeats
-                )
-            })
+            .map(|s| format!("{} x{}", names[s.loop_index].trim_end_matches(".wav"), s.repeats))
             .collect();
         println!(
             "piece-{}.wav {:7.2} s  {:6.2} LUFS  true peak {:5.2} dBTP  gain {:6.2} dB  {}",

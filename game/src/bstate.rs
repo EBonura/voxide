@@ -35,44 +35,20 @@ pub struct Family {
 
 pub const FAMILIES: [Family; 8] = [
     // bit 0 open, bits 1..2 facing, bit 3 upper half
-    Family {
-        kind: DOOR_C,
-        states: 16,
-    },
+    Family { kind: DOOR_C, states: 16 },
     // bits 0..1 facing (the way from the foot to the head), bit 2 head
-    Family {
-        kind: BED,
-        states: 8,
-    },
+    Family { kind: BED, states: 8 },
     // 0 on the floor, 1..4 on a wall facing 0..3
-    Family {
-        kind: TORCH,
-        states: 5,
-    },
-    Family {
-        kind: RSTORCH,
-        states: 5,
-    },
+    Family { kind: TORCH, states: 5 },
+    Family { kind: RSTORCH, states: 5 },
     // mount (0 floor, 1..4 wall) + 5 when switched on
-    Family {
-        kind: LEVER,
-        states: 10,
-    },
+    Family { kind: LEVER, states: 10 },
     // 0..3 facing (the way the panel looks, away from its wall)
-    Family {
-        kind: LADDER,
-        states: 4,
-    },
+    Family { kind: LADDER, states: 4 },
     // direction (see `piston`) + 6 when extended
-    Family {
-        kind: PISTON,
-        states: 12,
-    },
+    Family { kind: PISTON, states: 12 },
     // the head of an extended piston, by direction
-    Family {
-        kind: PISTON_HEAD,
-        states: 6,
-    },
+    Family { kind: PISTON_HEAD, states: 6 },
 ];
 
 const NFAM: usize = FAMILIES.len();
@@ -87,12 +63,9 @@ pub const EXT_USED: usize = {
     }
     n
 };
-const _: () = assert!(
-    EXT0 as usize + EXT_USED <= 256,
-    "the palette outgrew a byte"
-);
+const _: () = assert!(EXT0 as usize + EXT_USED <= 256, "the palette outgrew a byte");
 
-const NONE: u8 = 0xff;
+const NONE: u8 = 0xFF;
 
 /// Per ext id: kind, state; per kind: its family; per family: first ext id.
 struct Tables {
@@ -103,12 +76,7 @@ struct Tables {
 }
 
 const fn build() -> Tables {
-    let mut t = Tables {
-        kind: [0; 128],
-        state: [0; 128],
-        fam_of: [NONE; 128],
-        first: [0; NFAM],
-    };
+    let mut t = Tables { kind: [0; 128], state: [0; 128], fam_of: [NONE; 128], first: [0; NFAM] };
     let mut next = EXT0 as usize;
     let mut i = 0;
     while i < NFAM {
@@ -210,7 +178,7 @@ pub const FDZ: [i32; 4] = [1, 0, -1, 0];
 /// The facing a Q12 yaw looks along.
 #[inline]
 pub fn facing_of_yaw(yaw: u16) -> u8 {
-    ((((yaw as i32 & 0x0fff) + 512) >> 10) & 3) as u8
+    ((((yaw as i32 & 0x0FFF) + 512) >> 10) & 3) as u8
 }
 
 /// The facing that looks the other way.
@@ -366,10 +334,7 @@ mod tests {
                 for open in [false, true] {
                     let b = door(upper, f, open);
                     assert!(is_door(b));
-                    assert_eq!(
-                        (door_upper(b), door_facing(b), door_open(b)),
-                        (upper, f, open)
-                    );
+                    assert_eq!((door_upper(b), door_facing(b), door_open(b)), (upper, f, open));
                 }
             }
         }
@@ -406,7 +371,7 @@ mod tests {
         assert_eq!(facing_of_yaw(0), 0);
         assert_eq!(facing_of_yaw(0x400), 1);
         assert_eq!(facing_of_yaw(0x800), 2);
-        assert_eq!(facing_of_yaw(0xc00), 3);
-        assert_eq!(facing_of_yaw(0xfff), 0);
+        assert_eq!(facing_of_yaw(0xC00), 3);
+        assert_eq!(facing_of_yaw(0xFFF), 0);
     }
 }

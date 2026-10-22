@@ -112,9 +112,9 @@ impl Net {
 
     fn slot(x: i32, y: i32, z: i32) -> usize {
         let h = (x as u32)
-            .wrapping_mul(0x9e37_79b1)
-            .wrapping_add((z as u32).wrapping_mul(0x85eb_ca6b))
-            .wrapping_add((y as u32).wrapping_mul(0xc2b2_ae35));
+            .wrapping_mul(0x9E37_79B1)
+            .wrapping_add((z as u32).wrapping_mul(0x85EB_CA6B))
+            .wrapping_add((y as u32).wrapping_mul(0xC2B2_AE35));
         (h >> 15) as usize & (HASH - 1)
     }
 
@@ -221,8 +221,7 @@ impl Net {
         }
         // A dust with one join runs straight through the cell, out the far
         // side as well: that is what lets a line end power the door it ends at.
-        let joined =
-            (out[0] != 0) as u8 + (out[1] != 0) as u8 + (out[2] != 0) as u8 + (out[3] != 0) as u8;
+        let joined = (out[0] != 0) as u8 + (out[1] != 0) as u8 + (out[2] != 0) as u8 + (out[3] != 0) as u8;
         if joined == 1 {
             let mut d = 0;
             while d < 4 {
@@ -496,14 +495,9 @@ impl Net {
         let cb = w.block(x, y, z);
         if bstate::is_door(cb) {
             let low = if bstate::door_upper(cb) { y - 1 } else { y };
-            let on =
-                self.component_powered(w, x, low, z) || self.component_powered(w, x, low + 1, z);
+            let on = self.component_powered(w, x, low, z) || self.component_powered(w, x, low + 1, z);
             // Only an unpowered door has nothing to do; a powered one opens.
-            return if on {
-                Some(Effect::Door(x, y, z, true))
-            } else {
-                None
-            };
+            return if on { Some(Effect::Door(x, y, z, true)) } else { None };
         }
         if kind_of(cb) == crate::PISTON && self.component_powered(w, x, y, z) {
             return Some(Effect::Piston(x, y, z, true));
@@ -535,11 +529,8 @@ impl Net {
         while c < 12 {
             let (dx, dy, dz) = crate::DIRS[c % 6];
             // The emitter's own neighbours, then those of the block it powers.
-            let (cx, cy, cz) = if c < 6 {
-                (x + dx, y + dy, z + dz)
-            } else {
-                (qx + dx, qy + dy, qz + dz)
-            };
+            let (cx, cy, cz) =
+                if c < 6 { (x + dx, y + dy, z + dz) } else { (qx + dx, qy + dy, qz + dz) };
             c += 1;
             let cb = w.block(cx, cy, cz);
             let eff = if bstate::is_door(cb) {

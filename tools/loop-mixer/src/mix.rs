@@ -90,18 +90,11 @@ pub fn mix(piece: &Piece, loops: &[Audio]) -> [Vec<f64>; 2] {
 pub fn render(piece: &Piece, loops: &[Audio], dither: &mut Rng) -> Rendered {
     let rate = loops[0].rate;
     let mixed = mix(piece, loops);
-    let mut ch: [Vec<f64>; 2] = [
-        resample(&mixed[0], rate, OUT_RATE),
-        resample(&mixed[1], rate, OUT_RATE),
-    ];
+    let mut ch: [Vec<f64>; 2] = [resample(&mixed[0], rate, OUT_RATE), resample(&mixed[1], rate, OUT_RATE)];
     let refs = [&ch[0][..], &ch[1][..]];
     let lufs = loudness::integrated_lufs(refs, OUT_RATE);
     let peak = loudness::true_peak(refs, OUT_RATE);
-    let mut gain = if lufs > TARGET_LUFS {
-        10f64.powf((TARGET_LUFS - lufs) / 20.0)
-    } else {
-        1.0
-    };
+    let mut gain = if lufs > TARGET_LUFS { 10f64.powf((TARGET_LUFS - lufs) / 20.0) } else { 1.0 };
     let limit = 10f64.powf(TRUE_PEAK_LIMIT_DB / 20.0);
     if peak * gain > limit {
         gain = limit / peak;
@@ -118,12 +111,5 @@ pub fn render(piece: &Piece, loops: &[Audio], dither: &mut Rng) -> Rendered {
     };
     let left = quantise(&mut ch[0]);
     let right = quantise(&mut ch[1]);
-    Rendered {
-        left,
-        right,
-        lufs,
-        peak,
-        gain,
-        peak_db,
-    }
+    Rendered { left, right, lufs, peak, gain, peak_db }
 }

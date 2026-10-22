@@ -235,7 +235,7 @@ const DEAD: Mob = Mob {
     hurt_cd: 0,
     atk: 0,
     love: 0,
-    cool: 0,
+            cool: 0,
     walk: 0,
     facing: 0,
     heading: 0,
@@ -817,7 +817,7 @@ pub fn debug_lineup(px: i32, py: i32, pz: i32) {
                 hurt_cd: 0,
                 atk: 0,
                 love: 0,
-                cool: 0,
+            cool: 0,
                 walk: 0,
                 facing: 0,
                 heading: 0,
@@ -1406,11 +1406,7 @@ pub fn set_tamed(list: &[Parked]) {
 
 #[inline]
 fn solid(wx: i32, wy: i32, wz: i32) -> bool {
-    let (bx, by, bz) = (
-        world_to_block_x(wx),
-        world_to_block_y(wy),
-        world_to_block_z(wz),
-    );
+    let (bx, by, bz) = (world_to_block_x(wx), world_to_block_y(wy), world_to_block_z(wz));
     let b = world::get(bx, by, bz);
     if b == crate::AIR || b == crate::WATER || b == crate::LAVA {
         return false;
@@ -1528,11 +1524,7 @@ fn arrow_hit_mob(ax: i32, ay: i32, az: i32, dmg: i16) -> bool {
 
 fn explode(i: usize, cx: i32, cy: i32, cz: i32, charged: bool) -> bool {
     // A charged sapper blasts at twice the power, 6 (Creeper.explodeCreeper).
-    let power = if charged {
-        2 * SAPPER_POWER
-    } else {
-        SAPPER_POWER
-    };
+    let power = if charged { 2 * SAPPER_POWER } else { SAPPER_POWER };
     let blast_y = cy + BLOCK / 2; // half a block up the sapper
     if !world::explode(cx, blast_y, cz, power, (cx ^ cz) as u32) {
         return false;
@@ -1561,15 +1553,8 @@ pub fn blast_mobs(cx: i32, cy: i32, cz: i32, power: i32) {
         let mut m = unsafe { MOBS[i] };
         if m.alive {
             let (hw, h) = dims(m.kind);
-            if let Some(hit) = crate::tnt::hit_on(
-                power,
-                (cx, cy, cz),
-                (m.x, m.y, m.z),
-                hw,
-                h,
-                h * 9 / 10,
-                true,
-            ) {
+            if let Some(hit) = crate::tnt::hit_on(power, (cx, cy, cz), (m.x, m.y, m.z), hw, h, h * 9 / 10, true)
+            {
                 m.health -= hit.dmg as i16;
                 m.hurt_cd = HURT_TICKS;
                 // Q8 blocks a Java tick to Q8 units a sim tick, x 64 / 3.
@@ -1634,7 +1619,7 @@ fn fire_contact(i: usize) {
 fn arrow_damage(a: &Arrow) -> i16 {
     let v2 = (a.vx >> 4) * (a.vx >> 4) + (a.vy >> 4) * (a.vy >> 4) + (a.vz >> 4) * (a.vz >> 4);
     let v = psx_math::int32::isqrt_i32(v2) << 4; // Q8 units a sim tick
-                                                 // blocks a game tick = v * 3 / (64 * 256); x 2, rounded up.
+    // blocks a game tick = v * 3 / (64 * 256); x 2, rounded up.
     crate::bow::damage_for(v) as i16
 }
 
@@ -1667,11 +1652,7 @@ fn update_arrows(px: i32, py: i32, pz: i32) {
                     // Player arrow: damage the first mob it overlaps. A full draw
                     // crits for up to half again, Java's random extra.
                     let base = arrow_damage(&a);
-                    let dmg = if a.crit {
-                        base + (rng() % (base as u32 / 2 + 2)) as i16
-                    } else {
-                        base
-                    };
+                    let dmg = if a.crit { base + (rng() % (base as u32 / 2 + 2)) as i16 } else { base };
                     if arrow_hit_mob(ax, ay, az, dmg) {
                         dead = true;
                         crate::sfx::arrow_hit(((ax - px).abs() + (az - pz).abs()) / BLOCK);
@@ -2027,11 +2008,7 @@ fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
         if t < CAP && t != i && unsafe { MOBS[t].alive } && !is_tamed(t) {
             tgt = t;
         }
-        let tele = if tgt < CAP {
-            WOLF_TELEPORT_FIGHT_R
-        } else {
-            WOLF_TELEPORT_R
-        };
+        let tele = if tgt < CAP { WOLF_TELEPORT_FIGHT_R } else { WOLF_TELEPORT_R };
         if dist2 > tele * tele {
             // Two blocks off the owner, on the owner's level.
             let (ux, uz) = toward(-dx, -dz, 2 * BLOCK);
@@ -2099,11 +2076,7 @@ fn step_mob(i: usize, px: i32, py: i32, pz: i32, night: bool) {
             // the direction (a sapper never breeds).
             let dy = py - m.y;
             let d3 = dist2 + dy * dy;
-            let r = if m.cool == 1 {
-                FUSE_KEEP_R
-            } else {
-                FUSE_START_R
-            };
+            let r = if m.cool == 1 { FUSE_KEEP_R } else { FUSE_START_R };
             m.cool = (sight && d3 < r * r) as u16;
             if m.cool == 1 {
                 m.fuse += 1;
@@ -2472,11 +2445,7 @@ fn pick_box(m: &Mob) -> (i32, i32, i32, i32, i32) {
             (-j, j, -j, j, h)
         }
         _ => {
-            let j = if m.kind == WAILER {
-                hw
-            } else {
-                java_half_w(m.kind).max(hw)
-            };
+            let j = if m.kind == WAILER { hw } else { java_half_w(m.kind).max(hw) };
             let (f, b) = (j.max(3 * hw), j.max(hw * 3 / 2));
             match m.facing {
                 0 => (-j, j, -b, f, h),
@@ -2706,11 +2675,7 @@ fn spawn_at(kind: u8, sx: i32, sz: i32) {
 /// to three blocks over `y`. A full roster gives up its first non-dragon
 /// slot, so the cheat always spawns.
 pub fn cheat_spawn(kind: u8, x: i32, y: i32, z: i32) {
-    let s = free_slot().unwrap_or(if unsafe { MOBS[0].kind } == DRAGON {
-        1
-    } else {
-        0
-    });
+    let s = free_slot().unwrap_or(if unsafe { MOBS[0].kind } == DRAGON { 1 } else { 0 });
     let (hw, h) = dims(kind);
     let mut feet = y;
     let mut k = 0;

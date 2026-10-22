@@ -108,10 +108,7 @@ pub fn respawn_beside(bx: i32, by: i32, bz: i32) -> (i32, i32) {
     let f = crate::bstate::bed_facing(b) as usize;
     let sign = if crate::bstate::bed_head(b) { -1 } else { 1 };
     // The other half is one along the bed's axis.
-    let (ox, oz) = (
-        bx + sign * crate::bstate::FDX[f],
-        bz + sign * crate::bstate::FDZ[f],
-    );
+    let (ox, oz) = (bx + sign * crate::bstate::FDX[f], bz + sign * crate::bstate::FDZ[f]);
     let mut half = 0;
     while half < 2 {
         let (hx, hz) = if half == 0 { (bx, bz) } else { (ox, oz) };

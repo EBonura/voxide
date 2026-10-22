@@ -678,7 +678,7 @@ fn view(cam: &Camera, p: (i32, i32, i32)) -> (i32, i32, i32) {
     let y2 = ((dy * cam.cp) - (z1 * cam.sp)) >> 12;
     let z2 = ((dy * cam.sp) + (z1 * cam.cp)) >> 12;
     if cam.roll != 0 {
-        let a = (cam.roll & 0x0fff) as u16;
+        let a = (cam.roll & 0x0FFF) as u16;
         let (sr, cr) = (sincos::sin_q12(a), sincos::cos_q12(a));
         (
             ((cr * x1) + (sr * y2)) >> 12,
@@ -761,7 +761,7 @@ fn lab_strike(p: &Player) {
 /// the hits steer the level of a looping hiss (sfx::rain).
 #[inline(never)]
 fn rain_sound(p: &Player) {
-    static mut SEED: u32 = 0x1f2e_3d4c;
+    static mut SEED: u32 = 0x1F2E_3D4C;
     static mut WET: i32 = 0;
     let level = rain();
     if level == 0 || world::dimension() != world::DIM_OVERWORLD {
