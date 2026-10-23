@@ -355,7 +355,10 @@ wait = 20
 [[step]]
 checkpoint = "flint-equipped"
 golden = false
-strict = [{ x = 240, y = 140, w = 56, h = 46 }]
+# No strict region: the held item and the hand are 3D view-model polygons, which
+# the hardware renderer rasterizes at finer than native pixels at 3x by design.
+# Strict regions hold 2D content only (TESTING.md in PSoXide-emulator). The
+# blade is still asserted below, and the frame is compared at the sample centre.
 [[step.assert]]
 kind = "pixels"
 color = [189, 189, 198]
