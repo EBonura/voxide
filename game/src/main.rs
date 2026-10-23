@@ -4617,7 +4617,7 @@ fn finish_world_gen(fb: &mut FrameBuffer, font: &FontAtlas, pocket_done: &mut bo
 // Cycles every ~10s so an idle menu shows a few.
 const SPLASHES: [&str; 13] = [
     "NOW WITH 2MB OF RAM!",
-    "ALSO TRY WIPEOUT!",
+    "ALSO TRY CELESTE!",
     "RUNS ON REAL HARDWARE!",
     "AFFINE TEXTURES FOREVER!",
     "GTE GO BRRR!",
