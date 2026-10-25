@@ -7,7 +7,7 @@
 //! thrash. 16 tiles fill one row of the page.
 
 use psx_math::int32::isqrt_i32;
-use psx_vram::{upload_bytes, Clut, Color555, TexDepth, Tpage, VramRect};
+use psx_vram::{upload_bytes, Clut, Color555, TextureDepth, TexturePage, VramRect};
 
 pub const TILE: usize = 16;
 const TILES_PER_ROW: usize = 16;
@@ -3488,7 +3488,7 @@ pub fn upload() -> BlockTex {
     // Build and upload ONE tile-row at a time. A whole-atlas buffer used to sit
     // on the stack, and the linker only reserves 32 KiB for it; a 2 KiB row
     // scratch keeps that cost flat no matter how many rows the atlas grows to.
-    let tpage = Tpage::new(TPAGE_X, TPAGE_Y, TexDepth::Bit4);
+    let tpage = TexturePage::new(TPAGE_X, TPAGE_Y, TextureDepth::Bit4);
     let row_bytes = ATLAS_W / 2;
     let mut row = [0u8; ATLAS_W * TILE / 2];
     let mut ty = 0;
@@ -3525,7 +3525,7 @@ pub fn upload() -> BlockTex {
     // One CLUT per tile: normal CLUTs stack at rows CLUT_Y.., the STP (blend)
     // variants at CLUT_Y + TILE_COUNT.. . Each is 16 texels wide (32 bytes).
     let mut bt = BlockTex::EMPTY;
-    bt.tpage = tpage.uv_tpage_word(0);
+    bt.tpage = tpage.uv_word(0);
     let mut t = 0;
     while t < TILE_COUNT {
         let pal = palette_for(t as u8);
@@ -3546,8 +3546,8 @@ pub fn upload() -> BlockTex {
         let ay = CLUT_Y + TILE_COUNT as u16 + t as u16;
         upload_bytes(VramRect::new(CLUT_X, ny, 16, 1), &clut);
         upload_bytes(VramRect::new(CLUT_X, ay, 16, 1), &clut_a);
-        bt.clut[t] = Clut::new(CLUT_X, ny).uv_clut_word();
-        bt.clut_alpha[t] = Clut::new(CLUT_X, ay).uv_clut_word();
+        bt.clut[t] = Clut::new(CLUT_X, ny).uv_word();
+        bt.clut_alpha[t] = Clut::new(CLUT_X, ay).uv_word();
         t += 1;
     }
     upload_portal_banks();

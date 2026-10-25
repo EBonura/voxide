@@ -108,7 +108,7 @@ use psx_pad::poll_port1;
 use tunelab::poll_port1;
 use psx_rt::{interrupts, tty};
 use psx_settings::Profile;
-use psx_vram::{Clut, TexDepth, Tpage};
+use psx_vram::{Clut, TextureDepth, TexturePage};
 
 use tex::BlockTex;
 use units::{ms, secs};
@@ -1253,7 +1253,7 @@ const SWIM_SINK: i32 = units::cbps_q8(281);
 const LOOK_YAW_Q8: i32 = units::dps_q8(117);
 const LOOK_PITCH_Q8: i32 = units::dps_q8(98);
 
-const FONT_TPAGE: Tpage = Tpage::new(320, 0, TexDepth::Bit4);
+const FONT_TPAGE: TexturePage = TexturePage::new(320, 0, TextureDepth::Bit4);
 const FONT_CLUT: Clut = Clut::new(320, 256);
 
 // Day/night: a full cycle is DAY_LEN sim ticks, Java's 20 minutes (24,000
@@ -5087,7 +5087,7 @@ fn wait_vblank() {
 
 // Bonnie Studios intro logo: 128x128 4bpp at a free VRAM column, its CLUT in
 // the spare row under the block CLUT band (matches the celeste collection).
-const BONNIE_TPAGE: Tpage = Tpage::new(896, 0, TexDepth::Bit4);
+const BONNIE_TPAGE: TexturePage = TexturePage::new(896, 0, TextureDepth::Bit4);
 const BONNIE_CLUT_POS: Clut = Clut::new(768, 256);
 
 /// Boot intro, ported from the celeste collection: fade the Bonnie Studios
@@ -5136,8 +5136,8 @@ fn show_intro(fb: &mut FrameBuffer, font: &FontAtlas) {
         gpu::draw_quad_textured(
             [(112, 34), (208, 34), (112, 130), (208, 130)],
             [(0, 0), (128, 0), (0, 128), (128, 128)],
-            BONNIE_CLUT_POS.uv_clut_word(),
-            BONNIE_TPAGE.uv_tpage_word(0),
+            BONNIE_CLUT_POS.uv_word(),
+            BONNIE_TPAGE.uv_word(0),
             (lvl, lvl, lvl),
         );
         // "Built with PSoXide" -- gradient text with a sweeping sheen.
@@ -9879,7 +9879,7 @@ fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize, ao_n: &mut usize,
             (p.2 + chdz) as i16,
         )
     };
-    let inflight = scene::rtpt_kick(lv(verts[0]), lv(verts[1]), lv(verts[2]));
+    let inflight = scene::start_project_triple(lv(verts[0]), lv(verts[1]), lv(verts[2]));
     let (su, sv) = match dir {
         0 | 1 => ((h * 16) as u32, (w * 16) as u32),
         _ => ((w * 16) as u32, (h * 16) as u32),
@@ -9899,10 +9899,10 @@ fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize, ao_n: &mut usize,
     // Kick RTPS for corner 3 and assemble corners 0..2 while its 15-cycle
     // divide grinds -- the read below lands after the op has settled.
     let v3 = lv(verts[3]);
-    psx_gte::mtc2!(0, v3.xy_packed());
-    psx_gte::mtc2!(1, v3.z_packed());
+    psx_gte::write_data!(0, v3.xy_packed());
+    psx_gte::write_data!(1, v3.z_packed());
     // SAFETY: V0 just loaded; RT/TR/H/OFX/OFY set by gte_load_camera/begin_chunk.
-    unsafe { psx_gte::ops::rtps() };
+    unsafe { psx_gte::ops::project_single() };
     let min_sz012 = t[0].sz.min(t[1].sz).min(t[2].sz);
     // Screen corners as plain i32 locals (the values Proj's i16 fields held),
     // sign-extended once here rather than at every use.
@@ -9921,8 +9921,8 @@ fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize, ao_n: &mut usize,
         (t[2].sy as i32).clamp(-511, 511),
         t[2].sz as i32,
     );
-    let sxy3 = psx_gte::mfc2!(14);
-    let sz3 = psx_gte::mfc2!(19) as u16;
+    let sxy3 = psx_gte::read_data!(14);
+    let sz3 = psx_gte::read_data!(19) as u16;
     let min_sz = min_sz012.min(sz3);
     // PS1 textures are affine inside each primitive. Hand the entire two-block
     // foreground band to the per-block shell before a large greedy plate can
