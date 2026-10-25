@@ -61,6 +61,18 @@ edit store that no longer forgets a build.
   `tests/blocklab.toml` (a lab disc, `--features block-lab`) throws a lever that
   opens a door and extends a piston down a line of dust, and sleeps a night;
   `tests/blocklab-save.toml` saves and loads that world.
+- A new loading screen for every world build (boot, NEW WORLD, LOAD WORLD, a
+  portal, the way back to the title): the block atlas's dirt tile tiled over the
+  screen at a fraction of its brightness, a grass block turning on it, a title
+  line (GENERATING WORLD, LOADING WORLD, ENTERING THE INFERNO, ENTERING THE VOID,
+  RETURNING TO THE OVERWORLD), a stage line from the ring's real state (SHAPING
+  TERRAIN until every chunk exists, BUILDING TERRAIN while the meshes finish) and a
+  thin green bar from the real backlog. After the first two frames only the
+  rectangles that change are repainted, so the load takes the same number of
+  vblanks as with the old bar. The title and the world then come up out of black
+  over 0.4 s (`game/src/loading.rs`, `world::load_stage`).
+  In-game loads now wait for the frame still being rasterised before drawing.
+  `tests/loading-screen.toml` checks the screen by colour counts.
 
 ## 0.4.1 | TBD
 
