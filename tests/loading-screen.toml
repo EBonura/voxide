@@ -1,0 +1,106 @@
+# The boot loading screen: a darkened dirt backdrop, a turning grass block, a
+# title line, a stage line that names the work in progress, and a progress bar
+# that fills as the world is built; then the title screen comes up out of black.
+#
+#   psoxide-gate run tests/loading-screen.toml --disc build/gate/voxide.cue
+#
+# The screen animates (the block turns, the bar fills), so no frame is compared
+# to a golden: every check is a colour count in a fixed region, or evidence that
+# the picture is changing. Dirt (49,33,24) is the atlas dirt tile at the
+# backdrop's brightness; the bar fill is (74,189,41); text is white and grey.
+
+name = "voxide-loading-screen"
+title = "VoXide: the dirt loading screen builds the world, then the title appears"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate-symbols.txt"]
+max_ticks = 3000
+
+[[step]]
+label = "the intro ends and the bar starts to fill"
+wait_until = { kind = "pixels", color = [74, 189, 41], color_tol = 14, region = { x = 80, y = 164, w = 160, h = 8 }, min_count = 12 }
+timeout = 1200
+
+[[step]]
+checkpoint = "loading-early"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [49, 33, 24]
+color_tol = 12
+region = { x = 0, y = 0, w = 320, h = 28 }
+min_count = 4000
+note = "dirt tiles fill the top band, clear of everything else"
+[[step.assert]]
+kind = "pixels"
+color = [255, 255, 255]
+color_tol = 6
+region = { x = 56, y = 130, w = 208, h = 10 }
+min_count = 60
+note = "the title line, white"
+[[step.assert]]
+kind = "pixels"
+color = [180, 180, 180]
+color_tol = 10
+region = { x = 56, y = 144, w = 208, h = 10 }
+min_count = 50
+note = "the stage line, grey"
+[[step.assert]]
+kind = "pixels"
+color = [44, 44, 44]
+color_tol = 12
+region = { x = 80, y = 164, w = 160, h = 8 }
+min_count = 150
+note = "the empty part of the bar is dark"
+[[step.assert]]
+kind = "pixels"
+color = [120, 160, 40]
+color_tol = 60
+region = { x = 100, y = 36, w = 120, h = 88 }
+min_count = 400
+note = "the grass block is up, in greens"
+[[step.assert]]
+kind = "presenting"
+window = 60
+min_changes = 8
+note = "the block turns and the bar fills: the picture keeps changing"
+
+[[step]]
+label = "the bar is well along later in the same load"
+wait = 120
+
+[[step]]
+checkpoint = "loading-late"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [74, 189, 41]
+color_tol = 14
+region = { x = 80, y = 164, w = 160, h = 8 }
+min_count = 400
+note = "most of the bar is lit"
+[[step.assert]]
+kind = "pixels"
+color = [49, 33, 24]
+color_tol = 12
+region = { x = 0, y = 190, w = 320, h = 50 }
+min_count = 6000
+note = "dirt still fills the bottom band"
+
+[[step]]
+label = "the world is done: the title replaces the loading screen"
+wait_until = { kind = "pixels", color = [140, 140, 140], color_tol = 4, region = { x = 100, y = 208, w = 125, h = 18 }, min_count = 500 }
+timeout = 1500
+
+[[step]]
+wait = 40
+
+[[step]]
+checkpoint = "title-after-loading"
+golden = false
+[[step.assert]]
+kind = "pixels"
+color = [140, 140, 140]
+color_tol = 4
+region = { x = 100, y = 208, w = 125, h = 18 }
+min_count = 500
+note = "the CREDITS button is at full brightness: the fade-in has finished"

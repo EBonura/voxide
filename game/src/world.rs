@@ -5276,6 +5276,39 @@ pub fn stream_backlog() -> (u32, u32) {
     (near, far)
 }
 
+/// What a world that is loading is waiting on, for the loading screen.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum LoadStage {
+    /// Some chunk of the ring is not generated yet.
+    Terrain,
+    /// Every chunk exists; the meshes are still being built.
+    Meshes,
+}
+
+/// The stage of the ring around the player, from its real state: terrain until
+/// every chunk of the ring is resident, meshes after that.
+#[inline(never)]
+#[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
+pub fn load_stage() -> LoadStage {
+    unsafe {
+        let half = GRID / 2;
+        let mut j = -half;
+        while j <= half {
+            let mut i = -half;
+            while i <= half {
+                let (cx, cz) = (PLAYER_CX + i, PLAYER_CZ + j);
+                let s = slot(cx, cz);
+                if !(CHUNKS[s].loaded && CHUNKS[s].cx == cx && CHUNKS[s].cz == cz) {
+                    return LoadStage::Terrain;
+                }
+                i += 1;
+            }
+            j += 1;
+        }
+    }
+    LoadStage::Meshes
+}
+
 /// How near to the player a missing chunk has to start before it is a hole he
 /// could see, in blocks. The draw ends at DRAW_BLOCKS and its last two blocks are
 /// solid fog, so terrain that appears there arrives as haze. The ring's new row

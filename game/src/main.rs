@@ -25,6 +25,7 @@ mod edits;
 mod equip;
 mod grid;
 mod hand;
+mod loading;
 #[cfg(feature = "ui-fixture")]
 mod fixture;
 #[cfg(feature = "edit-lab")]
@@ -4543,6 +4544,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         unsafe {
             gpu::submit_linked_list_raw(OT[RENDER_ARENA].submit_head());
         }
+        draw_fade_now();
         // Drop shadow first: the mark must read over a bright sky and pale
         // terrain alike, the job the Minecraft logo's dark outline does.
         draw_mark_text(91, 43, "VoXide", 3, (0x20, 0x20, 0x28));
@@ -4585,6 +4587,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
 #[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
 #[inline(never)] // once, at boot: kept out of main() so the size attribute holds
 fn finish_world_gen(fb: &mut FrameBuffer, font: &FontAtlas, pocket_done: &mut bool) {
+    loading::set_kind(loading::Kind::Generate);
     let total = menu_world_pump(pocket_done) as usize;
     // A defensive ceiling: the full boot is ~150 pump steps, so thousands of
     // steps with no progress means the streaming machine is wedged -- show
@@ -4695,6 +4698,16 @@ fn draw_brightness_now() {
     }
 }
 
+/// The fade-in after a load, drawn over the vista alone: the title's mark and buttons are drawn
+/// after it, at full strength, so they are there the moment the load is over.
+fn draw_fade_now() {
+    if let Some(fade) = loading::fade_packet(interrupts::vblank_count()) {
+        // SAFETY: as in `draw_brightness_now`.
+        let mut dma = unsafe { GpuDma::steal() };
+        Gpu::from_dma_mut(&mut dma).draw(&fade);
+    }
+}
+
 /// The BRIGHTNESS packet appended to the frame's UI list. It is the last
 /// packet built, so the tail flush (which keeps build order) walks it last,
 /// over the HUD and any open menu. No packet at DEFAULT.
@@ -4704,6 +4717,9 @@ fn ui_brightness() {
         unsafe { SETTINGS_PROFILE.brightness }.overlay(Resolution::R320X240)
     {
         ui_packet(&overlay.words());
+    }
+    if let Some(fade) = loading::fade_packet(interrupts::vblank_count()) {
+        ui_packet(&fade.words());
     }
 }
 
@@ -5199,6 +5215,7 @@ fn finish_loading(fb: &mut FrameBuffer, font: &FontAtlas) {
     if let Some((done, total)) = unsafe { LOADING_SKIPPED } {
         present_loading(fb, font, done, total);
     }
+    loading::begin_fade();
 }
 
 /// VBlank count at the last loading-screen flip.
@@ -5206,14 +5223,20 @@ static mut LOADING_FLIP_VBL: u32 = 0;
 /// Progress `draw_loading` skipped since that flip, as (done, total).
 static mut LOADING_SKIPPED: Option<(usize, usize)> = None;
 
+#[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
+#[inline(never)]
 fn present_loading(fb: &mut FrameBuffer, font: &FontAtlas, done: usize, total: usize) {
     // Immediate-mode: this runs during world generation, with no ordering table
-    // in flight, so it cannot use the UI display list (`rect`).
-    gpu::draw_rect_flat(0, 0, 320, 240, 14, 14, 22);
-    font.draw_text(96, 106, "GENERATING WORLD", (0xD0, 0xD0, 0xD0));
-    gpu::draw_rect_flat(80, 124, 160, 10, 40, 40, 52);
-    let w = (done * 156 / total.max(1)) as i16;
-    gpu::draw_rect_flat(82, 126, w.max(2) as u16, 6, 120, 220, 120);
+    // in flight, so it cannot use the UI display list (`rect`). loading.rs draws
+    // the dirt backdrop, the turning block, the two status lines and the bar.
+    loading::draw(
+        font,
+        unsafe { &BLOCK_TEX },
+        done,
+        total,
+        world::load_stage(),
+        interrupts::vblank_count(),
+    );
     draw_brightness_now();
     gpu::draw_sync();
     // Flip on a true vblank edge like every other screen: a swap mid-scanout
@@ -5590,6 +5613,16 @@ fn save_step(pad: &mut ButtonState, previous: ButtonState) {
     }
 }
 
+/// Let the frame the gameplay loop still has in flight finish rasterising before a loading screen
+/// draws. The loading screen repaints only what changes after its first two frames, so a frame
+/// still being drawn into the same buffer would show through it.
+#[inline(never)]
+#[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
+fn settle_gpu() {
+    gpu::submit_linked_list_wait();
+    gpu::draw_sync();
+}
+
 /// Load the card save and put the world in the state it describes: the
 /// dimension it was saved in (a loading screen when that differs from this
 /// one), then its edits, raw-set with the touched chunks remeshed, then the
@@ -5598,6 +5631,7 @@ fn save_step(pad: &mut ButtonState, previous: ButtonState) {
 #[inline(never)]
 #[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
 fn load_game(player: &mut Player, day: &mut u32, fb: &mut FrameBuffer, font: &FontAtlas) -> bool {
+    settle_gpu();
     let Some((dim, meta)) = save::load(player) else {
         return false;
     };
@@ -5606,6 +5640,7 @@ fn load_game(player: &mut Player, day: &mut u32, fb: &mut FrameBuffer, font: &Fo
     // world now. The session's mobs, drops and fuses go with the old one.
     mob::reset();
     clear_world_entities();
+    loading::set_kind(loading::Kind::Load);
     world::reload(dim, meta.seed, bx, bz, |done, total| {
         draw_loading(fb, font, done, total)
     });
@@ -5656,6 +5691,12 @@ fn load_game(player: &mut Player, day: &mut u32, fb: &mut FrameBuffer, font: &Fo
 #[inline(never)]
 #[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
 fn enter_dimension(dim: u8, bx: i32, bz: i32, fb: &mut FrameBuffer, font: &FontAtlas) {
+    settle_gpu();
+    loading::set_kind(match dim {
+        world::DIM_INFERNO => loading::Kind::Inferno,
+        world::DIM_VOID => loading::Kind::Void,
+        _ => loading::Kind::Overworld,
+    });
     world::set_dimension(dim, bx, bz, |done, total| {
         draw_loading(fb, font, done, total)
     });
