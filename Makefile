@@ -135,6 +135,20 @@ gate-disc:
 	@$(MAKE) --no-print-directory gate-symbols
 	@$(MAKE) --no-print-directory pack PACK_EXE="$(GATE_EXE)" PACK_OUT="$(GATE_DIR)/voxide.bin"
 
+# The three lab discs the other journeys boot: tests/blocklab*.toml (block-lab),
+# tests/music-lab.toml (music-lab) and tests/settings-menu-quit-removed.toml
+# (save-pull). They are built without the profile (PGO_VARIANT=off: the lab code
+# overflows .bss with the profile-ordered layout), are never shipped, and the last
+# build leaves the save-pull exe in game/target, so run `make gate-disc` again
+# before packing a shipping disc.
+gate-labs:
+	@$(MAKE) --no-print-directory gate-disc FEATURES=block-lab PGO_VARIANT=off \
+		GATE_DIR="$(ROOT)/build/gate-blocks" GATE_SYMBOLS="$(ROOT)/build/gate-blocks-symbols.txt"
+	@$(MAKE) --no-print-directory gate-disc FEATURES=music-lab PGO_VARIANT=off \
+		GATE_DIR="$(ROOT)/build/gate-lab" GATE_SYMBOLS="$(ROOT)/build/gate-lab-symbols.txt"
+	@$(MAKE) --no-print-directory gate-disc FEATURES=save-pull PGO_VARIANT=off \
+		GATE_DIR="$(ROOT)/build/gate-pull" GATE_SYMBOLS="$(ROOT)/build/gate-pull-symbols.txt"
+
 # disc always installs into the game library too, so EVERY build (disc, smoke,
 # install, default) lands in $(GAMES_DIR) and the latest is always testable there.
 disc: compile

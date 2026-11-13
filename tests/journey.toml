@@ -27,7 +27,11 @@ max_ticks = 6000
 
 [[step]]
 label = "boot, the Bonnie splash fades in"
-wait = 100
+# The splash is a function of its own frame counter, which a fixed wait read at a different
+# frame after every SDK boot-timing change. The sheen reaches the final "e" at one frame of the
+# animation, so wait for that and take the checkpoint there.
+wait_until = { kind = "pixels", color = [165, 214, 255], color_tol = 50, region = { x = 223, y = 150, w = 8, h = 9 }, min_count = 20 }
+timeout = 300
 
 [[step]]
 checkpoint = "splash"
