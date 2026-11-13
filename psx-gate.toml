@@ -1,0 +1,3 @@
+# This program's exceptions to the SDK's architecture gate (`psx-gate`, the SDK's
+# sdk/docs/GATE.md). A ratchet: nothing is added, an entry that no longer matches the tree
+# fails (delete it), a count only goes down. VoXide holds none.

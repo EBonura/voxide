@@ -67,7 +67,7 @@ jobs:
           retention-days: 30
 
       - name: Validate destination and optionally publish
-        uses: EBonura/PSoXide/.github/actions/itch-publish@686303a7ab51b084af238efcc78557a82319027c
+        uses: EBonura/PSoXide/.github/actions/itch-publish@3b7ef12561fb3e1472f4422b8893d000d2d807fa
         with:
           source-dir: release
           target: bonnie-studios/voxide:psx

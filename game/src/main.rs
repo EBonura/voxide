@@ -15,7 +15,6 @@ extern crate psx_rt;
 
 mod blast;
 mod blocks;
-mod bonnie;
 mod bow;
 mod bstate;
 mod cheat;
@@ -84,7 +83,7 @@ use core::cmp::{max, min};
 use psx_font::{fonts::BASIC, FontAtlas};
 use psx_gpu::{
     self as gpu,
-    display::{DisplayConfig, Resolution, VideoMode},
+    display::{DisplayConfig, DoubleBuffer, Resolution, VideoMode},
     framebuf::FrameBuffer,
     material::{BlendMode, TextureMaterial, TextureWindow},
     ot::OrderingTable,
@@ -96,17 +95,17 @@ use psx_gpu::{
 };
 use psx_gte::math::{Mat3I16, Vec3I16, Vec3I32};
 use psx_gte::scene;
-use psx_io::periph::GpuDma;
+use psx_io::periph::{ControllerPort, GpuDma};
 use psx_math::attributed_clip::{clip_convex_plane, AttributedClipPlane, ClipTraversal};
 use psx_math::sincos;
 use psx_pad::{
-    button, enable_analog_port1, ActionBinding, ActionMap, ButtonState, Deadzone, PadState,
+    button, ActionBinding, ActionMap, ButtonState, Controllers, Deadzone, PadState, Port,
 };
 // The tuning lab (never shipped) scripts the pad through its own poll.
 #[cfg(not(feature = "tune-lab"))]
-use psx_pad::poll_port1;
+use self::read_pad as poll_pad;
 #[cfg(feature = "tune-lab")]
-use tunelab::poll_port1;
+use tunelab::poll_pad;
 use psx_rt::{interrupts, tty};
 use psx_settings::Profile;
 use psx_vram::{Clut, TextureDepth, TexturePage};
@@ -3052,11 +3051,11 @@ fn main() {
     // CPU interrupts, so it must run AFTER the handshake. (Latent until psx-rt
     // 2aceef5c fixed an MFC0 hazard that had kept interrupt-enable from actually
     // taking effect -- which is why analog "used to work".)
-    let _ = enable_analog_port1();
+    let _ = poll_pad();
     interrupts::install_vblank_counter();
     load_shared_settings();
     sfx::init();
-    show_intro(&mut fb, &font);
+    show_intro(&mut fb);
     // After the intro, not before: it reads the disc twice, which would shift
     // the splash's timing, and the splash is checked at a fixed tick.
     music::init();
@@ -3109,7 +3108,7 @@ fn main() {
     // the button when the gameplay loop starts. Against a NONE baseline that
     // reads as a fresh press and drops you into the world with the options menu
     // already open.
-    let mut previous = poll_port1().buttons;
+    let mut previous = poll_pad().buttons;
     // Frames since the world opened. Monotonic: it counts loop iterations and
     // nothing else moves it.
     let mut frame: u32 = 0;
@@ -3157,7 +3156,7 @@ fn main() {
         unsafe { TITLE_LOAD = false };
         if load_game(&mut player, &mut day, &mut fb, &font) {
             portal_dwell = PORTAL_IMMUNE;
-            previous = poll_port1().buttons;
+            previous = poll_pad().buttons;
         } else {
             unsafe { TITLE_UNREADABLE = true };
             quit_to_title(&mut fb, &font, frame);
@@ -3205,7 +3204,7 @@ fn main() {
         };
 
         telemetry::stage_begin(49); // TEMP: pad poll (SIO exchange)
-        let state = poll_port1();
+        let state = poll_pad();
         telemetry::stage_end(49);
         let mut pad = state.buttons;
         let mut lstick = state.sticks.left_centered();
@@ -3216,14 +3215,14 @@ fn main() {
         if menus::quit_ready() {
             break;
         }
-        // Safety net for a controller that wasn't ready at the boot handshake
-        // (or gets re-plugged): re-assert analog while the pad still reports
-        // non-analog. In the normal case the pre-interrupt boot enable already
-        // made it analog, so this never fires. Skips once analog; harmless on a
-        // digital-only pad.
-        if !state.is_analog() && frame % 15 == 0 {
-            let _ = enable_analog_port1();
-        }
+        // No analog re-assert here: the SDK's `Controllers` runs the analog
+        // handshake the first time a pad answers on the port, at boot and again
+        // after a re-plug, so a controller that was not ready at boot gets it
+        // when it appears. A digital-only pad is left in digital mode.
+        // The loop used to re-assert analog from here every 15 frames while the
+        // pad reported digital; that was a second copy of the SDK's handshake.
+        // (The comment is as long as the code it replaced so that the line
+        // offsets of the committed PGO profile for this function still hold.)
         if DEMO_PLAY {
             let (db, dl, dr) = demo_input(frame);
             pad = db;
@@ -4362,7 +4361,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         TITLE_LOAD = false;
         TITLE_PROBE = save::probe();
     }
-    let mut prev = poll_port1().buttons;
+    let mut prev = poll_pad().buttons;
     // 0 = play, 1 = load world, 2 = new world, 3 = controls, 4 = settings, 5 = credits.
     // Back from a save that would not read, the cursor waits on LOAD WORLD with the reason.
     let mut sel = unsafe { TITLE_UNREADABLE } as usize;
@@ -4376,7 +4375,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         if music::pick_due() {
             music::start(true);
         }
-        let mut pad = poll_port1().buttons;
+        let mut pad = poll_pad().buttons;
         let settings_was_open = settings;
         if DEMO_PLAY && t == 90 {
             // Headless playtest: confirm PLAY at menu-frame 90.
@@ -4479,7 +4478,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             // Regenerate behind the bar, then return to the menu over the
             // fresh vista.
             finish_world_gen(fb, font, &mut pocket_done);
-            prev = poll_port1().buttons;
+            prev = poll_pad().buttons;
         } else if go && sel == 3 {
             controls = true;
             controls::open();
@@ -5094,6 +5093,17 @@ fn reset_game_state() {
     cheat::reset();
 }
 
+/// The pads, read the one way every game reads them.
+static mut PADS: Controllers = Controllers::new();
+
+/// Poll port 1 once. The first poll of a pad runs the analog handshake, so the boot
+/// calls it once before interrupts are on.
+fn read_pad() -> PadState {
+    // SAFETY: the one reader of the controller port, as the one GPU owner below.
+    let mut port = unsafe { ControllerPort::steal() };
+    *unsafe { (*core::ptr::addr_of_mut!(PADS)).poll(&mut port, Port::One) }
+}
+
 /// Wait for the next VBlank IRQ (the SDK's fixed version of the old
 /// gpu::vsync() timer-reset bug; see psx_rt::interrupts::wait_vblank docs).
 #[inline]
@@ -5101,95 +5111,21 @@ fn wait_vblank() {
     interrupts::wait_vblank();
 }
 
-// Bonnie Studios intro logo: 128x128 4bpp at a free VRAM column, its CLUT in
-// the spare row under the block CLUT band (matches the celeste collection).
-const BONNIE_TPAGE: TexturePage = TexturePage::new(896, 0, TextureDepth::Bit4);
-const BONNIE_CLUT_POS: Clut = Clut::new(768, 256);
-
-/// Boot intro, ported from the celeste collection: fade the Bonnie Studios
-/// logo in, hold, fade out, with the "Built with PSoXide" sheen line. Any
-/// face button skips it.
-#[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
-#[inline(never)] // once, at boot: kept out of main() so the size attribute holds
-fn show_intro(fb: &mut FrameBuffer, font: &FontAtlas) {
-    psx_vram::upload_16bpp(
-        psx_vram::VramRect::new(BONNIE_TPAGE.x(), BONNIE_TPAGE.y(), 32, 128),
-        &bonnie::COVER_BONNIE,
+/// Boot intro: the SDK's splash. Any face button skips it.
+fn show_intro(fb: &mut FrameBuffer) {
+    // SAFETY: the one GPU owner, as in `apply_screen_offset`.
+    let mut dma = unsafe { GpuDma::steal() };
+    let gpu = Gpu::from_dma_mut(&mut dma);
+    let mut buffers = DoubleBuffer::new(Resolution::R320X240);
+    psx_splash::show(
+        gpu,
+        &mut buffers,
+        "Built with PSoXide",
+        unsafe { SETTINGS_PROFILE.brightness },
+        || poll_pad().buttons,
     );
-    let mut clut = bonnie::BONNIE_CLUT;
-    clut[0] = 0x0421; // entry 0 opaque near-black (intro backdrop is black)
-    psx_vram::upload_16bpp(
-        psx_vram::VramRect::new(BONNIE_CLUT_POS.x(), BONNIE_CLUT_POS.y(), 16, 1),
-        &clut,
-    );
-
-    const FADE_IN: i32 = 32;
-    const HOLD: i32 = 74;
-    const TOTAL: i32 = 150;
-    const FADE_OUT: i32 = TOTAL - FADE_IN - HOLD;
-    let any = |b: ButtonState| {
-        b.is_held(button::CROSS) || b.is_held(button::CIRCLE) || b.is_held(button::START)
-    };
-    let mut prev = poll_port1().buttons;
-    let mut t = 0i32;
-    while t < TOTAL {
-        let b = poll_port1().buttons;
-        if t > 8 && any(b) && !any(prev) {
-            break; // fresh press skips
-        }
-        prev = b;
-        let lvl = if t < FADE_IN {
-            t * 0x80 / FADE_IN
-        } else if t < FADE_IN + HOLD {
-            0x80
-        } else {
-            (TOTAL - t) * 0x80 / FADE_OUT
-        }
-        .clamp(0, 0x80) as u8;
-
-        fb.clear(0, 0, 0);
-        // Logo: 96x96 on screen from the 128x128 source, centred.
-        gpu::draw_quad_textured(
-            [(112, 34), (208, 34), (112, 130), (208, 130)],
-            [(0, 0), (128, 0), (0, 128), (128, 128)],
-            BONNIE_CLUT_POS.uv_word(),
-            BONNIE_TPAGE.uv_word(0),
-            (lvl, lvl, lvl),
-        );
-        // "Built with PSoXide" -- gradient text with a sweeping sheen.
-        let tag = "Built with PSoXide";
-        let x0 = 160 - (font.text_width(tag) / 2) as i16;
-        let span = tag.chars().count() as i32 + 18;
-        let head = (t / 2).rem_euclid(span);
-        let mix = |c: (u8, u8, u8), k: i32| -> (u8, u8, u8) {
-            let f = |v: u8| {
-                let base = v as i32 * lvl as i32 / 0x80;
-                (base + (lvl as i32 - base) * k / 18) as u8
-            };
-            (f(c.0), f(c.1), f(c.2))
-        };
-        let mut x = x0;
-        for (i, ch) in tag.char_indices() {
-            let glyph = &tag[i..i + ch.len_utf8()];
-            for (dx, dy) in [(-1, -1), (1, -1), (-1, 1), (1, 1)] {
-                font.draw_text(x + dx, 150 + dy, glyph, (0, 0, 0));
-            }
-            let k = (18 - ((i as i32) - head).abs() * 6).max(0);
-            font.draw_text_gradient(
-                x,
-                150,
-                glyph,
-                mix((0x68, 0x80, 0x80), k),
-                mix((0x38, 0x58, 0x80), k),
-            );
-            x += font.text_width(glyph) as i16;
-        }
-        draw_brightness_now();
-        gpu::draw_sync();
-        wait_vblank();
-        fb.swap();
-        t += 1;
-    }
+    // The game's own buffer tracking follows the splash's last swap.
+    fb.drawing = u8::from(buffers.draw_origin().1 != 0);
 }
 
 /// Boot/regen loading screen: dark backdrop, logo, and a progress bar. Drawn

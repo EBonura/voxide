@@ -70,8 +70,8 @@ fn phase(t: i32) -> i32 {
 
 /// The game's pad poll with the script's buttons in place of the pad's once
 /// gameplay has begun (menus and the hand-off into the world see the pad).
-pub fn poll_port1() -> psx_pad::PadState {
-    let mut s = psx_pad::poll_port1();
+pub fn poll_pad() -> psx_pad::PadState {
+    let mut s = crate::read_pad();
     s.buttons = pad(s.buttons);
     s
 }
