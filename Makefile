@@ -25,7 +25,7 @@ PSOXIDE_START_PULSE ?= 0x0008@700+60
 
 .DEFAULT_GOAL := build
 .PHONY: help psoxide build compile pack music music-check disc gate-disc gate-symbols install release run smoke profile \
-	pgo-collect pgo-order pgo-choose clean host-tests music-check
+	pgo-collect pgo-stamp pgo-order pgo-choose clean host-tests music-check
 
 help:
 	@echo "VoXide targets:"
@@ -230,6 +230,11 @@ pgo-order: psoxide
 		--pack $(PGO_PACK) --launch-arg --embedded-playtest $(PGO_LAUNCH_ARGS) \
 		--profile "$(PGO_PROFILE)" --variant "$(PGO_BASE_VARIANT)" --out "$(PGO_LAYOUT)" -- $(GAME_CARGO)
 
+# Record the source of a committed profile that has none (once; the README of
+# psoxide-pgo, "Edits move the profile"). pgo-collect stamps what it collects.
+pgo-stamp: psoxide
+	PSOXIDE="$(PSOXIDE)" $(PGO) stamp --crate "$(GAME)" --profile "$(PGO_PROFILE)" -- $(GAME_CARGO)
+
 # Every variant is built with --features lockstep (one sim step per pad poll),
 # so all of them reach the same state at every poll: a display hash that
 # differs from the `off` row is a miscompile, and ticks over the gameplay
@@ -239,9 +244,14 @@ pgo-order: psoxide
 PGO_VARIANTS = off default hot=500 hot=500+profi accurate+hot=500
 PGO_MEASURE  = "$$PSOXIDE_PGO" measure --frontend "$(FRONTEND)" --image "$$PSOXIDE_PGO_IMAGE" \
 	--launch-arg --embedded-playtest $(PGO_LAUNCH_ARGS)
+# The floor is the free RAM of the shipping variant linked with the arguments below
+# (hot=500+profi, --features lockstep: 92,124 B on SDK 091551541): a variant that
+# links under it is refused, not gated. Retake it from the committed build
+# (`psoxide-pgo ram MAP`) when the shipped variant or the SDK pin changes.
+PGO_RAM_FLOOR ?= 92124
 pgo-choose: psoxide
 	PSOXIDE="$(PSOXIDE)" $(PGO) choose --crate "$(GAME)" --profile "$(PGO_PROFILE)" \
-		$(foreach v,$(PGO_VARIANTS),--variant $(v)) --pack $(PGO_PACK) \
+		$(foreach v,$(PGO_VARIANTS),--variant $(v)) --ram-floor $(PGO_RAM_FLOOR) --pack $(PGO_PACK) \
 		--gate '$(PGO_MEASURE) --tape "$(TRAIN_TAPE)" --polls $(TRAIN_POLLS) --name train \
 			&& $(PGO_MEASURE) --tape "$(UNSEEN_TAPE)" --polls $(UNSEEN_POLLS) --name unseen' \
 		-- build --release --features lockstep
