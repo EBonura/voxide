@@ -19,8 +19,8 @@ fn profile() -> Profile<5, 0> {
 fn round_trip(profile: &Profile<5, 0>) -> Profile<5, 0> {
     let mut bytes = [0u8; MAX_RECORD_LEN];
     let len = profile.encode(&mut bytes).unwrap();
-    assert_eq!(len, 38);
-    assert_eq!(bytes[4], 2, "the record version does not change");
+    assert_eq!(len, 46);
+    assert_eq!(bytes[4], 3, "the record version the SDK writes today");
     Profile::decode(&bytes[..len]).unwrap()
 }
 
