@@ -81,7 +81,7 @@ FEATURES    ?=
 GAME_CARGO   = build --release$(if $(strip $(FEATURES)), --features "$(FEATURES)")
 PGO          = cargo run -q --release --locked --manifest-path "$(PSOXIDE)/tools/psoxide-pgo/Cargo.toml" --
 PGO_PROFILE  = $(ROOT)/pgo/voxide.prof
-PGO_VARIANT ?= hot=500+profi
+PGO_VARIANT ?= hot=500
 # Layout profile for `+order` variants (make pgo-order); only they read it.
 PGO_LAYOUT   = $(ROOT)/pgo/voxide.layout
 
@@ -245,10 +245,10 @@ PGO_VARIANTS = off default hot=500 hot=500+profi accurate+hot=500
 PGO_MEASURE  = "$$PSOXIDE_PGO" measure --frontend "$(FRONTEND)" --image "$$PSOXIDE_PGO_IMAGE" \
 	--launch-arg --embedded-playtest $(PGO_LAUNCH_ARGS)
 # The floor is the free RAM of the shipping variant linked with the arguments below
-# (hot=500+profi, --features lockstep: 92,124 B on SDK 091551541): a variant that
+# (hot=500, --features lockstep: 92,876 B on SDK 9bb3045bd): a variant that
 # links under it is refused, not gated. Retake it from the committed build
 # (`psoxide-pgo ram MAP`) when the shipped variant or the SDK pin changes.
-PGO_RAM_FLOOR ?= 92124
+PGO_RAM_FLOOR ?= 92876
 pgo-choose: psoxide
 	PSOXIDE="$(PSOXIDE)" $(PGO) choose --crate "$(GAME)" --profile "$(PGO_PROFILE)" \
 		$(foreach v,$(PGO_VARIANTS),--variant $(v)) --ram-floor $(PGO_RAM_FLOOR) --pack $(PGO_PACK) \
