@@ -12,7 +12,7 @@ fn sfx_bank_matches_the_committed_chunk() {
         bank == committed,
         "cooked bank differs from assets/sfx/pak/chunk_3000.bin"
     );
-    assert!(rs.contains("pub static SAMPLES: [Sample; 25]"));
+    assert!(rs.contains("pub static SAMPLES: [Sample; 27]"));
     assert!(rs.contains("Sample { off: 0, rate: 22050, blocks: 234 }, // step_grass"));
 }
 
