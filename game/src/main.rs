@@ -3215,14 +3215,6 @@ fn main() {
         if menus::quit_ready() {
             break;
         }
-        // No analog re-assert here: the SDK's `Controllers` runs the analog
-        // handshake the first time a pad answers on the port, at boot and again
-        // after a re-plug, so a controller that was not ready at boot gets it
-        // when it appears. A digital-only pad is left in digital mode.
-        // The loop used to re-assert analog from here every 15 frames while the
-        // pad reported digital; that was a second copy of the SDK's handshake.
-        // (The comment is as long as the code it replaced so that the line
-        // offsets of the committed PGO profile for this function still hold.)
         if DEMO_PLAY {
             let (db, dl, dr) = demo_input(frame);
             pad = db;
