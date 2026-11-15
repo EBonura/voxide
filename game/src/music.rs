@@ -18,9 +18,9 @@
 
 use crate::musicdata::{FILES, TRACKS};
 use crate::music_plan as plan;
-use psx_fmv::iso;
 use psx_fx::rng::LcgRng;
 use psx_io::cd::xa::{DriveSpeed, Event, File, Player};
+use psx_io::iso;
 use psx_io::periph::Cd;
 use psx_pack::cd::{SectorReader, SECTOR_WORDS};
 use psx_rt::{interrupts, tty};
@@ -203,17 +203,14 @@ fn read_sector<'s>(
     reader: &mut SectorReader,
     sector: &'s mut [u32; SECTOR_WORDS],
     lba: u32,
-) -> Option<&'s [u8]> {
+) -> Option<&'s [u8; iso::BYTES]> {
     if !reader.start_read(lba) {
         reader.stop();
         return None;
     }
     let ok = reader.read_sector(sector);
     reader.stop();
-    // SAFETY: a `[u32; N]` viewed as its own bytes; alignment only shrinks.
-    ok.then(|| unsafe {
-        core::slice::from_raw_parts(sector.as_ptr().cast::<u8>(), SECTOR_WORDS * 4)
-    })
+    ok.then(|| iso::as_bytes(sector))
 }
 
 /// The title screen is up: the menu song comes after Java's 1 to 30 seconds.
