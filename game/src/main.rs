@@ -97,6 +97,7 @@ use psx_gte::math::{Mat3I16, Vec3I16, Vec3I32};
 use psx_gte::scene;
 use psx_io::periph::{ControllerPort, GpuDma};
 use psx_math::attributed_clip::{clip_convex_plane, AttributedClipPlane, ClipTraversal};
+use psx_math::fmt::u32_dec_padded;
 use psx_math::sincos;
 use psx_pad::{
     button, ActionBinding, ActionMap, ButtonState, Controllers, Deadzone, PadState, Port,
@@ -4056,7 +4057,9 @@ fn main() {
         let hud_tool_now = hud_tool(&player, aimed_block);
         unsafe { FullStack::run(|| draw_all_hud(&font, player, menu, hud_tool_now)) };
         if SHOW_FPS {
-            ui_text(&font, 276, 6, &decimal3(fps as u16), (0xE0, 0xE0, 0x60));
+            let mut digits = [0u8; 3];
+            let fps = u32_dec_padded(&mut digits, u32::from((fps as u16).min(999)), 3);
+            ui_text(&font, 276, 6, fps, (0xE0, 0xE0, 0x60));
         }
         if cheat::hud() && menu == 0 {
             cheat::draw_hud(&font, &player, fps);
@@ -12316,7 +12319,8 @@ fn draw_hud(font: &FontAtlas, player: Player) {
         if HUD_NAME_T > 0 {
             HUD_NAME_T -= 1;
             let name = block_name(player.selected);
-            let cnt = decimal3(INV[player.selected as usize]);
+            let mut digits = [0u8; 3];
+            let cnt = u32_dec_padded(&mut digits, u32::from(INV[player.selected as usize].min(999)), 3);
             // Name and count centred as one unit, with a space between.
             let w = (name.len() + 1 + cnt.len()) as i16 * 8;
             let x = (SCREEN_W as i16 - w) / 2;
@@ -12348,28 +12352,6 @@ fn draw_hud(font: &FontAtlas, player: Player) {
             rect(x0 + i * 9, y, 7, 5, 80, 150, 230);
             i += 1;
         }
-    }
-}
-
-fn decimal3(v: u16) -> Decimal3 {
-    let n = if v > 999 { 999 } else { v };
-    Decimal3([
-        b'0' + ((n / 100) as u8),
-        b'0' + (((n / 10) % 10) as u8),
-        b'0' + ((n % 10) as u8),
-    ])
-}
-
-struct Decimal3([u8; 3]);
-impl Decimal3 {
-    fn as_str(&self) -> &str {
-        unsafe { core::str::from_utf8_unchecked(&self.0) }
-    }
-}
-impl core::ops::Deref for Decimal3 {
-    type Target = str;
-    fn deref(&self) -> &str {
-        self.as_str()
     }
 }
 

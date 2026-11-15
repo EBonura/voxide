@@ -1419,19 +1419,8 @@ pub fn tabs(font: &FontAtlas, y: i16, tiles: &[u8], sel: usize) {
 }
 
 /// Unpadded decimal into `buf`, returned as text.
-#[optimize(size)]
 pub fn number(v: u16, buf: &mut [u8; 5]) -> &str {
-    let mut i = 5;
-    let mut v = v;
-    loop {
-        i -= 1;
-        buf[i] = b'0' + (v % 10) as u8;
-        v /= 10;
-        if v == 0 {
-            break;
-        }
-    }
-    unsafe { core::str::from_utf8_unchecked(&buf[i..]) }
+    psx_math::fmt::u32_dec(&mut buf[..], u32::from(v))
 }
 
 /// What an item is for, one line for the info strip.
@@ -1962,18 +1951,6 @@ pub fn inventory_open_grid() {
     }
 }
 
-/// Unpadded `v` as whole.tenths.
-#[optimize(size)]
-fn tenths(v: i32, buf: &mut [u8; 8]) -> &str {
-    let mut n = [0u8; 5];
-    let whole = number((v / 10) as u16, &mut n);
-    let w = whole.len();
-    buf[..w].copy_from_slice(whole.as_bytes());
-    buf[w] = b'.';
-    buf[w + 1] = b'0' + (v % 10) as u8;
-    unsafe { core::str::from_utf8_unchecked(&buf[..w + 2]) }
-}
-
 /// A durability bar under an item icon (green to red), when worn.
 #[optimize(size)]
 fn wear_bar(x: i16, y: i16, left: i32, max: i32) {
@@ -2099,9 +2076,9 @@ fn draw_player_page(font: &FontAtlas, p: &Player) {
     let mut b1 = [0u8; 8];
     let mut b2 = [0u8; 8];
     ui_text(font, WX, WY + 22, "DMG", MC_INK);
-    ui_text(font, WX + 32, WY + 22, tenths((dmg + 5) / 10, &mut b1), MC_INK);
+    ui_text(font, WX + 32, WY + 22, psx_math::fmt::tenths_dec(&mut b1, ((dmg + 5) / 10) as u32), MC_INK);
     ui_text(font, WX + 72, WY + 22, "SPEED", MC_INK);
-    ui_text(font, WX + 120, WY + 22, tenths(spd, &mut b2), MC_INK);
+    ui_text(font, WX + 120, WY + 22, psx_math::fmt::tenths_dec(&mut b2, spd as u32), MC_INK);
 
     // The armour you carry.
     let mut n = 0;
