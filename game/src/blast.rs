@@ -42,8 +42,12 @@ pub fn mix(seed: u32, k: u32) -> u32 {
     h ^ (h >> 16)
 }
 
-/// Integer square root, rounded down.
-pub const fn isqrt(n: u32) -> u32 {
+/// Integer square root, rounded down. It is a `const fn` because `ray_step` runs in the
+/// initializer of `RAY_DIRS` and `psx_math::int32::isqrt_u32` is not one; this file also takes
+/// no dependencies (the host tests compile it with bare rustc), so `knockback_q8` uses it too.
+/// Everything else uses the SDK's. Over every `u32` the two agree except 4_294_967_295,
+/// where this one's `x + 1` overflows (compared exhaustively on the host).
+const fn isqrt(n: u32) -> u32 {
     if n < 2 {
         return n;
     }

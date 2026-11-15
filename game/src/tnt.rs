@@ -424,7 +424,7 @@ pub fn hit_on(
     if dx.abs() >= reach || dy.abs() >= reach || dz.abs() >= reach {
         return None;
     }
-    let dist = blast::isqrt((dx * dx + dy * dy + dz * dz) as u32) as i32;
+    let dist = psx_math::int32::isqrt_u32((dx * dx + dy * dy + dz * dz) as u32) as i32;
     let prox = blast::proximity_q8(power, dist)?;
     // Cover costs a block read a step along six lines, so only what it matters
     // for (the player and the mobs) pays; TNT and dropped items take it full.
