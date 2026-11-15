@@ -407,18 +407,15 @@ pub(super) fn decode_cols<const FULL: bool>(s: usize, c0: usize, c1: usize, top:
         while col < c1 {
             let mut o = region + COL_OFF[s][col] as usize;
             let mut y1 = CHU;
-            // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
-            let mut mesh = 0u64;
-            // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
-            let mut see = 0u64;
+            let mut mesh = Mask64::EMPTY;
+            let mut see = Mask64::EMPTY;
             let mut sky = false;
             while y1 > 0 {
                 let b = BLK[o];
                 let n = BLK[o + 1] as usize;
                 o += 2;
                 let y0 = y1 - n;
-                // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
-                let bits = if n == CHU { !0u64 } else { ((1u64 << n) - 1) << y0 };
+                let bits = Mask64::range(y0, y1);
                 let mut i = y0 * CWU * CWU + col;
                 let mut k = 0;
                 while k < n {
@@ -433,14 +430,14 @@ pub(super) fn decode_cols<const FULL: bool>(s: usize, c0: usize, c1: usize, top:
                     }
                     let cls = BCLASS[b as usize];
                     if cls & CLS_MESH != 0 {
-                        mesh |= bits;
+                        mesh = mesh.or(bits);
                         if FULL && !sky {
                             SKY_TOP[col] = (y1 - 1) as u8;
                             sky = true;
                         }
                     }
                     if cls & CLS_SEE != 0 {
-                        see |= bits;
+                        see = see.or(bits);
                     }
                     if cls & CLS_SPECIAL != 0 && is_light_source(b) {
                         LIGHT_COLS[col >> 5] |= 1 << (col & 31);
@@ -453,12 +450,12 @@ pub(super) fn decode_cols<const FULL: bool>(s: usize, c0: usize, c1: usize, top:
                         }
                     }
                 } else {
-                    see |= bits;
+                    see = see.or(bits);
                 }
                 y1 = y0;
             }
-            COL_MESH[col] |= mesh;
-            COL_SEE[col] |= see;
+            COL_MESH[col] = COL_MESH[col].or(mesh);
+            COL_SEE[col] = COL_SEE[col].or(see);
             col += 1;
         }
         if FULL && c1 == CWU * CWU {
