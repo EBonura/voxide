@@ -405,6 +405,13 @@ min_count = 100
 note = "the flint and steel blade is visible in hand before ignition"
 
 [[step]]
+label = "light the fuse on a fixed simulation tick, whatever the frame rate: wait on the game's own tick counter, polls not frames"
+sync = "poll"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 12, op = "ge", value = 1132 }
+timeout = 600
+
+[[step]]
+sync = "poll"
 press = ["l2"]
 hold = 4
 wait = 30
@@ -512,7 +519,7 @@ sym = "VOXIDE_GATE_STATE"
 offset = 20
 op = "ge"
 value = 100
-note = "the completed blast made a crater (138 edits on this route since the off-screen face and far plant rejects made the frames faster, which moves the route a tick or two; 136 before them, since the title looks at the card for LOAD WORLD; 134 before that, since the visible-crater slices of the combined release candidate; 126 before that; the exact count follows the sim tick the TNT goes off at, since the blast seed is SIM_TICK, so any change to the route timeline moves it: 126, 134, 134, 127 and 138 for extra waits of 0, 1, 2, 5 and 13 ticks before the flint. Re-measure and update world-saved and world-reloaded together)"
+note = "the completed blast made a crater; the exact count is asserted at world-saved"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_GATE_STATE"
@@ -567,8 +574,8 @@ kind = "ram"
 sym = "VOXIDE_GATE_STATE"
 offset = 20
 op = "eq"
-value = 136
-note = "the saved game has the completed crater edits (136 once the mesher keeps its 64-row bit sets in psx_math::Mask64, which makes the frames faster and the route shorter; 138 before it, on SDK 20f05ccf9 and on 9bb3045bd. The cause is the timeline, not the world: lockstep builds (FEATURES=lockstep, one sim tick per pad poll) of the u64 and the Mask64 sources give the same crater for every extra wait before the flint, 130, 131, 133 and 128 for waits 0, 1 to 4, 5 to 6 and 7 to 8, and the committed mesh and column data in RAM are byte for byte equal after 1200 polls of both benchmark tapes; where the boot is a tick or two earlier, which moved the TNT tick again; 136 on SDK 3b7ef1256, where the pad is read through Controllers and the splash is the SDK one, which moved the TNT tick again; 140 on SDK 686303a7a and on c75f63928, 136 on 31c3149b7, which moved the TNT tick again; 136 before it, since the TNT lands in the tall-grass tuft it is aimed at, as in Java, 2026-10-19; 140 before that, and 140 since the frame retune of 2026-10-17 moved the route timeline again; 136 after the repin to SDK b5365b18 and editor c096eee0, which moved it a tick or two; 140 on SDK 5219afbe, 138 before it; the count follows the sim tick the TNT goes off at, and the world-reloaded step below must read the same number back)"
+value = 142
+note = "the saved game has the completed crater edits: 142 when the fuse is lit on simulation tick 1132 (the blast seed is SIM_TICK, so the count follows the tick the TNT goes off at; the journey waits on the game's own tick counter, by polls, before the flint, so build speed and boot timing do not move it; the source before the Mask64 mesher and the one after both give 142)"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_GATE_STATE"
@@ -643,7 +650,7 @@ kind = "ram"
 sym = "VOXIDE_GATE_STATE"
 offset = 20
 op = "eq"
-value = 136
+value = 142
 note = "the actual world edit log was restored from card"
 [[step.assert]]
 kind = "ram"
