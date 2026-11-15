@@ -191,6 +191,7 @@ dependencies = [
  "psx-fx",
  "psx-gpu",
  "psx-gte",
+ "psx-hw",
  "psx-io",
  "psx-math",
  "psx-mc",

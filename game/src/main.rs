@@ -95,6 +95,7 @@ use psx_gpu::{
 };
 use psx_gte::math::{Mat3I16, Vec3I16, Vec3I32};
 use psx_gte::scene;
+use psx_hw::gpu::packet;
 use psx_io::periph::{ControllerPort, GpuDma};
 use psx_math::attributed_clip::{clip_convex_plane, AttributedClipPlane, ClipTraversal};
 use psx_math::fmt::u32_dec_padded;
@@ -9116,7 +9117,11 @@ fn emit_clipped_cell(win: u32, cl_hi: u32, tp_hi: u32, blended: bool, depth_bias
         );
     }
 
-    let command = if blended { 0x3600_0000 } else { 0x3400_0000 };
+    let command = if blended {
+        packet::SHADED_TEXTURED_TRIANGLE | packet::SEMI_TRANSPARENT
+    } else {
+        packet::SHADED_TEXTURED_TRIANGLE
+    };
     let mut fan = 1usize;
     while fan + 1 < n {
         let tri_n = unsafe { NEAR_TRI_N };
@@ -11680,7 +11685,7 @@ fn ui_tri_blend(v: [(i16, i16); 3], r: u8, g: u8, b: u8) {
     unsafe {
         *p.add(1) = mat.draw_mode_word();
         *p.add(2) = mat.texture_window_word();
-        *p.add(3) = 0x2200_0000 | rgb(r, g, b);
+        *p.add(3) = packet::FLAT_TRIANGLE | packet::SEMI_TRANSPARENT | rgb(r, g, b);
         *p.add(4) = xy(v[0].0, v[0].1);
         *p.add(5) = xy(v[1].0, v[1].1);
         *p.add(6) = xy(v[2].0, v[2].1);
@@ -11699,7 +11704,7 @@ fn ui_tri_add_gouraud(v: [(i16, i16); 3], c: [(u8, u8, u8); 3]) {
     unsafe {
         *p.add(1) = mat.draw_mode_word();
         *p.add(2) = mat.texture_window_word();
-        *p.add(3) = 0x3200_0000 | rgb(c[0].0, c[0].1, c[0].2);
+        *p.add(3) = packet::SHADED_TRIANGLE | packet::SEMI_TRANSPARENT | rgb(c[0].0, c[0].1, c[0].2);
         *p.add(4) = xy(v[0].0, v[0].1);
         *p.add(5) = rgb(c[1].0, c[1].1, c[1].2);
         *p.add(6) = xy(v[1].0, v[1].1);
@@ -11719,7 +11724,7 @@ fn ui_quad_blend_depth(v: [(i16, i16); 4], r: u8, g: u8, b: u8, slot: usize) {
     unsafe {
         *p.add(1) = mat.draw_mode_word();
         *p.add(2) = mat.texture_window_word();
-        *p.add(3) = 0x2A00_0000 | rgb(r, g, b);
+        *p.add(3) = packet::FLAT_QUAD | packet::SEMI_TRANSPARENT | rgb(r, g, b);
         *p.add(4) = xy(v[0].0, v[0].1);
         *p.add(5) = xy(v[1].0, v[1].1);
         *p.add(6) = xy(v[2].0, v[2].1);
@@ -11740,7 +11745,7 @@ fn ui_quad_add_depth(v: [(i16, i16); 4], c: (u8, u8, u8), slot: usize) {
     unsafe {
         *p.add(1) = mat.draw_mode_word();
         *p.add(2) = mat.texture_window_word();
-        *p.add(3) = 0x2A00_0000 | rgb(c.0, c.1, c.2);
+        *p.add(3) = packet::FLAT_QUAD | packet::SEMI_TRANSPARENT | rgb(c.0, c.1, c.2);
         *p.add(4) = xy(v[0].0, v[0].1);
         *p.add(5) = xy(v[1].0, v[1].1);
         *p.add(6) = xy(v[2].0, v[2].1);

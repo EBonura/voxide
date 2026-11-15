@@ -16,6 +16,7 @@ use psx_gpu::{
     material::{BlendMode, TextureMaterial, TextureWindow},
     prim::GpuPacket,
 };
+use psx_hw::gpu::packet;
 use psx_math::sincos;
 
 use crate::tex::{self, BlockTex};
@@ -403,7 +404,7 @@ pub fn fade_packet(now: u32) -> Option<FadePacket> {
             draw_mode: TextureMaterial::blended(0, 0, (0, 0, 0), BlendMode::Subtract)
                 .draw_mode_word(),
             // GP0 62h: semi-transparent flat rectangle, grey `step`.
-            colour: 0x6200_0000 | step * 0x0001_0101,
+            colour: packet::FLAT_RECT | packet::SEMI_TRANSPARENT | step * 0x0001_0101,
             origin: 0,
             size: (240 << 16) | 320,
         })
