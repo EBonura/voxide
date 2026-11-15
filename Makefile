@@ -80,6 +80,9 @@ psoxide:
 FEATURES    ?=
 GAME_CARGO   = build --release$(if $(strip $(FEATURES)), --features "$(FEATURES)")
 PGO          = cargo run -q --release --locked --manifest-path "$(PSOXIDE)/tools/psoxide-pgo/Cargo.toml" --
+# The SDK's size tool and dev tool, built in the same workspace.
+PSOXIDE_SIZE = cargo run -q --release --locked --manifest-path "$(PSOXIDE)/tools/psoxide-size/Cargo.toml" --
+PSOXIDE_DEV  = cargo run -q --release --locked --manifest-path "$(PSOXIDE)/tools/psoxide-dev/Cargo.toml" --
 PGO_PROFILE  = $(ROOT)/pgo/voxide.prof
 PGO_VARIANT ?= hot=500
 # Layout profile for `+order` variants (make pgo-order); only they read it.
@@ -125,10 +128,10 @@ GATE_EXE ?= $(if $(CARGO_TARGET_DIR),$(CARGO_TARGET_DIR)/$(TARGET)/release/voxid
 #   make gate-disc FEATURES=block-lab GATE_DIR=$PWD/build/gate-blocks GATE_SYMBOLS=$PWD/build/gate-blocks-symbols.txt
 GATE_DIR ?= $(ROOT)/build/gate
 GATE_SYMBOLS ?= $(ROOT)/build/gate-symbols.txt
-gate-symbols:
+gate-symbols: psoxide
 	@mkdir -p "$(ROOT)/build"
-	rustc --edition=2021 "$(ROOT)/tools/gate-symbols.rs" -o "$(ROOT)/build/gate-symbols-tool"
-	"$(ROOT)/build/gate-symbols-tool" "$(GATE_EXE)" > "$(GATE_SYMBOLS)"
+	$(PSOXIDE_SIZE) block "$(GATE_EXE)" VOXG:2:80:VOXIDE_GATE_STATE VSET:3:84:VOXIDE_SETTINGS_STATE \
+		VMUS:1:64:VOXIDE_MUSIC_STATE > "$(GATE_SYMBOLS)"
 
 gate-disc:
 	@$(MAKE) --no-print-directory compile
