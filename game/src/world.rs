@@ -402,11 +402,13 @@ static mut FMASK: [u16; CHU as usize * CWU] = [0; CHU as usize * CWU];
 /// Rows of FMASK (the plane's b axis) that hold at least one face cell after
 /// `build_mask`; the greedy seed scan skips the others. All ones on the
 /// dense border path.
+// psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
 static mut FMASK_ROWS: u64 = 0;
 /// Per row of FMASK, one bit per cell that holds a face (bit a of row b).
 /// The greedy seed scan jumps between set bits instead of reading every
 /// cell of a non-empty row; the merge clears the bits of the cells it
 /// consumes as it zeroes them.
+// psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
 static mut FMASK_BITS: [u64; CHU as usize] = [0; CHU as usize];
 /// The +Y or -Y candidate cells of every y-plane, bucketed by plane: bit lx
 /// of `Y_COLS[ly][lz]` is set when column (lx, lz) has a meshable cell at ly
@@ -417,6 +419,7 @@ static mut FMASK_BITS: [u64; CHU as usize] = [0; CHU as usize];
 /// when the direction or the column masks change (decode or edit), tracked
 /// by the key below.
 static mut Y_COLS: [[u16; CWU]; CHU as usize] = [[0; CWU]; CHU as usize];
+// psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
 static mut Y_ANY: u64 = 0;
 static mut Y_COLS_KEY: (usize, u32) = (usize::MAX, 0);
 static mut COL_MASKS_EPOCH: u32 = 0;
@@ -425,7 +428,9 @@ static mut COL_MASKS_EPOCH: u32 = 0;
 /// Built alongside every scratch decode and kept in step by the edit
 /// writers, so `build_mask` can find a plane's face cells with a few 64-bit
 /// ANDs per column instead of visiting every cell. Index is lx + lz * CWU.
+// psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
 static mut COL_MESH: [u64; CWU * CWU] = [0; CWU * CWU];
+// psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
 static mut COL_SEE: [u64; CWU * CWU] = [0; CWU * CWU];
 /// One bit per column of the chunk in MESH_SCRATCH: it holds (or once held,
 /// after an edit) a light source. A superset is fine; build_sky_top walks the
@@ -459,6 +464,7 @@ fn decode_blocks<const FULL: bool>(s: usize, i0: usize, i1: usize, top: &mut usi
 fn col_masks_set(i: usize, b: u8) {
     let cls = unsafe { BCLASS[b as usize] };
     let col = i & (CWU * CWU - 1);
+    // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
     let bit = 1u64 << (i >> 8);
     unsafe {
         COL_MASKS_EPOCH = COL_MASKS_EPOCH.wrapping_add(1);
@@ -2438,8 +2444,10 @@ fn blast_column(job: &BlastJob, x: i32, z: i32, mask: u32) {
         }
         let (lx, lz) = ((x - cx * CW) as usize, (z - cz * CW) as usize);
         let ymask = if y0 >= 0 {
+            // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
             (clear as u64) << y0
         } else {
+            // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
             (clear as u64) >> (-y0)
         };
         // The scratch keeps up when it holds this chunk's blocks. A mesh in
@@ -3586,6 +3594,7 @@ fn build_y_cols(dir: usize) {
     unsafe {
         // In place: a 2 KB temporary would not fit the scratchpad stack.
         core::ptr::write_bytes(core::ptr::addr_of_mut!(Y_COLS), 0, 1);
+        // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
         let mut any = 0u64;
         let mut c = 0usize;
         while c < CWU * CWU {
@@ -3651,11 +3660,15 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                 None
             }
         };
+        // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
         let mut rows = 0u64;
+        // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
         let mut bbit = 1u64;
         let mut b = 0;
         while b < b_dim {
+            // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
             let mut bits = 0u64;
+            // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
             let mut abit = 1u64;
             let mut a = 0;
             while a < a_dim {
@@ -3709,6 +3722,7 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
     // are written: the greedy merge zeroes every cell it consumes and it
     // consumes every non-zero cell, so FMASK is all zero between planes (the
     // border path still writes every cell of its plane).
+    // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
     let mut rows = 0u64;
     // Row cell bitmaps start empty for an interior plane (the previous plane's
     // merge consumed every set bit).
@@ -3738,8 +3752,10 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                     if blk != nb {
                         unsafe {
                             FMASK[col] = blk as u16 | (sky_bucket(lx, plane, lz) << 7);
+                            // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
                             FMASK_BITS[lz] |= 1u64 << lx;
                         }
+                        // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
                         rows |= 1u64 << lz;
                         any = true;
                     }
@@ -3764,8 +3780,10 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                     if blk != nb {
                         unsafe {
                             FMASK[lz * a_dim + ly] = blk as u16 | (sky_bucket(plane, ly, lz) << 7);
+                            // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
                             FMASK_BITS[lz] |= 1u64 << ly;
                         }
+                        // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
                         rows |= 1u64 << lz;
                         any = true;
                     }
@@ -3790,8 +3808,10 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                     if blk != nb {
                         unsafe {
                             FMASK[ly * a_dim + lx] = blk as u16 | (sky_bucket(lx, ly, plane) << 7);
+                            // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
                             FMASK_BITS[ly] |= 1u64 << lx;
                         }
+                        // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
                         rows |= 1u64 << ly;
                         any = true;
                     }
@@ -4018,6 +4038,7 @@ fn greedy_plane(
                 }
                 h += 1;
             }
+            // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
             let span = (((1u64 << (w as u32)) - 1) << (a0 as u32)) as u64;
             let mut bb = 0;
             while bb < h {

@@ -112,6 +112,7 @@ pub(super) fn rset(s: usize, i: usize, b: u8) {
 /// (bit y is height y): one unpack and one repack for the whole column, where
 /// `rset` per cell costs an unpack, a repack and a shift of the chunk's
 /// data each. True if anything changed.
+// psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
 pub(super) fn rset_mask(s: usize, col: usize, ymask: u64, b: u8) -> bool {
     let mut c = [0u8; CHU];
     col_unpack(s, col, &mut c);
@@ -406,7 +407,9 @@ pub(super) fn decode_cols<const FULL: bool>(s: usize, c0: usize, c1: usize, top:
         while col < c1 {
             let mut o = region + COL_OFF[s][col] as usize;
             let mut y1 = CHU;
+            // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
             let mut mesh = 0u64;
+            // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
             let mut see = 0u64;
             let mut sky = false;
             while y1 > 0 {
@@ -414,6 +417,7 @@ pub(super) fn decode_cols<const FULL: bool>(s: usize, c0: usize, c1: usize, top:
                 let n = BLK[o + 1] as usize;
                 o += 2;
                 let y0 = y1 - n;
+                // psx-numeric-allow-next-line: 64-row mesher bit set; Mask64 has no variable shift
                 let bits = if n == CHU { !0u64 } else { ((1u64 << n) - 1) << y0 };
                 let mut i = y0 * CWU * CWU + col;
                 let mut k = 0;

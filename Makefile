@@ -88,7 +88,13 @@ PGO_VARIANT ?= hot=500
 # Layout profile for `+order` variants (make pgo-order); only they read it.
 PGO_LAYOUT   = $(ROOT)/pgo/voxide.layout
 
-compile: psoxide
+# Guest code names no 64-bit integer and no float; the 27 u64 sites of the mesher's 64-row bit
+# sets carry reviewed markers (see world.rs).
+.PHONY: no64
+no64: psoxide
+	cd "$(ROOT)" && $(PSOXIDE_DEV) no64-scan game/src
+
+compile: psoxide no64
 	PSOXIDE="$(PSOXIDE)" $(PGO) apply --crate "$(GAME)" --profile "$(PGO_PROFILE)" \
 		--variant "$(PGO_VARIANT)" $(if $(findstring +order,$(PGO_VARIANT)),--layout "$(PGO_LAYOUT)") -- $(GAME_CARGO)
 	@echo "EXE -> $(EXE)"
