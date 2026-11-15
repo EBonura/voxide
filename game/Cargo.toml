@@ -9,6 +9,9 @@ path = "src/main.rs"
 
 [features]
 default = []
+# Result receipts for the headless journeys (VOXIDE_GATE_STATE and the others): the gate disc has them,
+# a shipping build links none.
+receipts = ["psx-telemetry/receipts"]
 # PSoXide-only MMIO telemetry so `frontend launch` can stop on guest frames and
 # write profile/counter CSVs. Off for shipping builds (calls compile to no-ops).
 emulator-telemetry = ["psx-telemetry/emit"]
@@ -104,4 +107,3 @@ psx-pack = { path = "../.psoxide/sdk/crates/psx-pack" }
 psx-mc   = { path = "../.psoxide/sdk/crates/psx-mc" }
 psx-settings = { path = "../.psoxide/sdk/crates/psx-settings" }
 psx-fx   = { path = "../.psoxide/sdk/crates/psx-fx" }
-psx-fmv  = { path = "../.psoxide/sdk/crates/psx-fmv" }

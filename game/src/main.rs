@@ -898,137 +898,6 @@ const CRAFT_TEST: (bool, usize, bool) = (false, 0, false);
 const POSE_TEST: bool = false;
 const POSE_PITCH: i16 = -1024;
 const POSE_YAW: u16 = 0;
-// Scripted-input playtest: DEMO_PLAY substitutes a frame-indexed input script
-// for the pad -- walks, looks, mines, places, cycles the hotbar, opens the
-// crafting menu, swings, and turns around like a player would. Checkpoint
-// state goes to the emulator console and the frame number is stamped on the
-// HUD so headless captures self-document. Ship = false.
-const DEMO_PLAY: bool = false;
-
-/// The demo input for a frame: (buttons, left stick, right stick), sticks as
-/// centred i16 (+-~110 usable). Phases are generous so captures at imprecise
-/// step counts still land inside the intended action.
-fn demo_input(frame: u32) -> (ButtonState, (i16, i16), (i16, i16)) {
-    let mut b: u16 = 0;
-    let mut left = (0i16, 0i16);
-    let mut right = (0i16, 0i16);
-    if DEMO_MARCH {
-        // Streaming stress: enter fly mode, climb clear of obstacles, then fly
-        // a large square. A ground-only straight march used to stop at the first
-        // cactus and falsely "pass" without crossing even one chunk boundary.
-        match frame {
-            0 => b = button::SELECT,
-            1..=59 => b = button::CROSS,
-            60..=799 => left = (0, -110),
-            800..=1539 => left = (110, 0),
-            1540..=2279 => left = (0, 110),
-            2280..=2999 => left = (-110, 0),
-            _ => {}
-        }
-        return (ButtonState::from_bits(b), left, right);
-    }
-    match frame {
-        // A: walk forward across the terrain.
-        0..=119 => left = (0, -100),
-        // B: keep walking, ease the camera down toward the ground ahead.
-        120..=179 => {
-            left = (0, -100);
-            if frame < 170 {
-                right = (0, 60);
-            }
-        }
-        // C: while the ground is still in reach, place dirt, cycle to the
-        // test stone stack, place stone, then cycle back. Doing this before
-        // mining prevents a long excavated ray from turning the placement
-        // portion of the regression test into a no-target no-op.
-        180 => b = button::L2,
-        190 => b = button::R1,
-        200 => b = button::L2,
-        210 => b = button::L1,
-        220 => b = button::L2,
-        221..=239 => {}
-        // D: stand and hold R2 -- hold-to-mine the picked block.
-        240..=419 => b = button::R2,
-        // E: repeat the placing sequence after mining.
-        420 => b = button::L2,
-        450 => b = button::R1,
-        480 => b = button::L2,
-        // F: cycle back and place dirt once more.
-        510 => b = button::L1,
-        540 => b = button::L2,
-        // G: open the crafting menu and sit in it (captures the panel).
-        570 => b = button::SQUARE,
-        // H: close it again, then a few melee swings.
-        630 => b = button::SQUARE,
-        660 | 680 | 700 => b = button::R2,
-        // I: turn ~180 degrees and look back over the walked path.
-        730..=879 => right = (85, 0),
-        // J: idle -- stable end state for late captures.
-        _ => {}
-    }
-    (ButtonState::from_bits(b), left, right)
-}
-
-#[inline(never)]
-fn demo_checkpoint(frame: u32, player: &Player) {
-    telemetry::counter(70, unsafe { INV[DIRT as usize] } as u32);
-    telemetry::counter(71, unsafe { INV[STONE as usize] } as u32);
-    telemetry::counter(72, player.selected as u32);
-    telemetry::console("DEMO checkpoint:");
-    telemetry::console(&decimal3((frame / 10) as u16));
-    telemetry::console(&decimal3((player.x >> 6) as u16));
-    telemetry::console(&decimal3(player.y as u16 >> 6));
-    telemetry::console(&decimal3((player.z >> 6) as u16));
-    telemetry::console(&decimal3(unsafe { INV[DIRT as usize] }));
-    telemetry::console(&decimal3(unsafe { INV[STONE as usize] }));
-    telemetry::console(&decimal3(player.selected as u16));
-    telemetry::console(&decimal3(player.health as u16));
-}
-
-#[inline(never)]
-fn draw_demo_hud(font: &FontAtlas, frame: u32, player: &Player) {
-    ui_text(font, 4, 228, "DF", (0x80, 0xE0, 0xF0));
-    ui_text(
-        font,
-        24,
-        228,
-        &decimal3((frame / 10).min(999) as u16),
-        (0x80, 0xE0, 0xF0),
-    );
-    let bx = world_to_block_x(player.x) + 500;
-    let by = world_to_block_y(player.y) + 500;
-    let bz = world_to_block_z(player.z) + 500;
-    ui_text(
-        font,
-        64,
-        228,
-        &decimal3(bx.clamp(0, 999) as u16),
-        (0xE0, 0xC0, 0x70),
-    );
-    ui_text(
-        font,
-        96,
-        228,
-        &decimal3(by.clamp(0, 999) as u16),
-        (0xE0, 0xC0, 0x70),
-    );
-    ui_text(
-        font,
-        128,
-        228,
-        &decimal3(bz.clamp(0, 999) as u16),
-        (0xE0, 0xC0, 0x70),
-    );
-    let (wl, wm, wd) = world::world_stats(world_to_block_x(player.x), world_to_block_z(player.z));
-    ui_text(font, 168, 228, &decimal3(wl), (0x90, 0xE0, 0x90));
-    ui_text(font, 200, 228, &decimal3(wm), (0x90, 0xE0, 0x90));
-    ui_text(font, 232, 228, &decimal3(wd), (0x90, 0xE0, 0x90));
-}
-
-/// Demo variant: an obstacle-free four-direction flight (streaming stress).
-/// Use with DEMO_PLAY; reproduces movement across chunk borders for a long time.
-const DEMO_MARCH: bool = false;
-
 // Block-face direction vectors, shared by mesh build and render.
 const DIRS: [(i32, i32, i32); 6] = [
     (1, 0, 0),
@@ -1072,6 +941,7 @@ static mut SETTINGS_FORMAT_OK: bool = false;
 /// SETTINGS_SAVE_STATUS after a blank card was refused.
 const SETTINGS_BLANK_CARD: &str = "BLANK CARD";
 
+psx_telemetry::receipts! {
 /// Read-only settings receipt: magic, version, size, menu context, selected
 /// row, dirty, save result, move deadzone, 0 (once the controls-seen flag) and menu page.
 /// Context is world=0, title=1, title settings tree=2, controls card=3, pause
@@ -1088,6 +958,7 @@ const SETTINGS_BLANK_CARD: &str = "BLANK CARD";
 #[no_mangle]
 pub static mut VOXIDE_SETTINGS_STATE: [u32; 21] =
     [u32::from_le_bytes(*b"VSET"), 3, 84, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+}
 
 /// The title's LOAD WORLD was chosen: `main` loads the card's save once the
 /// world around the player is set up, by the same `load_game` the game menu's
@@ -1111,6 +982,7 @@ fn title_load_reason() -> &'static str {
     }
 }
 
+psx_telemetry::receipts! {
 /// The title row's state as a number for the gate receipt: none 0 (not on the
 /// title), a save 1, no card 2, no save 3; 16 added when the save did not read.
 fn title_load_code() -> u32 {
@@ -1121,7 +993,9 @@ fn title_load_code() -> u32 {
     };
     base | (unsafe { TITLE_UNREADABLE } as u32) << 4
 }
+}
 
+psx_telemetry::receipts! {
 /// What the line under the menu says, as a number: none 0, saving 1, saved 2,
 /// blank card 3, no card 4, card full 5, card removed 6, save failed 7, loaded 8,
 /// no save on the card 9, anything else 10.
@@ -1140,7 +1014,9 @@ fn msg_code(m: &str) -> u32 {
         _ => 10,
     }
 }
+}
 
+psx_telemetry::receipts! {
 /// `world` is the player and the world clock when a world is up and paused.
 fn publish_settings(context: u32, selected: usize, page: u32, world: Option<(&Player, u32)>) {
     unsafe {
@@ -1192,6 +1068,7 @@ fn publish_settings(context: u32, selected: usize, page: u32, world: Option<(&Pl
         }
         core::ptr::write_volatile(core::ptr::addr_of_mut!(VOXIDE_SETTINGS_STATE), state);
     }
+}
 }
 // Sim ticks the first forward push stays "armed"; a second push inside it
 // latches sprint. 0.4 s: the 12 frames it was written as at 30 Hz, now that a
@@ -3215,17 +3092,6 @@ fn main() {
         if menus::quit_ready() {
             break;
         }
-        if DEMO_PLAY {
-            let (db, dl, dr) = demo_input(frame);
-            pad = db;
-            lstick = dl;
-            rstick = dr;
-            // Checkpoint state to the emulator console at phase boundaries so
-            // the smoke output documents the playthrough textually.
-            if frame % 120 == 0 {
-                demo_checkpoint(frame, &player);
-            }
-        }
         #[cfg(feature = "pick-lab")]
         picklab::frame(frame, &mut player, &mut lstick, &mut rstick);
         #[cfg(feature = "tool-lab")]
@@ -3438,12 +3304,14 @@ fn main() {
         if menu == MENU_CHEAT {
             menus::set_cheat_cursor(menu_sel);
         }
-        publish_settings(
-            match menu { 0 => 0, MENU_OPTIONS | MENU_CHEAT => 4, MENU_CONTROLS => 3, _ => 5 },
-            if menu == MENU_OPTIONS { menus::cursor() } else { menu_sel },
-            match menu { MENU_OPTIONS => menus::page_id(), MENU_CHEAT => menus::CHEATS_PAGE, _ => 0 },
-            if menu != 0 { Some((&player, day)) } else { None },
-        );
+        psx_telemetry::receipts! {
+            publish_settings(
+                match menu { 0 => 0, MENU_OPTIONS | MENU_CHEAT => 4, MENU_CONTROLS => 3, _ => 5 },
+                if menu == MENU_OPTIONS { menus::cursor() } else { menu_sel },
+                match menu { MENU_OPTIONS => menus::page_id(), MENU_CHEAT => menus::CHEATS_PAGE, _ => 0 },
+                if menu != 0 { Some((&player, day)) } else { None },
+            );
+        }
         let paused = menu == MENU_OPTIONS || menu == MENU_CHEAT || menu == MENU_CONTROLS;
         if !paused && menu != MENU_DEAD {
             // In a GUI the pad drives the GUI, not the player.
@@ -3557,8 +3425,10 @@ fn main() {
         } else {
             AIR
         };
-        gate_probe(&pick);
-        unsafe { VOXIDE_GATE_STATE[19] = day };
+        psx_telemetry::receipts! {
+            gate_probe(&pick);
+            unsafe { VOXIDE_GATE_STATE[19] = day };
+        }
         unsafe {
             // "Press L2 to sleep": aiming at a bed at (or near) nightfall --
             // the same window the bed interaction itself accepts.
@@ -4191,11 +4061,6 @@ fn main() {
         if cheat::hud() && menu == 0 {
             cheat::draw_hud(&font, &player, fps);
         }
-        if DEMO_PLAY {
-            // Frame, player block position (+500 for signed coordinates), and
-            // loaded/meshed/dirty chunk counts document headless captures.
-            draw_demo_hud(&font, frame, &player);
-        }
         draw_menu(&font, menu, menu_sel, chest_idx, player);
         ui_brightness();
         // Particles, the pick outline, the held item, rain, tints, the HUD and
@@ -4369,10 +4234,6 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         }
         let mut pad = poll_pad().buttons;
         let settings_was_open = settings;
-        if DEMO_PLAY && t == 90 {
-            // Headless playtest: confirm PLAY at menu-frame 90.
-            pad = ButtonState::from_bits(button::CROSS);
-        }
         // The ring is complete; one idle-tier tick keeps it centred and
         // services stragglers without costing the menu anything.
         world::recenter(unsafe { WORLD_BX }, unsafe { WORLD_BZ });
@@ -4487,12 +4348,14 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
             return;
         }
 
-        publish_settings(
-            if settings { 2 } else if controls { 3 } else { 1 },
-            if settings { menus::cursor() } else { sel },
-            if settings { menus::page_id() } else { 0 },
-            None,
-        );
+        psx_telemetry::receipts! {
+            publish_settings(
+                if settings { 2 } else if controls { 3 } else { 1 },
+                if settings { menus::cursor() } else { sel },
+                if settings { menus::page_id() } else { 0 },
+                None,
+            );
+        }
 
         // The vista: a slow orbit over the spawn surface, exactly the game's
         // sky + world pass. surface_y answers from the noise field before the
@@ -5040,9 +4903,6 @@ fn reset_game_state() {
         INV[BOW as usize] = 1;
         INV[ARROW as usize] = 8;
         INV[BUCKET as usize] = 1;
-        if DEMO_PLAY && !DEMO_MARCH {
-            INV[STONE as usize] = 4;
-        }
         // The starter kit claims hotbar slots in grant order (the same
         // first-free-slot rule every later pickup follows).
         hotbar_add(DIRT);
@@ -5050,9 +4910,6 @@ fn reset_game_state() {
         hotbar_add(BOW);
         hotbar_add(ARROW);
         hotbar_add(BUCKET);
-        if DEMO_PLAY && !DEMO_MARCH {
-            hotbar_add(STONE);
-        }
         #[cfg(feature = "ui-fixture")]
         fixture::seed();
         #[cfg(feature = "block-lab")]
@@ -5646,6 +5503,7 @@ static mut SIM_TICK: u32 = 0;
 ///   crosshair (0..15); 18 doors, pistons and TNT redstone has worked; 19 the
 ///   world clock in sim ticks (the day, DAY_LEN to a turn).
 /// It only mirrors gameplay state.
+psx_telemetry::receipts! {
 #[used]
 #[no_mangle]
 pub static mut VOXIDE_GATE_STATE: [u32; 20] = [
@@ -5685,6 +5543,7 @@ fn gate_snapshot(player: &Player) {
         VOXIDE_GATE_STATE[16] = sleep::darkness() as u32;
         VOXIDE_GATE_STATE[18] = redstone::worked();
     }
+}
 }
 /// Frames that took longer than this are not caught up in full: a portal's
 /// loading screen should not fast-forward the world. Half a second covers the
@@ -5746,7 +5605,7 @@ fn world_tick(player: &mut Player, dwell: &mut u16, n: u32) -> bool {
         tick_particles();
         tick_drops(player);
         unsafe { SIM_TICK = t.wrapping_add(1) };
-        gate_snapshot(player);
+        psx_telemetry::receipts! { gate_snapshot(player); }
         w += 1;
     }
     telemetry::stage_end(telemetry::stage::GAME_LOGIC);
@@ -6286,14 +6145,7 @@ fn update_player(
     // never re-triggers because `pressed` is edge-only.
     // Fly is toggled ONLY from the CHEATS page. The double-tap-CROSS toggle
     // is gone for cause: closing a menu with CROSS and then jumping counted
-    // as the double tap, silently launching the player into fly mode. SELECT
-    // stays wired in demo builds only -- the headless DEMO_MARCH scripts
-    // depend on it.
-    let toggle_fly = DEMO_PLAY && pad.pressed_since(previous, button::SELECT);
-    if toggle_fly {
-        player.fly = !player.fly;
-        player.vy = 0;
-    }
+    // as the double tap, silently launching the player into fly mode.
 
     // --- move: LEFT stick = character (forward/back + strafe), camera-relative analog ---
     let (lx, ly) = Deadzone::new(unsafe { SET_MOVE_DZ })

@@ -102,12 +102,15 @@ compile: psoxide no64
 # `make pack PACK_EXE=x PACK_OUT=y.bin` wraps any exe in the game's disc image.
 PACK_EXE ?= $(EXE)
 PACK_OUT ?= $(DIST)/voxide.bin
+# `--diag` for the gate disc: its executable carries the result receipts (a diagnostic build).
+PACK_FLAGS ?=
 pack:
 	@mkdir -p "$$(dirname "$(PACK_OUT)")"
 	cd "$(MKISOPSX)" && cargo run -q --release --locked -- \
 		--exe "$(PACK_EXE)" \
 		--out "$(PACK_OUT)" \
 		--volume VOXIDE \
+		$(PACK_FLAGS) \
 		--world-pack-extra-dir "$(ROOT)/assets/sfx/pak" \
 		$(foreach xa,$(sort $(wildcard $(ROOT)/assets/music/MUSIC*.XA)),--xa-file "$(xa)")
 
@@ -140,9 +143,9 @@ gate-symbols: psoxide
 		VMUS:1:64:VOXIDE_MUSIC_STATE > "$(GATE_SYMBOLS)"
 
 gate-disc:
-	@$(MAKE) --no-print-directory compile
+	@$(MAKE) --no-print-directory compile FEATURES="$(strip $(FEATURES) receipts)"
 	@$(MAKE) --no-print-directory gate-symbols
-	@$(MAKE) --no-print-directory pack PACK_EXE="$(GATE_EXE)" PACK_OUT="$(GATE_DIR)/voxide.bin"
+	@$(MAKE) --no-print-directory pack PACK_FLAGS=--diag PACK_EXE="$(GATE_EXE)" PACK_OUT="$(GATE_DIR)/voxide.bin"
 
 # The three lab discs the other journeys boot: tests/blocklab*.toml (block-lab),
 # tests/music-lab.toml (music-lab) and tests/settings-menu-quit-removed.toml

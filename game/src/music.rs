@@ -37,7 +37,9 @@ const POLL_VBLANKS: u32 = 60;
 const POLL_END_VBLANKS: u32 = 6;
 const END_WINDOW_MS: u32 = 10_000;
 /// The receipt is rewritten at least this often.
-const RECEIPT_VBLANKS: u32 = 30;
+psx_telemetry::receipts! {
+    const RECEIPT_VBLANKS: u32 = 30;
+}
 /// Wait before asking the drive again after it refused to start a song.
 const RETRY_VBLANKS: u32 = 600;
 
@@ -77,6 +79,7 @@ struct Music {
     /// The last delay set, in vblanks.
     delay: u32,
     /// Vblank of the last receipt write.
+    #[allow(dead_code)]
     published: u32,
     plays: u32,
     failures: u32,
@@ -103,6 +106,7 @@ static mut MUSIC: Music = Music {
 };
 const NO_TRACK: u8 = 255;
 
+psx_telemetry::receipts! {
 /// Read-only music receipt for the journeys: magic, version, byte length,
 /// phase (off 0, waiting 1, playing 2, not yet scheduled 3), piece (255 none),
 /// what the last pick was for (title 1, world 2), the slider percent, the
@@ -118,6 +122,7 @@ pub static mut VOXIDE_MUSIC_STATE: [u32; 16] = [
     64,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
+}
 
 fn m() -> &'static mut Music {
     // SAFETY: single-threaded; no interrupt handler touches the music state.
@@ -335,9 +340,20 @@ pub fn tick() {
     let now = interrupts::vblank_count();
     if x.phase == Phase::Playing && (now.wrapping_sub(x.next_poll) as i32) >= 0 {
         poll(now);
-    } else if now.wrapping_sub(x.published) >= RECEIPT_VBLANKS {
-        publish();
+    } else {
+        publish_due(x, now);
     }
+}
+
+/// Write the receipt again when it is `RECEIPT_VBLANKS` old (a build with the receipts only).
+#[inline(always)]
+fn publish_due(x: &mut Music, now: u32) {
+    psx_telemetry::receipts! {
+        if now.wrapping_sub(x.published) >= RECEIPT_VBLANKS {
+            publish();
+        }
+    }
+    let _ = (x, now);
 }
 
 #[inline(never)]
@@ -359,7 +375,9 @@ fn poll(now: u32) {
     publish();
 }
 
+#[inline(always)]
 fn publish() {
+    psx_telemetry::receipts! {
     let x = m();
     let now = interrupts::vblank_count();
     x.published = now;
@@ -393,4 +411,5 @@ fn publish() {
     ];
     // SAFETY: a plain store of the receipt; nothing else writes it.
     unsafe { core::ptr::write_volatile(core::ptr::addr_of_mut!(VOXIDE_MUSIC_STATE), state) };
+    }
 }
