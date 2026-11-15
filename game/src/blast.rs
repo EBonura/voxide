@@ -42,24 +42,6 @@ pub fn mix(seed: u32, k: u32) -> u32 {
     h ^ (h >> 16)
 }
 
-/// Integer square root, rounded down. It is a `const fn` because `ray_step` runs in the
-/// initializer of `RAY_DIRS` and `psx_math::int32::isqrt_u32` is not one; this file also takes
-/// no dependencies (the host tests compile it with bare rustc), so `knockback_q8` uses it too.
-/// Everything else uses the SDK's. Over every `u32` the two agree except 4_294_967_295,
-/// where this one's `x + 1` overflows (compared exhaustively on the host).
-const fn isqrt(n: u32) -> u32 {
-    if n < 2 {
-        return n;
-    }
-    let mut x = n;
-    let mut y = (x + 1) >> 1;
-    while y < x {
-        x = y;
-        y = (x + n / x) >> 1;
-    }
-    x
-}
-
 /// The direction of grid point `k` as a step of 0.3 of a block, Q16 a step
 /// per axis, or `None` for the interior points that cast no ray.
 pub const fn ray_step(k: u32) -> Option<(i32, i32, i32)> {
@@ -70,7 +52,7 @@ pub const fn ray_step(k: u32) -> Option<(i32, i32, i32)> {
     // The point's offset from the cube's centre, in halves: odd, -15 to 15.
     let (vx, vy, vz) = (2 * gx - 15, 2 * gy - 15, 2 * gz - 15);
     // The length times 256, for the rounding.
-    let len = isqrt(((vx * vx + vy * vy + vz * vz) as u32) << 16) as i32;
+    let len = psx_math::int32::isqrt_u32(((vx * vx + vy * vy + vz * vz) as u32) << 16) as i32;
     // 0.3 of a block is 19,661 in Q16.
     const STEP: i32 = 19_661;
     Some((
@@ -384,7 +366,7 @@ pub fn clear_line<S: FnMut(i32, i32, i32) -> bool>(
 /// it times the impact, as Q8 blocks per Java tick, from the offset in world
 /// units. Zero at the centre.
 pub fn knockback_q8(dx: i32, dy: i32, dz: i32, impact_q8: i32) -> (i32, i32, i32) {
-    let len = isqrt((dx * dx + dy * dy + dz * dz) as u32) as i32;
+    let len = psx_math::int32::isqrt_u32((dx * dx + dy * dy + dz * dz) as u32) as i32;
     if len == 0 {
         return (0, 0, 0);
     }
@@ -452,7 +434,7 @@ mod tests {
         let mut k = 0;
         while k < GRID_POINTS {
             if let Some((x, y, z)) = ray_step(k) {
-                let len = isqrt((x as i64 * x as i64 + y as i64 * y as i64 + z as i64 * z as i64) as u32);
+                let len = psx_math::int32::isqrt_u32((x as i64 * x as i64 + y as i64 * y as i64 + z as i64 * z as i64) as u32);
                 // 0.3 of a block, 19,661 in Q16, within a part in a hundred.
                 assert!((len as i32 - 19_661).abs() < 200, "k={k} len={len}");
             }
