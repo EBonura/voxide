@@ -226,7 +226,13 @@ impl Edits {
     }
 
     /// Call `f(local x, y, z, block)` for each edit of one chunk, newest first.
-    pub fn for_chunk<F: FnMut(usize, usize, usize, u8)>(&self, dim: u8, cx: i32, cz: i32, mut f: F) {
+    pub fn for_chunk<F: FnMut(usize, usize, usize, u8)>(
+        &self,
+        dim: u8,
+        cx: i32,
+        cz: i32,
+        mut f: F,
+    ) {
         let Some(c) = self.find_chunk(cx, cz, dim) else {
             return;
         };
@@ -241,10 +247,19 @@ impl Edits {
 
     /// Call `f(dim, chunk x, chunk z, edits in the chunk)` for each chunk, and
     /// `g(cell index, block)` for each of its edits: the card's order.
-    pub fn for_each_chunk<F: FnMut(u8, i32, i32, usize), G: FnMut(u16, u8)>(&self, mut f: F, mut g: G) {
+    pub fn for_each_chunk<F: FnMut(u8, i32, i32, usize), G: FnMut(u16, u8)>(
+        &self,
+        mut f: F,
+        mut g: G,
+    ) {
         let mut c = 0;
         while c < self.nck {
-            f(self.dim[c], self.cx[c] as i32, self.cz[c] as i32, self.cnt[c] as usize);
+            f(
+                self.dim[c],
+                self.cx[c] as i32,
+                self.cz[c] as i32,
+                self.cnt[c] as usize,
+            );
             let mut v = self.head[c] as usize;
             while v != 0 {
                 let i = v - 1;
@@ -441,7 +456,10 @@ mod tests {
         // 4,000 edits spread over a few hundred chunks, then to the cap.
         for i in 0..CAP as i32 {
             let (x, z) = ((i % 160) * 3 - 200, (i / 160) * 2 - 90);
-            assert!(e.record(0, x, 20 + i % 30, z, 1 + (i % 100) as u8), "edit {i}");
+            assert!(
+                e.record(0, x, 20 + i % 30, z, 1 + (i % 100) as u8),
+                "edit {i}"
+            );
         }
         assert_eq!(e.len(), CAP);
         assert!(!e.record(0, 1000, 5, 1000, 1), "a new position needs room");
@@ -455,7 +473,13 @@ mod tests {
         let mut e = Box::new(Edits::new());
         for i in 0..3000i32 {
             // A few dozen chunks per dimension, as a world with builds in it.
-            e.record((i % 3) as u8, i * 7 % 120 - 60, i % 64, i * 13 % 120 - 60, (i % 120) as u8);
+            e.record(
+                (i % 3) as u8,
+                i * 7 % 120 - 60,
+                i % 64,
+                i * 13 % 120 - 60,
+                (i % 120) as u8,
+            );
         }
         let mut by_chunk = 0usize;
         e.for_each_chunk(|_, _, _, n| by_chunk += n, |_, _| {});
@@ -463,14 +487,25 @@ mod tests {
         e.for_each(|_, _, _, _, _| by_edit += 1);
         assert_eq!(by_chunk, e.len());
         assert_eq!(by_edit, e.len());
-        assert!(e.card_bytes() < e.len() * 8, "{} bytes for {} edits", e.card_bytes(), e.len());
+        assert!(
+            e.card_bytes() < e.len() * 8,
+            "{} bytes for {} edits",
+            e.card_bytes(),
+            e.len()
+        );
     }
 
     #[test]
     fn the_card_layout_round_trips_and_rejects_damage() {
         let mut e = Box::new(Edits::new());
         for i in 0..2500i32 {
-            e.record((i % 3) as u8, i * 5 % 400 - 200, i % 64, i * 11 % 400 - 200, (i % 200) as u8 + 1);
+            e.record(
+                (i % 3) as u8,
+                i * 5 % 400 - 200,
+                i % 64,
+                i * 11 % 400 - 200,
+                (i % 200) as u8 + 1,
+            );
         }
         let mut buf = vec![0u8; CARD_MAX];
         let n = e.write_card(&mut buf);

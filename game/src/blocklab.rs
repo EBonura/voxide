@@ -42,7 +42,12 @@ fn door(x: i32, y: i32, z: i32, f: u8, open: bool) {
 
 fn bed(x: i32, y: i32, z: i32, f: u8) {
     put(x, y, z, bstate::bed(false, f));
-    put(x + bstate::FDX[f as usize], y, z + bstate::FDZ[f as usize], bstate::bed(true, f));
+    put(
+        x + bstate::FDX[f as usize],
+        y,
+        z + bstate::FDZ[f as usize],
+        bstate::bed(true, f),
+    );
 }
 
 /// Cells of the ground relative to its corner, floor level 0.
@@ -125,7 +130,11 @@ fn aim(p: &mut Player, tx: i32, ty: i32, tz: i32, fy: i32, fx: i32) {
     let ez = p.z;
     let ey = p.y + EYE_HEIGHT;
     // The point: the middle of the cell, `fy` sixty-fourths up it.
-    let (px, py, pz) = (block_to_world_x(tx) + BLOCK / 2 + fx, ty * BLOCK + fy, block_to_world_z(tz) + BLOCK / 2);
+    let (px, py, pz) = (
+        block_to_world_x(tx) + BLOCK / 2 + fx,
+        ty * BLOCK + fy,
+        block_to_world_z(tz) + BLOCK / 2,
+    );
     let (dx, dy, dz) = (px - ex, py - ey, pz - ez);
     // Yaw: the Q12 angle whose forward (sin, cos) lines up with (dx, dz).
     let mut best = (i32::MIN, 0u16);

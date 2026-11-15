@@ -21,8 +21,20 @@ use crate::*;
 pub static mut TOOL_LAB: [i32; 400] = [0; 400];
 
 const MINE_BLOCKS: [u8; 14] = [
-    DIRT, SAND, GRASS, WOOD, PLANK, STONE, COBBLE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE,
-    OBSIDIAN, LUMISTONE, SNOW,
+    DIRT,
+    SAND,
+    GRASS,
+    WOOD,
+    PLANK,
+    STONE,
+    COBBLE,
+    COAL_ORE,
+    IRON_ORE,
+    GOLD_ORE,
+    DIAMOND_ORE,
+    OBSIDIAN,
+    LUMISTONE,
+    SNOW,
 ];
 const MINE_AT: usize = 8;
 const MELEE_AT: usize = MINE_AT + 14 * 5;

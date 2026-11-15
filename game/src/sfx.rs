@@ -10,10 +10,10 @@
 #![allow(dead_code)]
 
 use crate::sfxdata::{
-    Sample, SAMPLES, SFX_CHUNK_ID, S_BARK, S_BONES, S_BREAK, S_CHEST, S_CHICKEN, S_CLICK,
-    S_CONFIRM, S_COW, S_DIG_SOFT, S_DIG_STONE, S_DIG_WOOD, S_DOOR, S_EAT, S_EXPLODE, S_HISS,
-    S_HURT, S_PIG, S_PLACE, S_SHEEP, S_SPLASH, S_STEP_GRASS, S_STEP_SAND, S_STEP_STONE,
-    S_STEP_WOOD, S_ZOMBIE, S_BOW, S_ARROW_HIT,
+    Sample, SAMPLES, SFX_CHUNK_ID, S_ARROW_HIT, S_BARK, S_BONES, S_BOW, S_BREAK, S_CHEST,
+    S_CHICKEN, S_CLICK, S_CONFIRM, S_COW, S_DIG_SOFT, S_DIG_STONE, S_DIG_WOOD, S_DOOR, S_EAT,
+    S_EXPLODE, S_HISS, S_HURT, S_PIG, S_PLACE, S_SHEEP, S_SPLASH, S_STEP_GRASS, S_STEP_SAND,
+    S_STEP_STONE, S_STEP_WOOD, S_ZOMBIE,
 };
 use psx_pack::cd::{self, SectorReader, SECTOR_WORDS};
 use psx_pack::SECTOR_BYTES;
@@ -253,7 +253,11 @@ pub fn door(open: bool) {
 /// The arrow leaves the bow: Java's pitch is 1 / (random x 0.4 + 1.2) + pull x
 /// 0.5, so a weak draw sounds lower and slower than a full one.
 pub fn bow_shoot(power_q12: i32) {
-    play(S_BOW, 0x3000, 85 + (power_q12.clamp(0, 4096) as u32) * 25 / 4096);
+    play(
+        S_BOW,
+        0x3000,
+        85 + (power_q12.clamp(0, 4096) as u32) * 25 / 4096,
+    );
 }
 /// An arrow lands in a block or a creature.
 pub fn arrow_hit(dist_blocks: i32) {

@@ -49,10 +49,18 @@ pub struct Row {
 }
 
 const fn row(label: &'static str, kind: Kind) -> Row {
-    Row { label, kind, gap: false }
+    Row {
+        label,
+        kind,
+        gap: false,
+    }
 }
 const fn apart(label: &'static str, kind: Kind) -> Row {
-    Row { label, kind, gap: true }
+    Row {
+        label,
+        kind,
+        gap: true,
+    }
 }
 
 // The live settings, in the order main.rs' `setting_adjust` and
@@ -159,10 +167,15 @@ pub fn first(at_title: bool) -> Page {
 
 /// True when LEFT and RIGHT do something on the page (its hint says so).
 pub fn adjusts(page: Page, at_title: bool) -> bool {
-    rows(page, at_title).iter().any(|r| matches!(r.kind, Kind::Set(_) | Kind::Tutorial))
+    rows(page, at_title)
+        .iter()
+        .any(|r| matches!(r.kind, Kind::Set(_) | Kind::Tutorial))
 }
 
 /// True when the page's values are kept only by SAVE SETTINGS, which it says.
 pub fn holds_settings(page: Page) -> bool {
-    matches!(page, Page::Options | Page::Video | Page::Sound | Page::Sticks)
+    matches!(
+        page,
+        Page::Options | Page::Video | Page::Sound | Page::Sticks
+    )
 }

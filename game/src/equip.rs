@@ -119,7 +119,11 @@ pub fn wear(p: &mut Player, kind: u8) -> Result<(), &'static str> {
     let k = (kind - ARMOR0) as usize;
     unsafe {
         INV[kind as usize] -= 1;
-        p.armor_dur[slot] = if SPARE[k] > 0 { SPARE[k] } else { ARMOR_DUR[t][slot] };
+        p.armor_dur[slot] = if SPARE[k] > 0 {
+            SPARE[k]
+        } else {
+            ARMOR_DUR[t][slot]
+        };
         SPARE[k] = 0;
     }
     p.worn[slot] = kind;

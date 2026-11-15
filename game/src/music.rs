@@ -16,8 +16,8 @@
 //! Anything that ever does must `stop` first and let the scheduler start the
 //! next piece at its own delay.
 
-use crate::musicdata::{FILES, TRACKS};
 use crate::music_plan as plan;
+use crate::musicdata::{FILES, TRACKS};
 use psx_fx::rng::LcgRng;
 use psx_io::cd::xa::{DriveSpeed, Event, File, Player};
 use psx_io::iso;
@@ -137,7 +137,8 @@ pub fn set_volume_pct(percent: i32) {
     if x.phase == Phase::Off {
         return;
     }
-    x.player.set_volume(plan::mixer_level(x.volume), plan::mixer_level(x.volume));
+    x.player
+        .set_volume(plan::mixer_level(x.volume), plan::mixer_level(x.volume));
     if x.volume == 0 && x.phase == Phase::Playing {
         // Java stops a song the slider takes to zero, and the delay to the
         // next one starts.
@@ -166,7 +167,8 @@ pub fn init() {
         return;
     }
     x.phase = Phase::Idle;
-    x.player.set_volume(plan::mixer_level(x.volume), plan::mixer_level(x.volume));
+    x.player
+        .set_volume(plan::mixer_level(x.volume), plan::mixer_level(x.volume));
     publish();
 }
 
@@ -192,7 +194,17 @@ fn find_song_files() -> [Option<File>; FILES] {
     };
     let mut n = 0;
     while n < FILES {
-        let name = [b'M', b'U', b'S', b'I', b'C', b'1' + n as u8, b'.', b'X', b'A'];
+        let name = [
+            b'M',
+            b'U',
+            b'S',
+            b'I',
+            b'C',
+            b'1' + n as u8,
+            b'.',
+            b'X',
+            b'A',
+        ];
         if let Ok(name) = core::str::from_utf8(&name) {
             files[n] = iso::find_in_directory(directory, name).map(|(lba, size)| {
                 File::from_directory_entry(lba, size, n as u8 + 1, DriveSpeed::Single)

@@ -7,12 +7,12 @@
 //! visible-face mesh (rebuilt on gen/edit, never per frame); the renderer walks
 //! only chunks that pass a cheap distance + horizontal-frustum cull.
 
-use crate::{
-    floor_div, Camera, AIR, BLOCK, CACTUS, CLAY, COAL_ORE, DIAMOND_ORE, DIRS, DIRT,
-    FAR_SIDE_Z, FAR_TREE_SIDE_Z, FAR_Z, FLOWER_R, FLOWER_Y, GOLD_ORE, GRASS, IRON_ORE, LAVA, LEAVES, PROJ_H, SAND,
-    SAPLING, SNOW, STONE, TALL_GRASS, WATER, WHEAT, WHEAT_RIPE, WOOD,
-};
 use crate::flame;
+use crate::{
+    floor_div, Camera, AIR, BLOCK, CACTUS, CLAY, COAL_ORE, DIAMOND_ORE, DIRS, DIRT, FAR_SIDE_Z,
+    FAR_TREE_SIDE_Z, FAR_Z, FLOWER_R, FLOWER_Y, GOLD_ORE, GRASS, IRON_ORE, LAVA, LEAVES, PROJ_H,
+    SAND, SAPLING, SNOW, STONE, TALL_GRASS, WATER, WHEAT, WHEAT_RIPE, WOOD,
+};
 use crate::{
     is_flammable, CINDERSTONE, EMBER_CAP, FIRE, LUMISTONE, OBSIDIAN, PORTAL, SINK_SAND, SUGAR_CANE,
     TORCH, VOID_PORTAL, VOID_STONE,
@@ -165,10 +165,10 @@ struct Chunk {
     cx: i32,
     cz: i32,
     loaded: bool,
-    dirty: bool,               // mesh out of date (block edit or a neighbour appeared)
-    face_slot: u16,            // index into FACE_POOL, or NO_SLOT if this chunk has no mesh
-    face_lod: u8,              // LOD level the current mesh was built at (0 near, 1 far)
-                               // blocks: world/rle.rs, indexed by slot
+    dirty: bool,    // mesh out of date (block edit or a neighbour appeared)
+    face_slot: u16, // index into FACE_POOL, or NO_SLOT if this chunk has no mesh
+    face_lod: u8,   // LOD level the current mesh was built at (0 near, 1 far)
+                    // blocks: world/rle.rs, indexed by slot
 }
 
 const EMPTY_CHUNK: Chunk = Chunk {
@@ -208,7 +208,11 @@ const NO_SLOT: u16 = u16::MAX;
 /// to MAX_FACES as long as the ring's total fits. At 1280 a ring where every
 /// chunk hit the survey maximum still fits. Past that, arena_alloc compacts and
 /// then truncates the mesh (the same failure the fixed slots have at MAX_FACES).
-const ARENA_PER_SLOT: usize = if cfg!(feature = "ram-stress") { 500 } else { 1280 };
+const ARENA_PER_SLOT: usize = if cfg!(feature = "ram-stress") {
+    500
+} else {
+    1280
+};
 const ARENA_FACES: usize = POOL * ARENA_PER_SLOT;
 static mut ARENA_F: [u32; ARENA_FACES] = [0; ARENA_FACES];
 /// Start and capacity of each slot's region in ARENA_F/ARENA_S. A region is
@@ -580,13 +584,18 @@ fn build_sky_top() {
     let mut col = 0usize;
     while col < CWU * CWU {
         let m = unsafe { COL_MESH[col] }.and_not(Mask64::bit(0));
-        let top = if m.is_empty() { 0 } else { 63 - m.leading_zeros() };
+        let top = if m.is_empty() {
+            0
+        } else {
+            63 - m.leading_zeros()
+        };
         unsafe { SKY_TOP[col] = top as u8 };
         if nsrc < MAX_SOURCES && unsafe { LIGHT_COLS[col >> 5] } & (1 << (col & 31)) != 0 {
             let (lx, lz) = (col & (CWU - 1), col >> 4);
             let mut ly = CHU - 1;
             while ly > 0 {
-                if nsrc < MAX_SOURCES && is_light_source(unsafe { MESH_SCRATCH[lidx(lx, ly, lz)] }) {
+                if nsrc < MAX_SOURCES && is_light_source(unsafe { MESH_SCRATCH[lidx(lx, ly, lz)] })
+                {
                     src[nsrc] = (lx, ly, lz);
                     nsrc += 1;
                 }
@@ -2100,7 +2109,9 @@ pub fn explode(x: i32, y: i32, z: i32, power: i32, seed: u32) -> bool {
             fz: (z - cz * BLOCK) << 10,
             power,
             seed,
-            near: (floor_div(cx, CW) - PLAYER_CX).abs().max((floor_div(cz, CW) - PLAYER_CZ).abs())
+            near: (floor_div(cx, CW) - PLAYER_CX)
+                .abs()
+                .max((floor_div(cz, CW) - PLAYER_CZ).abs())
                 <= RENDER_R,
         };
         BQ_LEN += 1;
@@ -2159,7 +2170,12 @@ fn blast_snapshot(job: &BlastJob, count: usize) {
                 continue;
             }
             let base = col * side;
-            get_span(job.cx + dx, job.cy - r, job.cz + dz, &mut snap[base..base + side]);
+            get_span(
+                job.cx + dx,
+                job.cy - r,
+                job.cz + dz,
+                &mut snap[base..base + side],
+            );
             // Below the world's floor nothing breaks.
             let mut dy = -r;
             while dy < 1 - job.cy && dy <= r {
@@ -2368,9 +2384,7 @@ fn blast_column(job: &BlastJob, x: i32, z: i32, mask: u32) {
         if b == AIR {
             continue;
         }
-        let n = unsafe {
-            BJ_N + 1
-        };
+        let n = unsafe { BJ_N + 1 };
         if b == crate::TNT
             && !crate::tnt::spawn(
                 x,
@@ -2410,8 +2424,8 @@ fn blast_column(job: &BlastJob, x: i32, z: i32, mask: u32) {
         // Water or lava beside the hole runs in. The cells above and below
         // are in the column read; the four sides are looked up only for a
         // hole that touches a fluid at all (a cheap test first).
-        let fluid_above_below = (k > 0 && is_fluid(col[k - 1]))
-            || (k + 1 < crate::blast::SIDE && is_fluid(col[k + 1]));
+        let fluid_above_below =
+            (k > 0 && is_fluid(col[k - 1])) || (k + 1 < crate::blast::SIDE && is_fluid(col[k + 1]));
         if is_fluid(b)
             || fluid_above_below
             || is_fluid(get(x + 1, y, z))
@@ -3248,7 +3262,9 @@ pub fn lightning_fire(x: i32, y: i32, z: i32) {
 pub fn light_fire_at(x: i32, y: i32, z: i32) -> bool {
     let here = get(x, y, z);
     // Air, or the grass and flowers a flame simply replaces.
-    if y < 1 || y >= CH || !(here == AIR || here == TALL_GRASS || here == FLOWER_R || here == FLOWER_Y)
+    if y < 1
+        || y >= CH
+        || !(here == AIR || here == TALL_GRASS || here == FLOWER_R || here == FLOWER_Y)
     {
         return false;
     }
@@ -3593,7 +3609,11 @@ fn build_y_cols(dir: usize) {
         let mut c = 0usize;
         while c < CWU * CWU {
             let see = COL_SEE[c];
-            let m = COL_MESH[c].and(if dir == 2 { see.shr_by(1) } else { see.shl_by(1) });
+            let m = COL_MESH[c].and(if dir == 2 {
+                see.shr_by(1)
+            } else {
+                see.shl_by(1)
+            });
             any = any.or(m);
             let bit = 1u16 << (c & (CWU - 1));
             let lz = c / CWU;
@@ -4214,13 +4234,25 @@ fn mesh_lod_tops() -> usize {
         let mut plane = 0usize;
         while plane < CWU {
             unsafe { MESH_PLANE_START[PL_OFF[dir] + plane] = n as u16 };
-            let (i, ni) = if dir == 0 { (plane / 2, plane / 2 + 1) } else { (plane / 2, plane / 2) };
-            let on_plane = if dir == 0 { plane & 1 == 1 && ni < CELLS } else { plane & 1 == 0 && i > 0 };
+            let (i, ni) = if dir == 0 {
+                (plane / 2, plane / 2 + 1)
+            } else {
+                (plane / 2, plane / 2)
+            };
+            let on_plane = if dir == 0 {
+                plane & 1 == 1 && ni < CELLS
+            } else {
+                plane & 1 == 0 && i > 0
+            };
             if on_plane {
                 let mut j = 0;
                 while j < CELLS {
                     let (h, b) = cell_at(i, j);
-                    let (nh, _) = if dir == 0 { cell_at(ni, j) } else { cell_at(i - 1, j) };
+                    let (nh, _) = if dir == 0 {
+                        cell_at(ni, j)
+                    } else {
+                        cell_at(i - 1, j)
+                    };
                     if h > nh && n < MAX_FACES {
                         let step = (h - nh).min(MAX_MERGE);
                         unsafe {
@@ -4312,12 +4344,20 @@ fn mesh_lod_tops() -> usize {
         while plane < CWU {
             unsafe { MESH_PLANE_START[PL_OFF[dir] + plane] = n as u16 };
             let j = plane / 2;
-            let on_plane = if dir == 4 { plane & 1 == 1 && j + 1 < CELLS } else { plane & 1 == 0 && j > 0 };
+            let on_plane = if dir == 4 {
+                plane & 1 == 1 && j + 1 < CELLS
+            } else {
+                plane & 1 == 0 && j > 0
+            };
             if on_plane {
                 let mut i = 0;
                 while i < CELLS {
                     let (h, b) = cell_at(i, j);
-                    let (nh, _) = if dir == 4 { cell_at(i, j + 1) } else { cell_at(i, j - 1) };
+                    let (nh, _) = if dir == 4 {
+                        cell_at(i, j + 1)
+                    } else {
+                        cell_at(i, j - 1)
+                    };
                     if h > nh && n < MAX_FACES {
                         let step = (h - nh).min(MAX_MERGE_H);
                         unsafe {
@@ -4471,7 +4511,11 @@ fn arena_alloc_inner(p: usize, n: usize) -> usize {
         let mut cur = 0usize;
         let mut k = 0;
         while k <= nl {
-            let next = if k < nl { POOL_BASE[order[k]] as usize } else { ARENA_FACES };
+            let next = if k < nl {
+                POOL_BASE[order[k]] as usize
+            } else {
+                ARENA_FACES
+            };
             if next - cur >= want {
                 POOL_BASE[p] = cur as u16;
                 POOL_CAP[p] = want as u16;
@@ -4604,7 +4648,11 @@ fn commit_mesh_inner(s: usize, n: usize, scan_plants: bool) {
                             let col = w * 32 + m.trailing_zeros() as usize;
                             m &= m - 1;
                             let b = MESH_SCRATCH[ly * CWU * CWU + col];
-                            if if pass == 0 { is_small_block(b) } else { is_cross_plant(b) } {
+                            if if pass == 0 {
+                                is_small_block(b)
+                            } else {
+                                is_cross_plant(b)
+                            } {
                                 let (lx, lz) = (col & (CWU - 1), col >> 4);
                                 POOL_PLANTS[p][np] = (lx as u32)
                                     | ((ly as u32) << 4)
@@ -4691,7 +4739,11 @@ fn stream_commit_tick(s: usize, n: usize) {
         }
         // Sprites past the near ring are a few pixels each; the far LOD
         // carries none.
-        POOL_NPLANT[p] = if FAR_LOD && CHUNKS[s].face_lod == 1 { 0 } else { MESH_NPLANT as u16 };
+        POOL_NPLANT[p] = if FAR_LOD && CHUNKS[s].face_lod == 1 {
+            0
+        } else {
+            MESH_NPLANT as u16
+        };
 
         let old = CHUNKS[s].face_slot;
         CHUNKS[s].face_slot = MESH_COMMIT_SLOT;

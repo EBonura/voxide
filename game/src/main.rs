@@ -14,25 +14,27 @@
 extern crate psx_rt;
 
 mod blast;
+#[cfg(feature = "block-lab")]
+mod blocklab;
 mod blocks;
 mod bow;
 mod bstate;
 mod cheat;
 mod controls;
 mod craft;
-mod edits;
-mod equip;
-mod grid;
-mod hand;
-mod loading;
-#[cfg(feature = "ui-fixture")]
-mod fixture;
 #[cfg(feature = "edit-lab")]
 mod edit_lab;
-#[cfg(feature = "block-lab")]
-mod blocklab;
+mod edits;
+mod equip;
+#[cfg(feature = "fire-lab")]
+mod firelab;
+#[cfg(feature = "ui-fixture")]
+mod fixture;
 mod flame;
+mod grid;
+mod hand;
 mod inv;
+mod loading;
 mod menu_tree;
 mod menus;
 mod mob;
@@ -43,22 +45,20 @@ mod redstone;
 mod save;
 mod seal;
 mod settings_menu;
-mod shape;
 mod sfx;
 mod sfxdata;
+mod shape;
 mod slack;
 mod sleep;
 mod telemetry;
 mod tex;
 mod texdata;
 mod tnt;
-mod units;
-#[cfg(feature = "tune-lab")]
-mod tunelab;
 #[cfg(feature = "tool-lab")]
 mod toollab;
-#[cfg(feature = "fire-lab")]
-mod firelab;
+#[cfg(feature = "tune-lab")]
+mod tunelab;
+mod units;
 
 #[cfg(any(feature = "pick-lab", feature = "look-lab"))]
 mod picklab;
@@ -106,11 +106,11 @@ use psx_pad::{
 // The tuning lab (never shipped) scripts the pad through its own poll.
 #[cfg(not(feature = "tune-lab"))]
 use self::read_pad as poll_pad;
-#[cfg(feature = "tune-lab")]
-use tunelab::poll_pad;
 use psx_rt::{interrupts, tty};
 use psx_settings::Profile;
 use psx_vram::{Clut, TextureDepth, TexturePage};
+#[cfg(feature = "tune-lab")]
+use tunelab::poll_pad;
 
 use tex::BlockTex;
 use units::{ms, secs};
@@ -145,7 +145,10 @@ const DRAW_BLOCKS: i32 = match option_env!("VOXIDE_DRAW_BLOCKS") {
     Some(s) => parse_const_i32(s),
     None => 20,
 };
-const _: () = assert!(DRAW_BLOCKS >= 8 && DRAW_BLOCKS <= 32, "draw distance is 8..32 blocks");
+const _: () = assert!(
+    DRAW_BLOCKS >= 8 && DRAW_BLOCKS <= 32,
+    "draw distance is 8..32 blocks"
+);
 const FAR_Z: i32 = DRAW_BLOCKS * BLOCK;
 // Side/bottom faces of terrain stop two bands before the tops (FAR_Z - 2 * BLOCK):
 // the fog was meant to be solid by then, so only the silhouette, a heightfield's
@@ -1083,10 +1086,10 @@ const DOUBLE_TAP_FRAMES: u8 = ms(400) as u8;
 const EYE_HEIGHT: i32 = 104; // 1.62 blocks (Java standing eye)
 const PLAYER_HALF_W: i32 = 19; // 0.6-block-wide collision box (Java 0.6)
 const PLAYER_HEIGHT: i32 = 115; // 1.8 blocks tall (Java)
-// Movement follows Java Edition's measured speeds, converted to sim ticks by
-// units.rs. Horizontal speeds are Q8 world units a tick with the remainder
-// carried in x_frac/z_frac; vertical velocity is Q8 too (VY_SHIFT), so every
-// value below is exact to 1/256 of a unit a tick.
+                                // Movement follows Java Edition's measured speeds, converted to sim ticks by
+                                // units.rs. Horizontal speeds are Q8 world units a tick with the remainder
+                                // carried in x_frac/z_frac; vertical velocity is Q8 too (VY_SHIFT), so every
+                                // value below is exact to 1/256 of a unit a tick.
 const VY_SHIFT: u32 = 8;
 /// Walking: 4.317 blocks/s (minecraft.wiki/w/Walking#Speed).
 const WALK_Q8: i32 = units::cbps_q8(432);
@@ -1577,7 +1580,7 @@ static mut MAT_CCMD_KEY: (u8, (u8, u8, u8), u8, i32) = (0xFF, (0, 0, 0), 0xFF, -
 
 fn refresh_mat_ccmd() {
     let fog = unsafe { FOG_RGB }; // already faded toward CAVE_FOG by the caller
-    // The weather too: it tints the ground haze the far bands meet.
+                                  // The weather too: it tints the ground haze the far bands meet.
     let key = unsafe { (LIGHT, fog, CAVE, rain_amount() << 8 | thunder_amount()) };
     if unsafe { MAT_CCMD_KEY } == key {
         return;
@@ -1861,19 +1864,19 @@ struct Player {
     pitch: i16,
     on_ground: bool,
     fly: bool,
-    health: i32,      // 0..MAX_HEALTH (2 hp per heart)
-    fall_peak: i32,   // highest y since last on ground, for fall damage
-    air: i32,         // breath remaining underwater
-    burn: i32,        // burning timer (set by lava/fire), damages over time
-    hurt_cd: i32,     // sim ticks of hit invulnerability left (take_hit)
-    last_hurt: i32,   // raw damage of the hit those i-frames belong to
-    hazard_t: i32,    // sim ticks until lava, fire, cactus, drowning or burning bite again
-    regen_tick: i32,  // sim ticks toward the next regen/starve point (Java's foodTickTimer)
-    heal_frac: i32,   // saturation-boost healing not yet a whole hp, hundredths
-    food: i32,        // hunger, 0..MAX_FOOD
-    food_items: i32,  // raw food carried (mob drops); auto-eaten when hungry
-    exhaustion: i32,  // Java's exhaustion, EXH_POINT to a point; 4 points cost a hunger point
-    saturation: i32,  // Java's saturation, hundredths, never above food
+    health: i32,     // 0..MAX_HEALTH (2 hp per heart)
+    fall_peak: i32,  // highest y since last on ground, for fall damage
+    air: i32,        // breath remaining underwater
+    burn: i32,       // burning timer (set by lava/fire), damages over time
+    hurt_cd: i32,    // sim ticks of hit invulnerability left (take_hit)
+    last_hurt: i32,  // raw damage of the hit those i-frames belong to
+    hazard_t: i32,   // sim ticks until lava, fire, cactus, drowning or burning bite again
+    regen_tick: i32, // sim ticks toward the next regen/starve point (Java's foodTickTimer)
+    heal_frac: i32,  // saturation-boost healing not yet a whole hp, hundredths
+    food: i32,       // hunger, 0..MAX_FOOD
+    food_items: i32, // raw food carried (mob drops); auto-eaten when hungry
+    exhaustion: i32, // Java's exhaustion, EXH_POINT to a point; 4 points cost a hunger point
+    saturation: i32, // Java's saturation, hundredths, never above food
     // A tier per tool TYPE (0 none, 1 wood .. 4 diamond). They are player
     // stats rather than inventory items: there is no durability, the best of
     // each auto-equips, and the right one is chosen for whatever you swing at.
@@ -1883,7 +1886,7 @@ struct Player {
     sword: u8,
     worn: [u8; 4], // the armour piece kind in each slot (helmet, chest, legs, boots), AIR = bare
     offhand: u8,   // the off-hand kind (a reference into INV, like a hotbar slot), AIR = empty
-    weapon: u8,    // the tool class swung at mobs: TOOL_SWORD, TOOL_AXE, TOOL_PICK, TOOL_SHOVEL, or TOOL_NONE (fist)
+    weapon: u8, // the tool class swung at mobs: TOOL_SWORD, TOOL_AXE, TOOL_PICK, TOOL_SHOVEL, or TOOL_NONE (fist)
     // Uses left, Java's durability: the tool tiers (pick, axe, shovel, sword),
     // the four armour pieces (helmet, chest, legs, boots; 0 = broken), and the
     // current bow, fishing rod and flint and steel (0 = a fresh one).
@@ -2058,14 +2061,14 @@ fn take_hit(p: &mut Player, raw: i32, armoured: bool) -> i32 {
 const MAX_HEALTH: i32 = 20;
 const SAFE_FALL_BLOCKS: i32 = 3; // first 3 blocks of a fall do no damage (Java)
 const MAX_AIR: i32 = secs(15); // 15s underwater before drowning (Java: 300 ticks)
-// Hunger, Java's (minecraft.wiki/w/Food): actions add exhaustion; every 4.0
-// points of it cost a point of saturation, or of hunger once saturation is
-// gone. At hunger 18+ the player heals 1 hp every 80 game ticks for 6.0
-// exhaustion; at a full 20 with saturation left, every 10 ticks, healing
-// min(saturation, 6) / 6 hp for that much exhaustion (the saturation boost).
-// At 0 the player starves 1 hp every 80 ticks, down to 1 on Normal.
-// Exhaustion is kept in 1/64,000ths of a point so that a sprint's 0.1 a block
-// is a whole number per world unit.
+                               // Hunger, Java's (minecraft.wiki/w/Food): actions add exhaustion; every 4.0
+                               // points of it cost a point of saturation, or of hunger once saturation is
+                               // gone. At hunger 18+ the player heals 1 hp every 80 game ticks for 6.0
+                               // exhaustion; at a full 20 with saturation left, every 10 ticks, healing
+                               // min(saturation, 6) / 6 hp for that much exhaustion (the saturation boost).
+                               // At 0 the player starves 1 hp every 80 ticks, down to 1 on Normal.
+                               // Exhaustion is kept in 1/64,000ths of a point so that a sprint's 0.1 a block
+                               // is a whole number per world unit.
 const EXH_POINT: i32 = 64_000;
 const EXH_SPRINT_PER_UNIT: i32 = EXH_POINT / 10 / BLOCK; // 0.1 a block sprinted
 const EXH_SWIM_PER_UNIT: i32 = EXH_POINT / 100 / BLOCK; // 0.01 a block swum
@@ -2621,7 +2624,8 @@ const RECIPES: [Recipe; 58] = [
         out: LEVER,
         out_qty: 1,
         label: "LEVER",
-    },];
+    },
+];
 
 // Category tabs, the console-edition answer to a long flat recipe list: the
 // legacy console UI grouped recipes into L1/R1-switched tabs and Bedrock's
@@ -2683,7 +2687,10 @@ static mut EQUIP_T: u16 = 0;
 /// Recipes the 2x2 pocket grid cannot make -- everything beyond planks,
 /// sticks, torches and the table itself wants the 3x3 bench, as in Java.
 fn needs_bench(i: usize) -> bool {
-    !matches!(RECIPES[i].out, PLANK | STICK | TORCH | CRAFT_TABLE | BONEMEAL)
+    !matches!(
+        RECIPES[i].out,
+        PLANK | STICK | TORCH | CRAFT_TABLE | BONEMEAL
+    )
 }
 
 /// A recipe the menu should show as makeable right now.
@@ -2804,7 +2811,11 @@ fn draw_tutorial(font: &FontAtlas) {
     let w = bw + text.len() as i16 * 8 + 12;
     let x = SCREEN_W as i16 - 6 - w;
     // Below the dragon's boss bar (text at 4, bar to 21) when there is one.
-    let y = if mob::dragon_status().is_some() { 26i16 } else { 6i16 };
+    let y = if mob::dragon_status().is_some() {
+        26i16
+    } else {
+        6i16
+    };
     rect(x - 2, y - 2, w + 4, 18, 0, 0, 0);
     rect(x, y, w, 14, 0xC6, 0xC6, 0xC6);
     let mut tx = x + 6;
@@ -2834,8 +2845,16 @@ fn draw_sleep_prompt(font: &FontAtlas) {
 /// under blocks.
 fn recipe_tab(i: usize) -> usize {
     match RECIPES[i].out {
-        CRAFT_PICK | CRAFT_AXE | CRAFT_SHOVEL | CRAFT_SWORD | CRAFT_HELMET..=CRAFT_BOOTS | BOW | ARROW
-        | FLINT_STEEL | BUCKET | FISHING_ROD => 1,
+        CRAFT_PICK
+        | CRAFT_AXE
+        | CRAFT_SHOVEL
+        | CRAFT_SWORD
+        | CRAFT_HELMET..=CRAFT_BOOTS
+        | BOW
+        | ARROW
+        | FLINT_STEEL
+        | BUCKET
+        | FISHING_ROD => 1,
         STICK | WIRE | TORCH | RSTORCH | BONEMEAL | VOID_EYE | MAGMA_PASTE => 2,
         BREAD | BOTTLE | POTION_AWKWARD | POTION_SPEED | POTION_STRENGTH | POTION_REGEN
         | POTION_FIRE => 3,
@@ -2967,1123 +2986,1167 @@ fn main() {
     // after it; SAVE AND QUIT TO TITLE ends the pass. (The body is not
     // indented a level: the gameplay loop's source is left as it was.)
     loop {
-    main_menu(&mut fb, &font);
-    music::enter_world();
-    tty::println("voxide: world ready");
-    // The starter kit for both a fresh boot and however many NEW WORLD
-    // reseeds happened in the menu.
-    reset_game_state();
-    let mut player = spawn_player();
-    #[cfg(feature = "ui-fixture")]
-    fixture::spawn_pitch(&mut player);
-    #[cfg(feature = "block-lab")]
-    {
-        player.pitch = -240;
-    }
-    mob::populate(player.x, player.z);
-    // Prime the edge detector with whatever is ACTUALLY held right now, not
-    // NONE. The title screen exits on START, world generation then runs for
-    // several seconds without polling, and the player is usually still holding
-    // the button when the gameplay loop starts. Against a NONE baseline that
-    // reads as a fresh press and drops you into the world with the options menu
-    // already open.
-    let mut previous = poll_pad().buttons;
-    // Frames since the world opened. Monotonic: it counts loop iterations and
-    // nothing else moves it.
-    let mut frame: u32 = 0;
-    // The world clock, in frames: `frame` plus however much sleeping has
-    // skipped.
-    //
-    // Separate because sleeping jumps it to dawn, and this used to be `frame`
-    // itself. Everything reading a frame count for another reason was dragged
-    // forward with it -- the telemetry frame boundary, the demo's scripted
-    // timings, the `% 8` and `% 7` periodic work, and the particle and mob RNG
-    // seeds all skipped a few hundred frames on every night slept through. One
-    // counter cannot be both monotonic and skippable.
-    let mut day: u32 = 0;
-    let mut prev_vbl = interrupts::vblank_count();
-    // Game time runs on the shared psx-tick clock: one sim tick per VBlank,
-    // and a frame catches up every tick owed since the last one, up to
-    // MAX_CATCHUP (half a second). Longer stalls -- the loading screen behind
-    // a dimension change -- drop the excess, counted in the clock's stats.
-    let mut game_clock = psx_tick::FixedClock::new(
-        psx_tick::TickConfig::new(psx_tick::TickRate::HZ60).with_cap(MAX_CATCHUP as u16),
-        prev_vbl.wrapping_add(1),
-    );
-    let mut cast_t: u16 = 0; // fishing: frames until a bite while the rod is cast
-    let mut swing: u32 = 0; // held-item swing countdown in sim ticks (mine/place/attack)
-    let mut dig_t: u32 = 0; // sim ticks since the last dig sound
-    let mut mine_active = false;
-    // Frames spent standing in portal sheet. Java makes you wait ~4s in
-    // survival; a shorter dwell here, but a dwell all the same, so brushing
-    // past a portal does not fling you into the Inferno.
-    let mut portal_dwell: u16 = 0;
-    let (mut mine_x, mut mine_y, mut mine_z) = (0i32, 0i32, 0i32);
-    let mut mine_progress: u32 = 0;
-    let mut mine_cool: u32 = 0; // sim ticks before the next block starts to break
-    let mut menu: u8 = 0; // 0 none, 1 crafting, 2 chest, 3 furnace
-    let mut menu_sel = 0usize;
-    let mut chest_idx = 0usize;
-    // The first gameplay frame primes the GPU. Thereafter frame N+1 is built
-    // while frame N rasterises, with this flag tracking that pending frame.
-    let mut render_in_flight = false;
+        main_menu(&mut fb, &font);
+        music::enter_world();
+        tty::println("voxide: world ready");
+        // The starter kit for both a fresh boot and however many NEW WORLD
+        // reseeds happened in the menu.
+        reset_game_state();
+        let mut player = spawn_player();
+        #[cfg(feature = "ui-fixture")]
+        fixture::spawn_pitch(&mut player);
+        #[cfg(feature = "block-lab")]
+        {
+            player.pitch = -240;
+        }
+        mob::populate(player.x, player.z);
+        // Prime the edge detector with whatever is ACTUALLY held right now, not
+        // NONE. The title screen exits on START, world generation then runs for
+        // several seconds without polling, and the player is usually still holding
+        // the button when the gameplay loop starts. Against a NONE baseline that
+        // reads as a fresh press and drops you into the world with the options menu
+        // already open.
+        let mut previous = poll_pad().buttons;
+        // Frames since the world opened. Monotonic: it counts loop iterations and
+        // nothing else moves it.
+        let mut frame: u32 = 0;
+        // The world clock, in frames: `frame` plus however much sleeping has
+        // skipped.
+        //
+        // Separate because sleeping jumps it to dawn, and this used to be `frame`
+        // itself. Everything reading a frame count for another reason was dragged
+        // forward with it -- the telemetry frame boundary, the demo's scripted
+        // timings, the `% 8` and `% 7` periodic work, and the particle and mob RNG
+        // seeds all skipped a few hundred frames on every night slept through. One
+        // counter cannot be both monotonic and skippable.
+        let mut day: u32 = 0;
+        let mut prev_vbl = interrupts::vblank_count();
+        // Game time runs on the shared psx-tick clock: one sim tick per VBlank,
+        // and a frame catches up every tick owed since the last one, up to
+        // MAX_CATCHUP (half a second). Longer stalls -- the loading screen behind
+        // a dimension change -- drop the excess, counted in the clock's stats.
+        let mut game_clock = psx_tick::FixedClock::new(
+            psx_tick::TickConfig::new(psx_tick::TickRate::HZ60).with_cap(MAX_CATCHUP as u16),
+            prev_vbl.wrapping_add(1),
+        );
+        let mut cast_t: u16 = 0; // fishing: frames until a bite while the rod is cast
+        let mut swing: u32 = 0; // held-item swing countdown in sim ticks (mine/place/attack)
+        let mut dig_t: u32 = 0; // sim ticks since the last dig sound
+        let mut mine_active = false;
+        // Frames spent standing in portal sheet. Java makes you wait ~4s in
+        // survival; a shorter dwell here, but a dwell all the same, so brushing
+        // past a portal does not fling you into the Inferno.
+        let mut portal_dwell: u16 = 0;
+        let (mut mine_x, mut mine_y, mut mine_z) = (0i32, 0i32, 0i32);
+        let mut mine_progress: u32 = 0;
+        let mut mine_cool: u32 = 0; // sim ticks before the next block starts to break
+        let mut menu: u8 = 0; // 0 none, 1 crafting, 2 chest, 3 furnace
+        let mut menu_sel = 0usize;
+        let mut chest_idx = 0usize;
+        // The first gameplay frame primes the GPU. Thereafter frame N+1 is built
+        // while frame N rasterises, with this flag tracking that pending frame.
+        let mut render_in_flight = false;
 
-    // LOAD WORLD on the title: the same load the game menu runs, over the
-    // world the title was showing. A save that will not read back sends the
-    // player back to a title that says so, rather than into a new world.
-    if unsafe { TITLE_LOAD } {
-        unsafe { TITLE_LOAD = false };
-        if load_game(&mut player, &mut day, &mut fb, &font) {
-            portal_dwell = PORTAL_IMMUNE;
-            previous = poll_pad().buttons;
-        } else {
-            unsafe { TITLE_UNREADABLE = true };
-            quit_to_title(&mut fb, &font, frame);
-            continue;
-        }
-    }
-
-    loop {
-        // Stop any SFX voice whose sample has ended. Ahead of everything that
-        // might start one, so a sound keyed this frame is not cut by the
-        // deadline of the one it replaced.
-        sfx::tick();
-        music::tick();
-        telemetry::frame_begin(frame); // profiler frame boundary (no-op without the feature)
-        telemetry::stage_begin(50); // TEMP: whole loop body minus vsync
-                                    // Honest frame cost: VBlank IRQs elapsed since the last loop top.
-                                    // 1 vbl = 60 fps, 2 = 30, 3 = 20 (NTSC). Read before doing work.
-        let now_vbl = interrupts::vblank_count();
-        let dt = now_vbl.wrapping_sub(prev_vbl).max(1);
-        prev_vbl = now_vbl;
-        let fps = (60 / dt).min(99);
-        // Fixed-timestep count: every game-time system (player, mobs,
-        // survival, world timers, fluids, particles, drops) advances this many
-        // sim ticks this frame, one per elapsed vblank, so game time runs at
-        // units::SIM_HZ whatever the frame rate. `lockstep` (A/B validation
-        // builds only) runs one sim tick per poll, so two builds of different
-        // speed reach identical state at every poll.
-        let sim_n = if cfg!(feature = "lockstep") {
-            1
-        } else {
-            // Wait for a tick rather than invent one: a frame shorter than a
-            // VBlank must not advance game time.
-            let mut n = 0u32;
-            loop {
-                let now = interrupts::vblank_count();
-                while game_clock.due(now) {
-                    n += 1;
-                }
-                if n != 0 {
-                    break;
-                }
-            }
-            game_clock.end_frame();
-            n
-        };
-
-        telemetry::stage_begin(49); // TEMP: pad poll (SIO exchange)
-        let state = poll_pad();
-        telemetry::stage_end(49);
-        let mut pad = state.buttons;
-        let mut lstick = state.sticks.left_centered();
-        let mut rstick = state.sticks.right_centered();
-        if save::busy() {
-            save_step(&mut pad, previous);
-        }
-        if menus::quit_ready() {
-            break;
-        }
-        #[cfg(feature = "pick-lab")]
-        picklab::frame(frame, &mut player, &mut lstick, &mut rstick);
-        #[cfg(feature = "tool-lab")]
-        toollab::frame(frame, &mut player, &mut lstick, &mut rstick);
-        if POSE_TEST {
-            // Freeze all input and pin the exact pose; two ordinary edits
-            // build the trigger tower ahead of the player, then nothing else
-            // ever changes -- the scene is static from here on.
-            pad = ButtonState::NONE;
-            lstick = (0, 0);
-            rstick = (0, 0);
-            player.yaw = POSE_YAW;
-            player.pitch = POSE_PITCH;
-            if frame == 30 || frame == 40 {
-                // Two ordinary edits, ten frames apart, exercising the edit
-                // remesh chain; surface_y is re-read so the second lands on
-                // the first (the first raises the surface by one).
-                let bx = world_to_block_x(player.x);
-                let bz = world_to_block_z(player.z);
-                let sy = world::surface_y(bx, bz + 2);
-                let b = if frame == 30 { DIRT } else { STONE };
-                set_block_i32(bx, sy, bz + 2, b);
-            }
-        }
-
-        // Bedrock PS layout: SQUARE toggles crafting, TRIANGLE the inventory.
-        // Each opener only acts from the world or its own menu -- SQUARE means
-        // "withdraw" inside the chest/furnace panels. Only the pause menu
-        // (START) stops the world; see `paused` below.
-        if (menu == 0 || menu == 1) && pad.pressed_since(previous, button::SQUARE) {
-            menu = if menu == 1 { 0 } else { 1 };
-            menu_sel = 0;
-            unsafe { AT_BENCH = false }; // the handheld menu is the pocket grid
-            craft::craft_open(&player);
-            sfx::blip();
-        }
-        // Inside the inventory TRIANGLE is Quick Move; CIRCLE or START close.
-        if menu == 0 && pad.pressed_since(previous, button::TRIANGLE) {
-            menu = MENU_INV;
-            inv::inventory_open(player.selected);
-            sfx::blip();
-        }
-        // START opens the options menu, and closes whatever menu is open
-        // (the death screen excepted -- only respawn leaves it).
-        if menu != MENU_DEAD && pad.pressed_since(previous, button::START) {
-            menu = if menu == 0 { MENU_OPTIONS } else { 0 };
-            menu_sel = 0;
-            if menu == MENU_OPTIONS {
-                menus::open_pause();
-            }
-        }
-
-        if menu != 0 {
-            let n = match menu {
-                1 => 0,        // the crafting strip navigates itself (craft.rs)
-                2 => 0,        // the container panes navigate themselves (inv.rs)
-                MENU_INV => 0, // the grid navigates itself (inv.rs)
-                MENU_CHEAT => cheat::ROWS.len(),
-                MENU_OPTIONS => 0, // the options tree keeps its own cursors (menus.rs)
-                MENU_DEAD => 1,
-                _ => 0,
-            };
-            // Crafting can shrink under the cursor (tab switch, filter, the
-            // last affordable recipe crafted); keep the selection in the list.
-            if menu_sel >= n {
-                menu_sel = n.saturating_sub(1);
-            }
-            // Hold-to-scroll: the first press steps once; keep holding and
-            // after a short delay it repeats fast, the console list feel.
-            let nav_up = nav_repeat(pad.is_held(button::UP), unsafe { &mut NAV_UP_T });
-            let nav_down = nav_repeat(pad.is_held(button::DOWN), unsafe { &mut NAV_DOWN_T });
-            if n > 0 && nav_up {
-                menu_sel = (menu_sel + n - 1) % n;
-                sfx::blip();
-            }
-            if n > 0 && nav_down {
-                menu_sel = (menu_sel + 1) % n;
-                sfx::blip();
-            }
-            // CIRCLE backs out of any menu, the PS convention -- except the
-            // death screen, which only CROSS (respawn) leaves.
-            if menu == MENU_DEAD {
-                if pad.pressed_since(previous, button::CROSS) {
-                    // Java's world carries on through a death: the mobs stay
-                    // where they are (they used to be wiped, tamed wolves too).
-                    // A death in the Inferno or the Void respawns in the
-                    // overworld, as Java's does, not at the overworld spawn's
-                    // coordinates inside the other dimension.
-                    if world::dimension() != world::DIM_OVERWORLD {
-                        let (rbx, rbz) = unsafe { (RESPAWN_BX, RESPAWN_BZ) };
-                        mob::leave_dimension();
-                        enter_dimension(world::DIM_OVERWORLD, rbx, rbz, &mut fb, &font);
-                        save::apply_edits();
-                        mob::settle_dragon(false, 0, 0);
-                    }
-                    // The inventory survives a death, so the armour on your
-                    // back goes into it, and the off hand stays.
-                    equip::take_all_off(&mut player);
-                    let off = player.offhand;
-                    player = spawn_player();
-                    player.offhand = off;
-                    menu = 0;
-                }
-            } else if menu == MENU_INV || menu == MENU_CONTROLS {
-                if menu_card_input(menu, pad, previous, &mut player) {
-                    menu = if menu == MENU_CONTROLS { MENU_OPTIONS } else { 0 };
-                }
-            } else if pad.pressed_since(previous, button::CIRCLE) && !inv::put_back(menu) {
-                if menu == MENU_CHEAT {
-                    // Back on GAMEPLAY, where CHEATS was opened.
-                    menu = MENU_OPTIONS;
-                } else if menu == MENU_OPTIONS {
-                    // Up one level; from the first page, out of the menu.
-                    if menus::back() {
-                        menu = 0;
-                    }
-                } else {
-                    menu = 0;
-                }
-            } else if menu == MENU_OPTIONS {
-                match menus::input(pad, previous, nav_up, nav_down, Some((&mut player, &mut day)), &mut fb, &font) {
-                    menus::Out::None => {}
-                    menus::Out::Close => menu = 0,
-                    menus::Out::Controls => menu = MENU_CONTROLS,
-                    menus::Out::Cheats => {
-                        menu = MENU_CHEAT;
-                        menu_sel = menus::cheat_cursor();
-                    }
-                    // A save made at the Void arrival point loads standing in
-                    // the rebuilt return portal: be immune until you step
-                    // out, as on arrival.
-                    menus::Out::Loaded => portal_dwell = PORTAL_IMMUNE,
-                }
-            } else if menu == MENU_CHEAT {
-                match cheat::input(pad, previous, menu_sel, &mut player) {
-                    cheat::Act::None => {}
-                    cheat::Act::Time(t) => {
-                        // Forward to that point of the day, as sleeping does.
-                        let target = t as u32 * DAY_LEN / 24_000; // fits u32: 18,000 x DAY_LEN
-                        day += (target + DAY_LEN - day % DAY_LEN) % DAY_LEN;
-                    }
-                    cheat::Act::Travel(to) => {
-                        travel_to(&mut player, to, &mut fb, &font);
-                        portal_dwell = PORTAL_IMMUNE;
-                        menu = 0;
-                    }
-                    cheat::Act::Home => {
-                        if world::dimension() != world::DIM_OVERWORLD {
-                            travel_to(&mut player, world::DIM_OVERWORLD, &mut fb, &font);
-                        }
-                        let sp = spawn_player();
-                        player.x = sp.x;
-                        player.y = sp.y;
-                        player.z = sp.z;
-                        player.vy = 0;
-                        player.fall_peak = player.y;
-                        world::recenter(world_to_block_x(player.x), world_to_block_z(player.z));
-                        portal_dwell = PORTAL_IMMUNE;
-                        menu = 0;
-                    }
-                }
-            } else if menu == 1 {
-                craft::craft_input(pad, previous, &mut player);
-                if craft::take_to_grid() {
-                    menu = MENU_INV;
-                    inv::inventory_open_grid();
-                }
-            } else if menu == 2 {
-                inv::chest_input(chest_idx, pad, previous);
+        // LOAD WORLD on the title: the same load the game menu runs, over the
+        // world the title was showing. A save that will not read back sends the
+        // player back to a title that says so, rather than into a new world.
+        if unsafe { TITLE_LOAD } {
+            unsafe { TITLE_LOAD = false };
+            if load_game(&mut player, &mut day, &mut fb, &font) {
+                portal_dwell = PORTAL_IMMUNE;
+                previous = poll_pad().buttons;
             } else {
-                inv::furnace_input(chest_idx, pad, previous);
-            }
-        } else {
-            // Hotbar select: L1/R1 step the 9 real slots (Bedrock's shoulder
-            // scroll), wrapping, empty slots included -- an empty slot is an
-            // empty hand, as in the original. TRIANGLE's inventory panel jumps
-            // straight to an item. Tools are not cycled: crafting a tier
-            // equips it and better never hurts (no durability here).
-            hotbar_sync(&mut player);
-            equip::sync(&mut player);
-            grid::return_all(); // whatever the 2x2 grid held goes back when its screen closes
-            if pad.pressed_since(previous, button::R1) || pad.pressed_since(previous, button::L1) {
-                player.attack_t = 0; // switching items restarts the attack cooldown
-            }
-            if pad.pressed_since(previous, button::R1) {
-                unsafe { HOTBAR_SEL = (HOTBAR_SEL + 1) % HOTBAR_VIS };
-                player.selected = unsafe { HOTBAR[HOTBAR_SEL] };
-                sfx::blip();
-            }
-            if pad.pressed_since(previous, button::L1) {
-                unsafe { HOTBAR_SEL = (HOTBAR_SEL + HOTBAR_VIS - 1) % HOTBAR_VIS };
-                player.selected = unsafe { HOTBAR[HOTBAR_SEL] };
-                sfx::blip();
-            }
-            // L1 and R1 together (one pressed with the other held) swap the
-            // hands, Java's swap-hands key. The two steps above cancel, so the
-            // selection is back where it was.
-            let (l, r) = (button::L1, button::R1);
-            if (pad.pressed_since(previous, l) && pad.is_held(r))
-                || (pad.pressed_since(previous, r) && pad.is_held(l))
-            {
-                equip::swap_hands(&mut player);
+                unsafe { TITLE_UNREADABLE = true };
+                quit_to_title(&mut fb, &font, frame);
+                continue;
             }
         }
-        // Java pauses a single-player world only for the pause menu (OPTIONS
-        // here, and the cheat menu behind it). Inventory, crafting and the
-        // container screens leave it running: mobs move and hit, you fall and
-        // burn, you just cannot steer (minecraft.wiki/w/Pause_menu). The
-        // death screen does not pause either.
-        if menu == MENU_CHEAT {
-            menus::set_cheat_cursor(menu_sel);
-        }
-        psx_telemetry::receipts! {
-            publish_settings(
-                match menu { 0 => 0, MENU_OPTIONS | MENU_CHEAT => 4, MENU_CONTROLS => 3, _ => 5 },
-                if menu == MENU_OPTIONS { menus::cursor() } else { menu_sel },
-                match menu { MENU_OPTIONS => menus::page_id(), MENU_CHEAT => menus::CHEATS_PAGE, _ => 0 },
-                if menu != 0 { Some((&player, day)) } else { None },
-            );
-        }
-        let paused = menu == MENU_OPTIONS || menu == MENU_CHEAT || menu == MENU_CONTROLS;
-        if !paused && menu != MENU_DEAD {
-            // In a GUI the pad drives the GUI, not the player.
-            let (spad, sprev, sl, sr) = if menu == 0 && !sleep::active() {
-                (pad, previous, lstick, rstick)
+
+        loop {
+            // Stop any SFX voice whose sample has ended. Ahead of everything that
+            // might start one, so a sound keyed this frame is not cut by the
+            // deadline of the one it replaced.
+            sfx::tick();
+            music::tick();
+            telemetry::frame_begin(frame); // profiler frame boundary (no-op without the feature)
+            telemetry::stage_begin(50); // TEMP: whole loop body minus vsync
+                                        // Honest frame cost: VBlank IRQs elapsed since the last loop top.
+                                        // 1 vbl = 60 fps, 2 = 30, 3 = 20 (NTSC). Read before doing work.
+            let now_vbl = interrupts::vblank_count();
+            let dt = now_vbl.wrapping_sub(prev_vbl).max(1);
+            prev_vbl = now_vbl;
+            let fps = (60 / dt).min(99);
+            // Fixed-timestep count: every game-time system (player, mobs,
+            // survival, world timers, fluids, particles, drops) advances this many
+            // sim ticks this frame, one per elapsed vblank, so game time runs at
+            // units::SIM_HZ whatever the frame rate. `lockstep` (A/B validation
+            // builds only) runs one sim tick per poll, so two builds of different
+            // speed reach identical state at every poll.
+            let sim_n = if cfg!(feature = "lockstep") {
+                1
             } else {
-                (ButtonState::NONE, ButtonState::NONE, (0, 0), (0, 0))
+                // Wait for a tick rather than invent one: a frame shorter than a
+                // VBlank must not advance game time.
+                let mut n = 0u32;
+                loop {
+                    let now = interrupts::vblank_count();
+                    while game_clock.due(now) {
+                        n += 1;
+                    }
+                    if n != 0 {
+                        break;
+                    }
+                }
+                game_clock.end_frame();
+                n
             };
-            // Fixed timestep: advance movement / physics / mobs / survival sim_n times
-            // (== capped fps delta) so pace is fps-independent. Edge actions inside
-            // update_player (jump, fly toggle) fire only on the first sub-tick (prev_i).
-            telemetry::stage_begin(ST_SIM);
-            let mut st = 0;
-            while st < sim_n {
-                let prev_i = if st == 0 { sprev } else { spad };
-                // Before update_player, so a fall's damage also plays the hurt sound.
-                let hp_before = player.health;
-                // SAFETY: nothing else is live in the scratchpad during the
-                // simulation step (see FullStack).
-                unsafe { FullStack::run(|| update_player(&mut player, spad, prev_i, sl, sr)) };
-                update_survival(&mut player);
-                mob::set_lure(player.selected); // animals follow their held food
-                mob::update(player.x, player.y, player.z, spawn_sky(day), undead_burn_time(day));
-                let raw_hit =
-                    mob::contact_damage(player.x, player.y, player.z) + mob::hazard_damage();
-                // Mob contact, arrows and sapper blasts, through Java's
-                // invulnerability rule (take_hit): a stronger hit inside the
-                // i-frames deals the difference instead of nothing.
-                if take_hit(&mut player, raw_hit, true) > 0 {
-                    player.hurt_tilt = HURT_TILT_FRAMES;
-                }
-                if cheat::god() {
-                    cheat::hold_god(&mut player);
-                }
-                if player.health < hp_before {
-                    sfx::hurt();
-                    sleep::cancel();
-                }
-                if player.health <= 0 {
-                    // Death: hold on the YOU DIED screen; CROSS respawns.
-                    // Inventory and hotbar are statics, so they persist.
-                    menu = MENU_DEAD;
-                    menu_sel = 0;
-                    break;
-                }
-                // Keep the chunk grid centred on the player (cheap unless a boundary
-                // was crossed).
-                world::recenter(world_to_block_x(player.x), world_to_block_z(player.z));
-                st += 1;
-            }
-            telemetry::stage_end(ST_SIM);
-        } else if menu == MENU_DEAD {
-            // Java's death screen leaves the world running: mobs keep moving
-            // (and arrows flying) around where you fell; nothing can hurt you
-            // until you respawn.
-            let mut st = 0;
-            while st < sim_n {
-                mob::update(player.x, player.y, player.z, spawn_sky(day), undead_burn_time(day));
-                let _ = mob::contact_damage(player.x, player.y, player.z) + mob::hazard_damage();
-                st += 1;
-            }
-        }
-        // The world's own timers run on the same sim ticks, in any menu but
-        // the pause menu (furnaces smelt while you browse); mining, fishing
-        // and the day below take sim_n as well.
-        if world_tick(&mut player, &mut portal_dwell, if paused { 0 } else { sim_n }) {
-            portal_travel(&mut player, &mut fb, &font);
-        }
-        sleep::tick(sim_n);
-        if sleep::take_skip() {
-            // In the dark, the night is over: Java resets the weather cycle
-            // when a night is slept through in rain (ServerLevel.resetWeatherCycle),
-            // and only the world clock skips (`frame` keeps counting the
-            // frames that actually happened).
-            if weather::raining() {
-                weather::sleep_clear();
-            }
-            day += DAY_LEN - day % DAY_LEN;
-        }
 
-        if VISTA_VIEW {
-            player.yaw = VISTA_YAW; // FIXED yaw: A/B captures must not drift with fps
-            player.pitch = (-140i32 & 0x0FFF) as i16; // eye-level, slight down: the real gameplay view
-        }
-        let cam = camera_from_player(player);
-        // Java's crosshair: the block ray out to 4.5 blocks, then any mob
-        // whose box the ray enters first, out to the 3-block entity reach.
-        // A targeted mob takes the crosshair from the block behind it: no
-        // outline, no cracks, no mining or placing there.
-        let (pick, target) = if menu != 0 {
-            (NO_PICK, None)
-        } else {
-            // Java's crosshair ray passes through water and lava; only the
-            // empty bucket (and here the rod's cast) aims at a fluid.
-            let p = trace_pick(&cam, matches!(player.selected, BUCKET | FISHING_ROD), false);
-            let t = mob::ray_pick(
-                cam.x,
-                cam.y,
-                cam.z,
-                (cam.sy * cam.cp) >> 12,
-                cam.sp,
-                (cam.cy * cam.cp) >> 12,
-                p.dist.min(ENTITY_REACH),
-            );
-            (if t.is_some() { NO_PICK } else { p }, t)
-        };
-        // The block under the crosshair decides which tool the HUD and the hand
-        // show, so the set reads as one tool that changes to suit the job.
-        let aimed_block = if pick.hit {
-            get_block_i32(pick.bx, pick.by, pick.bz)
-        } else {
-            AIR
-        };
-        psx_telemetry::receipts! {
-            gate_probe(&pick);
-            unsafe { VOXIDE_GATE_STATE[19] = day };
-        }
-        unsafe {
-            // "Press L2 to sleep": aiming at a bed at (or near) nightfall --
-            // the same window the bed interaction itself accepts.
-            PROMPT_SLEEP = pick.hit
-                && bstate::is_bed(get_block_i32(pick.bx, pick.by, pick.bz))
-                && bed_time(day);
-        }
+            telemetry::stage_begin(49); // TEMP: pad poll (SIO exchange)
+            let state = poll_pad();
+            telemetry::stage_end(49);
+            let mut pad = state.buttons;
+            let mut lstick = state.sticks.left_centered();
+            let mut rstick = state.sticks.right_centered();
+            if save::busy() {
+                save_step(&mut pad, previous);
+            }
+            if menus::quit_ready() {
+                break;
+            }
+            #[cfg(feature = "pick-lab")]
+            picklab::frame(frame, &mut player, &mut lstick, &mut rstick);
+            #[cfg(feature = "tool-lab")]
+            toollab::frame(frame, &mut player, &mut lstick, &mut rstick);
+            if POSE_TEST {
+                // Freeze all input and pin the exact pose; two ordinary edits
+                // build the trigger tower ahead of the player, then nothing else
+                // ever changes -- the scene is static from here on.
+                pad = ButtonState::NONE;
+                lstick = (0, 0);
+                rstick = (0, 0);
+                player.yaw = POSE_YAW;
+                player.pitch = POSE_PITCH;
+                if frame == 30 || frame == 40 {
+                    // Two ordinary edits, ten frames apart, exercising the edit
+                    // remesh chain; surface_y is re-read so the second lands on
+                    // the first (the first raises the surface by one).
+                    let bx = world_to_block_x(player.x);
+                    let bz = world_to_block_z(player.z);
+                    let sy = world::surface_y(bx, bz + 2);
+                    let b = if frame == 30 { DIRT } else { STONE };
+                    set_block_i32(bx, sy, bz + 2, b);
+                }
+            }
 
-        let mut mine_den: u32 = 0;
-        if menu != 0 {
-            bow::reset();
-        }
-        if menu == 0 && !sleep::active() {
-            // "Use" is ONE button, L2, as on Bedrock: a mob in front takes it
-            // first (bone tames a wolf, wheat trades with a villager), then the
-            // block under the crosshair (chest, furnace, bed, enchant table,
-            // door), then the held item's own action (place, bow, seeds...).
-            // Sneak+L2 skips the block interaction and force-places against it,
-            // the Java/Bedrock rule.
-            #[cfg(feature = "ui-fixture")]
-            if pad.pressed_since(previous, button::SELECT) {
-                // The fixture aims at portal sheet itself (stepping out of one,
-                // opening one underfoot), which the crosshair passes through.
-                let fixture_pick = if target.is_none() {
-                    trace_pick(&cam, matches!(player.selected, BUCKET | FISHING_ROD), true)
-                } else {
-                    pick
+            // Bedrock PS layout: SQUARE toggles crafting, TRIANGLE the inventory.
+            // Each opener only acts from the world or its own menu -- SQUARE means
+            // "withdraw" inside the chest/furnace panels. Only the pause menu
+            // (START) stops the world; see `paused` below.
+            if (menu == 0 || menu == 1) && pad.pressed_since(previous, button::SQUARE) {
+                menu = if menu == 1 { 0 } else { 1 };
+                menu_sel = 0;
+                unsafe { AT_BENCH = false }; // the handheld menu is the pocket grid
+                craft::craft_open(&player);
+                sfx::blip();
+            }
+            // Inside the inventory TRIANGLE is Quick Move; CIRCLE or START close.
+            if menu == 0 && pad.pressed_since(previous, button::TRIANGLE) {
+                menu = MENU_INV;
+                inv::inventory_open(player.selected);
+                sfx::blip();
+            }
+            // START opens the options menu, and closes whatever menu is open
+            // (the death screen excepted -- only respawn leaves it).
+            if menu != MENU_DEAD && pad.pressed_since(previous, button::START) {
+                menu = if menu == 0 { MENU_OPTIONS } else { 0 };
+                menu_sel = 0;
+                if menu == MENU_OPTIONS {
+                    menus::open_pause();
+                }
+            }
+
+            if menu != 0 {
+                let n = match menu {
+                    1 => 0,        // the crafting strip navigates itself (craft.rs)
+                    2 => 0,        // the container panes navigate themselves (inv.rs)
+                    MENU_INV => 0, // the grid navigates itself (inv.rs)
+                    MENU_CHEAT => cheat::ROWS.len(),
+                    MENU_OPTIONS => 0, // the options tree keeps its own cursors (menus.rs)
+                    MENU_DEAD => 1,
+                    _ => 0,
                 };
-                fixture::select(&fixture_pick, &mut player);
-            }
-            #[cfg(feature = "block-lab")]
-            if pad.pressed_since(previous, button::SELECT) {
-                blocklab::select(&mut player);
-            }
-            let use_pressed = pad.pressed_since(previous, button::L2);
-            // Held L2 repeats a block placement every USE_REPEAT sim ticks.
-            let use_repeat = unsafe {
-                if pad.is_held(button::L2) && !use_pressed {
-                    USE_HELD_T += sim_n;
-                    if USE_HELD_T >= USE_REPEAT {
-                        USE_HELD_T = 0;
-                        true
+                // Crafting can shrink under the cursor (tab switch, filter, the
+                // last affordable recipe crafted); keep the selection in the list.
+                if menu_sel >= n {
+                    menu_sel = n.saturating_sub(1);
+                }
+                // Hold-to-scroll: the first press steps once; keep holding and
+                // after a short delay it repeats fast, the console list feel.
+                let nav_up = nav_repeat(pad.is_held(button::UP), unsafe { &mut NAV_UP_T });
+                let nav_down = nav_repeat(pad.is_held(button::DOWN), unsafe { &mut NAV_DOWN_T });
+                if n > 0 && nav_up {
+                    menu_sel = (menu_sel + n - 1) % n;
+                    sfx::blip();
+                }
+                if n > 0 && nav_down {
+                    menu_sel = (menu_sel + 1) % n;
+                    sfx::blip();
+                }
+                // CIRCLE backs out of any menu, the PS convention -- except the
+                // death screen, which only CROSS (respawn) leaves.
+                if menu == MENU_DEAD {
+                    if pad.pressed_since(previous, button::CROSS) {
+                        // Java's world carries on through a death: the mobs stay
+                        // where they are (they used to be wiped, tamed wolves too).
+                        // A death in the Inferno or the Void respawns in the
+                        // overworld, as Java's does, not at the overworld spawn's
+                        // coordinates inside the other dimension.
+                        if world::dimension() != world::DIM_OVERWORLD {
+                            let (rbx, rbz) = unsafe { (RESPAWN_BX, RESPAWN_BZ) };
+                            mob::leave_dimension();
+                            enter_dimension(world::DIM_OVERWORLD, rbx, rbz, &mut fb, &font);
+                            save::apply_edits();
+                            mob::settle_dragon(false, 0, 0);
+                        }
+                        // The inventory survives a death, so the armour on your
+                        // back goes into it, and the off hand stays.
+                        equip::take_all_off(&mut player);
+                        let off = player.offhand;
+                        player = spawn_player();
+                        player.offhand = off;
+                        menu = 0;
+                    }
+                } else if menu == MENU_INV || menu == MENU_CONTROLS {
+                    if menu_card_input(menu, pad, previous, &mut player) {
+                        menu = if menu == MENU_CONTROLS {
+                            MENU_OPTIONS
+                        } else {
+                            0
+                        };
+                    }
+                } else if pad.pressed_since(previous, button::CIRCLE) && !inv::put_back(menu) {
+                    if menu == MENU_CHEAT {
+                        // Back on GAMEPLAY, where CHEATS was opened.
+                        menu = MENU_OPTIONS;
+                    } else if menu == MENU_OPTIONS {
+                        // Up one level; from the first page, out of the menu.
+                        if menus::back() {
+                            menu = 0;
+                        }
                     } else {
+                        menu = 0;
+                    }
+                } else if menu == MENU_OPTIONS {
+                    match menus::input(
+                        pad,
+                        previous,
+                        nav_up,
+                        nav_down,
+                        Some((&mut player, &mut day)),
+                        &mut fb,
+                        &font,
+                    ) {
+                        menus::Out::None => {}
+                        menus::Out::Close => menu = 0,
+                        menus::Out::Controls => menu = MENU_CONTROLS,
+                        menus::Out::Cheats => {
+                            menu = MENU_CHEAT;
+                            menu_sel = menus::cheat_cursor();
+                        }
+                        // A save made at the Void arrival point loads standing in
+                        // the rebuilt return portal: be immune until you step
+                        // out, as on arrival.
+                        menus::Out::Loaded => portal_dwell = PORTAL_IMMUNE,
+                    }
+                } else if menu == MENU_CHEAT {
+                    match cheat::input(pad, previous, menu_sel, &mut player) {
+                        cheat::Act::None => {}
+                        cheat::Act::Time(t) => {
+                            // Forward to that point of the day, as sleeping does.
+                            let target = t as u32 * DAY_LEN / 24_000; // fits u32: 18,000 x DAY_LEN
+                            day += (target + DAY_LEN - day % DAY_LEN) % DAY_LEN;
+                        }
+                        cheat::Act::Travel(to) => {
+                            travel_to(&mut player, to, &mut fb, &font);
+                            portal_dwell = PORTAL_IMMUNE;
+                            menu = 0;
+                        }
+                        cheat::Act::Home => {
+                            if world::dimension() != world::DIM_OVERWORLD {
+                                travel_to(&mut player, world::DIM_OVERWORLD, &mut fb, &font);
+                            }
+                            let sp = spawn_player();
+                            player.x = sp.x;
+                            player.y = sp.y;
+                            player.z = sp.z;
+                            player.vy = 0;
+                            player.fall_peak = player.y;
+                            world::recenter(world_to_block_x(player.x), world_to_block_z(player.z));
+                            portal_dwell = PORTAL_IMMUNE;
+                            menu = 0;
+                        }
+                    }
+                } else if menu == 1 {
+                    craft::craft_input(pad, previous, &mut player);
+                    if craft::take_to_grid() {
+                        menu = MENU_INV;
+                        inv::inventory_open_grid();
+                    }
+                } else if menu == 2 {
+                    inv::chest_input(chest_idx, pad, previous);
+                } else {
+                    inv::furnace_input(chest_idx, pad, previous);
+                }
+            } else {
+                // Hotbar select: L1/R1 step the 9 real slots (Bedrock's shoulder
+                // scroll), wrapping, empty slots included -- an empty slot is an
+                // empty hand, as in the original. TRIANGLE's inventory panel jumps
+                // straight to an item. Tools are not cycled: crafting a tier
+                // equips it and better never hurts (no durability here).
+                hotbar_sync(&mut player);
+                equip::sync(&mut player);
+                grid::return_all(); // whatever the 2x2 grid held goes back when its screen closes
+                if pad.pressed_since(previous, button::R1)
+                    || pad.pressed_since(previous, button::L1)
+                {
+                    player.attack_t = 0; // switching items restarts the attack cooldown
+                }
+                if pad.pressed_since(previous, button::R1) {
+                    unsafe { HOTBAR_SEL = (HOTBAR_SEL + 1) % HOTBAR_VIS };
+                    player.selected = unsafe { HOTBAR[HOTBAR_SEL] };
+                    sfx::blip();
+                }
+                if pad.pressed_since(previous, button::L1) {
+                    unsafe { HOTBAR_SEL = (HOTBAR_SEL + HOTBAR_VIS - 1) % HOTBAR_VIS };
+                    player.selected = unsafe { HOTBAR[HOTBAR_SEL] };
+                    sfx::blip();
+                }
+                // L1 and R1 together (one pressed with the other held) swap the
+                // hands, Java's swap-hands key. The two steps above cancel, so the
+                // selection is back where it was.
+                let (l, r) = (button::L1, button::R1);
+                if (pad.pressed_since(previous, l) && pad.is_held(r))
+                    || (pad.pressed_since(previous, r) && pad.is_held(l))
+                {
+                    equip::swap_hands(&mut player);
+                }
+            }
+            // Java pauses a single-player world only for the pause menu (OPTIONS
+            // here, and the cheat menu behind it). Inventory, crafting and the
+            // container screens leave it running: mobs move and hit, you fall and
+            // burn, you just cannot steer (minecraft.wiki/w/Pause_menu). The
+            // death screen does not pause either.
+            if menu == MENU_CHEAT {
+                menus::set_cheat_cursor(menu_sel);
+            }
+            psx_telemetry::receipts! {
+                publish_settings(
+                    match menu { 0 => 0, MENU_OPTIONS | MENU_CHEAT => 4, MENU_CONTROLS => 3, _ => 5 },
+                    if menu == MENU_OPTIONS { menus::cursor() } else { menu_sel },
+                    match menu { MENU_OPTIONS => menus::page_id(), MENU_CHEAT => menus::CHEATS_PAGE, _ => 0 },
+                    if menu != 0 { Some((&player, day)) } else { None },
+                );
+            }
+            let paused = menu == MENU_OPTIONS || menu == MENU_CHEAT || menu == MENU_CONTROLS;
+            if !paused && menu != MENU_DEAD {
+                // In a GUI the pad drives the GUI, not the player.
+                let (spad, sprev, sl, sr) = if menu == 0 && !sleep::active() {
+                    (pad, previous, lstick, rstick)
+                } else {
+                    (ButtonState::NONE, ButtonState::NONE, (0, 0), (0, 0))
+                };
+                // Fixed timestep: advance movement / physics / mobs / survival sim_n times
+                // (== capped fps delta) so pace is fps-independent. Edge actions inside
+                // update_player (jump, fly toggle) fire only on the first sub-tick (prev_i).
+                telemetry::stage_begin(ST_SIM);
+                let mut st = 0;
+                while st < sim_n {
+                    let prev_i = if st == 0 { sprev } else { spad };
+                    // Before update_player, so a fall's damage also plays the hurt sound.
+                    let hp_before = player.health;
+                    // SAFETY: nothing else is live in the scratchpad during the
+                    // simulation step (see FullStack).
+                    unsafe { FullStack::run(|| update_player(&mut player, spad, prev_i, sl, sr)) };
+                    update_survival(&mut player);
+                    mob::set_lure(player.selected); // animals follow their held food
+                    mob::update(
+                        player.x,
+                        player.y,
+                        player.z,
+                        spawn_sky(day),
+                        undead_burn_time(day),
+                    );
+                    let raw_hit =
+                        mob::contact_damage(player.x, player.y, player.z) + mob::hazard_damage();
+                    // Mob contact, arrows and sapper blasts, through Java's
+                    // invulnerability rule (take_hit): a stronger hit inside the
+                    // i-frames deals the difference instead of nothing.
+                    if take_hit(&mut player, raw_hit, true) > 0 {
+                        player.hurt_tilt = HURT_TILT_FRAMES;
+                    }
+                    if cheat::god() {
+                        cheat::hold_god(&mut player);
+                    }
+                    if player.health < hp_before {
+                        sfx::hurt();
+                        sleep::cancel();
+                    }
+                    if player.health <= 0 {
+                        // Death: hold on the YOU DIED screen; CROSS respawns.
+                        // Inventory and hotbar are statics, so they persist.
+                        menu = MENU_DEAD;
+                        menu_sel = 0;
+                        break;
+                    }
+                    // Keep the chunk grid centred on the player (cheap unless a boundary
+                    // was crossed).
+                    world::recenter(world_to_block_x(player.x), world_to_block_z(player.z));
+                    st += 1;
+                }
+                telemetry::stage_end(ST_SIM);
+            } else if menu == MENU_DEAD {
+                // Java's death screen leaves the world running: mobs keep moving
+                // (and arrows flying) around where you fell; nothing can hurt you
+                // until you respawn.
+                let mut st = 0;
+                while st < sim_n {
+                    mob::update(
+                        player.x,
+                        player.y,
+                        player.z,
+                        spawn_sky(day),
+                        undead_burn_time(day),
+                    );
+                    let _ =
+                        mob::contact_damage(player.x, player.y, player.z) + mob::hazard_damage();
+                    st += 1;
+                }
+            }
+            // The world's own timers run on the same sim ticks, in any menu but
+            // the pause menu (furnaces smelt while you browse); mining, fishing
+            // and the day below take sim_n as well.
+            if world_tick(
+                &mut player,
+                &mut portal_dwell,
+                if paused { 0 } else { sim_n },
+            ) {
+                portal_travel(&mut player, &mut fb, &font);
+            }
+            sleep::tick(sim_n);
+            if sleep::take_skip() {
+                // In the dark, the night is over: Java resets the weather cycle
+                // when a night is slept through in rain (ServerLevel.resetWeatherCycle),
+                // and only the world clock skips (`frame` keeps counting the
+                // frames that actually happened).
+                if weather::raining() {
+                    weather::sleep_clear();
+                }
+                day += DAY_LEN - day % DAY_LEN;
+            }
+
+            if VISTA_VIEW {
+                player.yaw = VISTA_YAW; // FIXED yaw: A/B captures must not drift with fps
+                player.pitch = (-140i32 & 0x0FFF) as i16; // eye-level, slight down: the real gameplay view
+            }
+            let cam = camera_from_player(player);
+            // Java's crosshair: the block ray out to 4.5 blocks, then any mob
+            // whose box the ray enters first, out to the 3-block entity reach.
+            // A targeted mob takes the crosshair from the block behind it: no
+            // outline, no cracks, no mining or placing there.
+            let (pick, target) = if menu != 0 {
+                (NO_PICK, None)
+            } else {
+                // Java's crosshair ray passes through water and lava; only the
+                // empty bucket (and here the rod's cast) aims at a fluid.
+                let p = trace_pick(&cam, matches!(player.selected, BUCKET | FISHING_ROD), false);
+                let t = mob::ray_pick(
+                    cam.x,
+                    cam.y,
+                    cam.z,
+                    (cam.sy * cam.cp) >> 12,
+                    cam.sp,
+                    (cam.cy * cam.cp) >> 12,
+                    p.dist.min(ENTITY_REACH),
+                );
+                (if t.is_some() { NO_PICK } else { p }, t)
+            };
+            // The block under the crosshair decides which tool the HUD and the hand
+            // show, so the set reads as one tool that changes to suit the job.
+            let aimed_block = if pick.hit {
+                get_block_i32(pick.bx, pick.by, pick.bz)
+            } else {
+                AIR
+            };
+            psx_telemetry::receipts! {
+                gate_probe(&pick);
+                unsafe { VOXIDE_GATE_STATE[19] = day };
+            }
+            unsafe {
+                // "Press L2 to sleep": aiming at a bed at (or near) nightfall --
+                // the same window the bed interaction itself accepts.
+                PROMPT_SLEEP = pick.hit
+                    && bstate::is_bed(get_block_i32(pick.bx, pick.by, pick.bz))
+                    && bed_time(day);
+            }
+
+            let mut mine_den: u32 = 0;
+            if menu != 0 {
+                bow::reset();
+            }
+            if menu == 0 && !sleep::active() {
+                // "Use" is ONE button, L2, as on Bedrock: a mob in front takes it
+                // first (bone tames a wolf, wheat trades with a villager), then the
+                // block under the crosshair (chest, furnace, bed, enchant table,
+                // door), then the held item's own action (place, bow, seeds...).
+                // Sneak+L2 skips the block interaction and force-places against it,
+                // the Java/Bedrock rule.
+                #[cfg(feature = "ui-fixture")]
+                if pad.pressed_since(previous, button::SELECT) {
+                    // The fixture aims at portal sheet itself (stepping out of one,
+                    // opening one underfoot), which the crosshair passes through.
+                    let fixture_pick = if target.is_none() {
+                        trace_pick(&cam, matches!(player.selected, BUCKET | FISHING_ROD), true)
+                    } else {
+                        pick
+                    };
+                    fixture::select(&fixture_pick, &mut player);
+                }
+                #[cfg(feature = "block-lab")]
+                if pad.pressed_since(previous, button::SELECT) {
+                    blocklab::select(&mut player);
+                }
+                let use_pressed = pad.pressed_since(previous, button::L2);
+                // Held L2 repeats a block placement every USE_REPEAT sim ticks.
+                let use_repeat = unsafe {
+                    if pad.is_held(button::L2) && !use_pressed {
+                        USE_HELD_T += sim_n;
+                        if USE_HELD_T >= USE_REPEAT {
+                            USE_HELD_T = 0;
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        USE_HELD_T = 0;
                         false
                     }
-                } else {
-                    USE_HELD_T = 0;
-                    false
+                } && repeats_when_held(player.selected);
+                let mut used = false;
+                if use_pressed {
+                    used = mob_interact(target);
                 }
-            } && repeats_when_held(player.selected);
-            let mut used = false;
-            if use_pressed {
-                used = mob_interact(target);
-            }
-            if !used && use_pressed && pick.hit && !player.sneaking {
-                let tb = get_block_i32(pick.bx, pick.by, pick.bz);
-                if tb == CRAFT_TABLE {
-                    used = true;
-                    menu = 1;
-                    menu_sel = 0;
-                    unsafe {
-                        AT_BENCH = true;
-                        TUT_BENCHED = true;
-                    }
-                    craft::craft_open(&player);
-                    sfx::confirm();
-                } else if tb == CHEST {
-                    used = true;
-                    if let Some(ci) = chest_find(pick.bx, pick.by, pick.bz) {
-                        menu = 2;
-                        chest_idx = ci;
-                        menu_sel = 0;
-                        inv::container_open();
-                        sfx::chest_open();
-                    }
-                } else if tb == FURNACE {
-                    used = true;
-                    if let Some(fi) = furn_find(pick.bx, pick.by, pick.bz) {
-                        menu = 3;
-                        chest_idx = fi;
-                        menu_sel = 0;
-                        inv::container_open();
-                        sfx::chest_open();
-                    }
-                } else if bstate::is_bed(tb) {
-                    used = true;
-                    use_bed(pick.bx, pick.by, pick.bz, day);
-                } else if tb == ENCHANT {
-                    used = true;
-                    // Spend XP levels at the table. Java rolls a random
-                    // enchantment from the ones the item can take; here the
-                    // table cycles efficiency -> sharpness -> protection, so
-                    // three visits gets you one of each rather than a lottery.
-                    let lvl = xp_level(player.xp);
-                    if lvl >= ENCHANT_LEVELS && enchant_next(&player) != 0 {
-                        player.xp -= xp_total(lvl) - xp_total(lvl - ENCHANT_LEVELS);
-                        match enchant_next(&player) {
-                            1 => player.efficiency += 1,
-                            2 => player.sharpness += 1,
-                            _ => player.protection += 1,
-                        }
-                        sfx::confirm();
-                        spawn_particles(
-                            block_to_world_x(pick.bx) + BLOCK / 2,
-                            pick.by * BLOCK + BLOCK,
-                            block_to_world_z(pick.bz) + BLOCK / 2,
-                            (150, 110, 230),
-                            12,
-                            frame,
-                            18,
-                        );
-                    } else {
-                        sfx::blip();
-                    }
-                } else if bstate::is_door(tb) {
-                    used = true;
-                    blocks::use_door(pick.bx, pick.by, pick.bz);
-                } else if kind_of(tb) == LEVER {
-                    used = true;
-                    blocks::use_lever(pick.bx, pick.by, pick.bz);
-                }
-            }
-
-            // Any R2/L2 action swings the arm.
-            if pad.pressed_since(previous, button::R2) || use_pressed {
-                swing = SWING_TICKS;
-            }
-
-            // Melee: tap R2 to strike the mob under the crosshair (one hit a
-            // press, as Java's attack key: holding it only mines). Every
-            // swing restarts Java's attack cooldown, which scales the damage
-            // (melee_damage).
-            let swung = pad.pressed_since(previous, button::R2);
-            let dmg = melee_damage(&player); // on the charge before this swing
-            // Only a swing at a mob restarts the cooldown. Java also restarts
-            // it on a swing that finds nothing, but a press on a block beyond
-            // the 4.5-block reach finds nothing, and the bar flashing under
-            // the crosshair for every try at a distant block read as a
-            // loading bar. Starting to break a block never restarted it.
-            if swung && target.is_some() {
-                player.attack_t = 0;
-            }
-            if let (true, Some(t)) = (swung, target) {
-                if dmg > 0 && mob::strike(t, cam.x, cam.z, dmg) {
-                    player.sprint_latch = false; // a hit ends a sprint (Sprinting)
-                    sfx::hit_mob();
-                    player.exhaustion += EXH_ATTACK;
-                    let (wc, _) = equip::weapon_of(&player);
-                    wear_tool(&mut player, wc, equip::wear_per_hit(wc));
-                }
-            }
-
-            // Mine: hold R2 to break the targeted block over time (by hardness).
-            if pick.hit && pad.is_held(button::R2) {
-                let tb = get_block_i32(pick.bx, pick.by, pick.bz);
-                let hard = block_hardness100(tb);
-                if hard >= 0 && pick.by != 0 && edit_blocked(pick.bx, pick.by, pick.bz) {
-                    // The store is full: nothing may be broken that it cannot
-                    // remember. Said once per press, not every frame.
-                    if pad.pressed_since(previous, button::R2) {
-                        edit_full_toast();
-                    }
-                } else if hard >= 0 && pick.by != 0 {
-                    let head = get_block_i32(
-                        world_to_block_x(player.x),
-                        world_to_block_y(player.y + EYE_HEIGHT),
-                        world_to_block_z(player.z),
-                    );
-                    let ticks = break_ticks(&player, tb, hard, is_water(head), player.on_ground);
-                    let step = if mine_cool > 0 {
-                        // Java's 6 game ticks between one block and the next.
-                        let used = mine_cool.min(sim_n);
-                        mine_cool -= used;
-                        sim_n - used
-                    } else {
-                        sim_n
-                    };
-                    if mine_active && mine_x == pick.bx && mine_y == pick.by && mine_z == pick.bz {
-                        mine_progress += step;
-                    } else {
-                        mine_active = true;
-                        mine_x = pick.bx;
-                        mine_y = pick.by;
-                        mine_z = pick.bz;
-                        mine_progress = step;
-                    }
-                    mine_den = ticks;
-                    dig_t += sim_n;
-                    if dig_t >= DIG_PERIOD {
-                        dig_t = 0;
-                        sfx::dig(step_mat(tb), frame); // hit voiced by the block
-                        swing = SWING_TICKS; // arm-swing each hit
-                    }
-                    if mine_progress >= mine_den && (mine_den == 0 || step > 0) {
-                        sfx::break_block();
-                        player.exhaustion += EXH_BREAK;
-                        if hard > 0 {
-                            wear_tool(&mut player, tool_for(tb), 1);
-                        }
-                        if mine_den > 0 {
-                            mine_cool = units::java_ticks(6) as u32;
-                        }
-                        let harvest = can_harvest(&player, tb);
-                        // Ore XP, Java's ranges (minecraft.wiki/w/Experience):
-                        // coal 0 to 2, diamond 3 to 7, and none for iron and
-                        // gold ore, which pay on smelting instead.
-                        let roll = frame.wrapping_mul(2_654_435_761) >> 16;
-                        if harvest {
-                            player.xp += match tb {
-                                COAL_ORE => (roll % 3) as i32,
-                                DIAMOND_ORE => 3 + (roll % 5) as i32,
-                                _ => 0,
-                            };
-                        }
-                        spawn_particles(
-                            block_to_world_x(pick.bx) + BLOCK / 2,
-                            pick.by * BLOCK + BLOCK / 2,
-                            block_to_world_z(pick.bz) + BLOCK / 2,
-                            block_particle_color(tb),
-                            10,
-                            frame,
-                            18,
-                        );
-                        // Everything a broken block yields now falls as an item
-                        // entity from the centre of the block, instead of
-                        // teleporting into the inventory.
-                        let (dx, dy, dz) = (
-                            block_to_world_x(pick.bx) + BLOCK / 2,
-                            pick.by * BLOCK + BLOCK / 4,
-                            block_to_world_z(pick.bz) + BLOCK / 2,
-                        );
-                        if tb == WHEAT_RIPE {
-                            give_drop(dx, dy, dz, WHEAT_ITEM, frame); // mature: wheat + a seed back
-                            give_drop(dx, dy, dz, SEEDS, frame ^ 0x9E37);
-                        } else if tb == WHEAT {
-                            give_drop(dx, dy, dz, SEEDS, frame); // immature: just the seed
-                        } else if tb == LEAVES {
-                            // A sapling 1 time in 20 (minecraft.wiki/w/Leaves).
-                            if roll % 20 == 0 {
-                                give_drop(dx, dy, dz, SAPLING, frame);
-                            }
-                        } else if tb == TALL_GRASS {
-                            // Wheat seeds 12.5% of the time (minecraft.wiki/w/Short_Grass).
-                            if roll % 8 == 0 {
-                                give_drop(dx, dy, dz, SEEDS, frame);
-                            }
-                        } else if tb == GLASS {
-                            // Glass drops nothing without Silk Touch
-                            // (minecraft.wiki/w/Glass).
-                        } else if harvest {
-                            spawn_drop(dx, dy, dz, tb, frame); // wrong tool: breaks, drops nothing
-                        }
-                        if tb == CHEST {
-                            chest_remove(pick.bx, pick.by, pick.bz);
-                        } else if tb == FURNACE {
-                            furn_remove(pick.bx, pick.by, pick.bz);
-                        }
-                        set_block_i32(pick.bx, pick.by, pick.bz, AIR);
-                        record_edit(pick.bx, pick.by, pick.bz, AIR);
-                        world::wake_fluid(pick.bx, pick.by, pick.bz);
-                        blocks::after_break(pick.bx, pick.by, pick.bz, tb);
-                        mine_active = false;
-                        mine_progress = 0;
-                        mine_den = 0;
-                    }
-                }
-            } else {
-                mine_active = false;
-                mine_progress = 0;
-            }
-
-            // Bow: hold L2 to draw, let go to loose the arrow along the look
-            // direction (needs no block target; bow.rs has Java's rules).
-            // Player arrows damage mobs, not the player.
-            bow_use(&mut player, &cam, used, use_pressed, pad.is_held(button::L2), sim_n);
-
-            // Feed: L2 on the animal under the crosshair with its food puts it
-            // in love mode (two fed animals breed); meat heals a tamed wolf.
-            if let (false, true, Some(t)) = (used, use_pressed, target) {
-                let item = player.selected;
-                if unsafe { INV[item as usize] } > 0 && mob::feed(t, item) {
-                    inv_take(item);
-                    sfx::eat();
-                    used = true;
-                }
-            }
-
-            // Place: tap L2. Seeds plant a crop on soil; everything else places
-            // the selected block, consuming one from the inventory.
-            if !used
-                && player.selected != BOW
-                && player.selected != WHEAT_ITEM
-                && pick.hit
-                && (use_pressed || use_repeat)
-            {
-                if player.selected == SEEDS {
-                    let below = get_block_i32(pick.px, pick.py - 1, pick.pz);
-                    if (below == GRASS || below == DIRT)
-                        && get_block_i32(pick.px, pick.py, pick.pz) == AIR
-                        && edit_ok(pick.px, pick.py, pick.pz)
-                        && inv_take(SEEDS)
-                    {
-                        set_block_i32(pick.px, pick.py, pick.pz, WHEAT);
-                        record_edit(pick.px, pick.py, pick.pz, WHEAT);
-                        plant_crop(pick.px, pick.py, pick.pz);
-                        sfx::place();
-                    }
-                } else if player.selected == SAPLING {
-                    // Plant on soil like seeds; grows into a tree (see sap_tick).
-                    let below = get_block_i32(pick.px, pick.py - 1, pick.pz);
-                    if (below == GRASS || below == DIRT)
-                        && get_block_i32(pick.px, pick.py, pick.pz) == AIR
-                        && edit_ok(pick.px, pick.py, pick.pz)
-                        && inv_take(SAPLING)
-                    {
-                        set_block_i32(pick.px, pick.py, pick.pz, SAPLING);
-                        record_edit(pick.px, pick.py, pick.pz, SAPLING);
-                        plant_sapling(pick.px, pick.py, pick.pz);
-                        sfx::place();
-                    }
-                } else if player.selected == FISHING_ROD {
-                    // Cast onto water; a bite arrives after cast_t frames (below).
-                    if cast_t == 0 && is_water(get_block_i32(pick.bx, pick.by, pick.bz)) {
-                        // A bite in 5 to 30 s, Java's 100 to 600 game ticks
-                        // (minecraft.wiki/w/Fishing).
-                        let r = (frame.wrapping_mul(2_654_435_761) >> 16) % 501;
-                        cast_t = units::java_ticks(100 + r as i32) as u16;
-                        sfx::splash();
-                    }
-                } else if is_potion(player.selected) {
-                    let kind = player.selected;
-                    if inv_take(kind) {
-                        drink_potion(&mut player, kind);
-                        sfx::eat();
-                    }
-                } else if player.selected == VOID_EYE {
-                    if light_frame(pick.px, pick.py, pick.pz, VOID_PORTAL) && inv_take(VOID_EYE) {
-                        sfx::place();
-                    }
-                } else if player.selected == FLINT_STEEL {
-                    // Light a portal frame if we struck one, otherwise start a
-                    // fire on top of whatever we hit, as in Java.
-                    // Flint and steel is use_flint's: TNT first, then a portal
-                    // frame, then a fire where one can stand. This branch keeps
-                    // the nine lines it had before so the line offsets inside
-                    // main() that the PGO profile is keyed on do not move.
-                    use_flint(&mut player, &pick);
-                    //
-                    //
-                } else if player.selected == BONEMEAL {
-                    // Bone meal grows a crop 2 to 5 stages (minecraft.wiki/w/Bone_Meal).
-                    if get_block_i32(pick.bx, pick.by, pick.bz) == WHEAT && inv_take(BONEMEAL) {
-                        crop_grow(pick.bx, pick.by, pick.bz, 2 + (world_rand() % 4) as u16);
-                        spawn_particles(
-                            block_to_world_x(pick.bx) + BLOCK / 2,
-                            pick.by * BLOCK + BLOCK,
-                            block_to_world_z(pick.bz) + BLOCK / 2,
-                            (220, 230, 180),
-                            8,
-                            frame,
-                            16,
-                        );
-                        sfx::place();
-                    }
-                } else if player.selected == BUCKET {
-                    // Scoop the looked-at fluid into a filled bucket.
+                if !used && use_pressed && pick.hit && !player.sneaking {
                     let tb = get_block_i32(pick.bx, pick.by, pick.bz);
-                    let filled = if tb == WATER {
-                        WATER_BUCKET
-                    } else if tb == LAVA {
-                        LAVA_BUCKET
-                    } else {
-                        AIR
-                    };
-                    if filled != AIR && edit_ok(pick.bx, pick.by, pick.bz) && inv_take(BUCKET) {
-                        set_block_i32(pick.bx, pick.by, pick.bz, AIR);
-                        record_edit(pick.bx, pick.by, pick.bz, AIR);
-                        world::wake_fluid(pick.bx, pick.by, pick.bz);
-                        inv_add(filled);
-                        sfx::splash();
+                    if tb == CRAFT_TABLE {
+                        used = true;
+                        menu = 1;
+                        menu_sel = 0;
+                        unsafe {
+                            AT_BENCH = true;
+                            TUT_BENCHED = true;
+                        }
+                        craft::craft_open(&player);
+                        sfx::confirm();
+                    } else if tb == CHEST {
+                        used = true;
+                        if let Some(ci) = chest_find(pick.bx, pick.by, pick.bz) {
+                            menu = 2;
+                            chest_idx = ci;
+                            menu_sel = 0;
+                            inv::container_open();
+                            sfx::chest_open();
+                        }
+                    } else if tb == FURNACE {
+                        used = true;
+                        if let Some(fi) = furn_find(pick.bx, pick.by, pick.bz) {
+                            menu = 3;
+                            chest_idx = fi;
+                            menu_sel = 0;
+                            inv::container_open();
+                            sfx::chest_open();
+                        }
+                    } else if bstate::is_bed(tb) {
+                        used = true;
+                        use_bed(pick.bx, pick.by, pick.bz, day);
+                    } else if tb == ENCHANT {
+                        used = true;
+                        // Spend XP levels at the table. Java rolls a random
+                        // enchantment from the ones the item can take; here the
+                        // table cycles efficiency -> sharpness -> protection, so
+                        // three visits gets you one of each rather than a lottery.
+                        let lvl = xp_level(player.xp);
+                        if lvl >= ENCHANT_LEVELS && enchant_next(&player) != 0 {
+                            player.xp -= xp_total(lvl) - xp_total(lvl - ENCHANT_LEVELS);
+                            match enchant_next(&player) {
+                                1 => player.efficiency += 1,
+                                2 => player.sharpness += 1,
+                                _ => player.protection += 1,
+                            }
+                            sfx::confirm();
+                            spawn_particles(
+                                block_to_world_x(pick.bx) + BLOCK / 2,
+                                pick.by * BLOCK + BLOCK,
+                                block_to_world_z(pick.bz) + BLOCK / 2,
+                                (150, 110, 230),
+                                12,
+                                frame,
+                                18,
+                            );
+                        } else {
+                            sfx::blip();
+                        }
+                    } else if bstate::is_door(tb) {
+                        used = true;
+                        blocks::use_door(pick.bx, pick.by, pick.bz);
+                    } else if kind_of(tb) == LEVER {
+                        used = true;
+                        blocks::use_lever(pick.bx, pick.by, pick.bz);
                     }
-                } else if player.selected == WATER_BUCKET || player.selected == LAVA_BUCKET {
-                    // Empty the bucket into the adjacent cell.
-                    let fluid = if player.selected == WATER_BUCKET {
-                        WATER
-                    } else {
-                        LAVA
-                    };
-                    if get_block_i32(pick.px, pick.py, pick.pz) == AIR
-                        && edit_ok(pick.px, pick.py, pick.pz)
-                        && inv_take(player.selected)
-                    {
-                        set_block_i32(pick.px, pick.py, pick.pz, fluid);
-                        record_edit(pick.px, pick.py, pick.pz, fluid);
-                        world::wake_fluid(pick.px, pick.py, pick.pz);
-                        inv_add(BUCKET);
-                        sfx::splash();
+                }
+
+                // Any R2/L2 action swings the arm.
+                if pad.pressed_since(previous, button::R2) || use_pressed {
+                    swing = SWING_TICKS;
+                }
+
+                // Melee: tap R2 to strike the mob under the crosshair (one hit a
+                // press, as Java's attack key: holding it only mines). Every
+                // swing restarts Java's attack cooldown, which scales the damage
+                // (melee_damage).
+                let swung = pad.pressed_since(previous, button::R2);
+                let dmg = melee_damage(&player); // on the charge before this swing
+                                                 // Only a swing at a mob restarts the cooldown. Java also restarts
+                                                 // it on a swing that finds nothing, but a press on a block beyond
+                                                 // the 4.5-block reach finds nothing, and the bar flashing under
+                                                 // the crosshair for every try at a distant block read as a
+                                                 // loading bar. Starting to break a block never restarted it.
+                if swung && target.is_some() {
+                    player.attack_t = 0;
+                }
+                if let (true, Some(t)) = (swung, target) {
+                    if dmg > 0 && mob::strike(t, cam.x, cam.z, dmg) {
+                        player.sprint_latch = false; // a hit ends a sprint (Sprinting)
+                        sfx::hit_mob();
+                        player.exhaustion += EXH_ATTACK;
+                        let (wc, _) = equip::weapon_of(&player);
+                        wear_tool(&mut player, wc, equip::wear_per_hit(wc));
                     }
-                } else if in_placeable(player.selected) {
-                    if let Some((px, py, pz)) = blocks::place_item(&player, &pick) {
-                        sfx::place();
-                        if player.selected == CHEST {
-                            chest_register(px, py, pz);
-                        } else if player.selected == FURNACE {
-                            furn_register(px, py, pz);
-                        } else if player.selected == CRAFT_TABLE {
-                            unsafe { TUT_TABLE_PLACED = true };
+                }
+
+                // Mine: hold R2 to break the targeted block over time (by hardness).
+                if pick.hit && pad.is_held(button::R2) {
+                    let tb = get_block_i32(pick.bx, pick.by, pick.bz);
+                    let hard = block_hardness100(tb);
+                    if hard >= 0 && pick.by != 0 && edit_blocked(pick.bx, pick.by, pick.bz) {
+                        // The store is full: nothing may be broken that it cannot
+                        // remember. Said once per press, not every frame.
+                        if pad.pressed_since(previous, button::R2) {
+                            edit_full_toast();
+                        }
+                    } else if hard >= 0 && pick.by != 0 {
+                        let head = get_block_i32(
+                            world_to_block_x(player.x),
+                            world_to_block_y(player.y + EYE_HEIGHT),
+                            world_to_block_z(player.z),
+                        );
+                        let ticks =
+                            break_ticks(&player, tb, hard, is_water(head), player.on_ground);
+                        let step = if mine_cool > 0 {
+                            // Java's 6 game ticks between one block and the next.
+                            let used = mine_cool.min(sim_n);
+                            mine_cool -= used;
+                            sim_n - used
+                        } else {
+                            sim_n
+                        };
+                        if mine_active
+                            && mine_x == pick.bx
+                            && mine_y == pick.by
+                            && mine_z == pick.bz
+                        {
+                            mine_progress += step;
+                        } else {
+                            mine_active = true;
+                            mine_x = pick.bx;
+                            mine_y = pick.by;
+                            mine_z = pick.bz;
+                            mine_progress = step;
+                        }
+                        mine_den = ticks;
+                        dig_t += sim_n;
+                        if dig_t >= DIG_PERIOD {
+                            dig_t = 0;
+                            sfx::dig(step_mat(tb), frame); // hit voiced by the block
+                            swing = SWING_TICKS; // arm-swing each hit
+                        }
+                        if mine_progress >= mine_den && (mine_den == 0 || step > 0) {
+                            sfx::break_block();
+                            player.exhaustion += EXH_BREAK;
+                            if hard > 0 {
+                                wear_tool(&mut player, tool_for(tb), 1);
+                            }
+                            if mine_den > 0 {
+                                mine_cool = units::java_ticks(6) as u32;
+                            }
+                            let harvest = can_harvest(&player, tb);
+                            // Ore XP, Java's ranges (minecraft.wiki/w/Experience):
+                            // coal 0 to 2, diamond 3 to 7, and none for iron and
+                            // gold ore, which pay on smelting instead.
+                            let roll = frame.wrapping_mul(2_654_435_761) >> 16;
+                            if harvest {
+                                player.xp += match tb {
+                                    COAL_ORE => (roll % 3) as i32,
+                                    DIAMOND_ORE => 3 + (roll % 5) as i32,
+                                    _ => 0,
+                                };
+                            }
+                            spawn_particles(
+                                block_to_world_x(pick.bx) + BLOCK / 2,
+                                pick.by * BLOCK + BLOCK / 2,
+                                block_to_world_z(pick.bz) + BLOCK / 2,
+                                block_particle_color(tb),
+                                10,
+                                frame,
+                                18,
+                            );
+                            // Everything a broken block yields now falls as an item
+                            // entity from the centre of the block, instead of
+                            // teleporting into the inventory.
+                            let (dx, dy, dz) = (
+                                block_to_world_x(pick.bx) + BLOCK / 2,
+                                pick.by * BLOCK + BLOCK / 4,
+                                block_to_world_z(pick.bz) + BLOCK / 2,
+                            );
+                            if tb == WHEAT_RIPE {
+                                give_drop(dx, dy, dz, WHEAT_ITEM, frame); // mature: wheat + a seed back
+                                give_drop(dx, dy, dz, SEEDS, frame ^ 0x9E37);
+                            } else if tb == WHEAT {
+                                give_drop(dx, dy, dz, SEEDS, frame); // immature: just the seed
+                            } else if tb == LEAVES {
+                                // A sapling 1 time in 20 (minecraft.wiki/w/Leaves).
+                                if roll % 20 == 0 {
+                                    give_drop(dx, dy, dz, SAPLING, frame);
+                                }
+                            } else if tb == TALL_GRASS {
+                                // Wheat seeds 12.5% of the time (minecraft.wiki/w/Short_Grass).
+                                if roll % 8 == 0 {
+                                    give_drop(dx, dy, dz, SEEDS, frame);
+                                }
+                            } else if tb == GLASS {
+                                // Glass drops nothing without Silk Touch
+                                // (minecraft.wiki/w/Glass).
+                            } else if harvest {
+                                spawn_drop(dx, dy, dz, tb, frame); // wrong tool: breaks, drops nothing
+                            }
+                            if tb == CHEST {
+                                chest_remove(pick.bx, pick.by, pick.bz);
+                            } else if tb == FURNACE {
+                                furn_remove(pick.bx, pick.by, pick.bz);
+                            }
+                            set_block_i32(pick.bx, pick.by, pick.bz, AIR);
+                            record_edit(pick.bx, pick.by, pick.bz, AIR);
+                            world::wake_fluid(pick.bx, pick.by, pick.bz);
+                            blocks::after_break(pick.bx, pick.by, pick.bz, tb);
+                            mine_active = false;
+                            mine_progress = 0;
+                            mine_den = 0;
+                        }
+                    }
+                } else {
+                    mine_active = false;
+                    mine_progress = 0;
+                }
+
+                // Bow: hold L2 to draw, let go to loose the arrow along the look
+                // direction (needs no block target; bow.rs has Java's rules).
+                // Player arrows damage mobs, not the player.
+                bow_use(
+                    &mut player,
+                    &cam,
+                    used,
+                    use_pressed,
+                    pad.is_held(button::L2),
+                    sim_n,
+                );
+
+                // Feed: L2 on the animal under the crosshair with its food puts it
+                // in love mode (two fed animals breed); meat heals a tamed wolf.
+                if let (false, true, Some(t)) = (used, use_pressed, target) {
+                    let item = player.selected;
+                    if unsafe { INV[item as usize] } > 0 && mob::feed(t, item) {
+                        inv_take(item);
+                        sfx::eat();
+                        used = true;
+                    }
+                }
+
+                // Place: tap L2. Seeds plant a crop on soil; everything else places
+                // the selected block, consuming one from the inventory.
+                if !used
+                    && player.selected != BOW
+                    && player.selected != WHEAT_ITEM
+                    && pick.hit
+                    && (use_pressed || use_repeat)
+                {
+                    if player.selected == SEEDS {
+                        let below = get_block_i32(pick.px, pick.py - 1, pick.pz);
+                        if (below == GRASS || below == DIRT)
+                            && get_block_i32(pick.px, pick.py, pick.pz) == AIR
+                            && edit_ok(pick.px, pick.py, pick.pz)
+                            && inv_take(SEEDS)
+                        {
+                            set_block_i32(pick.px, pick.py, pick.pz, WHEAT);
+                            record_edit(pick.px, pick.py, pick.pz, WHEAT);
+                            plant_crop(pick.px, pick.py, pick.pz);
+                            sfx::place();
+                        }
+                    } else if player.selected == SAPLING {
+                        // Plant on soil like seeds; grows into a tree (see sap_tick).
+                        let below = get_block_i32(pick.px, pick.py - 1, pick.pz);
+                        if (below == GRASS || below == DIRT)
+                            && get_block_i32(pick.px, pick.py, pick.pz) == AIR
+                            && edit_ok(pick.px, pick.py, pick.pz)
+                            && inv_take(SAPLING)
+                        {
+                            set_block_i32(pick.px, pick.py, pick.pz, SAPLING);
+                            record_edit(pick.px, pick.py, pick.pz, SAPLING);
+                            plant_sapling(pick.px, pick.py, pick.pz);
+                            sfx::place();
+                        }
+                    } else if player.selected == FISHING_ROD {
+                        // Cast onto water; a bite arrives after cast_t frames (below).
+                        if cast_t == 0 && is_water(get_block_i32(pick.bx, pick.by, pick.bz)) {
+                            // A bite in 5 to 30 s, Java's 100 to 600 game ticks
+                            // (minecraft.wiki/w/Fishing).
+                            let r = (frame.wrapping_mul(2_654_435_761) >> 16) % 501;
+                            cast_t = units::java_ticks(100 + r as i32) as u16;
+                            sfx::splash();
+                        }
+                    } else if is_potion(player.selected) {
+                        let kind = player.selected;
+                        if inv_take(kind) {
+                            drink_potion(&mut player, kind);
+                            sfx::eat();
+                        }
+                    } else if player.selected == VOID_EYE {
+                        if light_frame(pick.px, pick.py, pick.pz, VOID_PORTAL) && inv_take(VOID_EYE)
+                        {
+                            sfx::place();
+                        }
+                    } else if player.selected == FLINT_STEEL {
+                        // Light a portal frame if we struck one, otherwise start a
+                        // fire on top of whatever we hit, as in Java.
+                        // Flint and steel is use_flint's: TNT first, then a portal
+                        // frame, then a fire where one can stand. This branch keeps
+                        // the nine lines it had before so the line offsets inside
+                        // main() that the PGO profile is keyed on do not move.
+                        use_flint(&mut player, &pick);
+                        //
+                        //
+                    } else if player.selected == BONEMEAL {
+                        // Bone meal grows a crop 2 to 5 stages (minecraft.wiki/w/Bone_Meal).
+                        if get_block_i32(pick.bx, pick.by, pick.bz) == WHEAT && inv_take(BONEMEAL) {
+                            crop_grow(pick.bx, pick.by, pick.bz, 2 + (world_rand() % 4) as u16);
+                            spawn_particles(
+                                block_to_world_x(pick.bx) + BLOCK / 2,
+                                pick.by * BLOCK + BLOCK,
+                                block_to_world_z(pick.bz) + BLOCK / 2,
+                                (220, 230, 180),
+                                8,
+                                frame,
+                                16,
+                            );
+                            sfx::place();
+                        }
+                    } else if player.selected == BUCKET {
+                        // Scoop the looked-at fluid into a filled bucket.
+                        let tb = get_block_i32(pick.bx, pick.by, pick.bz);
+                        let filled = if tb == WATER {
+                            WATER_BUCKET
+                        } else if tb == LAVA {
+                            LAVA_BUCKET
+                        } else {
+                            AIR
+                        };
+                        if filled != AIR && edit_ok(pick.bx, pick.by, pick.bz) && inv_take(BUCKET) {
+                            set_block_i32(pick.bx, pick.by, pick.bz, AIR);
+                            record_edit(pick.bx, pick.by, pick.bz, AIR);
+                            world::wake_fluid(pick.bx, pick.by, pick.bz);
+                            inv_add(filled);
+                            sfx::splash();
+                        }
+                    } else if player.selected == WATER_BUCKET || player.selected == LAVA_BUCKET {
+                        // Empty the bucket into the adjacent cell.
+                        let fluid = if player.selected == WATER_BUCKET {
+                            WATER
+                        } else {
+                            LAVA
+                        };
+                        if get_block_i32(pick.px, pick.py, pick.pz) == AIR
+                            && edit_ok(pick.px, pick.py, pick.pz)
+                            && inv_take(player.selected)
+                        {
+                            set_block_i32(pick.px, pick.py, pick.pz, fluid);
+                            record_edit(pick.px, pick.py, pick.pz, fluid);
+                            world::wake_fluid(pick.px, pick.py, pick.pz);
+                            inv_add(BUCKET);
+                            sfx::splash();
+                        }
+                    } else if in_placeable(player.selected) {
+                        if let Some((px, py, pz)) = blocks::place_item(&player, &pick) {
+                            sfx::place();
+                            if player.selected == CHEST {
+                                chest_register(px, py, pz);
+                            } else if player.selected == FURNACE {
+                                furn_register(px, py, pz);
+                            } else if player.selected == CRAFT_TABLE {
+                                unsafe { TUT_TABLE_PLACED = true };
+                            }
+                        } else {
+                            sfx::blip(); // nothing placed (empty stack or blocked cell)
                         }
                     } else {
                         sfx::blip(); // nothing placed (empty stack or blocked cell)
                     }
-                } else {
-                    sfx::blip(); // nothing placed (empty stack or blocked cell)
                 }
-            }
 
-            // Fishing: a cast line counts down to a bite, then lands a fish.
-            // Switching off the rod reels in (cancels the cast).
-            if player.selected == FISHING_ROD {
-                if cast_t > 0 {
-                    cast_t = cast_t.saturating_sub(sim_n as u16);
-                    if cast_t == 0 {
-                        player.food_items += 1;
-                        wear_item(&mut player, FISHING_ROD);
-                        sfx::splash();
+                // Fishing: a cast line counts down to a bite, then lands a fish.
+                // Switching off the rod reels in (cancels the cast).
+                if player.selected == FISHING_ROD {
+                    if cast_t > 0 {
+                        cast_t = cast_t.saturating_sub(sim_n as u16);
+                        if cast_t == 0 {
+                            player.food_items += 1;
+                            wear_item(&mut player, FISHING_ROD);
+                            sfx::splash();
+                        }
                     }
+                } else {
+                    cast_t = 0;
                 }
-            } else {
-                cast_t = 0;
+
+                // Collect loot dropped by mobs killed this frame. Passive kills
+                // yield RAW MEAT (cookable in a furnace); fishing still fills the
+                // generic food_items pouch.
+                // Loot from mobs killed this frame, dropped where they died rather
+                // than teleported into the pack. Passives yield RAW MEAT (cookable
+                // in a furnace); fishing still fills the generic food pouch.
+                let deaths = mob::death_count();
+                let mut d = 0usize;
+                while d < deaths {
+                    let (mx, my, mz, kind) = mob::death_at(d);
+                    let seed = frame.wrapping_add(d as u32 * 977);
+                    // Meat per kind (minecraft.wiki/w/Pig, /w/Cow, /w/Sheep,
+                    // /w/Chicken): pig and cow 1-3, sheep 1-2, chicken 1, all as
+                    // the one raw meat here. Wolves and villagers drop nothing.
+                    let meat = match kind {
+                        mob::PIG | mob::COW => 1 + seed % 3,
+                        mob::SHEEP => 1 + seed % 2,
+                        mob::CHICKEN => 1,
+                        _ => 0,
+                    };
+                    let mut k = 0;
+                    while k < meat {
+                        give_drop(mx, my + BLOCK / 2, mz, RAW_MEAT, seed ^ (k * 0x51ED));
+                        k += 1;
+                    }
+                    let extra = match kind {
+                        mob::SHEEP => WOOL,
+                        mob::SKELETON => BONE,
+                        mob::SAPPER => GUNPOWDER, // slain (not exploded) sappers
+                        mob::SPIDER => STRING,    // the bow's cord, as in Java
+                        mob::WRAITH => VOID_PEARL,
+                        mob::EMBER => EMBER_ROD,
+                        mob::WAILER => WAILER_TEAR,
+                        mob::CHARRED_SK => BONE,
+                        _ => AIR,
+                    };
+                    if extra != AIR {
+                        give_drop(mx, my + BLOCK / 2, mz, extra, seed ^ 0x2C1B);
+                    }
+                    d += 1;
+                }
+                mob::clear_deaths();
+                player.xp += mob::take_xp() as i32;
+                unsafe {
+                    player.xp += XP_PENDING;
+                    XP_PENDING = 0;
+                }
             }
 
-            // Collect loot dropped by mobs killed this frame. Passive kills
-            // yield RAW MEAT (cookable in a furnace); fishing still fills the
-            // generic food_items pouch.
-            // Loot from mobs killed this frame, dropped where they died rather
-            // than teleported into the pack. Passives yield RAW MEAT (cookable
-            // in a furnace); fishing still fills the generic food pouch.
-            let deaths = mob::death_count();
-            let mut d = 0usize;
-            while d < deaths {
-                let (mx, my, mz, kind) = mob::death_at(d);
-                let seed = frame.wrapping_add(d as u32 * 977);
-                // Meat per kind (minecraft.wiki/w/Pig, /w/Cow, /w/Sheep,
-                // /w/Chicken): pig and cow 1-3, sheep 1-2, chicken 1, all as
-                // the one raw meat here. Wolves and villagers drop nothing.
-                let meat = match kind {
-                    mob::PIG | mob::COW => 1 + seed % 3,
-                    mob::SHEEP => 1 + seed % 2,
-                    mob::CHICKEN => 1,
-                    _ => 0,
-                };
-                let mut k = 0;
-                while k < meat {
-                    give_drop(mx, my + BLOCK / 2, mz, RAW_MEAT, seed ^ (k * 0x51ED));
-                    k += 1;
-                }
-                let extra = match kind {
-                    mob::SHEEP => WOOL,
-                    mob::SKELETON => BONE,
-                    mob::SAPPER => GUNPOWDER, // slain (not exploded) sappers
-                    mob::SPIDER => STRING,    // the bow's cord, as in Java
-                    mob::WRAITH => VOID_PEARL,
-                    mob::EMBER => EMBER_ROD,
-                    mob::WAILER => WAILER_TEAR,
-                    mob::CHARRED_SK => BONE,
-                    _ => AIR,
-                };
-                if extra != AIR {
-                    give_drop(mx, my + BLOCK / 2, mz, extra, seed ^ 0x2C1B);
-                }
-                d += 1;
-            }
-            mob::clear_deaths();
-            player.xp += mob::take_xp() as i32;
+            // Weather: rain in one of every three ~40s windows. Phase 2, not 0, so a
+            // fresh world always opens dry -- `% 3 == 0` meant frame 0 was rain and
+            // every session started in a downpour.
+            let (tod, rain, light, sky) = world_lighting(day);
+            let raining = rain > 0;
+            // Underground the horizon colour is nonsense: fade it (and, in
+            // refresh_mat_ccmd, the far-band haze it meets) to cave black by how
+            // deep the camera has gone.
+            let cave = cave_amount(
+                player.y,
+                world_to_block_x(player.x),
+                world_to_block_z(player.z),
+            );
+            let sky = (
+                lerp_u8(sky.0 as i32, CAVE_FOG.0 as i32, cave as i32, 255),
+                lerp_u8(sky.1 as i32, CAVE_FOG.1 as i32, cave as i32, 255),
+                lerp_u8(sky.2 as i32, CAVE_FOG.2 as i32, cave as i32, 255),
+            );
             unsafe {
-                player.xp += XP_PENDING;
-                XP_PENDING = 0;
+                LIGHT = light;
+                FOG_RGB = sky;
+                CAVE = cave;
             }
-        }
-
-        // Weather: rain in one of every three ~40s windows. Phase 2, not 0, so a
-        // fresh world always opens dry -- `% 3 == 0` meant frame 0 was rain and
-        // every session started in a downpour.
-        let (tod, rain, light, sky) = world_lighting(day);
-        let raining = rain > 0;
-        // Underground the horizon colour is nonsense: fade it (and, in
-        // refresh_mat_ccmd, the far-band haze it meets) to cave black by how
-        // deep the camera has gone.
-        let cave = cave_amount(
-            player.y,
-            world_to_block_x(player.x),
-            world_to_block_z(player.z),
-        );
-        let sky = (
-            lerp_u8(sky.0 as i32, CAVE_FOG.0 as i32, cave as i32, 255),
-            lerp_u8(sky.1 as i32, CAVE_FOG.1 as i32, cave as i32, 255),
-            lerp_u8(sky.2 as i32, CAVE_FOG.2 as i32, cave as i32, 255),
-        );
-        unsafe {
-            LIGHT = light;
-            FOG_RGB = sky;
-            CAVE = cave;
-        }
-        if music::pick_due() {
-            music::start(false);
-        }
-        refresh_mat_ccmd(); // tint words follow LIGHT and the horizon colour
-        if MOB_LINEUP {
-            mob::debug_lineup(player.x, player.y, player.z);
-            player.yaw = 0x800; // face -Z so the lineup's +Z faces point at us
-            player.pitch = -180; // slight down at the row
-        }
-        if CRAFT_TEST.0 && frame == 20 {
-            // Enough for some recipes on each tab, not all: the capture should
-            // show bright, greyed, and (with the filter) hidden rows at once.
-            inv_give(PLANK, 6);
-            inv_give(STICK, 2);
-            unsafe {
-                CRAFT_TAB = CRAFT_TEST.1;
-                CRAFT_HIDE = CRAFT_TEST.2;
+            if music::pick_due() {
+                music::start(false);
             }
-            menu = 1;
-            menu_sel = 0;
-        }
-        #[cfg(feature = "edit-lab")]
-        edit_lab::tick(&mut player, frame);
-        if PLACE_TEST && frame == 5 {
-            // A row of the once-corrupted placeables 5 blocks ahead (+Z).
-            let bx = world_to_block_x(player.x);
-            let bz = world_to_block_z(player.z) + 5;
-            let row = [SAPLING, DOOR_C, CACTUS, CLAY, BRICK, TNT];
-            let mut i = 0;
-            while i < row.len() {
-                let x = bx - 2 + i as i32;
-                let y = world::surface_y(x, bz);
-                world::set(x, y, bz, row[i]);
-                i += 1;
+            refresh_mat_ccmd(); // tint words follow LIGHT and the horizon colour
+            if MOB_LINEUP {
+                mob::debug_lineup(player.x, player.y, player.z);
+                player.yaw = 0x800; // face -Z so the lineup's +Z faces point at us
+                player.pitch = -180; // slight down at the row
             }
-        }
-        if PLANT_TEST {
-            // Plant a small field of crops + flowers + tall grass just ahead and
-            // aim at it, to verify the cross-sprite billboards.
-            let bx = world_to_block_x(player.x);
-            let bz0 = world_to_block_z(player.z) + 2;
-            let mut dz = 0;
-            while dz < 3 {
+            if CRAFT_TEST.0 && frame == 20 {
+                // Enough for some recipes on each tab, not all: the capture should
+                // show bright, greyed, and (with the filter) hidden rows at once.
+                inv_give(PLANK, 6);
+                inv_give(STICK, 2);
+                unsafe {
+                    CRAFT_TAB = CRAFT_TEST.1;
+                    CRAFT_HIDE = CRAFT_TEST.2;
+                }
+                menu = 1;
+                menu_sel = 0;
+            }
+            #[cfg(feature = "edit-lab")]
+            edit_lab::tick(&mut player, frame);
+            if PLACE_TEST && frame == 5 {
+                // A row of the once-corrupted placeables 5 blocks ahead (+Z).
+                let bx = world_to_block_x(player.x);
+                let bz = world_to_block_z(player.z) + 5;
+                let row = [SAPLING, DOOR_C, CACTUS, CLAY, BRICK, TNT];
                 let mut i = 0;
-                while i < 5 {
-                    let x = bx - 2 + i;
-                    let z = bz0 + dz;
-                    let y = world::surface_y(x, z) + 1;
-                    let b = [WHEAT_RIPE, FLOWER_R, TALL_GRASS, FLOWER_Y, SAPLING][i as usize];
-                    world::set(x, y, z, b);
+                while i < row.len() {
+                    let x = bx - 2 + i as i32;
+                    let y = world::surface_y(x, bz);
+                    world::set(x, y, bz, row[i]);
                     i += 1;
                 }
-                dz += 1;
             }
-            player.yaw = 0; // face +Z toward the field
-            player.pitch = -240; // slight look-down: see the sprites standing up
+            if PLANT_TEST {
+                // Plant a small field of crops + flowers + tall grass just ahead and
+                // aim at it, to verify the cross-sprite billboards.
+                let bx = world_to_block_x(player.x);
+                let bz0 = world_to_block_z(player.z) + 2;
+                let mut dz = 0;
+                while dz < 3 {
+                    let mut i = 0;
+                    while i < 5 {
+                        let x = bx - 2 + i;
+                        let z = bz0 + dz;
+                        let y = world::surface_y(x, z) + 1;
+                        let b = [WHEAT_RIPE, FLOWER_R, TALL_GRASS, FLOWER_Y, SAPLING][i as usize];
+                        world::set(x, y, z, b);
+                        i += 1;
+                    }
+                    dz += 1;
+                }
+                player.yaw = 0; // face +Z toward the field
+                player.pitch = -240; // slight look-down: see the sprites standing up
+            }
+            // No fb.clear: draw_sky's two gouraud triangles cover every pixel of
+            // the frame, so the clear was 76.8K pixels of pure GPU overdraw --
+            // roughly 0.15 vblank of fill, the difference between 30 and 60fps at
+            // short draw distances.
+            telemetry::stage_begin(ST_R_SKY);
+            // Build only: the GPU is still rasterising the previous arena. Even GPU
+            // register state such as dithering belongs in this frame's list.
+            ui_frame_begin();
+            queue_dither();
+            // SAFETY: nothing else is live in the scratchpad between phases, and
+            // the SDK's stack-guard proves each tree fits (see FullStack).
+            unsafe { FullStack::run(|| draw_frame_sky(&cam, day, tod, light, sky, rain > 128)) };
+            ui_finish_sky(false);
+            telemetry::stage_end(ST_R_SKY);
+            telemetry::stage_begin(ST_RENDER);
+            gte_load_camera(&cam);
+            telemetry::stage_begin(ST_R_WORLD);
+            let (_world_quads, _face_work) = render_world(&cam);
+            // Cross-sprite plants, depth-sorted into the same OT; on a scratchpad
+            // stack for the same reason as the face pass (see world::FaceStack).
+            unsafe { FullStack::run(|| render_plants(&cam)) };
+            telemetry::stage_end(ST_R_WORLD);
+            telemetry::stage_begin(ST_R_MOBS);
+            unsafe { FullStack::run(|| render_mobs(&cam, SIM_TICK)) };
+            telemetry::stage_end(ST_R_MOBS);
+            // Spend streaming work only from the headroom left by the current world
+            // pass. Heavy terrain gets no extra work this frame; moderate terrain
+            // gets one slice; cheap views get two. This breaks the old feedback loop
+            // where a slow frame performed more streaming and became slower still.
+            telemetry::stage_begin(ST_MESH);
+            world::set_view(cam.x, cam.z, cam.sy, cam.cy);
+            advance_streaming(true);
+            telemetry::stage_end(ST_MESH);
+            telemetry::stage_end(ST_RENDER);
+            telemetry::stage_begin(ST_R_TAIL);
+            unsafe { FullStack::run(|| render_particles(&cam)) };
+            #[cfg(feature = "look-lab")]
+            picklab::look(&player);
+            #[cfg(feature = "pick-lab")]
+            picklab::record(frame, &pick, target.map_or(-1, |t| t as i32), mine_progress);
+            draw_pick_outline(&cam, pick);
+            // Minecraft puts the destroy stage ON the block you are hitting. Ours
+            // only had an 18px bar under the crosshair, which is nearly subliminal at
+            // 320x240 and keeps your eye off the block.
+            unsafe { FullStack::run(|| draw_break_overlay(&cam, pick, mine_progress, mine_den)) };
+            swing = swing.saturating_sub(sim_n);
+            if menu == 0 {
+                draw_held_item(
+                    player.selected,
+                    hud_tool(&player, aimed_block),
+                    unsafe { SIM_TICK },
+                    (swing * 8 / SWING_TICKS) as i32,
+                );
+            }
+            if raining && under_open_sky(&player) {
+                // Over the world, UNDER the HUD (it used to fall in front of the
+                // hotbar, hearts and every open menu), and only where sky reaches.
+                draw_rain(unsafe { SIM_TICK }, &cam, rain);
+            }
+            // Full-screen tints. The GPU is measured at 17% busy with ZERO fill
+            // cost, so a 320x240 blend is about 77K GPU cycles against ~940K of
+            // headroom -- the one place left to buy feel without spending CPU.
+            screen_tint(&player);
+            tut_tick(&player);
+            let hud_tool_now = hud_tool(&player, aimed_block);
+            unsafe { FullStack::run(|| draw_all_hud(&font, player, menu, hud_tool_now)) };
+            if SHOW_FPS {
+                let mut digits = [0u8; 3];
+                let fps = u32_dec_padded(&mut digits, u32::from((fps as u16).min(999)), 3);
+                ui_text(&font, 276, 6, fps, (0xE0, 0xE0, 0x60));
+            }
+            if cheat::hud() && menu == 0 {
+                cheat::draw_hud(&font, &player, fps);
+            }
+            draw_menu(&font, menu, menu_sel, chest_idx, player);
+            ui_brightness();
+            // Particles, the pick outline, the held item, rain, tints, the HUD and
+            // any open menu all live in OT slot 0 -- the slot the DMA walker
+            // reaches last, so they paint over the world.
+            ui_submit_tail();
+            telemetry::stage_end(ST_R_TAIL);
+            frame_present(&mut fb, &mut render_in_flight);
+            previous = pad;
+            frame = frame.wrapping_add(1);
+            if !(menu == MENU_OPTIONS || menu == MENU_CHEAT || menu == MENU_CONTROLS) {
+                day = day.wrapping_add(sim_n); // the pause menu stops the clock too
+            }
         }
-        // No fb.clear: draw_sky's two gouraud triangles cover every pixel of
-        // the frame, so the clear was 76.8K pixels of pure GPU overdraw --
-        // roughly 0.15 vblank of fill, the difference between 30 and 60fps at
-        // short draw distances.
-        telemetry::stage_begin(ST_R_SKY);
-        // Build only: the GPU is still rasterising the previous arena. Even GPU
-        // register state such as dithering belongs in this frame's list.
-        ui_frame_begin();
-        queue_dither();
-        // SAFETY: nothing else is live in the scratchpad between phases, and
-        // the SDK's stack-guard proves each tree fits (see FullStack).
-        unsafe { FullStack::run(|| draw_frame_sky(&cam, day, tod, light, sky, rain > 128)) };
-        ui_finish_sky(false);
-        telemetry::stage_end(ST_R_SKY);
-        telemetry::stage_begin(ST_RENDER);
-        gte_load_camera(&cam);
-        telemetry::stage_begin(ST_R_WORLD);
-        let (_world_quads, _face_work) = render_world(&cam);
-        // Cross-sprite plants, depth-sorted into the same OT; on a scratchpad
-        // stack for the same reason as the face pass (see world::FaceStack).
-        unsafe { FullStack::run(|| render_plants(&cam)) };
-        telemetry::stage_end(ST_R_WORLD);
-        telemetry::stage_begin(ST_R_MOBS);
-        unsafe { FullStack::run(|| render_mobs(&cam, SIM_TICK)) };
-        telemetry::stage_end(ST_R_MOBS);
-        // Spend streaming work only from the headroom left by the current world
-        // pass. Heavy terrain gets no extra work this frame; moderate terrain
-        // gets one slice; cheap views get two. This breaks the old feedback loop
-        // where a slow frame performed more streaming and became slower still.
-        telemetry::stage_begin(ST_MESH);
-        world::set_view(cam.x, cam.z, cam.sy, cam.cy);
-        advance_streaming(true);
-        telemetry::stage_end(ST_MESH);
-        telemetry::stage_end(ST_RENDER);
-        telemetry::stage_begin(ST_R_TAIL);
-        unsafe { FullStack::run(|| render_particles(&cam)) };
-        #[cfg(feature = "look-lab")]
-        picklab::look(&player);
-        #[cfg(feature = "pick-lab")]
-        picklab::record(frame, &pick, target.map_or(-1, |t| t as i32), mine_progress);
-        draw_pick_outline(&cam, pick);
-        // Minecraft puts the destroy stage ON the block you are hitting. Ours
-        // only had an 18px bar under the crosshair, which is nearly subliminal at
-        // 320x240 and keeps your eye off the block.
-        unsafe { FullStack::run(|| draw_break_overlay(&cam, pick, mine_progress, mine_den)) };
-        swing = swing.saturating_sub(sim_n);
-        if menu == 0 {
-            draw_held_item(
-                player.selected,
-                hud_tool(&player, aimed_block),
-                unsafe { SIM_TICK },
-                (swing * 8 / SWING_TICKS) as i32,
-            );
-        }
-        if raining && under_open_sky(&player) {
-            // Over the world, UNDER the HUD (it used to fall in front of the
-            // hotbar, hearts and every open menu), and only where sky reaches.
-            draw_rain(unsafe { SIM_TICK }, &cam, rain);
-        }
-        // Full-screen tints. The GPU is measured at 17% busy with ZERO fill
-        // cost, so a 320x240 blend is about 77K GPU cycles against ~940K of
-        // headroom -- the one place left to buy feel without spending CPU.
-        screen_tint(&player);
-        tut_tick(&player);
-        let hud_tool_now = hud_tool(&player, aimed_block);
-        unsafe { FullStack::run(|| draw_all_hud(&font, player, menu, hud_tool_now)) };
-        if SHOW_FPS {
-            let mut digits = [0u8; 3];
-            let fps = u32_dec_padded(&mut digits, u32::from((fps as u16).min(999)), 3);
-            ui_text(&font, 276, 6, fps, (0xE0, 0xE0, 0x60));
-        }
-        if cheat::hud() && menu == 0 {
-            cheat::draw_hud(&font, &player, fps);
-        }
-        draw_menu(&font, menu, menu_sel, chest_idx, player);
-        ui_brightness();
-        // Particles, the pick outline, the held item, rain, tints, the HUD and
-        // any open menu all live in OT slot 0 -- the slot the DMA walker
-        // reaches last, so they paint over the world.
-        ui_submit_tail();
-        telemetry::stage_end(ST_R_TAIL);
-        frame_present(&mut fb, &mut render_in_flight);
-        previous = pad;
-        frame = frame.wrapping_add(1);
-        if !(menu == MENU_OPTIONS || menu == MENU_CHEAT || menu == MENU_CONTROLS) {
-            day = day.wrapping_add(sim_n); // the pause menu stops the clock too
-        }
-    }
-    // SAVE AND QUIT TO TITLE: let the frame the GPU is still drawing finish,
-    // then back to a fresh title screen and the next pass.
-    gpu::submit_linked_list_wait();
-    gpu::draw_sync();
-    quit_to_title(&mut fb, &font, frame);
+        // SAVE AND QUIT TO TITLE: let the frame the GPU is still drawing finish,
+        // then back to a fresh title screen and the next pass.
+        gpu::submit_linked_list_wait();
+        gpu::draw_sync();
+        quit_to_title(&mut fb, &font, frame);
     }
 }
 
@@ -4250,7 +4313,8 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         } else if credits != 0 {
             // CROSS turns the first page; CIRCLE or START closes the card, and
             // CROSS on the last page does too.
-            let back = pad.pressed_since(prev, button::CIRCLE) || pad.pressed_since(prev, button::START);
+            let back =
+                pad.pressed_since(prev, button::CIRCLE) || pad.pressed_since(prev, button::START);
             if !back && credits == 1 && pad.pressed_since(prev, button::CROSS) {
                 credits = 2;
                 sfx::blip();
@@ -4533,10 +4597,8 @@ fn menu_card_input(menu: u8, pad: ButtonState, previous: ButtonState, player: &m
 /// signal change (GP1 08h/06h/07h), nothing per frame; `gpu::init` already
 /// left it centred, so a centred profile skips the write at boot.
 fn apply_screen_offset() {
-    let display = unsafe { SETTINGS_PROFILE.screen_offset }.apply_to(DisplayConfig::new(
-        VideoMode::Ntsc,
-        Resolution::R320X240,
-    ));
+    let display = unsafe { SETTINGS_PROFILE.screen_offset }
+        .apply_to(DisplayConfig::new(VideoMode::Ntsc, Resolution::R320X240));
     // SAFETY: a token is a logic guard, not a memory-safety one (see
     // `psx_io::periph`); nothing else drives the display setters while the
     // options page is open.
@@ -4547,9 +4609,7 @@ fn apply_screen_offset() {
 /// The BRIGHTNESS packet drawn over the finished immediate-mode frame (the
 /// main menu). None at DEFAULT, so DEFAULT draws exactly what it always did.
 fn draw_brightness_now() {
-    if let Some(overlay) =
-        unsafe { SETTINGS_PROFILE.brightness }.overlay(Resolution::R320X240)
-    {
+    if let Some(overlay) = unsafe { SETTINGS_PROFILE.brightness }.overlay(Resolution::R320X240) {
         // SAFETY: as in `apply_screen_offset`.
         let mut dma = unsafe { GpuDma::steal() };
         Gpu::from_dma_mut(&mut dma).draw(&overlay);
@@ -4571,9 +4631,7 @@ fn draw_fade_now() {
 /// over the HUD and any open menu. No packet at DEFAULT.
 #[inline(never)]
 fn ui_brightness() {
-    if let Some(overlay) =
-        unsafe { SETTINGS_PROFILE.brightness }.overlay(Resolution::R320X240)
-    {
+    if let Some(overlay) = unsafe { SETTINGS_PROFILE.brightness }.overlay(Resolution::R320X240) {
         ui_packet(&overlay.words());
     }
     if let Some(fade) = loading::fade_packet(interrupts::vblank_count()) {
@@ -4639,9 +4697,19 @@ fn save_shared_settings(fb: &mut FrameBuffer, font: &FontAtlas) {
 fn present_formatting(fb: &mut FrameBuffer, font: &FontAtlas) {
     gpu::draw_rect_flat(0, 0, 320, 240, 14, 14, 22);
     let head = "FORMATTING THE CARD";
-    font.draw_text((320 - head.len() as i16 * 8) / 2, 100, head, (0xF0, 0xE0, 0x80));
+    font.draw_text(
+        (320 - head.len() as i16 * 8) / 2,
+        100,
+        head,
+        (0xF0, 0xE0, 0x80),
+    );
     let warn = "DO NOT REMOVE THE CARD";
-    font.draw_text((320 - warn.len() as i16 * 8) / 2, 118, warn, (0xD0, 0xD0, 0xD0));
+    font.draw_text(
+        (320 - warn.len() as i16 * 8) / 2,
+        118,
+        warn,
+        (0xD0, 0xD0, 0xD0),
+    );
     draw_brightness_now();
     gpu::draw_sync();
     wait_vblank();
@@ -4659,7 +4727,9 @@ fn setting_adjust(row: usize, dir: i32) {
             S_INVERT_Y => SET_INVERT_Y = !SET_INVERT_Y,
             S_SFX => sfx::set_volume_pct(sfx::volume_pct() + dir * 25),
             S_MUSIC => music::set_volume_pct(music::volume_pct() + dir * 25),
-            S_BRIGHTNESS => SETTINGS_PROFILE.brightness = SETTINGS_PROFILE.brightness.stepped(dir as i8),
+            S_BRIGHTNESS => {
+                SETTINGS_PROFILE.brightness = SETTINGS_PROFILE.brightness.stepped(dir as i8)
+            }
             S_SCREEN_X => {
                 SETTINGS_PROFILE.screen_offset =
                     SETTINGS_PROFILE.screen_offset.stepped_x(dir as i8);
@@ -4686,7 +4756,9 @@ fn setting_value(row: usize, buf: &mut [u8; 12]) -> usize {
             S_SAVE => {
                 let status = if SETTINGS_SAVE_STATUS.is_empty() && SETTINGS_DIRTY {
                     "UNSAVED"
-                } else { SETTINGS_SAVE_STATUS };
+                } else {
+                    SETTINGS_SAVE_STATUS
+                };
                 buf[..status.len()].copy_from_slice(status.as_bytes());
                 return status.len();
             }
@@ -4805,7 +4877,12 @@ fn draw_credits_now(font: &FontAtlas, page: u8) {
     const HEAD: (u8, u8, u8) = (0x10, 0x10, 0x16);
     const BODY: (u8, u8, u8) = (0x2C, 0x2C, 0x34);
     let title = "CREDITS";
-    font.draw_text((SCREEN_W as i16 - title.len() as i16 * 8) / 2, 10, title, (0x14, 0x14, 0x1A));
+    font.draw_text(
+        (SCREEN_W as i16 - title.len() as i16 * 8) / 2,
+        10,
+        title,
+        (0x14, 0x14, 0x1A),
+    );
     let mut y = 28i16;
     if page == 1 {
         for line in musicdata::CREDITS {
@@ -4824,7 +4901,11 @@ fn draw_credits_now(font: &FontAtlas, page: u8) {
             y += 11;
         }
     }
-    let hint = if page == 1 { "X: MORE   O: BACK" } else { "O: BACK" };
+    let hint = if page == 1 {
+        "X: MORE   O: BACK"
+    } else {
+        "O: BACK"
+    };
     font.draw_text(24, SCREEN_H as i16 - 20, hint, BODY);
 }
 
@@ -5574,7 +5655,9 @@ fn world_tick(player: &mut Player, dwell: &mut u16, n: u32) -> bool {
     // A blast in progress, or primed TNT waiting for the queue, is what the
     // player is watching: the frame spends nearly all its spare time on it.
     slack::set_urgent(world::blast_busy() || tnt::pending_count() > 0);
-    slack::set_backlog(world::blasts_pending() as u32 + tnt::pending_count() + world::chain_remesh_waiting());
+    slack::set_backlog(
+        world::blasts_pending() as u32 + tnt::pending_count() + world::chain_remesh_waiting(),
+    );
     slack::frame_begin(); // this frame's spare time, for blasts and flames
     let mut travel = false;
     let mut w = 0;
@@ -5995,7 +6078,10 @@ fn update_survival(player: &mut Player) {
 
     // Regeneration potion heals regardless of food or recent damage, which is
     // the whole point of carrying one into a fight.
-    if player.eff_regen > 0 && player.health < MAX_HEALTH && player.eff_regen % REGEN_POTION_PERIOD == 0 {
+    if player.eff_regen > 0
+        && player.health < MAX_HEALTH
+        && player.eff_regen % REGEN_POTION_PERIOD == 0
+    {
         player.health += 1;
     }
     // Java's food timer: the saturation boost at a full bar, natural regen at
@@ -6493,7 +6579,8 @@ fn update_player(
             JUMP_DELAY = JUMP_DELAY.saturating_sub(1);
             JUMP_DELAY == 0 && pad.is_held(button::CROSS)
         };
-        if (player.on_ground || shore) && (pad.pressed_since(previous, button::CROSS) || held_jump) {
+        if (player.on_ground || shore) && (pad.pressed_since(previous, button::CROSS) || held_jump)
+        {
             player.exhaustion += if sprinting { EXH_SPRINT_JUMP } else { EXH_JUMP };
             player.vy = JUMP_VY;
             player.on_ground = false;
@@ -6616,7 +6703,11 @@ fn at_ladder(cx: i32, feet: i32, cz: i32) -> bool {
     let bx = world_to_block_x(cx);
     let bz = world_to_block_z(cz);
     kind_of(get_block_i32(bx, world_to_block_y(feet + 8), bz)) == LADDER
-        || kind_of(get_block_i32(bx, world_to_block_y(feet + PLAYER_HEIGHT - 8), bz)) == LADDER
+        || kind_of(get_block_i32(
+            bx,
+            world_to_block_y(feet + PLAYER_HEIGHT - 8),
+            bz,
+        )) == LADDER
 }
 
 /// True if an AABB at (centre x, feet y, centre z) with the given half-width and
@@ -7088,13 +7179,23 @@ fn held_box(
     );
     face(
         [p(x0, y1, z1), p(x1, y1, z1), p(x0, y0, z1), p(x1, y0, z1)],
-        [uv(x0, 16 - y1), uv(x1, 16 - y1), uv(x0, 16 - y0), uv(x1, 16 - y0)],
+        [
+            uv(x0, 16 - y1),
+            uv(x1, 16 - y1),
+            uv(x0, 16 - y0),
+            uv(x1, 16 - y0),
+        ],
         tiles.1,
         shades.1,
     );
     face(
         [p(x1, y1, z1), p(x1, y1, z0), p(x1, y0, z1), p(x1, y0, z0)],
-        [uv(16 - z1, 16 - y1), uv(16 - z0, 16 - y1), uv(16 - z1, 16 - y0), uv(16 - z0, 16 - y0)],
+        [
+            uv(16 - z1, 16 - y1),
+            uv(16 - z0, 16 - y1),
+            uv(16 - z1, 16 - y0),
+            uv(16 - z0, 16 - y0),
+        ],
         tiles.2,
         shades.2,
     );
@@ -7627,7 +7728,13 @@ fn emit_arrow(cam: &Camera, at: (i32, i32, i32), v: (i32, i32, i32), count: &mut
     }
     let (sr, _, _) = face_tint(2);
     let s = sr as u32;
-    let shade = |c: (u32, u32, u32)| ((c.0 * s / 128) as u8, (c.1 * s / 128) as u8, (c.2 * s / 128) as u8);
+    let shade = |c: (u32, u32, u32)| {
+        (
+            (c.0 * s / 128) as u8,
+            (c.1 * s / 128) as u8,
+            (c.2 * s / 128) as u8,
+        )
+    };
     // The head is the last fifth of the shaft.
     let (mx, my) = (h.x as i32 - sx / 5, h.y as i32 - sy / 5);
     let mut k = 0;
@@ -7910,7 +8017,11 @@ fn emit_portal(cam: &Camera, blk: u8, wx: i32, wy: i32, wz: i32) {
         h += 1;
     }
     // Portal space relative to the eye: u along the sheet, y up, n through it.
-    let (eu, en) = if along_x { (cam.x, cam.z) } else { (cam.z, cam.x) };
+    let (eu, en) = if along_x {
+        (cam.x, cam.z)
+    } else {
+        (cam.z, cam.x)
+    };
     let u0 = if along_x { wx } else { wz } - eu;
     let n0 = if along_x { wz } else { wx } - en;
     let y0 = wy - cam.y;
@@ -8018,7 +8129,12 @@ fn portal_piece(
             (n, cam.y + y, eu + u)
         }
     };
-    let verts = [corner(pu0, py1), corner(pu1, py1), corner(pu0, py0), corner(pu1, py0)];
+    let verts = [
+        corner(pu0, py1),
+        corner(pu1, py1),
+        corner(pu0, py0),
+        corner(pu1, py0),
+    ];
     let p = project_quad_gte(cam, &verts)?;
     let z = p[0].z.min(p[1].z).min(p[2].z).min(p[3].z);
     // Past FAR_SIDE_Z the terrain draws no side faces, so the frame round
@@ -8057,7 +8173,11 @@ fn emit_shape(cam: &Camera, blk: u8, wx: i32, wy: i32, wz: i32) {
     let n = shape::parts(blk, ps);
     // A redstone torch that has been turned off wears the dark head.
     let off = kind_of(blk) == RSTORCH
-        && !redstone::torch_lit(world_to_block_x(wx), world_to_block_y(wy), world_to_block_z(wz));
+        && !redstone::torch_lit(
+            world_to_block_x(wx),
+            world_to_block_y(wy),
+            world_to_block_z(wz),
+        );
     let mut i = 0;
     while i < n {
         if off {
@@ -8104,8 +8224,16 @@ fn emit_part(cam: &Camera, p: &shape::Part, wx: i32, wy: i32, wz: i32) {
 #[inline(never)]
 fn emit_part_face(cam: &Camera, p: &shape::Part, dir: usize, wx: i32, wy: i32, wz: i32) {
     let [bx0, by0, bz0, bx1, by1, bz1] = p.b;
-    let (x0, y0, z0) = (wx + bx0 as i32 * 4, wy + by0 as i32 * 4, wz + bz0 as i32 * 4);
-    let (x1, y1, z1) = (wx + bx1 as i32 * 4, wy + by1 as i32 * 4, wz + bz1 as i32 * 4);
+    let (x0, y0, z0) = (
+        wx + bx0 as i32 * 4,
+        wy + by0 as i32 * 4,
+        wz + bz0 as i32 * 4,
+    );
+    let (x1, y1, z1) = (
+        wx + bx1 as i32 * 4,
+        wy + by1 as i32 * 4,
+        wz + bz1 as i32 * 4,
+    );
     // Same backface test the cube pass uses: keep only the faces pointing at us.
     let facing = match dir {
         0 => cam.x > x1 - 8,
@@ -8183,9 +8311,15 @@ fn push_world_quad(
     let bt = unsafe { BLOCK_TEX };
     let (tux, tuy) = tex::tile_uv(tile);
     let win = TextureWindow::power_of_two_tile(tux, tuy, 16, 16);
-    let mat = TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, tint).with_texture_window(win);
+    let mat =
+        TextureMaterial::opaque(bt.clut[tile as usize], bt.tpage, tint).with_texture_window(win);
     let packet = QuadTexturedMaterial::with_material(
-        [(q[0].x, q[0].y), (q[1].x, q[1].y), (q[2].x, q[2].y), (q[3].x, q[3].y)],
+        [
+            (q[0].x, q[0].y),
+            (q[1].x, q[1].y),
+            (q[2].x, q[2].y),
+            (q[3].x, q[3].y),
+        ],
         uvs,
         mat,
     );
@@ -8206,7 +8340,11 @@ fn push_world_quad(
 /// climbs the side of the block it stands against.
 #[inline(never)]
 fn emit_wire(cam: &Camera, wx: i32, wy: i32, wz: i32) {
-    let (bx, by, bz) = (world_to_block_x(wx), world_to_block_y(wy), world_to_block_z(wz));
+    let (bx, by, bz) = (
+        world_to_block_x(wx),
+        world_to_block_y(wy),
+        world_to_block_z(wz),
+    );
     let power = redstone::wire_power(bx, by, bz) as i32;
     let links = redstone::wire_links(bx, by, bz);
     // Java: r 0.4 + 0.6 p/15, g (p/15)^2 0.7 - 0.5, b (p/15)^2 0.6 - 0.7.
@@ -8537,7 +8675,8 @@ fn tick_drops(player: &Player) {
                     DROP_Z[i] = nz;
                 }
                 let ny = y + DROP_VY[i];
-                if aabb_collides_dims(DROP_X[i] >> 2, ny >> 2, DROP_Z[i] >> 2, DROP_HALF_W, DROP_H) {
+                if aabb_collides_dims(DROP_X[i] >> 2, ny >> 2, DROP_Z[i] >> 2, DROP_HALF_W, DROP_H)
+                {
                     // Landed (or bumped a ceiling). Only a downward stop counts
                     // as settled.
                     if DROP_VY[i] < 0 {
@@ -8958,7 +9097,17 @@ fn cell_verdict(all: u32, any: u32) -> u32 {
 /// inline(never): inlined at its call sites it made emit_near_face 8 KB,
 /// twice the instruction cache, so the patch loop evicted itself.
 #[inline(never)]
-fn near_vertex(g: &NearGrid, u: usize, v: usize, x: i32, y: i32, z: i32, tu: i32, tv: i32, slot: usize) {
+fn near_vertex(
+    g: &NearGrid,
+    u: usize,
+    v: usize,
+    x: i32,
+    y: i32,
+    z: i32,
+    tu: i32,
+    tv: i32,
+    slot: usize,
+) {
     let (ui, vi) = (u as i32, v as i32);
     let rgb = g.row[fog_band(z)] & 0x00FF_FFFF;
     // Equal corners skip the bilinear divide and its eight multiplies (most
@@ -9017,7 +9166,14 @@ fn set_clip_cell(tl: ClipVert, tr: ClipVert, bl: ClipVert, br: ClipVert) {
 /// then fan-triangulate the surviving convex polygon. The fan pivot is the
 /// vertex whose depth is closest to the rest, matching the diagonal choice
 /// that measured best on real PS1 affine texture interpolation.
-fn emit_clipped_cell(win: u32, cl_hi: u32, tp_hi: u32, blended: bool, depth_bias: i32, inside: bool) {
+fn emit_clipped_cell(
+    win: u32,
+    cl_hi: u32,
+    tp_hi: u32,
+    blended: bool,
+    depth_bias: i32,
+    inside: bool,
+) {
     // The two polygon buffers are static scratch, not locals: as locals the
     // compiler zeroed 768 bytes per call (memset was 3% of a spawn-meadow
     // frame, all from here) and `swap` copied both arrays every clipped
@@ -9096,8 +9252,7 @@ fn emit_clipped_cell(win: u32, cl_hi: u32, tp_hi: u32, blended: bool, depth_bias
     // invisible; transparent cells keep exact edges because overlapping two
     // Average-blended quads double-blends.
     // Scratchpad too; only the first `n` entries are ever read.
-    let pp: &mut [Proj; CLIP_VERT_CAP] =
-        unsafe { &mut *(clip_p() as *mut [Proj; CLIP_VERT_CAP]) };
+    let pp: &mut [Proj; CLIP_VERT_CAP] = unsafe { &mut *(clip_p() as *mut [Proj; CLIP_VERT_CAP]) };
     let mut i = 0usize;
     while i < n {
         unsafe { *pp.get_unchecked_mut(i) = clip_project(a.get_unchecked(i)) };
@@ -9130,8 +9285,16 @@ fn emit_clipped_cell(win: u32, cl_hi: u32, tp_hi: u32, blended: bool, depth_bias
         }
         // pivot < n and fan + 1 < n, so one subtraction wraps an index (the
         // runtime `% n` was three divides per triangle).
-        let i1 = if pivot + fan >= n { pivot + fan - n } else { pivot + fan };
-        let i2 = if pivot + fan + 1 >= n { pivot + fan + 1 - n } else { pivot + fan + 1 };
+        let i1 = if pivot + fan >= n {
+            pivot + fan - n
+        } else {
+            pivot + fan
+        };
+        let i2 = if pivot + fan + 1 >= n {
+            pivot + fan + 1 - n
+        } else {
+            pivot + fan + 1
+        };
         // SAFETY: pivot, i1, i2 < n.
         let (c0, c1, c2, p0, p1, p2) = unsafe {
             (
@@ -9235,7 +9398,12 @@ fn render_near_block_shell(cam: &Camera) {
             // One run walk per column. (Same line count as the per-cell
             // loop it replaced: the PGO profile is keyed by line offsets.)
             let mut col = [AIR; 6];
-            world::get_span(shell_x0 + ix as i32 - 1, cby - 3, shell_z0 + iz as i32 - 1, &mut col);
+            world::get_span(
+                shell_x0 + ix as i32 - 1,
+                cby - 3,
+                shell_z0 + iz as i32 - 1,
+                &mut col,
+            );
             let mut iy = 0usize;
             while iy < 6 {
                 cells[iy][iz][ix] = col[iy];
@@ -9340,7 +9508,14 @@ fn render_near_block_shell(cam: &Camera) {
                                     make(2, 0, 16),
                                     make(3, 16, 16),
                                 );
-                                emit_clipped_cell(win, cl_hi, tp_hi, false, BLOCK / 2, verdict == CELL_INSIDE);
+                                emit_clipped_cell(
+                                    win,
+                                    cl_hi,
+                                    tp_hi,
+                                    false,
+                                    BLOCK / 2,
+                                    verdict == CELL_INSIDE,
+                                );
                             }
                         }
                         dir += 1;
@@ -9544,7 +9719,14 @@ fn emit_near_face(f: u32, side: u16, dir: usize) {
                             near_vertex(&grid, cu + 1, cv, cx1, cy1, cz1, 16, 0, CELL_TR);
                             near_vertex(&grid, cu, cv + 1, cx2, cy2, cz2, 0, 16, CELL_BL);
                             near_vertex(&grid, cu + 1, cv + 1, cx3, cy3, cz3, 16, 16, CELL_BR);
-                            emit_clipped_cell(win, cl_hi, tp_hi, blended, 0, verdict == CELL_INSIDE);
+                            emit_clipped_cell(
+                                win,
+                                cl_hi,
+                                tp_hi,
+                                blended,
+                                0,
+                                verdict == CELL_INSIDE,
+                            );
                         }
                         cu += 1;
                     }
@@ -9685,7 +9867,14 @@ fn screen_xy(x: i32, y: i32) -> u32 {
 
 /// inline(always) into emit_faces, whose loop is the only caller.
 #[inline(always)]
-fn emit_face(f: u32, side: u16, dir: usize, count: &mut usize, ao_n: &mut usize, chunk: &FaceChunk) {
+fn emit_face(
+    f: u32,
+    side: u16,
+    dir: usize,
+    count: &mut usize,
+    ao_n: &mut usize,
+    chunk: &FaceChunk,
+) {
     if *count >= MAX_QUADS {
         return;
     }
@@ -10389,8 +10578,18 @@ fn draw_sun(x: i16, y: i16, hy: i32) {
     let (c, h) = (SUN_CORE_PX, SUN_HALO_PX);
     let warm = (96, 88, 52);
     let off = (0, 0, 0);
-    let inner = [(x - c, y - c), (x + c, y - c), (x + c, y + c), (x - c, y + c)];
-    let outer = [(x - h, y - h), (x + h, y - h), (x + h, y + h), (x - h, y + h)];
+    let inner = [
+        (x - c, y - c),
+        (x + c, y - c),
+        (x + c, y + c),
+        (x - c, y + c),
+    ];
+    let outer = [
+        (x - h, y - h),
+        (x + h, y - h),
+        (x + h, y + h),
+        (x - h, y + h),
+    ];
     let mut k = 0;
     while k < 4 {
         let n = (k + 1) % 4;
@@ -10840,7 +11039,7 @@ fn trace_pick(cam: &Camera, fluids: bool, portals: bool) -> Pick {
     let reach = PICK_RANGE << T_FRAC;
     let mut place = cell;
     let mut t_in = 0; // where the ray entered `cell`
-    // A ray this long crosses at most ceil(reach)+1 walls per axis.
+                      // A ray this long crosses at most ceil(reach)+1 walls per axis.
     let mut guard = 0;
     while guard <= 3 * (PICK_RANGE / BLOCK + 2) {
         let b = get_block_i32(cell[0], cell[1], cell[2]);
@@ -11339,7 +11538,11 @@ fn draw_armor(p: &Player) {
         }
         k += 1;
     }
-    let col = if diamond { (120, 200, 220) } else { (184, 184, 196) };
+    let col = if diamond {
+        (120, 200, 220)
+    } else {
+        (184, 184, 196)
+    };
     let x0 = 8i16;
     let y = HUD_ROW2_Y;
     let mut i = 0i16;
@@ -11347,7 +11550,15 @@ fn draw_armor(p: &Player) {
         let full = (i as i32 + 1) * 2 <= points;
         let half = !full && (i as i32) * 2 < points;
         if full || half {
-            rect(x0 + i * 9, y, if full { 7 } else { 3 }, 7, col.0, col.1, col.2);
+            rect(
+                x0 + i * 9,
+                y,
+                if full { 7 } else { 3 },
+                7,
+                col.0,
+                col.1,
+                col.2,
+            );
         }
         i += 1;
     }
@@ -11704,7 +11915,8 @@ fn ui_tri_add_gouraud(v: [(i16, i16); 3], c: [(u8, u8, u8); 3]) {
     unsafe {
         *p.add(1) = mat.draw_mode_word();
         *p.add(2) = mat.texture_window_word();
-        *p.add(3) = packet::SHADED_TRIANGLE | packet::SEMI_TRANSPARENT | rgb(c[0].0, c[0].1, c[0].2);
+        *p.add(3) =
+            packet::SHADED_TRIANGLE | packet::SEMI_TRANSPARENT | rgb(c[0].0, c[0].1, c[0].2);
         *p.add(4) = xy(v[0].0, v[0].1);
         *p.add(5) = rgb(c[1].0, c[1].1, c[1].2);
         *p.add(6) = xy(v[1].0, v[1].1);
@@ -11969,7 +12181,15 @@ fn draw_options(font: &FontAtlas) {
     if save::busy() {
         // The save runs a card frame per game frame: show it moving.
         rect(60, 182, 200, 4, 40, 40, 40);
-        rect(60, 182, (200 * save::progress() / 256) as i16, 4, 0x70, 0xE0, 0x70);
+        rect(
+            60,
+            182,
+            (200 * save::progress() / 256) as i16,
+            4,
+            0x70,
+            0xE0,
+            0x70,
+        );
     }
 }
 
@@ -12325,7 +12545,11 @@ fn draw_hud(font: &FontAtlas, player: Player) {
             HUD_NAME_T -= 1;
             let name = block_name(player.selected);
             let mut digits = [0u8; 3];
-            let cnt = u32_dec_padded(&mut digits, u32::from(INV[player.selected as usize].min(999)), 3);
+            let cnt = u32_dec_padded(
+                &mut digits,
+                u32::from(INV[player.selected as usize].min(999)),
+                3,
+            );
             // Name and count centred as one unit, with a space between.
             let w = (name.len() + 1 + cnt.len()) as i16 * 8;
             let x = (SCREEN_W as i16 - w) / 2;
@@ -12418,7 +12642,10 @@ fn is_pushable(b: u8) -> bool {
         && !is_water(b)
         && !is_lava(b)
         && !bstate::piston_extended(b)
-        && !matches!(k, PISTON_HEAD | CHEST | FURNACE | OBSIDIAN | ENCHANT | PORTAL | VOID_PORTAL)
+        && !matches!(
+            k,
+            PISTON_HEAD | CHEST | FURNACE | OBSIDIAN | ENCHANT | PORTAL | VOID_PORTAL
+        )
 }
 
 // ---- TNT: a block lit becomes an entity (tnt.rs); the blast's block side is
@@ -12803,7 +13030,7 @@ fn face_tile(block: u8, dir: usize) -> u8 {
             3 => tex::T_PLANK,
             _ => tex::T_BED_SIDE,
         },
-        WIRE => tex::T_COAL,  // never meshed; the icon is T_I_WIRE
+        WIRE => tex::T_COAL,             // never meshed; the icon is T_I_WIRE
         TORCH | RSTORCH => tex::T_TORCH, // never meshed; the icons are their own
         LEVER => tex::T_COBBLE,
         PISTON => tex::T_WOOD_TOP,
@@ -13199,7 +13426,7 @@ fn block_name(block: u8) -> &'static str {
 fn drop_of(block: u8) -> u8 {
     match kind_of(block) {
         GRASS => DIRT,
-        STONE => COBBLE,  // mining smooth stone yields cobblestone (Java)
+        STONE => COBBLE, // mining smooth stone yields cobblestone (Java)
         STAIRS_E | STAIRS_S | STAIRS_W => STAIRS_N, // all four facings are one item
         TALL_GRASS => SEEDS, // harvesting grass gives seeds (Java), feeding farming
         PISTON_HEAD
@@ -13535,8 +13762,8 @@ fn furn_tick() {
 /// is refused by layer). Flowers, crops, torches, fire and redstone are 0.
 fn block_hardness100(block: u8) -> i32 {
     match kind_of(block) {
-        WIRE | TORCH | RSTORCH | WHEAT | WHEAT_RIPE | SAPLING | FLOWER_R | FLOWER_Y | TALL_GRASS | FIRE
-        | SUGAR_CANE | TNT | EMBER_CAP => 0,
+        WIRE | TORCH | RSTORCH | WHEAT | WHEAT_RIPE | SAPLING | FLOWER_R | FLOWER_Y
+        | TALL_GRASS | FIRE | SUGAR_CANE | TNT | EMBER_CAP => 0,
         LEAVES | SNOW | BED => 20,
         GLASS | LUMISTONE => 30,
         LADDER | CACTUS | CINDERSTONE => 40,
@@ -13707,7 +13934,6 @@ fn tool_tier(p: &Player, class: u8) -> u8 {
         _ => 0,
     }
 }
-
 
 fn get_block_i32(x: i32, y: i32, z: i32) -> u8 {
     world::get(x, y, z)

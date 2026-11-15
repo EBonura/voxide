@@ -326,7 +326,13 @@ pub fn draw_hud(font: &FontAtlas, p: &Player, fps: u32) {
     let mut fb = [0u8; 4];
     let k = put_int(&mut fb, 0, fps as i32);
     ui_text(font, 6, 40, "FPS", (0xE0, 0xE0, 0x60));
-    ui_text(font, 38, 40, unsafe { core::str::from_utf8_unchecked(&fb[..k]) }, (0xE0, 0xE0, 0x60));
+    ui_text(
+        font,
+        38,
+        40,
+        unsafe { core::str::from_utf8_unchecked(&fb[..k]) },
+        (0xE0, 0xE0, 0x60),
+    );
 }
 
 /// Append `v` in decimal at `n`; returns the new length.

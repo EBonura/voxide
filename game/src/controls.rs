@@ -57,7 +57,12 @@ impl Ink for Now {
     }
     fn frame(&self, font: &FontAtlas, title: &str) {
         panel_now(MENU_PANEL_X, MENU_PANEL_Y, MENU_PANEL_W, MENU_PANEL_H);
-        font.draw_text((SCREEN_W as i16 - title.len() as i16 * 8) / 2, 12, title, MC_INK);
+        font.draw_text(
+            (SCREEN_W as i16 - title.len() as i16 * 8) / 2,
+            12,
+            title,
+            MC_INK,
+        );
     }
     fn button(&self, y: i16, sel: bool) {
         row_button_now(y, sel);

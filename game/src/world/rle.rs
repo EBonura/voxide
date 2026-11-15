@@ -20,10 +20,18 @@ use super::*;
 /// bytes plus the 514-byte offset table kept alongside (48 generated chunks
 /// and 250 ring chunks from the train/unseen routes), so this leaves ~50%
 /// headroom for edits and for terrain rougher than the routes saw.
-pub(super) const BLK_BUDGET: usize = if cfg!(feature = "ram-stress-blk") { 3200 } else { 6144 };
+pub(super) const BLK_BUDGET: usize = if cfg!(feature = "ram-stress-blk") {
+    3200
+} else {
+    6144
+};
 const BLK_BYTES: usize = NCHUNKS * BLK_BUDGET;
 /// Slack given to a region beyond what it needs, so most edits grow in place.
-const SLACK: usize = if cfg!(feature = "ram-stress-blk") { 0 } else { 64 };
+const SLACK: usize = if cfg!(feature = "ram-stress-blk") {
+    0
+} else {
+    64
+};
 
 static mut BLK: [u8; BLK_BYTES] = [0; BLK_BYTES];
 static mut COL_OFF: [[u16; CWU * CWU + 1]; NCHUNKS] = [[0; CWU * CWU + 1]; NCHUNKS];
@@ -150,7 +158,11 @@ fn col_store(s: usize, col: usize, c: &[u8; CHU]) {
             let base = RBASE[s] as usize;
             // Slide the columns after this one over, as one copy.
             let blk = (&raw mut BLK) as *mut u8;
-            core::ptr::copy(blk.add(base + o1), blk.add(base + o1 + n).sub(old), len - o1);
+            core::ptr::copy(
+                blk.add(base + o1),
+                blk.add(base + o1 + n).sub(old),
+                len - o1,
+            );
             let mut k = col + 1;
             while k <= CWU * CWU {
                 COL_OFF[s][k] = (COL_OFF[s][k] as usize + n - old) as u16;
@@ -191,12 +203,20 @@ fn blk_alloc(s: usize, need: usize, keep: bool) -> bool {
             }
             q += 1;
         }
-        let len = if keep { COL_OFF[s][CWU * CWU] as usize } else { 0 };
+        let len = if keep {
+            COL_OFF[s][CWU * CWU] as usize
+        } else {
+            0
+        };
         // First fit.
         let mut cur = 0usize;
         let mut k = 0;
         while k <= nl {
-            let next = if k < nl { RBASE[order[k]] as usize } else { BLK_BYTES };
+            let next = if k < nl {
+                RBASE[order[k]] as usize
+            } else {
+                BLK_BYTES
+            };
             if next >= cur + need {
                 if keep {
                     let src = RBASE[s] as usize;
@@ -480,7 +500,11 @@ pub(super) fn decode_cols<const FULL: bool>(s: usize, c0: usize, c1: usize, top:
                                 MESH_NLIGHT += 1;
                             }
                             if MESH_NPLANT < MAX_PLANTS
-                                && if pass == 0 { is_small_block(b) } else { is_cross_plant(b) }
+                                && if pass == 0 {
+                                    is_small_block(b)
+                                } else {
+                                    is_cross_plant(b)
+                                }
                             {
                                 MESH_PLANTS[MESH_NPLANT] = lx as u32
                                     | ((ly as u32) << 4)
@@ -560,7 +584,11 @@ fn self_test() {
                     col_unpack(s, c * 16 + 3, &mut saved[c]);
                     let mut y = 0;
                     while y < CHU {
-                        rset(s, y * CWU * CWU + c * 16 + 3, if y & 1 == 0 { STONE } else { DIRT });
+                        rset(
+                            s,
+                            y * CWU * CWU + c * 16 + 3,
+                            if y & 1 == 0 { STONE } else { DIRT },
+                        );
                         y += 1;
                     }
                     c += 1;
@@ -570,7 +598,9 @@ fn self_test() {
                 while c < 12 {
                     let mut y = 0;
                     while y < CHU {
-                        if rget(s, y * CWU * CWU + c * 16 + 3) != if y & 1 == 0 { STONE } else { DIRT } {
+                        if rget(s, y * CWU * CWU + c * 16 + 3)
+                            != if y & 1 == 0 { STONE } else { DIRT }
+                        {
                             bad += 1;
                         }
                         y += 1;
@@ -599,7 +629,11 @@ fn self_test() {
             s += 1;
         }
         psx_rt::tty::print("RLE selftest ");
-        psx_rt::tty::print(if bad == 0 && BLK_SHORT == short0 { "ok" } else { "FAIL" });
+        psx_rt::tty::print(if bad == 0 && BLK_SHORT == short0 {
+            "ok"
+        } else {
+            "FAIL"
+        });
         psx_rt::tty::print(" bad=");
         psx_rt::tty::print_hex_u32(bad);
         psx_rt::tty::print(" rotates=");

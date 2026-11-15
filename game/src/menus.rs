@@ -327,7 +327,14 @@ pub fn quit_after(outcome: &save::Outcome) {
 }
 
 /// A button hint on the panel: pill, then its action in dark ink.
-fn hint(ink: &dyn Ink, font: &FontAtlas, x: i16, key: &str, tint: (u8, u8, u8), action: &str) -> i16 {
+fn hint(
+    ink: &dyn Ink,
+    font: &FontAtlas,
+    x: i16,
+    key: &str,
+    tint: (u8, u8, u8),
+    action: &str,
+) -> i16 {
     let nx = ink.pill(font, x, MENU_HINT_Y, key, tint) + 3;
     ink.text(font, nx, MENU_HINT_Y, action, MC_INK);
     nx + action.len() as i16 * 8 + 8
@@ -346,7 +353,14 @@ pub fn draw(ink: &dyn Ink, font: &FontAtlas) {
         hx = hint(ink, font, hx, "< >", PS_KEY, "ADJUST");
     }
     let closes = page == Page::Pause;
-    hint(ink, font, hx, "O", PS_CIRCLE, if closes { "CLOSE" } else { "BACK" });
+    hint(
+        ink,
+        font,
+        hx,
+        "O",
+        PS_CIRCLE,
+        if closes { "CLOSE" } else { "BACK" },
+    );
     let mut air = 0i16;
     let mut j = 0;
     while j < rows.len() {
@@ -389,5 +403,11 @@ pub fn draw(ink: &dyn Ink, font: &FontAtlas) {
     } else {
         ""
     };
-    ink.text(font, (SCREEN_W as i16 - line.len() as i16 * 8) / 2, 168, line, MC_INK);
+    ink.text(
+        font,
+        (SCREEN_W as i16 - line.len() as i16 * 8) / 2,
+        168,
+        line,
+        MC_INK,
+    );
 }

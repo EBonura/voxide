@@ -1130,7 +1130,13 @@ fn texel(tile: u8, x: usize, y: usize) -> u8 {
             // (it gets its top from rows 6..8 too), then the stick.
             if x == 7 || x == 8 {
                 if y >= 6 && y <= 8 {
-                    return if y == 6 { 6 } else if x == 7 { 5 } else { 4 };
+                    return if y == 6 {
+                        6
+                    } else if x == 7 {
+                        5
+                    } else {
+                        4
+                    };
                 }
                 if y >= 9 {
                     return if x == 7 { 2 } else { 1 };
@@ -1146,14 +1152,24 @@ fn texel(tile: u8, x: usize, y: usize) -> u8 {
             }
             let dh = (xu - 8).abs().max((yu - 4).abs());
             if dh <= 2 {
-                return if dh == 2 { 6 } else if dh == 1 { 5 } else { 4 };
+                return if dh == 2 {
+                    6
+                } else if dh == 1 {
+                    5
+                } else {
+                    4
+                };
             }
             0
         }
         T_LADDER_W => {
             let (xu, yu) = (x as i32, y as i32);
             if xu == 2 || xu == 3 || xu == 12 || xu == 13 {
-                return if xu == 2 || xu == 12 { 1 + (hash(xi, yi, 77) % 3) as u8 } else { 5 + (hash(xi, yi, 78) % 3) as u8 };
+                return if xu == 2 || xu == 12 {
+                    1 + (hash(xi, yi, 77) % 3) as u8
+                } else {
+                    5 + (hash(xi, yi, 78) % 3) as u8
+                };
             }
             if xu > 3 && xu < 12 && (yu % 5 == 1 || yu % 5 == 2) {
                 return if yu % 5 == 1 { 3 } else { 6 };
@@ -1164,7 +1180,13 @@ fn texel(tile: u8, x: usize, y: usize) -> u8 {
             let (xu, yu) = (x as i32, y as i32);
             // Base plate at the bottom.
             if (3..=12).contains(&xu) && (11..=14).contains(&yu) {
-                return if yu == 11 { 1 } else if yu == 14 { 3 } else { 2 };
+                return if yu == 11 {
+                    1
+                } else if yu == 14 {
+                    3
+                } else {
+                    2
+                };
             }
             // The handle leans up and to the right from the middle of the base.
             let t = 11 - yu;

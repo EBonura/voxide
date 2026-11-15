@@ -74,8 +74,7 @@ fn makeable(i: usize, p: &Player) -> bool {
     let t = r.out_qty as u8;
     let have = have_tier(p, r.out);
     // A lower tier is never worth it; the same tier only replaces a worn one.
-    craftable_here(i)
-        && !(tiered(r.out) && (t < have || (t == have && tier_full(p, r.out, t))))
+    craftable_here(i) && !(tiered(r.out) && (t < have || (t == have && tier_full(p, r.out, t))))
 }
 
 /// The recipes of one column: every tier of a tiered output (in RECIPES
@@ -468,7 +467,13 @@ pub fn draw_crafting(font: &FontAtlas, p: &Player) {
             let mut hb = [0u8; 5];
             let kind = armor_item(r.out_qty as usize - 1, slot);
             ui_text(font, 166, 156, "YOU HAVE", GREY);
-            ui_text(font, 238, 156, number(unsafe { INV[kind as usize] }, &mut hb), GREY);
+            ui_text(
+                font,
+                238,
+                156,
+                number(unsafe { INV[kind as usize] }, &mut hb),
+                GREY,
+            );
         } else {
             let have = have_tier(p, r.out) as usize;
             let word = TIER_WORD[have.min(4)];
