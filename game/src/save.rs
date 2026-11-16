@@ -16,6 +16,7 @@ use crate::{
     FURN_USED, FURN_X, FURN_Y, FURN_Z, HOTBAR, HOTBAR_SEL, HOTBAR_VIS, INV, MAX_CHESTS, MAX_EDITS,
     MAX_FURNACES, PLACEABLE,
 };
+use psx_asset::le::{read_i16 as get_i16, read_i32 as get_i32, read_u16 as get_u16};
 use psx_mc::{
     queue_frames, Card, CardJob, Error as McError, HardwareCard, Slot, Staged, Step, FORMAT_FRAMES,
 };
@@ -237,33 +238,15 @@ fn card() -> Card<HardwareCard> {
 
 #[inline]
 fn put_i32(b: &mut [u8], o: usize, v: i32) {
-    let u = v as u32;
-    b[o] = u as u8;
-    b[o + 1] = (u >> 8) as u8;
-    b[o + 2] = (u >> 16) as u8;
-    b[o + 3] = (u >> 24) as u8;
-}
-#[inline]
-fn get_i32(b: &[u8], o: usize) -> i32 {
-    (b[o] as u32 | (b[o + 1] as u32) << 8 | (b[o + 2] as u32) << 16 | (b[o + 3] as u32) << 24)
-        as i32
+    b[o..o + 4].copy_from_slice(&v.to_le_bytes());
 }
 #[inline]
 fn put_u16(b: &mut [u8], o: usize, v: u16) {
-    b[o] = v as u8;
-    b[o + 1] = (v >> 8) as u8;
-}
-#[inline]
-fn get_u16(b: &[u8], o: usize) -> u16 {
-    b[o] as u16 | (b[o + 1] as u16) << 8
+    b[o..o + 2].copy_from_slice(&v.to_le_bytes());
 }
 #[inline]
 fn put_i16(b: &mut [u8], o: usize, v: i16) {
-    put_u16(b, o, v as u16);
-}
-#[inline]
-fn get_i16(b: &[u8], o: usize) -> i16 {
-    get_u16(b, o) as i16
+    b[o..o + 2].copy_from_slice(&v.to_le_bytes());
 }
 
 /// Non-destructive card probe: true if a card answers on port 1 and its
