@@ -214,7 +214,7 @@ pub fn input(
     up: bool,
     down: bool,
     world: Option<(&mut Player, &mut u32)>,
-    fb: &mut FrameBuffer,
+    fb: &mut crate::screen::Screen,
     font: &FontAtlas,
 ) -> Out {
     let Some(kind) = step(pad, prev, up, down) else {
