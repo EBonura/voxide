@@ -10047,7 +10047,7 @@ fn emit_face(
                 let rgb1 = ccmd_row[b1] & 0x00FF_FFFF;
                 let rgb2 = ccmd_row[b2] & 0x00FF_FFFF;
                 let rgb3 = ccmd_row[b3] & 0x00FF_FFFF;
-                q.color0_cmd = (ccmd & 0xFF00_0000) | 0x1000_0000 | ao_shade(rgb0, ao as u32);
+                q.color0_cmd = (ccmd & 0xFF00_0000) | packet::SHADED | ao_shade(rgb0, ao as u32);
                 q.v0 = screen_xy(x0, y0);
                 q.uv0_clut = cl_hi;
                 q.color1 = ao_shade(rgb1, (ao >> 2) as u32);
