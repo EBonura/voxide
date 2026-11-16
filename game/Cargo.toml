@@ -108,4 +108,3 @@ psx-pack = { path = "../.psoxide/sdk/crates/psx-pack" }
 psx-mc   = { path = "../.psoxide/sdk/crates/psx-mc" }
 psx-settings = { path = "../.psoxide/sdk/crates/psx-settings" }
 psx-fx   = { path = "../.psoxide/sdk/crates/psx-fx" }
-psx-asset = { path = "../.psoxide/sdk/crates/psx-asset" }

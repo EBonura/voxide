@@ -16,7 +16,7 @@ use crate::{
     FURN_USED, FURN_X, FURN_Y, FURN_Z, HOTBAR, HOTBAR_SEL, HOTBAR_VIS, INV, MAX_CHESTS, MAX_EDITS,
     MAX_FURNACES, PLACEABLE,
 };
-use psx_asset::le::{read_i16 as get_i16, read_i32 as get_i32, read_u16 as get_u16};
+use psx_math::le::{read_i16 as get_i16, read_i32 as get_i32, read_u16 as get_u16};
 use psx_mc::{
     queue_frames, Card, CardJob, Error as McError, HardwareCard, Slot, Staged, Step, FORMAT_FRAMES,
 };
