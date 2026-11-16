@@ -377,6 +377,11 @@ label = "hold L2 for 60 ticks, a full draw, and let go"
 press = ["l2"]
 hold = 60
 
+# A fixed six ticks after the release was phase-dependent: the arrow lives a number of simulation
+# steps, and how many vblanks those take depends on the frame cadence (one or two vblanks a frame)
+# and on which side of a flip the release lands. With the presenter a frame can take one vblank,
+# so the arrow could already have landed six ticks on. Waiting for it to be in the air keeps the
+# same assertion without the phase.
 [[step]]
 label = "the arrow is in the air"
 wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 56, op = "ge", value = 1 }
