@@ -386,63 +386,18 @@ impl Synth {
     }
 }
 
-/// SPU-ADPCM, filter 0 to 4 per 28-sample block (the same coding as
-/// tools/voxide-tools, with the shift chosen from the block's largest
-/// residual instead of a full search, to keep boot short).
-const ADPCM_K: [(i32, i32); 5] = psx_hw::adpcm::FILTERS;
-
+/// SPU-ADPCM, filter 0 to 4 per 28-sample block: the filter whose open-loop residuals stay
+/// smallest, the shift from that peak, and the SDK's closed-loop quantiser
+/// (`psx_hw::adpcm`), with the shift chosen from the block's largest residual instead of a full
+/// search, to keep boot short.
 fn adpcm_block(s: &[i32; 28], p1: &mut i32, p2: &mut i32, out: &mut [u8]) {
-    // Pick the filter whose residuals (on the source) stay smallest.
-    let mut best = (i32::MAX, 0usize);
-    let mut f = 0;
-    while f < 5 {
-        let (k0, k1) = ADPCM_K[f];
-        let (mut a, mut b) = (*p1, *p2);
-        let mut m = 0;
-        let mut i = 0;
-        while i < 28 {
-            let r = s[i] - ((a * k0 + b * k1) >> 6);
-            m = m.max(r.abs());
-            b = a;
-            a = s[i];
-            i += 1;
-        }
-        if m < best.0 {
-            best = (m, f);
-        }
-        f += 1;
-    }
-    let f = best.1;
-    // Largest shift (finest step) whose range covers the residual.
-    let mut range = 12;
-    while range > 0 && (7 << (12 - range)) < best.0 {
-        range -= 1;
-    }
-    let shift = range;
-    let (k0, k1) = ADPCM_K[f];
-    out[0] = (shift as u8) | ((f as u8) << 4);
-    out[1] = 0;
-    let step = 12 - shift;
-    let mut i = 0;
-    while i < 28 {
-        let pred = (*p1 * k0 + *p2 * k1) >> 6;
-        let r = s[i] - pred;
-        let q = if step > 0 {
-            ((r + (1 << (step - 1))) >> step).clamp(-8, 7)
-        } else {
-            r.clamp(-8, 7)
-        };
-        let dec = ((q << step) + pred).clamp(-32_768, 32_767);
-        *p2 = *p1;
-        *p1 = dec;
-        let nib = (q & 0xF) as u8;
-        if i % 2 == 0 {
-            out[2 + i / 2] = nib;
-        } else {
-            out[2 + i / 2] |= nib << 4;
-        }
-        i += 1;
-    }
+    use psx_hw::adpcm::{best_filter, encode_block, filter_peaks, shift_for_peak};
+    let Some(out) = out.first_chunk_mut::<16>() else {
+        return;
+    };
+    let state = (*p1, *p2);
+    let (filter, peak) = best_filter(&filter_peaks(s, state));
+    (*p1, *p2) = encode_block(s, state, filter, shift_for_peak(peak), 0, out);
 }
 
 /// Gain to 0.9 of full scale, Q12. The synthesis is deterministic and peaks
