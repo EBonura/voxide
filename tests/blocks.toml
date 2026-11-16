@@ -376,7 +376,11 @@ note = "no arrow used"
 label = "hold L2 for 60 ticks, a full draw, and let go"
 press = ["l2"]
 hold = 60
-wait = 6
+
+[[step]]
+label = "the arrow is in the air"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 56, op = "ge", value = 1 }
+timeout = 20
 
 [[step]]
 checkpoint = "bow-loosed"

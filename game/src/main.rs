@@ -43,6 +43,7 @@ mod music_plan;
 mod musicdata;
 mod redstone;
 mod save;
+mod screen;
 mod seal;
 mod settings_menu;
 mod sfx;
@@ -84,7 +85,6 @@ use psx_font::{fonts::BASIC, FontAtlas};
 use psx_gpu::{
     self as gpu,
     display::{DisplayConfig, DoubleBuffer, Resolution, VideoMode},
-    framebuf::FrameBuffer,
     material::{BlendMode, TextureMaterial, TextureWindow},
     ot::OrderingTable,
     prim::{
@@ -868,7 +868,6 @@ const RECIP_LEN: usize = (FAR_Z + 1) as usize; // 1/z table for the perspective 
                                                // the fill count is a continuous metric, where the vsync-quantised fps readout
                                                // only moves in 60/N steps and hides real gains.
 const PROFILE_SKIP_WORLD: bool = false; // skip world face render (isolate world cost)
-const PERF_FREERUN: bool = false; // skip vsync so frames-per-cycle reads true CPU cost
 const PROFILE_SKIP_SUBMIT: bool = false; // build OT but skip GPU draw (isolate fill cost)
 const PROFILE_SKIP_TITLE: bool = false; // TEMP: bypass the title screen for headless in-game captures
 const FORCE_TIME: i32 = -1;
@@ -2931,7 +2930,6 @@ fn main() {
     tty::println("voxide: boot");
 
     gpu::init(VideoMode::Ntsc, Resolution::R320X240);
-    let mut fb = FrameBuffer::new(SCREEN_W, SCREEN_H);
     gpu::set_draw_area(0, 0, SCREEN_W - 1, SCREEN_H - 1);
     gpu::set_draw_offset(0, 0);
 
@@ -2953,6 +2951,7 @@ fn main() {
     interrupts::install_vblank_counter();
     load_shared_settings();
     sfx::init();
+    let mut fb = screen::Screen::new();
     show_intro(&mut fb);
     // After the intro, not before: it reads the disc twice, which would shift
     // the splash's timing, and the splash is checked at a fixed tick.
@@ -3043,9 +3042,6 @@ fn main() {
         let mut menu: u8 = 0; // 0 none, 1 crafting, 2 chest, 3 furnace
         let mut menu_sel = 0usize;
         let mut chest_idx = 0usize;
-        // The first gameplay frame primes the GPU. Thereafter frame N+1 is built
-        // while frame N rasterises, with this flag tracking that pending frame.
-        let mut render_in_flight = false;
 
         // LOAD WORLD on the title: the same load the game menu runs, over the
         // world the title was showing. A save that will not read back sends the
@@ -4061,7 +4057,13 @@ fn main() {
             telemetry::stage_begin(ST_R_SKY);
             // Build only: the GPU is still rasterising the previous arena. Even GPU
             // register state such as dithering belongs in this frame's list.
+            slack::idle_begin(); // the wait for the frame two back is spare time
+            psx_rt::present::wait_arena_free();
+            slack::idle_mark();
             ui_frame_begin();
+            // SAFETY: slot 0 is empty right after the clear; the chain ends on the draw-done
+            // node the presenter needs (it shows the frame once its GP0(1Fh) has run).
+            unsafe { OT[RENDER_ARENA].end_with_draw_done() };
             queue_dither();
             // SAFETY: nothing else is live in the scratchpad between phases, and
             // the SDK's stack-guard proves each tree fits (see FullStack).
@@ -4135,7 +4137,7 @@ fn main() {
             // reaches last, so they paint over the world.
             ui_submit_tail();
             telemetry::stage_end(ST_R_TAIL);
-            frame_present(&mut fb, &mut render_in_flight);
+            frame_present(&mut fb);
             previous = pad;
             frame = frame.wrapping_add(1);
             if !(menu == MENU_OPTIONS || menu == MENU_CHEAT || menu == MENU_CONTROLS) {
@@ -4144,8 +4146,7 @@ fn main() {
         }
         // SAVE AND QUIT TO TITLE: let the frame the GPU is still drawing finish,
         // then back to a fresh title screen and the next pass.
-        gpu::submit_linked_list_wait();
-        gpu::draw_sync();
+        screen::Screen::resume();
         quit_to_title(&mut fb, &font, frame);
     }
 }
@@ -4155,7 +4156,7 @@ fn main() {
 /// comes back with LOAD WORLD in the game menu, as it does after a boot.
 #[inline(never)]
 #[optimize(size)] // a menu transition: its bytes are worth more than its cycles
-fn quit_to_title(fb: &mut FrameBuffer, font: &FontAtlas, entropy: u32) {
+fn quit_to_title(fb: &mut screen::Screen, font: &FontAtlas, entropy: u32) {
     if world::dimension() != world::DIM_OVERWORLD {
         mob::leave_dimension();
         enter_dimension(world::DIM_OVERWORLD, 0, 0, fb, font);
@@ -4268,7 +4269,7 @@ fn menu_world_pump(pocket_done: &mut bool) -> u32 {
 /// vista dissolves into the fresh terrain without leaving the menu.
 #[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
 #[inline(never)] // once, at boot: kept out of main() so the size attribute holds
-fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
+fn main_menu(fb: &mut screen::Screen, font: &FontAtlas) {
     let mut pocket_done = false;
     // The world loads FIRST, behind the plain bar, and the menu appears over a
     // COMPLETE vista. The previous design assembled the world behind the live
@@ -4497,7 +4498,6 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
         }
         draw_brightness_now();
         gpu::draw_sync();
-        wait_vblank();
         fb.swap();
         t = t.wrapping_add(1);
     }
@@ -4508,7 +4508,7 @@ fn main_menu(fb: &mut FrameBuffer, font: &FontAtlas) {
 /// mashed at frame zero) it is the old boot bar.
 #[optimize(size)] // boot-time, once: its bytes are worth more than its cycles
 #[inline(never)] // once, at boot: kept out of main() so the size attribute holds
-fn finish_world_gen(fb: &mut FrameBuffer, font: &FontAtlas, pocket_done: &mut bool) {
+fn finish_world_gen(fb: &mut screen::Screen, font: &FontAtlas, pocket_done: &mut bool) {
     loading::set_kind(loading::Kind::Generate);
     let total = menu_world_pump(pocket_done) as usize;
     // A defensive ceiling: the full boot is ~150 pump steps, so thousands of
@@ -4657,7 +4657,7 @@ fn load_shared_settings() {
     }
 }
 
-fn save_shared_settings(fb: &mut FrameBuffer, font: &FontAtlas) {
+fn save_shared_settings(fb: &mut screen::Screen, font: &FontAtlas) {
     unsafe {
         SETTINGS_PROFILE.move_deadzone = SET_MOVE_DZ as u8;
         SETTINGS_PROFILE.look_deadzone = SET_LOOK_DZ as u8;
@@ -4694,7 +4694,7 @@ fn save_shared_settings(fb: &mut FrameBuffer, font: &FontAtlas) {
 
 /// The screen shown while SAVE SETTINGS formats a blank card in one blocking
 /// call. Immediate-mode, like `present_loading`: no display list is in flight.
-fn present_formatting(fb: &mut FrameBuffer, font: &FontAtlas) {
+fn present_formatting(fb: &mut screen::Screen, font: &FontAtlas) {
     gpu::draw_rect_flat(0, 0, 320, 240, 14, 14, 22);
     let head = "FORMATTING THE CARD";
     font.draw_text(
@@ -4712,7 +4712,6 @@ fn present_formatting(fb: &mut FrameBuffer, font: &FontAtlas) {
     );
     draw_brightness_now();
     gpu::draw_sync();
-    wait_vblank();
     fb.swap();
 }
 
@@ -5039,7 +5038,7 @@ fn wait_vblank() {
 }
 
 /// Boot intro: the SDK's splash. Any face button skips it.
-fn show_intro(fb: &mut FrameBuffer) {
+fn show_intro(fb: &mut screen::Screen) {
     // SAFETY: the one GPU owner, as in `apply_screen_offset`.
     let mut dma = unsafe { GpuDma::steal() };
     let gpu = Gpu::from_dma_mut(&mut dma);
@@ -5052,7 +5051,7 @@ fn show_intro(fb: &mut FrameBuffer) {
         || poll_pad().buttons,
     );
     // The game's own buffer tracking follows the splash's last swap.
-    fb.drawing = u8::from(buffers.draw_origin().1 != 0);
+    fb.follow(buffers);
 }
 
 /// Boot/regen loading screen: dark backdrop, logo, and a progress bar. Drawn
@@ -5060,7 +5059,7 @@ fn show_intro(fb: &mut FrameBuffer) {
 /// boot -- replaces what used to be a long black screen.
 /// The world-generation bar: just the text and the progress, Minecraft's own
 /// spartan style -- the logo lives on the main menu now, nowhere else.
-fn draw_loading(fb: &mut FrameBuffer, font: &FontAtlas, done: usize, total: usize) {
+fn draw_loading(fb: &mut screen::Screen, font: &FontAtlas, done: usize, total: usize) {
     // At most one flip per display period. Generation reports progress several
     // times a vblank, and waiting out a whole period for each report stretched
     // the load; an update that arrives before the next vblank is only noted,
@@ -5074,7 +5073,7 @@ fn draw_loading(fb: &mut FrameBuffer, font: &FontAtlas, done: usize, total: usiz
 
 /// Show the progress `draw_loading` last skipped, if any, so a stage never
 /// ends with its final state unshown.
-fn finish_loading(fb: &mut FrameBuffer, font: &FontAtlas) {
+fn finish_loading(fb: &mut screen::Screen, font: &FontAtlas) {
     if let Some((done, total)) = unsafe { LOADING_SKIPPED } {
         present_loading(fb, font, done, total);
     }
@@ -5088,7 +5087,7 @@ static mut LOADING_SKIPPED: Option<(usize, usize)> = None;
 
 #[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
 #[inline(never)]
-fn present_loading(fb: &mut FrameBuffer, font: &FontAtlas, done: usize, total: usize) {
+fn present_loading(fb: &mut screen::Screen, font: &FontAtlas, done: usize, total: usize) {
     // Immediate-mode: this runs during world generation, with no ordering table
     // in flight, so it cannot use the UI display list (`rect`). loading.rs draws
     // the dirt backdrop, the turning block, the two status lines and the bar.
@@ -5102,9 +5101,8 @@ fn present_loading(fb: &mut FrameBuffer, font: &FontAtlas, done: usize, total: u
     );
     draw_brightness_now();
     gpu::draw_sync();
-    // Flip on a true vblank edge like every other screen: a swap mid-scanout
-    // shows a stable tear line on silicon, which emulators do not reproduce.
-    wait_vblank();
+    // Flip on a true vblank edge like every other screen (the presenter applies it there): a
+    // swap mid-scanout shows a stable tear line on silicon, which emulators do not reproduce.
     fb.swap();
     unsafe {
         LOADING_FLIP_VBL = interrupts::vblank_count();
@@ -5482,8 +5480,7 @@ fn save_step(pad: &mut ButtonState, previous: ButtonState) {
 #[inline(never)]
 #[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
 fn settle_gpu() {
-    gpu::submit_linked_list_wait();
-    gpu::draw_sync();
+    screen::Screen::resume();
 }
 
 /// Load the card save and put the world in the state it describes: the
@@ -5493,7 +5490,12 @@ fn settle_gpu() {
 /// different chunk. False, with nothing changed, when there is no save.
 #[inline(never)]
 #[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
-fn load_game(player: &mut Player, day: &mut u32, fb: &mut FrameBuffer, font: &FontAtlas) -> bool {
+fn load_game(
+    player: &mut Player,
+    day: &mut u32,
+    fb: &mut screen::Screen,
+    font: &FontAtlas,
+) -> bool {
     settle_gpu();
     let Some((dim, meta)) = save::load(player) else {
         return false;
@@ -5553,7 +5555,7 @@ fn load_game(player: &mut Player, day: &mut u32, fb: &mut FrameBuffer, font: &Fo
 /// for portals and loads alike.
 #[inline(never)]
 #[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
-fn enter_dimension(dim: u8, bx: i32, bz: i32, fb: &mut FrameBuffer, font: &FontAtlas) {
+fn enter_dimension(dim: u8, bx: i32, bz: i32, fb: &mut screen::Screen, font: &FontAtlas) {
     settle_gpu();
     loading::set_kind(match dim {
         world::DIM_INFERNO => loading::Kind::Inferno,
@@ -5728,7 +5730,7 @@ fn portal_tick(player: &Player, dwell: &mut u16) -> bool {
 /// needs the framebuffer and font for a loading screen.
 #[inline(never)]
 #[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
-fn portal_travel(player: &mut Player, fb: &mut FrameBuffer, font: &FontAtlas) {
+fn portal_travel(player: &mut Player, fb: &mut screen::Screen, font: &FontAtlas) {
     let bx = world_to_block_x(player.x);
     let bz = world_to_block_z(player.z);
     // Which sheet you are standing in decides where you go; from anywhere but
@@ -5757,7 +5759,7 @@ fn portal_travel(player: &mut Player, fb: &mut FrameBuffer, font: &FontAtlas) {
 /// ground at the scaled position, a return portal built there.
 #[inline(never)]
 #[optimize(size)] // a load, not a gameplay frame: its bytes are worth more than its cycles
-fn travel_to(player: &mut Player, to: u8, fb: &mut FrameBuffer, font: &FontAtlas) {
+fn travel_to(player: &mut Player, to: u8, fb: &mut screen::Screen, font: &FontAtlas) {
     let bx = world_to_block_x(player.x);
     let bz = world_to_block_z(player.z);
     let here = world::dimension();
@@ -11750,7 +11752,7 @@ fn ui_frame_begin() {
 
 /// One empty DMA node per arena that ends the gameplay sky chain by jumping
 /// to the head of that arena's world/tail OT, so a frame goes out as a single
-/// linked-list walk (see submit_built_frame).
+/// linked-list walk (see frame_present).
 static mut SKY_TO_OT: [u32; RENDER_ARENAS] = [0; RENDER_ARENAS];
 
 /// Link the sky batch. The title screen may submit it immediately because it
@@ -11786,65 +11788,21 @@ fn ui_submit_tail() {
     }
 }
 
-/// Submit the arena just built and switch CPU packet allocation to the other.
-///
-/// One kick: the sky chain ends in a node that jumps to the world/tail OT
-/// (ui_finish_sky). Kicking the two tables separately made the second kick
-/// wait out the first walk, which the GPU paces with the full-screen sky fill:
-/// ~80K CPU cycles blocked at the top of every frame.
+/// Hand the arena the CPU just built to the presenter, which walks it and shows it at the first
+/// VBlank after the GPU is done; CPU frame N+1 overlaps GPU frame N. Packet RAM is reusable as
+/// soon as its DMA walk finishes (`present::wait_arena_free` before the next build).
 #[inline(never)]
-fn submit_built_frame() {
-    unsafe {
-        let arena = RENDER_ARENA;
-        // SAFETY: this arena's sky chain, world OT and packets stay untouched
-        // while it is walked: CPU building switches to the other arena below,
-        // and frame_present waits this walk out before switching back.
-        gpu::submit_linked_list_raw_async(SKY_OT[arena].submit_head());
-        RENDER_ARENA ^= 1;
-    }
-}
-
-/// Present the completed GPU frame, then queue the arena the CPU just built.
-/// After the one-frame prime, CPU frame N+1 overlaps GPU frame N. Packet RAM is
-/// reusable as soon as its DMA walk finishes; rasterisation no longer reads it.
-#[inline(never)]
-fn frame_present(fb: &mut FrameBuffer, in_flight: &mut bool) {
+fn frame_present(fb: &mut screen::Screen) {
     telemetry::stage_end(50);
-    if PROFILE_SKIP_SUBMIT {
-        if !PERF_FREERUN {
-            wait_vblank();
-        }
-        telemetry::stage_begin(48);
-        fb.swap();
-        telemetry::stage_end(48);
-        return;
-    }
-
-    // Prime without a flip: the title remains visible for this single build,
-    // while the next gameplay frame immediately starts filling the other arena.
-    if !*in_flight {
-        submit_built_frame();
-        *in_flight = true;
-        return;
-    }
-
-    telemetry::stage_begin(47); // residual DMA walk + raster after CPU overlap
-    slack::idle_begin(); // the waits from here are the frame's spare time
-    gpu::submit_linked_list_wait();
-    gpu::draw_sync();
-    slack::idle_mark();
-    telemetry::stage_end(47);
-
-    // The completed back buffer is only exposed at a VBlank boundary. swap()
-    // also queues the draw-area state for the other VRAM half, before its OTs.
-    if !PERF_FREERUN {
-        wait_vblank();
-    }
-    slack::idle_end();
+    slack::idle_resume(); // the slot wait in submit is spare time too
     telemetry::stage_begin(48);
-    fb.swap();
-    submit_built_frame();
+    // SAFETY: this arena's sky chain, world OT and packets stay untouched while it is walked:
+    // CPU building switches to the other arena below, and the build waits (`wait_arena_free`)
+    // before it comes back to this one. The chain ends on the draw-done node.
+    unsafe { fb.submit_chain(SKY_OT[RENDER_ARENA].submit_head()) };
+    unsafe { RENDER_ARENA ^= 1 };
     telemetry::stage_end(48);
+    slack::idle_end();
 }
 
 #[inline(always)]

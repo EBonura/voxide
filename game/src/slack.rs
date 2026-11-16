@@ -109,6 +109,12 @@ pub fn idle_begin() {
     }
 }
 
+/// Start another idle stretch of the same frame without clearing what was banked.
+#[inline(always)]
+pub fn idle_resume() {
+    unsafe { IDLE_T = timers::counter(Timer::Timer2) };
+}
+
 /// Bank the idle time so far (between the GPU wait and the vblank wait), so
 /// neither stretch alone has to fit one lap of the 16-bit counter.
 #[inline(always)]
