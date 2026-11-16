@@ -1,348 +1,333 @@
 # psoxide-pgo features: (default)
-# psoxide-pgo source: 8585c0d0c3107c66d4c92ac9eac0a58971ef0622
-# psoxide-pgo file: 801f637343665dc2cd58605368b5ce25ab502e83 game/src/blocks.rs
-# psoxide-pgo file: 8c143edeebca8124569b680ce5ffef0e8e846e6a game/src/bow.rs
-# psoxide-pgo file: f2cd5c55ec70796e15450a38a3ad41786c333f65 game/src/bstate.rs
-# psoxide-pgo file: dd136787ab49aebf4eeb293a9d380038e366213c game/src/cheat.rs
-# psoxide-pgo file: 96eec24d0e296b18d8685983162387b45091b29d game/src/edits.rs
-# psoxide-pgo file: 302f716c36fca903b8619ad18c8d6c4fbfa34730 game/src/equip.rs
-# psoxide-pgo file: 5a9afcf80cfeb2c4019de5432301adf35295c590 game/src/grid.rs
+# psoxide-pgo source: 6bd1c24097182b6d8cccd417ef7405646bea2211
+# psoxide-pgo file: b902b52ae70d268d78c19e5bb47b100dfa4edb99 game/src/blocks.rs
+# psoxide-pgo file: db2a2d922e6b3d0c2518bcc0905b6420b8609a5e game/src/bow.rs
+# psoxide-pgo file: 528f61e048700832862e4d23b3d6655b5d17f972 game/src/bstate.rs
+# psoxide-pgo file: 783b28b17aad54ed5cfd6c648caea8b7638468fe game/src/cheat.rs
+# psoxide-pgo file: 0bd18a960fdb8fd3968480f0ff3ab7baad00df9f game/src/edits.rs
+# psoxide-pgo file: ff971293089db52450f7981e1472e8a4699d1dea game/src/equip.rs
+# psoxide-pgo file: 7d21599ef2b5f9634a8f12ddf5a0e0fe4d5daba1 game/src/grid.rs
 # psoxide-pgo file: 8e4e1dce7bd107fb3766626f4904c2a7743ed9ff game/src/hand.rs
-# psoxide-pgo file: 0656d9839b685524dadda53f4ff29082dd3a6423 game/src/inv.rs
-# psoxide-pgo file: eb4d06660d063bd3384a13ae2c2b818d6a0b415e game/src/loading.rs
-# psoxide-pgo file: 672515a3cee4b60e813decb747860606c2feea37 game/src/main.rs
-# psoxide-pgo file: 32e925a3e175a98804fb3ebc8e27ef78ad2ff599 game/src/menus.rs
-# psoxide-pgo file: 701beabe4e825c00e6975a1881eddafcbd793d29 game/src/mob.rs
-# psoxide-pgo file: c27ab44e13c7792f78b2bc65802e786eb2055cb0 game/src/music.rs
-# psoxide-pgo file: 78533c7d03a45d11205bcda031bc05a84ecbbf77 game/src/redstone.rs
-# psoxide-pgo file: 3d91b4530386031e577ca78bb338dad145866fdd game/src/save.rs
+# psoxide-pgo file: 343460abbc4b4de458d4aa0ee406f6361ce09f8d game/src/inv.rs
+# psoxide-pgo file: 7b96b8e38d28a72afce5539dc8f557f939c5e952 game/src/loading.rs
+# psoxide-pgo file: 26c58f3ea1236ba4bde96a78100e2fcc946a03a1 game/src/main.rs
+# psoxide-pgo file: 9ccd276e98f31f6343f9e3b1a4aa2cc142822427 game/src/menus.rs
+# psoxide-pgo file: 29c0dd1111b5703c3cddcc07b6b00ceccb80b3a4 game/src/mob.rs
+# psoxide-pgo file: 2e923f8f38df3a2537b1b3bbfc5246b823e4b86e game/src/music.rs
+# psoxide-pgo file: 93f3081cb446614c59c7a42ba68ff81226632ddb game/src/redstone.rs
+# psoxide-pgo file: 11ab5e52a00e70d59c53605e230f8ce0b01f06c1 game/src/save.rs
 # psoxide-pgo file: fb0ac2eae2438de4c55806b221c41ad923b36ffb game/src/seal.rs
-# psoxide-pgo file: 832dfa2b4845fbb9df0c1dae3ba85261a9d9f4a8 game/src/sfx.rs
-# psoxide-pgo file: 9c25843b41864bd60da5ad0a852099e35040285d game/src/shape.rs
+# psoxide-pgo file: 05cf81911102444d3f21f2416edafb157b8f1c27 game/src/sfx.rs
+# psoxide-pgo file: cbf6d6d988fdd75cced8b59c59226a98865158fb game/src/shape.rs
 # psoxide-pgo file: 8c957318103fd276aab21d15e998b191187edec8 game/src/slack.rs
-# psoxide-pgo file: fabb26f7741151b49b83c0c75946a8de11fb5ec2 game/src/sleep.rs
-# psoxide-pgo file: 0b6dca8c88ac85c58a4c2b71fe57b9f6aecac9e9 game/src/tex.rs
-# psoxide-pgo file: b028808bef589381c3c1aa853d254d20168e8c61 game/src/tnt.rs
+# psoxide-pgo file: 2ad145b65fc261914a377faf3c4fba02f1cc741d game/src/sleep.rs
+# psoxide-pgo file: ec0293ab0d524df3aadea6b6dfc8d06155416ea8 game/src/tex.rs
+# psoxide-pgo file: bf9333f7aad712fba2115ba58944407899c817e8 game/src/tnt.rs
 # psoxide-pgo file: a87caa7db9c43692aea268d17a4cf085ed075d2f game/src/weather.rs
-# psoxide-pgo file: 7c6dbc3cfc8064f24f7a90d288d91997e8553ccc game/src/world.rs
-# psoxide-pgo file: 87565a30304009fc00c191f8a06d1645175b5293 game/src/world/rle.rs
-# psoxide-pgo func: 8887 8888 10 <voxide::CellPlane<0> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
-# psoxide-pgo func: 8895 8904 10 <voxide::CellPlane<0> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
-# psoxide-pgo func: 8887 8888 10 <voxide::CellPlane<2> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
-# psoxide-pgo func: 8895 8904 10 <voxide::CellPlane<2> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
-# psoxide-pgo func: 8887 8888 10 <voxide::CellPlane<3> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
-# psoxide-pgo func: 8895 8904 10 <voxide::CellPlane<3> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
-# psoxide-pgo func: 8887 8888 10 <voxide::CellPlane<4> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
-# psoxide-pgo func: 8895 8904 10 <voxide::CellPlane<4> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
-# psoxide-pgo func: 8887 8888 10 <voxide::CellPlane<5> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
-# psoxide-pgo func: 8895 8904 10 <voxide::CellPlane<5> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
+# psoxide-pgo file: 5e3d246029586ebce8917200e3f0564cef10acb2 game/src/world.rs
+# psoxide-pgo file: 3cf5ce32226ba9fb13b29466b4bfe599370f110a game/src/world/rle.rs
+# psoxide-pgo func: 8882 8883 10 <voxide::CellPlane<0> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
+# psoxide-pgo func: 8890 8899 10 <voxide::CellPlane<0> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
+# psoxide-pgo func: 8882 8883 10 <voxide::CellPlane<2> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
+# psoxide-pgo func: 8890 8899 10 <voxide::CellPlane<2> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
+# psoxide-pgo func: 8882 8883 10 <voxide::CellPlane<3> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
+# psoxide-pgo func: 8890 8899 10 <voxide::CellPlane<3> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
+# psoxide-pgo func: 8882 8883 10 <voxide::CellPlane<4> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
+# psoxide-pgo func: 8890 8899 10 <voxide::CellPlane<4> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
+# psoxide-pgo func: 8882 8883 10 <voxide::CellPlane<5> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
+# psoxide-pgo func: 8890 8899 10 <voxide::CellPlane<5> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
 # psoxide-pgo func: 140 155 4 <voxide::edits::Edits>::add_chunk
 # psoxide-pgo func: 125 136 4 <voxide::edits::Edits>::find_chunk
 # psoxide-pgo func: 159 170 4 <voxide::edits::Edits>::find_edit
 # psoxide-pgo func: 112 113 4 <voxide::edits::Edits>::len
 # psoxide-pgo func: 184 219 4 <voxide::edits::Edits>::record
 # psoxide-pgo func: 56 56 7 <voxide::hand::Btn as core::cmp::PartialEq>::eq
-# psoxide-pgo func: 50 50 13 <voxide::music::Phase as core::cmp::PartialEq>::eq
+# psoxide-pgo func: 52 52 13 <voxide::music::Phase as core::cmp::PartialEq>::eq
 # psoxide-pgo func: 121 132 14 <voxide::redstone::Net>::find
-# psoxide-pgo func: 105 106 14 <voxide::redstone::Net>::len
 # psoxide-pgo func: 113 118 14 <voxide::redstone::Net>::slot
-# psoxide-pgo func: 370 488 14 <voxide::redstone::Net>::step::<voxide::redstone::Live> @voxide
+# psoxide-pgo func: 371 489 14 <voxide::redstone::Net>::step::<voxide::redstone::Live> @voxide
 # psoxide-pgo func: 178 180 14 <voxide::redstone::Net>::wire_power
-# psoxide-pgo func: 3032 4216 10 main
-# psoxide-pgo func: 6702 6703 10 voxide::aabb_collides
-# psoxide-pgo func: 6768 6808 10 voxide::aabb_collides_dims
-# psoxide-pgo func: 1431 1544 10 voxide::advance_streaming
-# psoxide-pgo func: 9318 9319 10 voxide::ao_factor
-# psoxide-pgo func: 1390 1398 10 voxide::ao_shade
-# psoxide-pgo func: 5959 5971 10 voxide::apply_blast_kick
-# psoxide-pgo func: 13248 13261 10 voxide::apply_sunset
-# psoxide-pgo func: 594 597 10 voxide::armor_piece
-# psoxide-pgo func: 628 641 10 voxide::armor_points
-# psoxide-pgo func: 609 610 10 voxide::armor_tile
-# psoxide-pgo func: 2130 2142 10 voxide::armored
-# psoxide-pgo func: 6759 6763 10 voxide::at_ladder
-# psoxide-pgo func: 2095 2098 10 voxide::attack_charge
-# psoxide-pgo func: 10545 10550 10 voxide::billboard
-# psoxide-pgo func: 13146 13183 10 voxide::block_light
-# psoxide-pgo func: 13274 13357 10 voxide::block_name
-# psoxide-pgo func: 13885 13886 10 voxide::block_to_world_z
-# psoxide-pgo func: 274 293 0 voxide::blocks::after_break
-# psoxide-pgo func: 232 246 0 voxide::blocks::hangs_on
-# psoxide-pgo func: 21 22 0 voxide::blocks::last
-# psoxide-pgo func: 298 320 0 voxide::blocks::settle
+# psoxide-pgo func: 2930 4148 10 main
+# psoxide-pgo func: 6645 6646 10 voxide::aabb_collides
+# psoxide-pgo func: 6715 6755 10 voxide::aabb_collides_dims
+# psoxide-pgo func: 1313 1426 10 voxide::advance_streaming
+# psoxide-pgo func: 9341 9342 10 voxide::ao_factor
+# psoxide-pgo func: 1272 1280 10 voxide::ao_shade
+# psoxide-pgo func: 5905 5917 10 voxide::apply_blast_kick
+# psoxide-pgo func: 13314 13327 10 voxide::apply_sunset
+# psoxide-pgo func: 599 602 10 voxide::armor_piece
+# psoxide-pgo func: 633 646 10 voxide::armor_points
+# psoxide-pgo func: 614 615 10 voxide::armor_tile
+# psoxide-pgo func: 2012 2024 10 voxide::armored
+# psoxide-pgo func: 6702 6708 10 voxide::at_ladder
+# psoxide-pgo func: 1977 1980 10 voxide::attack_charge
+# psoxide-pgo func: 10604 10609 10 voxide::billboard
+# psoxide-pgo func: 13212 13249 10 voxide::block_light
+# psoxide-pgo func: 13340 13423 10 voxide::block_name
+# psoxide-pgo func: 13950 13951 10 voxide::block_to_world_z
+# psoxide-pgo func: 308 331 0 voxide::blocks::after_break
+# psoxide-pgo func: 266 280 0 voxide::blocks::hangs_on
+# psoxide-pgo func: 336 358 0 voxide::blocks::settle
 # psoxide-pgo func: 69 70 1 voxide::bow::drawing
-# psoxide-pgo func: 133 134 1 voxide::bow::held_ticks
 # psoxide-pgo func: 73 77 1 voxide::bow::reset
 # psoxide-pgo func: 96 127 1 voxide::bow::update
-# psoxide-pgo func: 12551 12569 10 voxide::bow_use
-# psoxide-pgo func: 234 235 2 voxide::bstate::is_bed
-# psoxide-pgo func: 107 111 2 voxide::bstate::kind_of
-# psoxide-pgo func: 6179 6209 10 voxide::camera_from_player
-# psoxide-pgo func: 9337 9341 10 voxide::camera_space_world
-# psoxide-pgo func: 9340 9340 10 voxide::camera_space_world::{closure#0} @voxide
-# psoxide-pgo func: 1610 1615 10 voxide::cave_amount
-# psoxide-pgo func: 13111 13114 10 voxide::celestial_q12
-# psoxide-pgo func: 9087 9093 10 voxide::cell_verdict
+# psoxide-pgo func: 12614 12632 10 voxide::bow_use
+# psoxide-pgo func: 266 267 2 voxide::bstate::is_bed
+# psoxide-pgo func: 139 143 2 voxide::bstate::kind_of
+# psoxide-pgo func: 6128 6158 10 voxide::camera_from_player
+# psoxide-pgo func: 9360 9364 10 voxide::camera_space_world
+# psoxide-pgo func: 9363 9363 10 voxide::camera_space_world::{closure#0} @voxide
+# psoxide-pgo func: 1492 1497 10 voxide::cave_amount
+# psoxide-pgo func: 13177 13180 10 voxide::celestial_q12
+# psoxide-pgo func: 9082 9088 10 voxide::cell_verdict
 # psoxide-pgo func: 118 119 3 voxide::cheat::god
 # psoxide-pgo func: 122 123 3 voxide::cheat::hud
-# psoxide-pgo func: 8911 8935 10 voxide::clip_cell_plane_c::<0> @voxide
-# psoxide-pgo func: 8911 8935 10 voxide::clip_cell_plane_c::<1> @voxide
-# psoxide-pgo func: 8911 8935 10 voxide::clip_cell_plane_c::<2> @voxide
-# psoxide-pgo func: 8911 8935 10 voxide::clip_cell_plane_c::<3> @voxide
-# psoxide-pgo func: 8911 8935 10 voxide::clip_cell_plane_c::<4> @voxide
-# psoxide-pgo func: 8911 8935 10 voxide::clip_cell_plane_c::<5> @voxide
-# psoxide-pgo func: 9063 9071 10 voxide::clip_code
-# psoxide-pgo func: 8943 8955 10 voxide::clip_distance
-# psoxide-pgo func: 8851 8853 10 voxide::clip_distance_c::<0> @voxide
-# psoxide-pgo func: 8851 8854 10 voxide::clip_distance_c::<1> @voxide
-# psoxide-pgo func: 8851 8855 10 voxide::clip_distance_c::<2> @voxide
-# psoxide-pgo func: 8851 8856 10 voxide::clip_distance_c::<3> @voxide
-# psoxide-pgo func: 8851 8857 10 voxide::clip_distance_c::<4> @voxide
-# psoxide-pgo func: 8851 8858 10 voxide::clip_distance_c::<5> @voxide
-# psoxide-pgo func: 8960 8972 10 voxide::clip_intersection
-# psoxide-pgo func: 8963 8963 10 voxide::clip_intersection::{closure#0} @voxide
-# psoxide-pgo func: 8982 8993 10 voxide::clip_line_segment
-# psoxide-pgo func: 8865 8873 10 voxide::clip_polygon_plane_c::<0> @voxide
-# psoxide-pgo func: 8865 8873 10 voxide::clip_polygon_plane_c::<2> @voxide
-# psoxide-pgo func: 8865 8873 10 voxide::clip_polygon_plane_c::<3> @voxide
-# psoxide-pgo func: 8865 8873 10 voxide::clip_polygon_plane_c::<4> @voxide
-# psoxide-pgo func: 8865 8873 10 voxide::clip_polygon_plane_c::<5> @voxide
-# psoxide-pgo func: 9001 9009 10 voxide::clip_project
-# psoxide-pgo func: 10082 10121 10 voxide::clip_quad_near
-# psoxide-pgo func: 10882 10909 10 voxide::cloud_color
-# psoxide-pgo func: 12810 12832 10 voxide::crop_tick
-# psoxide-pgo func: 13135 13137 10 voxide::day_light
-# psoxide-pgo func: 12502 12507 10 voxide::decimal3
-# psoxide-pgo func: 10914 10921 10 voxide::depth_slot
-# psoxide-pgo func: 11994 11998 10 voxide::dim_screen
-# psoxide-pgo func: 12236 12263 10 voxide::draw_all_hud
-# psoxide-pgo func: 11469 11490 10 voxide::draw_armor
-# psoxide-pgo func: 12420 12433 10 voxide::draw_boss_bar
-# psoxide-pgo func: 11172 11218 10 voxide::draw_box_outline
-# psoxide-pgo func: 11037 11067 10 voxide::draw_break_overlay
-# psoxide-pgo func: 12000 12002 10 voxide::draw_centered
-# psoxide-pgo func: 11328 11350 10 voxide::draw_count
-# psoxide-pgo func: 12298 12303 10 voxide::draw_crosshair
-# psoxide-pgo func: 11518 11527 10 voxide::draw_food
-# psoxide-pgo func: 13079 13088 10 voxide::draw_frame_sky
-# psoxide-pgo func: 11496 11512 10 voxide::draw_hearts
-# psoxide-pgo func: 6978 7160 10 voxide::draw_held_item
-# psoxide-pgo func: 6995 6995 10 voxide::draw_held_item::{closure#0} @voxide
-# psoxide-pgo func: 7135 7135 10 voxide::draw_held_item::{closure#1} @voxide
-# psoxide-pgo func: 11352 11441 10 voxide::draw_hotbar
-# psoxide-pgo func: 12435 12496 10 voxide::draw_hud
-# psoxide-pgo func: 11315 11323 10 voxide::draw_icon
-# psoxide-pgo func: 11536 11554 10 voxide::draw_menu
-# psoxide-pgo func: 11148 11168 10 voxide::draw_pick_outline
-# psoxide-pgo func: 10584 10874 10 voxide::draw_sky
-# psoxide-pgo func: 10644 10648 10 voxide::draw_sky::{closure#0} @voxide
-# psoxide-pgo func: 2941 2950 10 voxide::draw_sleep_prompt
-# psoxide-pgo func: 10528 10541 10 voxide::draw_sun
-# psoxide-pgo func: 11308 11312 10 voxide::draw_tile
-# psoxide-pgo func: 2910 2935 10 voxide::draw_tutorial
-# psoxide-pgo func: 11451 11461 10 voxide::draw_xp
-# psoxide-pgo func: 1831 1832 10 voxide::edit_count
-# psoxide-pgo func: 7296 7362 10 voxide::emit_body_box
-# psoxide-pgo func: 6853 6864 10 voxide::emit_box
-# psoxide-pgo func: 6870 6964 10 voxide::emit_box_masked
-# psoxide-pgo func: 9164 9315 10 voxide::emit_clipped_cell
-# psoxide-pgo func: 9213 9213 10 voxide::emit_clipped_cell::{closure#0} @voxide
-# psoxide-pgo func: 9256 9256 10 voxide::emit_clipped_cell::{closure#1} @voxide
-# psoxide-pgo func: 9257 9259 10 voxide::emit_clipped_cell::{closure#2} @voxide
-# psoxide-pgo func: 9828 10054 10 voxide::emit_face
-# psoxide-pgo func: 9844 9848 10 voxide::emit_face::{closure#0} @voxide
-# psoxide-pgo func: 7728 7747 10 voxide::emit_face_box
-# psoxide-pgo func: 7369 7431 10 voxide::emit_head_box_dir
-# psoxide-pgo func: 9504 9708 10 voxide::emit_near_face
-# psoxide-pgo func: 9541 9542 10 voxide::emit_near_face::{closure#0} @voxide
-# psoxide-pgo func: 9544 9549 10 voxide::emit_near_face::{closure#1} @voxide
-# psoxide-pgo func: 9552 9556 10 voxide::emit_near_face::{closure#2} @voxide
-# psoxide-pgo func: 9566 9572 10 voxide::emit_near_face::{closure#3} @voxide
-# psoxide-pgo func: 9580 9599 10 voxide::emit_near_face::{closure#4} @voxide
+# psoxide-pgo func: 8906 8930 10 voxide::clip_cell_plane_c::<0> @voxide
+# psoxide-pgo func: 8906 8930 10 voxide::clip_cell_plane_c::<1> @voxide
+# psoxide-pgo func: 8906 8930 10 voxide::clip_cell_plane_c::<2> @voxide
+# psoxide-pgo func: 8906 8930 10 voxide::clip_cell_plane_c::<3> @voxide
+# psoxide-pgo func: 8906 8930 10 voxide::clip_cell_plane_c::<4> @voxide
+# psoxide-pgo func: 8906 8930 10 voxide::clip_cell_plane_c::<5> @voxide
+# psoxide-pgo func: 9058 9066 10 voxide::clip_code
+# psoxide-pgo func: 8938 8950 10 voxide::clip_distance
+# psoxide-pgo func: 8846 8848 10 voxide::clip_distance_c::<0> @voxide
+# psoxide-pgo func: 8846 8849 10 voxide::clip_distance_c::<1> @voxide
+# psoxide-pgo func: 8846 8850 10 voxide::clip_distance_c::<2> @voxide
+# psoxide-pgo func: 8846 8851 10 voxide::clip_distance_c::<3> @voxide
+# psoxide-pgo func: 8846 8852 10 voxide::clip_distance_c::<4> @voxide
+# psoxide-pgo func: 8846 8853 10 voxide::clip_distance_c::<5> @voxide
+# psoxide-pgo func: 8955 8967 10 voxide::clip_intersection
+# psoxide-pgo func: 8958 8958 10 voxide::clip_intersection::{closure#0} @voxide
+# psoxide-pgo func: 8977 8988 10 voxide::clip_line_segment
+# psoxide-pgo func: 8860 8868 10 voxide::clip_polygon_plane_c::<0> @voxide
+# psoxide-pgo func: 8860 8868 10 voxide::clip_polygon_plane_c::<2> @voxide
+# psoxide-pgo func: 8860 8868 10 voxide::clip_polygon_plane_c::<3> @voxide
+# psoxide-pgo func: 8860 8868 10 voxide::clip_polygon_plane_c::<4> @voxide
+# psoxide-pgo func: 8860 8868 10 voxide::clip_polygon_plane_c::<5> @voxide
+# psoxide-pgo func: 8996 9004 10 voxide::clip_project
+# psoxide-pgo func: 10131 10170 10 voxide::clip_quad_near
+# psoxide-pgo func: 10941 10968 10 voxide::cloud_color
+# psoxide-pgo func: 12876 12898 10 voxide::crop_tick
+# psoxide-pgo func: 13201 13203 10 voxide::day_light
+# psoxide-pgo func: 10973 10980 10 voxide::depth_slot
+# psoxide-pgo func: 12066 12070 10 voxide::dim_screen
+# psoxide-pgo func: 12316 12343 10 voxide::draw_all_hud
+# psoxide-pgo func: 11528 11553 10 voxide::draw_armor
+# psoxide-pgo func: 12500 12513 10 voxide::draw_boss_bar
+# psoxide-pgo func: 11231 11277 10 voxide::draw_box_outline
+# psoxide-pgo func: 11096 11126 10 voxide::draw_break_overlay
+# psoxide-pgo func: 12072 12074 10 voxide::draw_centered
+# psoxide-pgo func: 11387 11409 10 voxide::draw_count
+# psoxide-pgo func: 12378 12383 10 voxide::draw_crosshair
+# psoxide-pgo func: 11589 11598 10 voxide::draw_food
+# psoxide-pgo func: 13145 13154 10 voxide::draw_frame_sky
+# psoxide-pgo func: 11567 11583 10 voxide::draw_hearts
+# psoxide-pgo func: 6925 7107 10 voxide::draw_held_item
+# psoxide-pgo func: 6942 6942 10 voxide::draw_held_item::{closure#0} @voxide
+# psoxide-pgo func: 7082 7082 10 voxide::draw_held_item::{closure#1} @voxide
+# psoxide-pgo func: 11411 11500 10 voxide::draw_hotbar
+# psoxide-pgo func: 12515 12581 10 voxide::draw_hud
+# psoxide-pgo func: 11374 11382 10 voxide::draw_icon
+# psoxide-pgo func: 11607 11625 10 voxide::draw_menu
+# psoxide-pgo func: 11207 11228 10 voxide::draw_pick_outline
+# psoxide-pgo func: 10643 10933 10 voxide::draw_sky
+# psoxide-pgo func: 10703 10707 10 voxide::draw_sky::{closure#0} @voxide
+# psoxide-pgo func: 2831 2840 10 voxide::draw_sleep_prompt
+# psoxide-pgo func: 10577 10600 10 voxide::draw_sun
+# psoxide-pgo func: 11367 11371 10 voxide::draw_tile
+# psoxide-pgo func: 2796 2825 10 voxide::draw_tutorial
+# psoxide-pgo func: 11510 11520 10 voxide::draw_xp
+# psoxide-pgo func: 1713 1714 10 voxide::edit_count
+# psoxide-pgo func: 7253 7319 10 voxide::emit_body_box
+# psoxide-pgo func: 6800 6811 10 voxide::emit_box
+# psoxide-pgo func: 6817 6911 10 voxide::emit_box_masked
+# psoxide-pgo func: 9169 9338 10 voxide::emit_clipped_cell
+# psoxide-pgo func: 9225 9225 10 voxide::emit_clipped_cell::{closure#0} @voxide
+# psoxide-pgo func: 9267 9267 10 voxide::emit_clipped_cell::{closure#1} @voxide
+# psoxide-pgo func: 9268 9270 10 voxide::emit_clipped_cell::{closure#2} @voxide
+# psoxide-pgo func: 9870 10103 10 voxide::emit_face
+# psoxide-pgo func: 9893 9897 10 voxide::emit_face::{closure#0} @voxide
+# psoxide-pgo func: 7685 7704 10 voxide::emit_face_box
+# psoxide-pgo func: 7326 7388 10 voxide::emit_head_box_dir
+# psoxide-pgo func: 9539 9750 10 voxide::emit_near_face
+# psoxide-pgo func: 9576 9577 10 voxide::emit_near_face::{closure#0} @voxide
+# psoxide-pgo func: 9579 9584 10 voxide::emit_near_face::{closure#1} @voxide
+# psoxide-pgo func: 9587 9591 10 voxide::emit_near_face::{closure#2} @voxide
+# psoxide-pgo func: 9601 9607 10 voxide::emit_near_face::{closure#3} @voxide
+# psoxide-pgo func: 9615 9634 10 voxide::emit_near_face::{closure#4} @voxide
 # psoxide-pgo func: 63 65 5 voxide::equip::damage100
-# psoxide-pgo func: 212 271 5 voxide::equip::draw_figure
+# psoxide-pgo func: 216 275 5 voxide::equip::draw_figure
 # psoxide-pgo func: 69 71 5 voxide::equip::six_t
 # psoxide-pgo func: 75 77 5 voxide::equip::stats
-# psoxide-pgo func: 184 186 5 voxide::equip::sync
+# psoxide-pgo func: 188 190 5 voxide::equip::sync
 # psoxide-pgo func: 41 42 5 voxide::equip::weapon_index
 # psoxide-pgo func: 53 55 5 voxide::equip::weapon_of
-# psoxide-pgo func: 9754 9761 10 voxide::face_fields
-# psoxide-pgo func: 9798 9801 10 voxide::face_mat
-# psoxide-pgo func: 12901 12992 10 voxide::face_tile
-# psoxide-pgo func: 12997 13045 10 voxide::face_tint
-# psoxide-pgo func: 13028 13028 10 voxide::face_tint::{closure#0} @voxide
-# psoxide-pgo func: 13043 13043 10 voxide::face_tint::{closure#1} @voxide
-# psoxide-pgo func: 9770 9788 10 voxide::face_verts
-# psoxide-pgo func: 7439 7442 10 voxide::facing_axis
-# psoxide-pgo func: 424 429 10 voxide::fire_odds
-# psoxide-pgo func: 13902 13906 10 voxide::floor_div
-# psoxide-pgo func: 1795 1797 10 voxide::fog_band
-# psoxide-pgo func: 11755 11792 10 voxide::frame_present
-# psoxide-pgo func: 13665 13692 10 voxide::furn_tick
-# psoxide-pgo func: 7452 7454 10 voxide::gait
-# psoxide-pgo func: 5659 5662 10 voxide::gate_probe
-# psoxide-pgo func: 5669 5686 10 voxide::gate_snapshot
-# psoxide-pgo func: 13873 13874 10 voxide::get_block_i32
-# psoxide-pgo func: 54 55 6 voxide::grid::kind
-# psoxide-pgo func: 63 108 6 voxide::grid::matched
-# psoxide-pgo func: 111 113 6 voxide::grid::output
-# psoxide-pgo func: 170 174 6 voxide::grid::return_all
-# psoxide-pgo func: 1665 1692 10 voxide::ground_haze
-# psoxide-pgo func: 10197 10203 10 voxide::gte_begin_chunk
-# psoxide-pgo func: 10129 10175 10 voxide::gte_load_camera
+# psoxide-pgo func: 9796 9803 10 voxide::face_fields
+# psoxide-pgo func: 9840 9843 10 voxide::face_mat
+# psoxide-pgo func: 12967 13058 10 voxide::face_tile
+# psoxide-pgo func: 13063 13111 10 voxide::face_tint
+# psoxide-pgo func: 13094 13094 10 voxide::face_tint::{closure#0} @voxide
+# psoxide-pgo func: 13109 13109 10 voxide::face_tint::{closure#1} @voxide
+# psoxide-pgo func: 9812 9830 10 voxide::face_verts
+# psoxide-pgo func: 7396 7399 10 voxide::facing_axis
+# psoxide-pgo func: 429 434 10 voxide::fire_odds
+# psoxide-pgo func: 13967 13971 10 voxide::floor_div
+# psoxide-pgo func: 1677 1679 10 voxide::fog_band
+# psoxide-pgo func: 11826 11863 10 voxide::frame_present
+# psoxide-pgo func: 13731 13758 10 voxide::furn_tick
+# psoxide-pgo func: 7409 7411 10 voxide::gait
+# psoxide-pgo func: 13938 13939 10 voxide::get_block_i32
+# psoxide-pgo func: 84 85 6 voxide::grid::kind
+# psoxide-pgo func: 93 138 6 voxide::grid::matched
+# psoxide-pgo func: 141 143 6 voxide::grid::output
+# psoxide-pgo func: 200 204 6 voxide::grid::return_all
+# psoxide-pgo func: 1547 1574 10 voxide::ground_haze
+# psoxide-pgo func: 10246 10252 10 voxide::gte_begin_chunk
+# psoxide-pgo func: 10178 10224 10 voxide::gte_load_camera
 # psoxide-pgo func: 119 226 7 voxide::hand::decide
 # psoxide-pgo func: 230 231 7 voxide::hand::label
-# psoxide-pgo func: 7202 7240 10 voxide::held_box
-# psoxide-pgo func: 7213 7216 10 voxide::held_box::{closure#0} @voxide
-# psoxide-pgo func: 7219 7219 10 voxide::held_box::{closure#1} @voxide
-# psoxide-pgo func: 7220 7225 10 voxide::held_box::{closure#2} @voxide
-# psoxide-pgo func: 7163 7168 10 voxide::held_flat
-# psoxide-pgo func: 7176 7194 10 voxide::held_model
-# psoxide-pgo func: 12042 12046 10 voxide::hint_item
-# psoxide-pgo func: 13447 13458 10 voxide::hotbar_sync
-# psoxide-pgo func: 13788 13809 10 voxide::hud_tool
-# psoxide-pgo func: 11254 11304 10 voxide::icon_tile
-# psoxide-pgo func: 6742 6756 10 voxide::in_water_body
-# psoxide-pgo func: 618 627 8 voxide::inv::draw_hand
-# psoxide-pgo func: 1472 1608 8 voxide::inv::draw_inventory
-# psoxide-pgo func: 1991 2237 8 voxide::inv::draw_player_page
-# psoxide-pgo func: 1389 1394 8 voxide::inv::frame
+# psoxide-pgo func: 7149 7192 10 voxide::held_box
+# psoxide-pgo func: 7160 7163 10 voxide::held_box::{closure#0} @voxide
+# psoxide-pgo func: 7166 7166 10 voxide::held_box::{closure#1} @voxide
+# psoxide-pgo func: 7167 7172 10 voxide::held_box::{closure#2} @voxide
+# psoxide-pgo func: 7110 7115 10 voxide::held_flat
+# psoxide-pgo func: 7123 7141 10 voxide::held_model
+# psoxide-pgo func: 12114 12118 10 voxide::hint_item
+# psoxide-pgo func: 13513 13524 10 voxide::hotbar_sync
+# psoxide-pgo func: 13854 13875 10 voxide::hud_tool
+# psoxide-pgo func: 11313 11363 10 voxide::icon_tile
+# psoxide-pgo func: 6685 6699 10 voxide::in_water_body
+# psoxide-pgo func: 629 638 8 voxide::inv::draw_hand
+# psoxide-pgo func: 1493 1634 8 voxide::inv::draw_inventory
+# psoxide-pgo func: 2089 2369 8 voxide::inv::draw_player_page
+# psoxide-pgo func: 1421 1426 8 voxide::inv::frame
 # psoxide-pgo func: 39 53 8 voxide::inv::hold_step
-# psoxide-pgo func: 1204 1338 8 voxide::inv::inventory_input
-# psoxide-pgo func: 1205 1205 8 voxide::inv::inventory_input::{closure#0} @voxide
-# psoxide-pgo func: 1115 1152 8 voxide::inv::inventory_open
-# psoxide-pgo func: 1423 1435 8 voxide::inv::number
-# psoxide-pgo func: 1091 1095 8 voxide::inv::pages
-# psoxide-pgo func: 1368 1375 8 voxide::inv::panel
-# psoxide-pgo func: 1802 1943 8 voxide::inv::player_input
-# psoxide-pgo func: 1803 1803 8 voxide::inv::player_input::{closure#0} @voxide
-# psoxide-pgo func: 1725 1746 8 voxide::inv::player_spot
-# psoxide-pgo func: 590 602 8 voxide::inv::prompt
-# psoxide-pgo func: 608 614 8 voxide::inv::prompt_bar
-# psoxide-pgo func: 1380 1384 8 voxide::inv::slot
+# psoxide-pgo func: 1222 1360 8 voxide::inv::inventory_input
+# psoxide-pgo func: 1223 1223 8 voxide::inv::inventory_input::{closure#0} @voxide
+# psoxide-pgo func: 1133 1170 8 voxide::inv::inventory_open
+# psoxide-pgo func: 1454 1456 8 voxide::inv::number
+# psoxide-pgo func: 1109 1113 8 voxide::inv::pages
+# psoxide-pgo func: 1400 1407 8 voxide::inv::panel
+# psoxide-pgo func: 1912 2053 8 voxide::inv::player_input
+# psoxide-pgo func: 1913 1913 8 voxide::inv::player_input::{closure#0} @voxide
+# psoxide-pgo func: 1819 1856 8 voxide::inv::player_spot
+# psoxide-pgo func: 601 613 8 voxide::inv::prompt
+# psoxide-pgo func: 619 625 8 voxide::inv::prompt_bar
+# psoxide-pgo func: 1412 1416 8 voxide::inv::slot
 # psoxide-pgo func: 82 90 8 voxide::inv::spot
-# psoxide-pgo func: 1658 1669 8 voxide::inv::stock
-# psoxide-pgo func: 1033 1060 8 voxide::inv::tab_kinds
-# psoxide-pgo func: 1026 1028 8 voxide::inv::tab_list
-# psoxide-pgo func: 1001 1004 8 voxide::inv::tab_table
-# psoxide-pgo func: 1399 1419 8 voxide::inv::tabs
-# psoxide-pgo func: 1967 1975 8 voxide::inv::tenths
-# psoxide-pgo func: 436 437 10 voxide::is_flammable
-# psoxide-pgo func: 461 462 10 voxide::is_lava
-# psoxide-pgo func: 325 326 10 voxide::is_portal
-# psoxide-pgo func: 489 490 10 voxide::is_small_block
-# psoxide-pgo func: 12895 12898 10 voxide::is_transparent
-# psoxide-pgo func: 525 526 10 voxide::is_water
-# psoxide-pgo func: 13187 13188 10 voxide::java_time
-# psoxide-pgo func: 496 497 10 voxide::kind_of
-# psoxide-pgo func: 13218 13219 10 voxide::lerp_u8
-# psoxide-pgo func: 383 406 9 voxide::loading::fade_packet
-# psoxide-pgo func: 3466 3466 10 voxide::main::{closure#0} @voxide
-# psoxide-pgo func: 4133 4133 10 voxide::main::{closure#1} @voxide
-# psoxide-pgo func: 4142 4142 10 voxide::main::{closure#2} @voxide
-# psoxide-pgo func: 4145 4145 10 voxide::main::{closure#3} @voxide
-# psoxide-pgo func: 4157 4157 10 voxide::main::{closure#4} @voxide
-# psoxide-pgo func: 4166 4166 10 voxide::main::{closure#5} @voxide
-# psoxide-pgo func: 4187 4187 10 voxide::main::{closure#6} @voxide
-# psoxide-pgo func: 9809 9815 10 voxide::mat_words
-# psoxide-pgo func: 12076 12082 10 voxide::mc_slot
-# psoxide-pgo func: 2108 2120 10 voxide::melee_damage
-# psoxide-pgo func: 4657 4663 10 voxide::menu_card_input
+# psoxide-pgo func: 1684 1695 8 voxide::inv::stock
+# psoxide-pgo func: 1051 1078 8 voxide::inv::tab_kinds
+# psoxide-pgo func: 1044 1046 8 voxide::inv::tab_list
+# psoxide-pgo func: 1019 1022 8 voxide::inv::tab_table
+# psoxide-pgo func: 1431 1451 8 voxide::inv::tabs
+# psoxide-pgo func: 441 442 10 voxide::is_flammable
+# psoxide-pgo func: 466 467 10 voxide::is_lava
+# psoxide-pgo func: 330 331 10 voxide::is_portal
+# psoxide-pgo func: 494 495 10 voxide::is_small_block
+# psoxide-pgo func: 12961 12964 10 voxide::is_transparent
+# psoxide-pgo func: 530 531 10 voxide::is_water
+# psoxide-pgo func: 13253 13254 10 voxide::java_time
+# psoxide-pgo func: 501 502 10 voxide::kind_of
+# psoxide-pgo func: 13284 13285 10 voxide::lerp_u8
+# psoxide-pgo func: 384 407 9 voxide::loading::fade_packet
+# psoxide-pgo func: 3369 3369 10 voxide::main::{closure#0} @voxide
+# psoxide-pgo func: 4068 4068 10 voxide::main::{closure#1} @voxide
+# psoxide-pgo func: 4077 4077 10 voxide::main::{closure#2} @voxide
+# psoxide-pgo func: 4080 4080 10 voxide::main::{closure#3} @voxide
+# psoxide-pgo func: 4092 4092 10 voxide::main::{closure#4} @voxide
+# psoxide-pgo func: 4101 4101 10 voxide::main::{closure#5} @voxide
+# psoxide-pgo func: 4122 4122 10 voxide::main::{closure#6} @voxide
+# psoxide-pgo func: 9851 9857 10 voxide::mat_words
+# psoxide-pgo func: 12148 12154 10 voxide::mc_slot
+# psoxide-pgo func: 1990 2002 10 voxide::melee_damage
+# psoxide-pgo func: 4588 4594 10 voxide::menu_card_input
 # psoxide-pgo func: 302 303 11 voxide::menus::quit_ready
-# psoxide-pgo func: 2738 2742 12 voxide::mob::alive_count
-# psoxide-pgo func: 1843 1844 12 voxide::mob::arrow_view
+# psoxide-pgo func: 1862 1863 12 voxide::mob::arrow_view
 # psoxide-pgo func: 1074 1108 12 voxide::mob::breed_tick
 # psoxide-pgo func: 362 364 12 voxide::mob::clear_deaths
-# psoxide-pgo func: 2364 2409 12 voxide::mob::contact_damage
+# psoxide-pgo func: 2391 2436 12 voxide::mob::contact_damage
 # psoxide-pgo func: 485 489 12 voxide::mob::count_alive
 # psoxide-pgo func: 498 503 12 voxide::mob::count_kind
 # psoxide-pgo func: 353 354 12 voxide::mob::death_count
 # psoxide-pgo func: 405 419 12 voxide::mob::dims
 # psoxide-pgo func: 785 789 12 voxide::mob::dragon_status
 # psoxide-pgo func: 388 389 12 voxide::mob::eats
-# psoxide-pgo func: 1902 1917 12 voxide::mob::face_of
+# psoxide-pgo func: 1921 1936 12 voxide::mob::face_of
 # psoxide-pgo func: 517 523 12 voxide::mob::free_slot
 # psoxide-pgo func: 466 481 12 voxide::mob::get
-# psoxide-pgo func: 1689 1692 12 voxide::mob::hazard_damage
-# psoxide-pgo func: 1882 1888 12 voxide::mob::heading_vec
+# psoxide-pgo func: 1708 1711 12 voxide::mob::hazard_damage
+# psoxide-pgo func: 1901 1907 12 voxide::mob::heading_vec
 # psoxide-pgo func: 425 426 12 voxide::mob::is_flyer
 # psoxide-pgo func: 44 45 12 voxide::mob::is_hostile
 # psoxide-pgo func: 1287 1288 12 voxide::mob::is_tamed
-# psoxide-pgo func: 2424 2427 12 voxide::mob::java_half_w
+# psoxide-pgo func: 2451 2454 12 voxide::mob::java_half_w
 # psoxide-pgo func: 1044 1066 12 voxide::mob::pack_pick_skeleton
-# psoxide-pgo func: 2439 2453 12 voxide::mob::pick_box
-# psoxide-pgo func: 1849 1853 12 voxide::mob::player_arrows
-# psoxide-pgo func: 2485 2512 12 voxide::mob::ray_pick
+# psoxide-pgo func: 2466 2484 12 voxide::mob::pick_box
+# psoxide-pgo func: 2516 2543 12 voxide::mob::ray_pick
 # psoxide-pgo func: 397 401 12 voxide::mob::rng
 # psoxide-pgo func: 379 381 12 voxide::mob::set_lure
-# psoxide-pgo func: 1712 1713 12 voxide::mob::set_raining
-# psoxide-pgo func: 2464 2476 12 voxide::mob::slab
-# psoxide-pgo func: 1919 2341 12 voxide::mob::step_mob
+# psoxide-pgo func: 1731 1732 12 voxide::mob::set_raining
+# psoxide-pgo func: 2495 2507 12 voxide::mob::slab
+# psoxide-pgo func: 1938 2368 12 voxide::mob::step_mob
 # psoxide-pgo func: 1207 1254 12 voxide::mob::sun_burn
 # psoxide-pgo func: 370 373 12 voxide::mob::take_xp
 # psoxide-pgo func: 544 672 12 voxide::mob::try_spawn
 # psoxide-pgo func: 1331 1353 12 voxide::mob::unpark_near
 # psoxide-pgo func: 960 1039 12 voxide::mob::update
-# psoxide-pgo func: 1626 1684 12 voxide::mob::update_arrows
+# psoxide-pgo func: 1641 1703 12 voxide::mob::update_arrows
 # psoxide-pgo func: 68 69 12 voxide::mob::walk_q8
-# psoxide-pgo func: 6833 6846 10 voxide::mob_color
-# psoxide-pgo func: 7251 7264 10 voxide::mob_face_tile
-# psoxide-pgo func: 1128 1139 10 voxide::msg_code
-# psoxide-pgo func: 278 282 13 voxide::music::length_ms
-# psoxide-pgo func: 288 290 13 voxide::music::pick_due
-# psoxide-pgo func: 347 363 13 voxide::music::poll
-# psoxide-pgo func: 365 399 13 voxide::music::publish
-# psoxide-pgo func: 295 329 13 voxide::music::start
-# psoxide-pgo func: 333 342 13 voxide::music::tick
-# psoxide-pgo func: 2791 2798 10 voxide::nav_repeat
-# psoxide-pgo func: 9049 9054 10 voxide::near_pos
-# psoxide-pgo func: 9345 9346 10 voxide::near_shell_meshable
-# psoxide-pgo func: 9350 9351 10 voxide::near_shell_see_through
-# psoxide-pgo func: 9105 9140 10 voxide::near_vertex
-# psoxide-pgo func: 1407 1409 10 voxide::opaque
-# psoxide-pgo func: 9015 9018 10 voxide::pack_clip_color
-# psoxide-pgo func: 9022 9023 10 voxide::pack_clip_uv
-# psoxide-pgo func: 7858 7866 10 voxide::plant_tile
-# psoxide-pgo func: 5761 5786 10 voxide::portal_tick
-# psoxide-pgo func: 10391 10404 10 voxide::project_dir
-# psoxide-pgo func: 8741 8751 10 voxide::project_point_gte
-# psoxide-pgo func: 10284 10322 10 voxide::project_quad_gte
-# psoxide-pgo func: 10288 10292 10 voxide::project_quad_gte::{closure#0} @voxide
-# psoxide-pgo func: 10331 10341 10 voxide::project_quad_sw
-# psoxide-pgo func: 1145 1195 10 voxide::publish_settings
-# psoxide-pgo func: 1187 1187 10 voxide::publish_settings::{closure#0} @voxide
-# psoxide-pgo func: 10264 10274 10 voxide::quad_exploded
-# psoxide-pgo func: 13062 13073 10 voxide::queue_dither
-# psoxide-pgo func: 5369 5373 10 voxide::rain_amount
-# psoxide-pgo func: 5093 5096 10 voxide::read_pad
-# psoxide-pgo func: 1899 1907 10 voxide::record_edit
-# psoxide-pgo func: 11947 11949 10 voxide::rect
-# psoxide-pgo func: 595 596 14 voxide::redstone::emitters
-# psoxide-pgo func: 633 646 14 voxide::redstone::tick
-# psoxide-pgo func: 616 617 14 voxide::redstone::wire_power
-# psoxide-pgo func: 589 590 14 voxide::redstone::worked
-# psoxide-pgo func: 1699 1791 10 voxide::refresh_mat_ccmd
-# psoxide-pgo func: 1774 1774 10 voxide::refresh_mat_ccmd::{closure#0} @voxide
-# psoxide-pgo func: 1776 1776 10 voxide::refresh_mat_ccmd::{closure#1} @voxide
-# psoxide-pgo func: 8721 8732 10 voxide::render_drops
-# psoxide-pgo func: 7500 7723 10 voxide::render_mob
-# psoxide-pgo func: 7657 7666 10 voxide::render_mob::{closure#0} @voxide
-# psoxide-pgo func: 7464 7486 10 voxide::render_mob_shadow
-# psoxide-pgo func: 7807 7843 10 voxide::render_mobs
-# psoxide-pgo func: 9362 9493 10 voxide::render_near_block_shell
-# psoxide-pgo func: 9459 9470 10 voxide::render_near_block_shell::{closure#0} @voxide
-# psoxide-pgo func: 9473 9473 10 voxide::render_near_block_shell::{closure#1} @voxide
-# psoxide-pgo func: 8756 8775 10 voxide::render_particles
-# psoxide-pgo func: 7877 7998 10 voxide::render_plants
-# psoxide-pgo func: 7885 7997 10 voxide::render_plants::{closure#0} @voxide
-# psoxide-pgo func: 6812 6830 10 voxide::render_world
-# psoxide-pgo func: 6826 6826 10 voxide::render_world::{closure#0} @voxide
-# psoxide-pgo func: 11800 11801 10 voxide::rgb
-# psoxide-pgo func: 12870 12892 10 voxide::sap_tick
-# psoxide-pgo func: 531 532 15 voxide::save::busy
-# psoxide-pgo func: 6966 6972 10 voxide::scale_rgb
-# psoxide-pgo func: 12207 12229 10 voxide::screen_tint
-# psoxide-pgo func: 9822 9823 10 voxide::screen_xy
+# psoxide-pgo func: 6780 6793 10 voxide::mob_color
+# psoxide-pgo func: 7208 7221 10 voxide::mob_face_tile
+# psoxide-pgo func: 292 296 13 voxide::music::length_ms
+# psoxide-pgo func: 302 304 13 voxide::music::pick_due
+# psoxide-pgo func: 372 388 13 voxide::music::poll
+# psoxide-pgo func: 309 343 13 voxide::music::start
+# psoxide-pgo func: 347 365 13 voxide::music::tick
+# psoxide-pgo func: 2674 2681 10 voxide::nav_repeat
+# psoxide-pgo func: 9044 9049 10 voxide::near_pos
+# psoxide-pgo func: 9368 9369 10 voxide::near_shell_meshable
+# psoxide-pgo func: 9373 9374 10 voxide::near_shell_see_through
+# psoxide-pgo func: 9100 9145 10 voxide::near_vertex
+# psoxide-pgo func: 1289 1291 10 voxide::opaque
+# psoxide-pgo func: 9010 9013 10 voxide::pack_clip_color
+# psoxide-pgo func: 9017 9018 10 voxide::pack_clip_uv
+# psoxide-pgo func: 7821 7829 10 voxide::plant_tile
+# psoxide-pgo func: 5707 5732 10 voxide::portal_tick
+# psoxide-pgo func: 10440 10453 10 voxide::project_dir
+# psoxide-pgo func: 8736 8746 10 voxide::project_point_gte
+# psoxide-pgo func: 10333 10371 10 voxide::project_quad_gte
+# psoxide-pgo func: 10337 10341 10 voxide::project_quad_gte::{closure#0} @voxide
+# psoxide-pgo func: 10380 10390 10 voxide::project_quad_sw
+# psoxide-pgo func: 10313 10323 10 voxide::quad_exploded
+# psoxide-pgo func: 13128 13139 10 voxide::queue_dither
+# psoxide-pgo func: 5311 5315 10 voxide::rain_amount
+# psoxide-pgo func: 5035 5038 10 voxide::read_pad
+# psoxide-pgo func: 1781 1789 10 voxide::record_edit
+# psoxide-pgo func: 12019 12021 10 voxide::rect
+# psoxide-pgo func: 642 655 14 voxide::redstone::tick
+# psoxide-pgo func: 625 626 14 voxide::redstone::wire_power
+# psoxide-pgo func: 1581 1673 10 voxide::refresh_mat_ccmd
+# psoxide-pgo func: 1656 1656 10 voxide::refresh_mat_ccmd::{closure#0} @voxide
+# psoxide-pgo func: 1658 1658 10 voxide::refresh_mat_ccmd::{closure#1} @voxide
+# psoxide-pgo func: 8716 8727 10 voxide::render_drops
+# psoxide-pgo func: 7457 7680 10 voxide::render_mob
+# psoxide-pgo func: 7614 7623 10 voxide::render_mob::{closure#0} @voxide
+# psoxide-pgo func: 7421 7443 10 voxide::render_mob_shadow
+# psoxide-pgo func: 7770 7806 10 voxide::render_mobs
+# psoxide-pgo func: 9385 9528 10 voxide::render_near_block_shell
+# psoxide-pgo func: 9487 9498 10 voxide::render_near_block_shell::{closure#0} @voxide
+# psoxide-pgo func: 9501 9501 10 voxide::render_near_block_shell::{closure#1} @voxide
+# psoxide-pgo func: 8751 8770 10 voxide::render_particles
+# psoxide-pgo func: 7840 7961 10 voxide::render_plants
+# psoxide-pgo func: 7848 7960 10 voxide::render_plants::{closure#0} @voxide
+# psoxide-pgo func: 6759 6777 10 voxide::render_world
+# psoxide-pgo func: 6773 6773 10 voxide::render_world::{closure#0} @voxide
+# psoxide-pgo func: 11871 11872 10 voxide::rgb
+# psoxide-pgo func: 12936 12958 10 voxide::sap_tick
+# psoxide-pgo func: 528 529 15 voxide::save::busy
+# psoxide-pgo func: 6913 6919 10 voxide::scale_rgb
+# psoxide-pgo func: 12287 12309 10 voxide::screen_tint
+# psoxide-pgo func: 9864 9865 10 voxide::screen_xy
 # psoxide-pgo func: 130 133 16 voxide::seal::axis
 # psoxide-pgo func: 99 100 16 voxide::seal::byte
 # psoxide-pgo func: 187 231 16 voxide::seal::grow_polygon::<voxide::emit_clipped_cell::{closure#1}, voxide::emit_clipped_cell::{closure#2}> @voxide
@@ -351,22 +336,22 @@
 # psoxide-pgo func: 122 123 16 voxide::seal::neg_if
 # psoxide-pgo func: 104 105 16 voxide::seal::sgn
 # psoxide-pgo func: 113 117 16 voxide::seal::signs
-# psoxide-pgo func: 13877 13878 10 voxide::set_block_i32
-# psoxide-pgo func: 9148 9156 10 voxide::set_clip_cell
+# psoxide-pgo func: 13942 13943 10 voxide::set_block_i32
+# psoxide-pgo func: 9153 9161 10 voxide::set_clip_cell
 # psoxide-pgo func: 186 188 17 voxide::sfx::blip
 # psoxide-pgo func: 163 164 17 voxide::sfx::break_block
 # psoxide-pgo func: 225 226 17 voxide::sfx::chicken
 # psoxide-pgo func: 219 220 17 voxide::sfx::cow
 # psoxide-pgo func: 127 148 17 voxide::sfx::play
-# psoxide-pgo func: 690 711 17 voxide::sfx::rain
+# psoxide-pgo func: 694 715 17 voxide::sfx::rain
 # psoxide-pgo func: 222 223 17 voxide::sfx::sheep
 # psoxide-pgo func: 172 179 17 voxide::sfx::step_on
-# psoxide-pgo func: 483 529 17 voxide::sfx::thunder_step
+# psoxide-pgo func: 487 533 17 voxide::sfx::thunder_step
 # psoxide-pgo func: 51 57 17 voxide::sfx::tick
-# psoxide-pgo func: 268 269 18 voxide::shape::is_shape
-# psoxide-pgo func: 274 278 18 voxide::shape::solid
-# psoxide-pgo func: 13125 13128 10 voxide::sky_bright_q12
-# psoxide-pgo func: 13101 13103 10 voxide::sky_level
+# psoxide-pgo func: 367 368 18 voxide::shape::is_shape
+# psoxide-pgo func: 373 377 18 voxide::shape::solid
+# psoxide-pgo func: 13191 13194 10 voxide::sky_bright_q12
+# psoxide-pgo func: 13167 13169 10 voxide::sky_level
 # psoxide-pgo func: 136 189 19 voxide::slack::frame_begin
 # psoxide-pgo func: 105 108 19 voxide::slack::idle_begin
 # psoxide-pgo func: 125 129 19 voxide::slack::idle_end
@@ -380,58 +365,57 @@
 # psoxide-pgo func: 24 25 20 voxide::sleep::active
 # psoxide-pgo func: 68 78 20 voxide::sleep::darkness
 # psoxide-pgo func: 44 50 20 voxide::sleep::tick
-# psoxide-pgo func: 11978 11990 10 voxide::sleep_fade
-# psoxide-pgo func: 8449 8472 10 voxide::spawn_particles
-# psoxide-pgo func: 13201 13203 10 voxide::spawn_sky
-# psoxide-pgo func: 10507 10516 10 voxide::square_above
-# psoxide-pgo func: 6692 6694 10 voxide::step_mat
-# psoxide-pgo func: 11740 11749 10 voxide::submit_built_frame
-# psoxide-pgo func: 13118 13119 10 voxide::sun_height_q12
-# psoxide-pgo func: 13232 13246 10 voxide::sunset_warmth
-# psoxide-pgo func: 6736 6737 10 voxide::supported
-# psoxide-pgo func: 2150 2175 10 voxide::take_hit
-# psoxide-pgo func: 3466 3470 21 voxide::tex::digit_uv
-# psoxide-pgo func: 3475 3479 21 voxide::tex::tile_uv
-# psoxide-pgo func: 5361 5365 10 voxide::thunder_amount
-# psoxide-pgo func: 8629 8710 10 voxide::tick_drops
-# psoxide-pgo func: 8474 8485 10 voxide::tick_particles
-# psoxide-pgo func: 9328 9332 10 voxide::tint_factor
-# psoxide-pgo func: 72 73 22 voxide::tnt::live_count
+# psoxide-pgo func: 12050 12062 10 voxide::sleep_fade
+# psoxide-pgo func: 8443 8466 10 voxide::spawn_particles
+# psoxide-pgo func: 13267 13269 10 voxide::spawn_sky
+# psoxide-pgo func: 10556 10565 10 voxide::square_above
+# psoxide-pgo func: 6635 6637 10 voxide::step_mat
+# psoxide-pgo func: 11811 11820 10 voxide::submit_built_frame
+# psoxide-pgo func: 13184 13185 10 voxide::sun_height_q12
+# psoxide-pgo func: 13298 13312 10 voxide::sunset_warmth
+# psoxide-pgo func: 6679 6680 10 voxide::supported
+# psoxide-pgo func: 2032 2057 10 voxide::take_hit
+# psoxide-pgo func: 3488 3492 21 voxide::tex::digit_uv
+# psoxide-pgo func: 3497 3501 21 voxide::tex::tile_uv
+# psoxide-pgo func: 5303 5307 10 voxide::thunder_amount
+# psoxide-pgo func: 8623 8705 10 voxide::tick_drops
+# psoxide-pgo func: 8468 8479 10 voxide::tick_particles
+# psoxide-pgo func: 9351 9355 10 voxide::tint_factor
 # psoxide-pgo func: 56 69 22 voxide::tnt::pending_count
-# psoxide-pgo func: 451 485 22 voxide::tnt::render
-# psoxide-pgo func: 385 388 22 voxide::tnt::take_kick
-# psoxide-pgo func: 233 244 22 voxide::tnt::tick
-# psoxide-pgo func: 13850 13851 10 voxide::tool_for
-# psoxide-pgo func: 665 666 10 voxide::tool_slot
-# psoxide-pgo func: 13862 13867 10 voxide::tool_tier
-# psoxide-pgo func: 13822 13825 10 voxide::tool_tile
-# psoxide-pgo func: 10945 11029 10 voxide::trace_pick
-# psoxide-pgo func: 10452 10504 10 voxide::tri_above
-# psoxide-pgo func: 10472 10472 10 voxide::tri_above::{closure#0} @voxide
-# psoxide-pgo func: 2859 2893 10 voxide::tut_tick
-# psoxide-pgo func: 11641 11651 10 voxide::ui_alloc
-# psoxide-pgo func: 12031 12039 10 voxide::ui_badge
-# psoxide-pgo func: 4706 4715 10 voxide::ui_brightness
-# psoxide-pgo func: 11704 11721 10 voxide::ui_finish_sky
-# psoxide-pgo func: 11673 11683 10 voxide::ui_flush::<1024> @voxide
-# psoxide-pgo func: 11673 11683 10 voxide::ui_flush::<2> @voxide
-# psoxide-pgo func: 11687 11693 10 voxide::ui_frame_begin
-# psoxide-pgo func: 11899 11901 10 voxide::ui_line
-# psoxide-pgo func: 11656 11663 10 voxide::ui_packet
-# psoxide-pgo func: 11858 11873 10 voxide::ui_quad_blend_depth
-# psoxide-pgo func: 11805 11807 10 voxide::ui_quad_flat
-# psoxide-pgo func: 11920 11930 10 voxide::ui_quad_textured
-# psoxide-pgo func: 11629 11633 10 voxide::ui_reset
-# psoxide-pgo func: 11907 11917 10 voxide::ui_sprite
-# psoxide-pgo func: 11726 11731 10 voxide::ui_submit_tail
-# psoxide-pgo func: 11940 11942 10 voxide::ui_text
-# psoxide-pgo func: 11838 11854 10 voxide::ui_tri_add_gouraud
-# psoxide-pgo func: 11819 11831 10 voxide::ui_tri_blend
-# psoxide-pgo func: 11811 11813 10 voxide::ui_tri_gouraud
-# psoxide-pgo func: 6232 6681 10 voxide::update_player
-# psoxide-pgo func: 6267 6267 10 voxide::update_player::{closure#1} @voxide
-# psoxide-pgo func: 5987 6176 10 voxide::update_survival
-# psoxide-pgo func: 5102 5103 10 voxide::wait_vblank
+# psoxide-pgo func: 473 507 22 voxide::tnt::render
+# psoxide-pgo func: 407 410 22 voxide::tnt::take_kick
+# psoxide-pgo func: 231 242 22 voxide::tnt::tick
+# psoxide-pgo func: 13916 13917 10 voxide::tool_for
+# psoxide-pgo func: 670 671 10 voxide::tool_slot
+# psoxide-pgo func: 13928 13933 10 voxide::tool_tier
+# psoxide-pgo func: 13888 13891 10 voxide::tool_tile
+# psoxide-pgo func: 11004 11088 10 voxide::trace_pick
+# psoxide-pgo func: 10501 10553 10 voxide::tri_above
+# psoxide-pgo func: 10521 10521 10 voxide::tri_above::{closure#0} @voxide
+# psoxide-pgo func: 2745 2779 10 voxide::tut_tick
+# psoxide-pgo func: 11712 11722 10 voxide::ui_alloc
+# psoxide-pgo func: 12103 12111 10 voxide::ui_badge
+# psoxide-pgo func: 4633 4640 10 voxide::ui_brightness
+# psoxide-pgo func: 11775 11792 10 voxide::ui_finish_sky
+# psoxide-pgo func: 11744 11754 10 voxide::ui_flush::<1024> @voxide
+# psoxide-pgo func: 11744 11754 10 voxide::ui_flush::<2> @voxide
+# psoxide-pgo func: 11758 11764 10 voxide::ui_frame_begin
+# psoxide-pgo func: 11971 11973 10 voxide::ui_line
+# psoxide-pgo func: 11727 11734 10 voxide::ui_packet
+# psoxide-pgo func: 11930 11945 10 voxide::ui_quad_blend_depth
+# psoxide-pgo func: 11876 11878 10 voxide::ui_quad_flat
+# psoxide-pgo func: 11992 12002 10 voxide::ui_quad_textured
+# psoxide-pgo func: 11700 11704 10 voxide::ui_reset
+# psoxide-pgo func: 11979 11989 10 voxide::ui_sprite
+# psoxide-pgo func: 11797 11802 10 voxide::ui_submit_tail
+# psoxide-pgo func: 12012 12014 10 voxide::ui_text
+# psoxide-pgo func: 11909 11926 10 voxide::ui_tri_add_gouraud
+# psoxide-pgo func: 11890 11902 10 voxide::ui_tri_blend
+# psoxide-pgo func: 11882 11884 10 voxide::ui_tri_gouraud
+# psoxide-pgo func: 6181 6624 10 voxide::update_player
+# psoxide-pgo func: 6216 6216 10 voxide::update_player::{closure#1} @voxide
+# psoxide-pgo func: 5933 6125 10 voxide::update_survival
+# psoxide-pgo func: 5044 5045 10 voxide::wait_vblank
 # psoxide-pgo func: 291 296 23 voxide::weather::flash
 # psoxide-pgo func: 358 397 23 voxide::weather::lightning_tick
 # psoxide-pgo func: 165 166 23 voxide::weather::rain
@@ -441,92 +425,90 @@
 # psoxide-pgo func: 171 172 23 voxide::weather::thunder
 # psoxide-pgo func: 181 182 23 voxide::weather::thundering
 # psoxide-pgo func: 49 109 23 voxide::weather::tick
-# psoxide-pgo func: 4382 4387 24 voxide::world::arena_alloc
-# psoxide-pgo func: 4439 4521 24 voxide::world::arena_alloc_inner
-# psoxide-pgo func: 4783 4812 24 voxide::world::begin_mesh_edit
-# psoxide-pgo func: 4632 4647 24 voxide::world::begin_stream_commit
-# psoxide-pgo func: 2308 2315 24 voxide::world::blast_busy
-# psoxide-pgo func: 2525 2534 24 voxide::world::blast_remesh_urgent
-# psoxide-pgo func: 2505 2520 24 voxide::world::blast_remesh_view
-# psoxide-pgo func: 2181 2283 24 voxide::world::blast_tick
-# psoxide-pgo func: 3056 3057 24 voxide::world::blasts_completed
-# psoxide-pgo func: 3051 3052 24 voxide::world::blasts_pending
-# psoxide-pgo func: 3623 3799 24 voxide::world::build_mask
-# psoxide-pgo func: 607 618 24 voxide::world::build_sky_column
-# psoxide-pgo func: 575 602 24 voxide::world::build_sky_top
-# psoxide-pgo func: 3585 3612 24 voxide::world::build_y_cols
-# psoxide-pgo func: 3928 3931 24 voxide::world::cell_to_local
-# psoxide-pgo func: 2296 2299 24 voxide::world::chain_remesh_waiting
-# psoxide-pgo func: 374 379 24 voxide::world::chunk_lod
-# psoxide-pgo func: 436 441 24 voxide::world::col_masks_reset
-# psoxide-pgo func: 1858 1862 24 voxide::world::column_loaded
-# psoxide-pgo func: 4548 4626 24 voxide::world::commit_mesh_inner
-# psoxide-pgo func: 451 454 24 voxide::world::decode_blocks::<false> @voxide
-# psoxide-pgo func: 451 454 24 voxide::world::decode_blocks::<true> @voxide
-# psoxide-pgo func: 1460 1461 24 voxide::world::dimension
-# psoxide-pgo func: 4056 4063 24 voxide::world::dir_dims
-# psoxide-pgo func: 4755 4756 24 voxide::world::edit_backlog
-# psoxide-pgo func: 3875 3923 24 voxide::world::face_ao
-# psoxide-pgo func: 3887 3894 24 voxide::world::face_ao::{closure#0} @voxide
-# psoxide-pgo func: 2972 2973 24 voxide::world::fire_live
-# psoxide-pgo func: 3152 3169 24 voxide::world::fire_tick
-# psoxide-pgo func: 623 638 24 voxide::world::flood_light
-# psoxide-pgo func: 2766 2774 24 voxide::world::fluid_step
-# psoxide-pgo func: 2896 2942 24 voxide::world::fluid_tick
-# psoxide-pgo func: 5965 6019 24 voxide::world::for_plants::<voxide::render_plants::{closure#0}> @voxide
-# psoxide-pgo func: 5639 5684 24 voxide::world::for_visible_faces
-# psoxide-pgo func: 5677 5677 24 voxide::world::for_visible_faces::{closure#0} @voxide
-# psoxide-pgo func: 5684 5685 24 voxide::world::for_visible_faces::{closure#1} @voxide
-# psoxide-pgo func: 2645 2654 24 voxide::world::fq_push
-# psoxide-pgo func: 5018 5028 24 voxide::world::free_far_slots
-# psoxide-pgo func: 5145 5191 24 voxide::world::gen_tick
-# psoxide-pgo func: 1865 1881 24 voxide::world::get
-# psoxide-pgo func: 1885 1895 24 voxide::world::get_span
-# psoxide-pgo func: 3939 4051 24 voxide::world::greedy_plane
-# psoxide-pgo func: 364 369 24 voxide::world::in_render_range
-# psoxide-pgo func: 38 39 24 voxide::world::is_cross_plant
-# psoxide-pgo func: 544 545 24 voxide::world::is_light_source
-# psoxide-pgo func: 754 755 24 voxide::world::lidx
-# psoxide-pgo func: 4818 4937 24 voxide::world::mesh_edit_tick
-# psoxide-pgo func: 3520 3540 24 voxide::world::pack
-# psoxide-pgo func: 4072 4089 24 voxide::world::pad_plane_starts
-# psoxide-pgo func: 3808 3825 24 voxide::world::push_face
-# psoxide-pgo func: 4760 4780 24 voxide::world::queue_mesh_edit
-# psoxide-pgo func: 4097 4143 24 voxide::world::rebuild_plane_bounds
-# psoxide-pgo func: 5045 5118 24 voxide::world::recenter
-# psoxide-pgo func: 335 357 24 voxide::world::reserve_stream_slot
-# psoxide-pgo func: 81 93 25 voxide::world::rle::col_pack
-# psoxide-pgo func: 373 388 25 voxide::world::rle::col_span
-# psoxide-pgo func: 135 166 25 voxide::world::rle::col_store
-# psoxide-pgo func: 62 78 25 voxide::world::rle::col_unpack
-# psoxide-pgo func: 399 499 25 voxide::world::rle::decode_cols::<false> @voxide
-# psoxide-pgo func: 399 499 25 voxide::world::rle::decode_cols::<true> @voxide
-# psoxide-pgo func: 45 55 25 voxide::world::rle::rget
-# psoxide-pgo func: 1898 1973 24 voxide::world::set
-# psoxide-pgo func: 1840 1844 24 voxide::world::set_dirty
-# psoxide-pgo func: 388 391 24 voxide::world::set_mesh_lod
-# psoxide-pgo func: 3197 3198 24 voxide::world::set_raining
-# psoxide-pgo func: 2482 2483 24 voxide::world::set_view
-# psoxide-pgo func: 550 565 24 voxide::world::sky_bucket
-# psoxide-pgo func: 759 762 24 voxide::world::slot
-# psoxide-pgo func: 5228 5277 24 voxide::world::stream_backlog
-# psoxide-pgo func: 4652 4706 24 voxide::world::stream_commit_tick
-# psoxide-pgo func: 5333 5467 24 voxide::world::stream_tick
-# psoxide-pgo func: 5202 5207 24 voxide::world::stream_tick_claim
-# psoxide-pgo func: 3425 3457 24 voxide::world::surface_y
-# psoxide-pgo func: 538 540 24 voxide::world::torch_lit
-# psoxide-pgo func: 3261 3281 24 voxide::world::try_ignite
-# psoxide-pgo func: 2660 2682 24 voxide::world::wake_fluid
-# psoxide-pgo func: 5403 5492 10 voxide::world_lighting
-# psoxide-pgo func: 5709 5754 10 voxide::world_tick
-# psoxide-pgo func: 13889 13890 10 voxide::world_to_block_x
-# psoxide-pgo func: 13893 13894 10 voxide::world_to_block_y
-# psoxide-pgo func: 13897 13898 10 voxide::world_to_block_z
-# psoxide-pgo func: 2055 2057 10 voxide::xp_level
-# psoxide-pgo func: 2044 2050 10 voxide::xp_total
-# psoxide-pgo func: 5714 5958 24 voxide_chunk_faces
-# psoxide-pgo func: 9716 9741 10 voxide_emit_faces
-# psoxide-pgo func: 5554 5614 24 voxide_plane_in_frustum
+# psoxide-pgo func: 4421 4426 24 voxide::world::arena_alloc
+# psoxide-pgo func: 4478 4564 24 voxide::world::arena_alloc_inner
+# psoxide-pgo func: 4834 4863 24 voxide::world::begin_mesh_edit
+# psoxide-pgo func: 4679 4694 24 voxide::world::begin_stream_commit
+# psoxide-pgo func: 2325 2332 24 voxide::world::blast_busy
+# psoxide-pgo func: 2542 2551 24 voxide::world::blast_remesh_urgent
+# psoxide-pgo func: 2522 2537 24 voxide::world::blast_remesh_view
+# psoxide-pgo func: 2198 2300 24 voxide::world::blast_tick
+# psoxide-pgo func: 3068 3069 24 voxide::world::blasts_pending
+# psoxide-pgo func: 3646 3818 24 voxide::world::build_mask
+# psoxide-pgo func: 617 628 24 voxide::world::build_sky_column
+# psoxide-pgo func: 580 612 24 voxide::world::build_sky_top
+# psoxide-pgo func: 3604 3635 24 voxide::world::build_y_cols
+# psoxide-pgo func: 3947 3948 24 voxide::world::cell_to_local
+# psoxide-pgo func: 2313 2316 24 voxide::world::chain_remesh_waiting
+# psoxide-pgo func: 379 384 24 voxide::world::chunk_lod
+# psoxide-pgo func: 1868 1872 24 voxide::world::column_loaded
+# psoxide-pgo func: 4591 4673 24 voxide::world::commit_mesh_inner
+# psoxide-pgo func: 456 459 24 voxide::world::decode_blocks::<false> @voxide
+# psoxide-pgo func: 456 459 24 voxide::world::decode_blocks::<true> @voxide
+# psoxide-pgo func: 1470 1471 24 voxide::world::dimension
+# psoxide-pgo func: 4075 4082 24 voxide::world::dir_dims
+# psoxide-pgo func: 4806 4807 24 voxide::world::edit_backlog
+# psoxide-pgo func: 3894 3942 24 voxide::world::face_ao
+# psoxide-pgo func: 3906 3913 24 voxide::world::face_ao::{closure#0} @voxide
+# psoxide-pgo func: 2989 2990 24 voxide::world::fire_live
+# psoxide-pgo func: 3169 3186 24 voxide::world::fire_tick
+# psoxide-pgo func: 633 648 24 voxide::world::flood_light
+# psoxide-pgo func: 2783 2791 24 voxide::world::fluid_step
+# psoxide-pgo func: 2913 2959 24 voxide::world::fluid_tick
+# psoxide-pgo func: 6016 6070 24 voxide::world::for_plants::<voxide::render_plants::{closure#0}> @voxide
+# psoxide-pgo func: 5690 5735 24 voxide::world::for_visible_faces
+# psoxide-pgo func: 5728 5728 24 voxide::world::for_visible_faces::{closure#0} @voxide
+# psoxide-pgo func: 5735 5736 24 voxide::world::for_visible_faces::{closure#1} @voxide
+# psoxide-pgo func: 2662 2671 24 voxide::world::fq_push
+# psoxide-pgo func: 5069 5079 24 voxide::world::free_far_slots
+# psoxide-pgo func: 5196 5242 24 voxide::world::gen_tick
+# psoxide-pgo func: 1875 1891 24 voxide::world::get
+# psoxide-pgo func: 1895 1905 24 voxide::world::get_span
+# psoxide-pgo func: 3958 4070 24 voxide::world::greedy_plane
+# psoxide-pgo func: 369 374 24 voxide::world::in_render_range
+# psoxide-pgo func: 39 40 24 voxide::world::is_cross_plant
+# psoxide-pgo func: 549 550 24 voxide::world::is_light_source
+# psoxide-pgo func: 764 765 24 voxide::world::lidx
+# psoxide-pgo func: 4869 4988 24 voxide::world::mesh_edit_tick
+# psoxide-pgo func: 3539 3559 24 voxide::world::pack
+# psoxide-pgo func: 4091 4108 24 voxide::world::pad_plane_starts
+# psoxide-pgo func: 3827 3844 24 voxide::world::push_face
+# psoxide-pgo func: 4811 4831 24 voxide::world::queue_mesh_edit
+# psoxide-pgo func: 4116 4162 24 voxide::world::rebuild_plane_bounds
+# psoxide-pgo func: 5096 5169 24 voxide::world::recenter
+# psoxide-pgo func: 340 362 24 voxide::world::reserve_stream_slot
+# psoxide-pgo func: 89 101 25 voxide::world::rle::col_pack
+# psoxide-pgo func: 394 409 25 voxide::world::rle::col_span
+# psoxide-pgo func: 144 179 25 voxide::world::rle::col_store
+# psoxide-pgo func: 70 86 25 voxide::world::rle::col_unpack
+# psoxide-pgo func: 420 524 25 voxide::world::rle::decode_cols::<false> @voxide
+# psoxide-pgo func: 420 524 25 voxide::world::rle::decode_cols::<true> @voxide
+# psoxide-pgo func: 53 63 25 voxide::world::rle::rget
+# psoxide-pgo func: 1908 1983 24 voxide::world::set
+# psoxide-pgo func: 1850 1854 24 voxide::world::set_dirty
+# psoxide-pgo func: 393 396 24 voxide::world::set_mesh_lod
+# psoxide-pgo func: 3214 3215 24 voxide::world::set_raining
+# psoxide-pgo func: 2499 2500 24 voxide::world::set_view
+# psoxide-pgo func: 555 570 24 voxide::world::sky_bucket
+# psoxide-pgo func: 769 772 24 voxide::world::slot
+# psoxide-pgo func: 5279 5328 24 voxide::world::stream_backlog
+# psoxide-pgo func: 4699 4757 24 voxide::world::stream_commit_tick
+# psoxide-pgo func: 5384 5518 24 voxide::world::stream_tick
+# psoxide-pgo func: 5253 5258 24 voxide::world::stream_tick_claim
+# psoxide-pgo func: 3444 3476 24 voxide::world::surface_y
+# psoxide-pgo func: 543 545 24 voxide::world::torch_lit
+# psoxide-pgo func: 3280 3300 24 voxide::world::try_ignite
+# psoxide-pgo func: 2677 2699 24 voxide::world::wake_fluid
+# psoxide-pgo func: 5345 5434 10 voxide::world_lighting
+# psoxide-pgo func: 5653 5700 10 voxide::world_tick
+# psoxide-pgo func: 13954 13955 10 voxide::world_to_block_x
+# psoxide-pgo func: 13958 13959 10 voxide::world_to_block_y
+# psoxide-pgo func: 13962 13963 10 voxide::world_to_block_z
+# psoxide-pgo func: 1937 1939 10 voxide::xp_level
+# psoxide-pgo func: 1926 1932 10 voxide::xp_total
+# psoxide-pgo func: 5765 6009 24 voxide_chunk_faces
+# psoxide-pgo func: 9758 9783 10 voxide_emit_faces
+# psoxide-pgo func: 5605 5665 24 voxide_plane_in_frustum
 voxide_emit_faces:590204:88
  0: 88
  9: 103
@@ -534,12 +516,12 @@ voxide_emit_faces:590204:88
  13: 84
  15.1: 4510
  20: voxide::emit_face:585065
-  1: 4464
-  4: voxide::face_fields:8968
+  8: 4464
+  11: voxide::face_fields:8968
    5: 4460
    6: 4508
-  5: 1566
-  7: voxide::face_verts:35912
+  12: 1566
+  14: voxide::face_verts:35912
    1: 4547
    2: 1199
    8: 4534
@@ -552,11 +534,7 @@ voxide_emit_faces:590204:88
    16: 301
    17: 1436
    18: 382
-  23: voxide::emit_face::{closure#0} @voxide:13501
-   2: 4537
-   3: 4480
-   4: 4484
-  23: psx_gte::scene::start_project_triple:31498
+  30: psx_gte::scene::start_project_triple:31498
    3: <psx_gte_core::math::Vec3I16>::xy_packed:4434
     1: 4434
    4: <psx_gte_core::math::Vec3I16>::z_packed:4450
@@ -570,8 +548,12 @@ voxide_emit_faces:590204:88
    8: <psx_gte_core::math::Vec3I16>::z_packed:4513
     1: 4513
    14: 4545
-  24: 4508
-  38: voxide::mat_words:26920
+  30: voxide::emit_face::{closure#0} @voxide:13501
+   2: 4537
+   3: 4480
+   4: 4484
+  31: 4508
+  45: voxide::mat_words:26920
    4: 4462
    4: <*const u32>::add @voxide:4530
     34: 4530
@@ -581,73 +563,73 @@ voxide_emit_faces:590204:88
    6: 4498
    6: <*const u32>::add @voxide:4475
     34: 4475
-  39: <psx_gte::scene::ProjectTripleInFlight>::read:13370
+  46: <psx_gte::scene::ProjectTripleInFlight>::read:13370
    15: 4538
    45: 4448
    50: 4384
-  43: 4591
-  43: <psx_gte_core::math::Vec3I16>::xy_packed:4557
+  50: 4591
+  50: <psx_gte_core::math::Vec3I16>::xy_packed:4557
    1: 4557
-  44: 4435
-  44: <psx_gte_core::math::Vec3I16>::z_packed:4536
+  51: 4435
+  51: <psx_gte_core::math::Vec3I16>::z_packed:4536
    1: 4536
-  46: psx_gte::ops::project_single:4453
+  53: psx_gte::ops::project_single:4453
    65516: 4453
-  47: <u16 as core::cmp::Ord>::min @voxide:9053
+  54: <u16 as core::cmp::Ord>::min @voxide:9053
    4: 4469
    4.3: 4584
-  52: 4352
-  52: <i32 as core::cmp::Ord>::clamp:4537
+  59: 4352
+  59: <i32 as core::cmp::Ord>::clamp:4537
    9: 4537
-  57: <i32 as core::cmp::Ord>::clamp:4426
+  64: <i32 as core::cmp::Ord>::clamp:4426
    9: 4426
-  62: <i32 as core::cmp::Ord>::clamp:4533
+  69: <i32 as core::cmp::Ord>::clamp:4533
    9: 4533
-  65: 4488
-  66: 4424
-  67: <u16 as core::cmp::Ord>::min @voxide:4565
+  72: 4488
+  73: 4424
+  74: <u16 as core::cmp::Ord>::min @voxide:4565
    4.5: 4565
-  79: 4432
-  80: 4123
-  82: 166
-  82: <usize as core::cmp::Ord>::max @voxide:182
+  86: 4432
+  87: 4123
+  89: 166
+  89: <usize as core::cmp::Ord>::max @voxide:182
    4: 182
-  85: 476
-  88: 3974
-  89: 3937
-  89: <i32 as core::cmp::Ord>::clamp:4111
+  92: 476
+  95: 3974
+  96: 3937
+  96: <i32 as core::cmp::Ord>::clamp:4111
    9: 4111
-  98: core::cmp::max::<i32> @voxide:10201
+  105: core::cmp::max::<i32> @voxide:10201
    1: <i32 as core::cmp::Ord>::max @voxide:4015
     4.2: 4015
    1.1: <i32 as core::cmp::Ord>::max @voxide:4046
     4.4: 4046
    1.2: <i32 as core::cmp::Ord>::max @voxide:2140
     4.6: 2140
-  98: core::cmp::min::<i32> @voxide:10002
+  105: core::cmp::min::<i32> @voxide:10002
    1: <i32 as core::cmp::Ord>::min @voxide:3324
     4.7: 3324
    1.1: <i32 as core::cmp::Ord>::min @voxide:2677
     4.9: 2677
    1.2: <i32 as core::cmp::Ord>::min @voxide:4001
     4.11: 4001
-  99: core::cmp::max::<i32> @voxide:10948
+  106: core::cmp::max::<i32> @voxide:10948
    1.3: <i32 as core::cmp::Ord>::max @voxide:4026
     4.8: 4026
    1.4: <i32 as core::cmp::Ord>::max @voxide:2948
     4.10: 2948
    1.5: <i32 as core::cmp::Ord>::max @voxide:3974
     4.12: 3974
-  99: core::cmp::min::<i32> @voxide:10906
+  106: core::cmp::min::<i32> @voxide:10906
    1.3: <i32 as core::cmp::Ord>::min @voxide:3502
     4.13: 3502
    1.4: <i32 as core::cmp::Ord>::min @voxide:4000
     4.15: 4000
    1.5: <i32 as core::cmp::Ord>::min @voxide:3404
     4.17: 3404
-  100: 3418
-  116: 3013
-  117: voxide::seal::grow_quad:114965
+  107: 3418
+  123: 3013
+  124: voxide::seal::grow_quad:114965
    3: 3019
    4: 2935
    5: 3004
@@ -708,36 +690,36 @@ voxide_emit_faces:590204:88
    29: 3070
    29: voxide::seal::byte:2877
     1: 2877
-  137: 2980
-  148: 3077
-  151: 2999
-  154: voxide::depth_slot:5970
+  144: 2980
+  155: 3077
+  158: 2999
+  161: voxide::depth_slot:5970
    1: 2945
    7: 3025
-  156.1: 3025
-  164: voxide::fog_band:8772
+  163.1: 3025
+  171: voxide::fog_band:8772
    1.2: 2878
    2.2: 2958
    2.4: 2936
-  165: voxide::fog_band:8950
+  172: voxide::fog_band:8950
    1.8: 2936
    2.6: 2994
    2.8: 3020
-  166: 2916
-  166.3: 1529
-  172.1: 1723
-  172.2: 143
-  172.3: 1598
-  174: 1311
-  176: 1651
-  177.3: 1637
-  178: 1667
-  184.1: 1611
-  185.1: 1685
-  186.1: 1658
-  187.1: 1607
-  188: 1667
-  188: voxide::ao_shade:19331
+  173: 2916
+  173.3: 1529
+  179.1: 1723
+  179.2: 143
+  179.3: 1598
+  181: 1311
+  183: 1651
+  184.3: 1637
+  185: 1667
+  191.1: 1611
+  192.1: 1685
+  193.1: 1658
+  194.1: 1607
+  195: 1667
+  195: voxide::ao_shade:19331
    1: 1667
    2: 1611
    3: 1614
@@ -754,12 +736,12 @@ voxide_emit_faces:590204:88
     1: 1559
    8: <u32>::wrapping_sub:1565
     1: 1565
-  189: 1596
-  189: voxide::screen_xy:1565
+  196: 1596
+  196: voxide::screen_xy:1565
    1.1: 1565
-  190: 1567
-  191: 1616
-  191: voxide::ao_shade:19476
+  197: 1567
+  198: 1616
+  198: voxide::ao_shade:19476
    1: 1585
    2: 1616
    3: 1682
@@ -776,12 +758,12 @@ voxide_emit_faces:590204:88
     1: 1651
    8.1: <u32>::wrapping_sub:1682
     1: 1682
-  192: 1611
-  192: voxide::screen_xy:1682
+  199: 1611
+  199: voxide::screen_xy:1682
    1.1: 1682
-  193: 1608
-  194: 1667
-  194: voxide::ao_shade:19338
+  200: 1608
+  201: 1667
+  201: voxide::ao_shade:19338
    1: 1687
    2: 1587
    3: 1619
@@ -798,12 +780,12 @@ voxide_emit_faces:590204:88
     1: 1588
    8.2: <u32>::wrapping_sub:1577
     1: 1577
-  195: 1565
-  195: voxide::screen_xy:1579
+  202: 1565
+  202: voxide::screen_xy:1579
    1.1: 1579
-  196: 1576
-  197: 1577
-  197: voxide::ao_shade:21279
+  203: 1576
+  204: 1577
+  204: voxide::ao_shade:21279
    1: 1626
    2: 1626
    3: 1687
@@ -822,11 +804,11 @@ voxide_emit_faces:590204:88
     1: 1594
    8.3: <u32>::wrapping_sub:1685
     1: 1685
-  198: 1565
-  198: voxide::screen_xy:1585
+  205: 1565
+  205: voxide::screen_xy:1585
    1.1: 1585
-  199: 1658
-  201: <psx_gpu::ot::OrderingTable<1024>>::insert_unchecked @voxide:8085
+  206: 1658
+  208: <psx_gpu::ot::OrderingTable<1024>>::insert_unchecked @voxide:8085
    2: <psx_gpu::ot::OrderingTable<1024>>::link_unchecked @voxide:8085
     3: <psx_gpu::ot::OrderingTable<1024>>::link_tag_high_unchecked @voxide:8085
      11: <[u32]>::get_unchecked_mut::<usize> @voxide:1596
@@ -837,26 +819,26 @@ voxide_emit_faces:590204:88
       11.1: 1538
      14.1: 1658
      15.1: 1649
-  215.3: 1377
-  216: 1378
-  217: 1410
-  218: 1305
-  218: voxide::screen_xy:1284
+  222.3: 1377
+  223: 1378
+  224: 1410
+  225: 1305
+  225: voxide::screen_xy:1284
    1: 1284
-  219: 1354
-  220: 1292
-  220: voxide::screen_xy:1339
+  226: 1354
+  227: 1292
+  227: voxide::screen_xy:1339
    1: 1339
-  221: 1416
-  222: 1354
-  222: voxide::screen_xy:1321
+  228: 1416
+  229: 1354
+  229: voxide::screen_xy:1321
    1: 1321
-  223: 1375
-  224: 1284
-  224: voxide::screen_xy:1287
+  230: 1375
+  231: 1284
+  231: voxide::screen_xy:1287
    1: 1287
-  225: 1321
-  226: <psx_gpu::ot::OrderingTable<1024>>::insert_unchecked @voxide:6755
+  232: 1321
+  233: <psx_gpu::ot::OrderingTable<1024>>::insert_unchecked @voxide:6755
    2.1: <psx_gpu::ot::OrderingTable<1024>>::link_unchecked @voxide:6755
     3.1: <psx_gpu::ot::OrderingTable<1024>>::link_tag_high_unchecked @voxide:6755
      11.1: <[u32]>::get_unchecked_mut::<usize> @voxide:1369
@@ -964,18 +946,18 @@ voxide::frame_present:517409:17
    1: 16
   8: <psx_gpu::framebuf::FrameBuffer>::buffer_y:20
    1.3: 20
+  9: psx_hw::gpu::gp0::draw_area_top_left:21
+   1: 21
   9: psx_io::gpu::write_command:18
    8: psx_io::write_u32:18
     3.1: core::ptr::write_volatile::<u32> @psx_gpu:18
      11.1: 18
-  9: psx_hw::gpu::gp0::draw_area_top_left:21
-   1: 21
+  10: psx_hw::gpu::gp0::draw_area_bottom_right:19
+   1: 19
   10: psx_io::gpu::write_command:15
    8.1: psx_io::write_u32:15
     3.2: core::ptr::write_volatile::<u32> @psx_gpu:15
      11.2: 15
-  10: psx_hw::gpu::gp0::draw_area_bottom_right:19
-   1: 19
   11: 20
   12: 24
   14: psx_hw::gpu::gp0::draw_offset:20
@@ -998,20 +980,20 @@ voxide_chunk_faces:393472:185
  50.1: 794
  53: 773
  54: 175
+ 54: <i32 as core::cmp::Ord>::min @voxide:400
+  4: 400
  54: voxide::floor_div:1401
   1: 580
   2.3: 408
   4: 221
   4.3: 192
- 54: <i32 as core::cmp::Ord>::min @voxide:400
-  4: 400
  56: 574
+ 56: <i32 as core::cmp::Ord>::max @voxide:595
+  4: 595
  56: voxide::floor_div:981
   1: 581
   4: 199
   4.3: 201
- 56: <i32 as core::cmp::Ord>::max @voxide:595
-  4: 595
  58: 592
  59: 240
  67: 892
@@ -1070,19 +1052,15 @@ voxide_chunk_faces:393472:185
  234: <*mut u32>::add @voxide:4372
   34: 4372
  235: 4397
- 235: <*mut u16>::add @voxide:4344
-  34: 4344
  235: <*const u16>::add @voxide:4413
   34.2: 4413
+ 235: <*mut u16>::add @voxide:4344
+  34: 4344
  237: 4391
  241: 869
  244: 204
-voxide::render_plants:202327:18
+voxide::render_plants:202275:18
  0: 19
- 4: psx_gte::scene::load_translation:52
-  65502: 17
-  65502.1: 18
-  65502.2: 17
  5: 968
  6: 18
  7: voxide::face_tint:166
@@ -1169,10 +1147,6 @@ voxide::render_plants:202327:18
    80.1: 62
    80.1: voxide::project_quad_gte:31292
     11: 983
-    11: voxide::project_quad_gte::{closure#0} @voxide:2840
-     2: 942
-     3: 941
-     4: 957
     11: psx_gte::scene::project_triangle_scheduled:10080
      3: psx_gte::scene::project_triangle_mips:10080
       1: <psx_gte_core::math::Vec3I16>::xy_packed:930
@@ -1192,9 +1166,11 @@ voxide::render_plants:202327:18
       76: 916
       80: 825
       81: 888
+    11: voxide::project_quad_gte::{closure#0} @voxide:2840
+     2: 942
+     3: 941
+     4: 957
     12: 932
-    12: voxide::project_quad_gte::{closure#0} @voxide:941
-     4: 941
     12: psx_gte::scene::project_vertex_scheduled:4669
      3: psx_gte::scene::project_vertex_mips:4669
       1: <psx_gte_core::math::Vec3I16>::xy_packed:919
@@ -1204,6 +1180,8 @@ voxide::render_plants:202327:18
       7: 971
       36: 900
       37: 911
+    12: voxide::project_quad_gte::{closure#0} @voxide:941
+     4: 941
     13: <u16 as core::cmp::Ord>::min @voxide:2842
      4.3: 986
      4.5: 918
@@ -1261,9 +1239,9 @@ voxide::render_plants:202327:18
    112.1: 550
   54: 386
  121: 23
-voxide::emit_clipped_cell:161431:386
+voxide::emit_clipped_cell:160784:386
  0: 466
- 26: voxide::clip_cell_plane_c::<0> @voxide:2950
+ 33: voxide::clip_cell_plane_c::<0> @voxide:2950
   10: 361
   10: voxide::clip_distance_c::<0> @voxide:407
    2: 407
@@ -1320,13 +1298,13 @@ voxide::emit_clipped_cell:161431:386
         23.1: 98
       15.1: 84
   24: 95
- 26.1: voxide::clip_cell_plane_c::<1> @voxide:4997
+ 33.1: voxide::clip_cell_plane_c::<1> @voxide:4997
   8.1: 1517
   10: 1606
   10: voxide::clip_distance_c::<1> @voxide:1469
    3: 1469
   17: 405
- 26.2: voxide::clip_cell_plane_c::<2> @voxide:20116
+ 33.2: voxide::clip_cell_plane_c::<2> @voxide:20116
   8.1: 1567
   10: 1528
   10: voxide::clip_distance_c::<2> @voxide:1569
@@ -1395,7 +1373,7 @@ voxide::emit_clipped_cell:161431:386
       15.1: 319
      97: 687
   24: 187
- 26.3: voxide::clip_cell_plane_c::<3> @voxide:19257
+ 33.3: voxide::clip_cell_plane_c::<3> @voxide:19257
   8.1: 1428
   10: 1477
   10: voxide::clip_distance_c::<3> @voxide:1463
@@ -1464,7 +1442,7 @@ voxide::emit_clipped_cell:161431:386
       15.1: 344
      97: 703
   24: 186
- 26.4: voxide::clip_cell_plane_c::<4> @voxide:7849
+ 33.4: voxide::clip_cell_plane_c::<4> @voxide:7849
   8.1: 1269
   10: 1303
   10: voxide::clip_distance_c::<4> @voxide:1293
@@ -1533,7 +1511,7 @@ voxide::emit_clipped_cell:161431:386
       15.1: 42
      97: 153
   24: 31
- 26.5: voxide::clip_cell_plane_c::<5> @voxide:9461
+ 33.5: voxide::clip_cell_plane_c::<5> @voxide:9461
   8.1: 1189
   10: 1179
   10: voxide::clip_distance_c::<5> @voxide:1259
@@ -1602,34 +1580,34 @@ voxide::emit_clipped_cell:161431:386
       15.1: 100
      97: 226
   24: 53
- 27: 289
- 27.1: 416
- 27.2: 222
- 27.3: 210
- 27.4: 309
- 27.5: 259
- 34: 480
- 50: voxide::emit_clipped_cell::{closure#0} @voxide:291
+ 34: 289
+ 34.1: 416
+ 34.2: 222
+ 34.3: 210
+ 34.4: 309
+ 34.5: 259
+ 41: 480
+ 57: voxide::emit_clipped_cell::{closure#0} @voxide:291
   0: 291
- 53.1: 910
- 54: voxide::emit_clipped_cell::{closure#0} @voxide:973
-  0.1: 973
- 54: <i32 as core::cmp::Ord>::min @voxide:956
+ 60.1: 910
+ 61: <i32 as core::cmp::Ord>::min @voxide:956
   4: 956
- 55: <i32 as core::cmp::Ord>::max @voxide:974
+ 61: voxide::emit_clipped_cell::{closure#0} @voxide:973
+  0.1: 973
+ 62: <i32 as core::cmp::Ord>::max @voxide:974
   4.4: 974
- 56: 967
- 61.1: 1249
- 62: 1199
- 62: voxide::emit_clipped_cell::{closure#0} @voxide:1213
-  0.2: 1213
- 62: <i32 as core::cmp::Ord>::max @voxide:1267
+ 63: 967
+ 68.1: 1249
+ 69: 1199
+ 69: <i32 as core::cmp::Ord>::max @voxide:1267
   4: 1267
- 63: 863
- 67: 1255
- 82.1: 1220
- 83: 1280
- 83: voxide::clip_project:7542
+ 69: voxide::emit_clipped_cell::{closure#0} @voxide:1213
+  0.2: 1213
+ 70: 863
+ 74: 1255
+ 88.1: 1220
+ 89: 1280
+ 89: voxide::clip_project:7542
   5: 1304
   5: <*const i32>::add @voxide:1243
    34: 1243
@@ -1639,8 +1617,8 @@ voxide::emit_clipped_cell:161431:386
   8: 1316
   8: <i32 as core::cmp::Ord>::clamp:1180
    9: 1180
- 86: 310
- 90: voxide::seal::grow_polygon::<voxide::emit_clipped_cell::{closure#1}, voxide::emit_clipped_cell::{closure#2}> @voxide:36445
+ 92: 310
+ 96: voxide::seal::grow_polygon::<voxide::emit_clipped_cell::{closure#1}, voxide::emit_clipped_cell::{closure#2}> @voxide:36445
   12: voxide::emit_clipped_cell::{closure#1} @voxide:334
    0: 334
   16.1: 1279
@@ -1694,28 +1672,27 @@ voxide::emit_clipped_cell:161431:386
   44.1: voxide::emit_clipped_cell::{closure#2} @voxide:2389
    1: 1196
    2: 1193
- 102.1: 641
- 104: 606
- 109: 625
- 110: 647
- 117: 632
- 118: 654
- 119: 630
- 122: 659
- 123: 625
- 124: 601
- 125: 645
- 125: voxide::depth_slot:1896
+ 112.1: 641
+ 114: 606
+ 119: 625
+ 135: 632
+ 136: 654
+ 137: 630
+ 140: 659
+ 141: 625
+ 142: 601
+ 143: 645
+ 143: <i32 as core::cmp::Ord>::max @voxide:638
+  4.1: 638
+ 143: voxide::depth_slot:1896
   1: 619
   4: 638
   7: 639
- 125: <i32 as core::cmp::Ord>::max @voxide:638
-  4.1: 638
- 129: <*mut psx_gpu::prim::TriTexturedGouraud>::add @voxide:625
+ 147: <*mut psx_gpu::prim::TriTexturedGouraud>::add @voxide:625
   34: 625
- 130: 642
- 131: 618
- 131: voxide::pack_clip_color:3691
+ 148: 642
+ 149: 618
+ 149: voxide::pack_clip_color:3691
   1: 641
   1: <i32 as core::cmp::Ord>::clamp:616
    9: 616
@@ -1725,16 +1702,16 @@ voxide::emit_clipped_cell:161431:386
   3: 594
   3: <i32 as core::cmp::Ord>::clamp:626
    9: 626
- 132: 570
- 133: 628
- 133: voxide::pack_clip_uv:1869
+ 150: 570
+ 151: 628
+ 151: voxide::pack_clip_uv:1869
   1: 637
   1: <i32 as core::cmp::Ord>::clamp:621
    9: 621
   1.1: <i32 as core::cmp::Ord>::clamp:611
    9: 611
- 134: 595
- 134: voxide::pack_clip_color:3689
+ 152: 595
+ 152: voxide::pack_clip_color:3689
   1: 638
   1: <i32 as core::cmp::Ord>::clamp:601
    9: 601
@@ -1744,15 +1721,15 @@ voxide::emit_clipped_cell:161431:386
   3: 633
   3: <i32 as core::cmp::Ord>::clamp:627
    9: 627
- 136: 659
- 136: voxide::pack_clip_uv:1886
+ 154: 659
+ 154: voxide::pack_clip_uv:1886
   1: 624
   1.2: <i32 as core::cmp::Ord>::clamp:639
    9: 639
   1.3: <i32 as core::cmp::Ord>::clamp:623
    9: 623
- 137: 599
- 137: voxide::pack_clip_color:3692
+ 155: 599
+ 155: voxide::pack_clip_color:3692
   1: 628
   1: <i32 as core::cmp::Ord>::clamp:611
    9: 611
@@ -1762,14 +1739,14 @@ voxide::emit_clipped_cell:161431:386
   3: 615
   3: <i32 as core::cmp::Ord>::clamp:615
    9: 615
- 139: 608
- 139: voxide::pack_clip_uv:1876
+ 157: 608
+ 157: voxide::pack_clip_uv:1876
   1: 646
   1.4: <i32 as core::cmp::Ord>::clamp:645
    9: 645
   1.5: <i32 as core::cmp::Ord>::clamp:585
    9: 585
- 141: <psx_gpu::ot::OrderingTable<1024>>::insert_unchecked @voxide:2416
+ 159: <psx_gpu::ot::OrderingTable<1024>>::insert_unchecked @voxide:2416
   2: <psx_gpu::ot::OrderingTable<1024>>::link_unchecked @voxide:2416
    3: <psx_gpu::ot::OrderingTable<1024>>::link_tag_high_unchecked @voxide:2416
     12: 617
@@ -1777,8 +1754,8 @@ voxide::emit_clipped_cell:161431:386
     14: core::ptr::write_volatile::<u32> @voxide:592
      11: 592
     15: 591
- 146: 583
- 151.2: 491
+ 164: 583
+ 169.2: 491
 voxide_plane_in_frustum:116774:4522
  0: 4522
  9: 4516
@@ -2033,19 +2010,19 @@ voxide::emit_near_face:54024:505
  181: 270
  182: 283
  183: 292
- 192: 57
- 193: 67
- 194: 81
- 195: 81
- 196: 68
- 197: 63
- 197: voxide::cell_verdict:47
+ 199: 57
+ 200: 67
+ 201: 81
+ 202: 81
+ 203: 68
+ 204: 63
+ 204: voxide::cell_verdict:47
   2: 47
- 198: 67
- 204: 520
-voxide::render_world::{closure#0} @voxide:44488:13
+ 205: 67
+ 211: 520
+voxide::render_world::{closure#0} @voxide:44094:13
  0: 20
- 0: voxide::render_near_block_shell:44468
+ 0: voxide::render_near_block_shell:44074
   1: 17
   1: voxide::world_to_block_x:49
    1: voxide::floor_div:49
@@ -2063,7 +2040,6 @@ voxide::render_world::{closure#0} @voxide:44488:13
   4: 27
   10.1: 84
   12.1: 389
-  16: 394
   16: voxide::world::get_span:21816
    1: voxide::floor_div:1236
     1: 416
@@ -2094,34 +2070,34 @@ voxide::render_world::{closure#0} @voxide:44488:13
     11: 2336
     11.1: 2354
     15: 1517
-  18: 398
-  19.1: 402
-  19.7: 412
-  22: 398
-  24: 85
-  28.1: 63
-  29: 72
-  31.1: 196
-  32: 203
-  34.1: 549
-  36.5: 577
-  37: 212
-  37: voxide::is_transparent:225
+  23: 398
+  24.1: 402
+  24.7: 412
+  27: 398
+  29: 85
+  33.1: 63
+  34: 72
+  36.1: 196
+  37: 203
+  39.1: 549
+  41.5: 577
+  42: 212
+  42: voxide::is_transparent:225
    3: voxide::is_water:225
     1.1: 225
-  37: voxide::near_shell_meshable:586
+  42: voxide::near_shell_meshable:586
    1: 586
-  38: 241
-  45.1: 1275
-  46: 1252
-  62: 209
-  62.1: 212
-  62.2: 224
-  62.3: 237
-  62.4: 215
-  62.5: 231
-  62.7: 15
-  62.7: voxide::near_shell_see_through:93
+  43: 241
+  50.1: 1275
+  51: 1252
+  67: 209
+  67.1: 212
+  67.2: 224
+  67.3: 237
+  67.4: 215
+  67.5: 231
+  67.7: 15
+  67.7: voxide::near_shell_see_through:93
    1: 21
    1: voxide::is_small_block:20
     1: voxide::shape::is_shape:20
@@ -2131,15 +2107,15 @@ voxide::render_world::{closure#0} @voxide:44488:13
    1: voxide::world::is_cross_plant:16
     1: 16
    1.5: 16
-  62.9: voxide::near_shell_see_through:3
+  67.9: voxide::near_shell_see_through:3
    1: 1
    1: voxide::is_small_block:1
     1: voxide::shape::is_shape:1
      1.1: 1
    1: voxide::is_water:1
     1.2: 1
-  62.11: 43
-  62.11: voxide::near_shell_see_through:377
+  67.11: 43
+  67.11: voxide::near_shell_see_through:377
    1: 105
    1: voxide::is_small_block:48
     1: voxide::shape::is_shape:48
@@ -2149,8 +2125,8 @@ voxide::render_world::{closure#0} @voxide:44488:13
    1: voxide::world::is_cross_plant:88
     1: 88
    1.5: 41
-  62.15: 5
-  62.15: voxide::near_shell_see_through:46
+  67.15: 5
+  67.15: voxide::near_shell_see_through:46
    1: 9
    1: voxide::is_small_block:11
     1: voxide::shape::is_shape:11
@@ -2160,8 +2136,8 @@ voxide::render_world::{closure#0} @voxide:44488:13
    1: voxide::world::is_cross_plant:13
     1: 13
    1.5: 4
-  62.17: 39
-  62.17: voxide::near_shell_see_through:214
+  67.17: 39
+  67.17: voxide::near_shell_see_through:214
    1: 42
    1: voxide::is_small_block:51
     1: voxide::shape::is_shape:51
@@ -2171,34 +2147,34 @@ voxide::render_world::{closure#0} @voxide:44488:13
    1: voxide::world::is_cross_plant:45
     1: 45
    1.5: 29
-  72: voxide::camera_space_world:580
+  77: voxide::camera_space_world:580
    1: 188
    2: 179
    4: voxide::camera_space_world::{closure#0} @voxide:213
     0: 213
-  73: voxide::camera_space_world:378
+  78: voxide::camera_space_world:378
    2: 171
    4: voxide::camera_space_world::{closure#0} @voxide:207
     0: 207
-  74: voxide::camera_space_world:409
+  79: voxide::camera_space_world:409
    2: 190
    4: voxide::camera_space_world::{closure#0} @voxide:219
     0: 219
-  75: voxide::camera_space_world:199
+  80: voxide::camera_space_world:199
    4: voxide::camera_space_world::{closure#0} @voxide:199
     0: 199
-  79: <i32 as core::cmp::Ord>::min @voxide:186
+  84: <i32 as core::cmp::Ord>::min @voxide:186
    5: 186
-  80: <i32 as core::cmp::Ord>::min @voxide:183
+  85: <i32 as core::cmp::Ord>::min @voxide:183
    4.3: 183
-  81: <i32 as core::cmp::Ord>::min @voxide:179
+  86: <i32 as core::cmp::Ord>::min @voxide:179
    4.5: 179
-  88: 199
-  92: 181
-  93.1: 186
-  94: 185
-  95: 188
-  112: voxide::render_near_block_shell::{closure#1} @voxide:3387
+  93: 199
+  97: 181
+  98.1: 186
+  99: 185
+  100: 188
+  117: voxide::render_near_block_shell::{closure#1} @voxide:3387
    0: voxide::clip_code:661
     5: 123
     6: 184
@@ -2222,15 +2198,15 @@ voxide::render_world::{closure#0} @voxide:44488:13
     6: 185
     7: 106
     8: 190
-  113: 205
-  113: voxide::cell_verdict:720
+  118: 205
+  118: voxide::cell_verdict:720
    1: 174
    2: 185
    5: <u32>::wrapping_neg:166
     1: <u32>::wrapping_sub:166
      1: 166
    6: 195
-  115: voxide::set_clip_cell:605
+  120: voxide::set_clip_cell:605
    5: <*mut voxide::ClipVert>::write @voxide:150
     5: core::ptr::write::<voxide::ClipVert> @voxide:150
      23: 150
@@ -2243,7 +2219,7 @@ voxide::render_world::{closure#0} @voxide:44488:13
    8: <*mut voxide::ClipVert>::write @voxide:161
     5.3: core::ptr::write::<voxide::ClipVert> @voxide:161
      23: 161
-  116: voxide::render_near_block_shell::{closure#0} @voxide:830
+  121: voxide::render_near_block_shell::{closure#0} @voxide:830
    2: voxide::fog_band:278
     1: <i32 as core::cmp::Ord>::max @voxide:135
      4: 135
@@ -2252,7 +2228,7 @@ voxide::render_world::{closure#0} @voxide:44488:13
    9: 127
    10: 149
    11: 129
-  117: voxide::render_near_block_shell::{closure#0} @voxide:945
+  122: voxide::render_near_block_shell::{closure#0} @voxide:945
    2: voxide::fog_band:407
     1: 133
     1: <i32 as core::cmp::Ord>::max @voxide:137
@@ -2262,7 +2238,7 @@ voxide::render_world::{closure#0} @voxide:44488:13
    9: 123
    10: 146
    11: 135
-  118: voxide::render_near_block_shell::{closure#0} @voxide:799
+  123: voxide::render_near_block_shell::{closure#0} @voxide:799
    2: voxide::fog_band:399
     1: 132
     1: <i32 as core::cmp::Ord>::max @voxide:138
@@ -2271,7 +2247,7 @@ voxide::render_world::{closure#0} @voxide:44488:13
    9: 139
    10: 127
    11: 134
-  119: voxide::render_near_block_shell::{closure#0} @voxide:847
+  124: voxide::render_near_block_shell::{closure#0} @voxide:847
    2: voxide::fog_band:438
     1: 146
     1: <i32 as core::cmp::Ord>::max @voxide:143
@@ -2280,10 +2256,10 @@ voxide::render_world::{closure#0} @voxide:44488:13
    9: 138
    10: 128
    11: 143
-  121: 151
-  127: 557
-  129: 163
-  131: 60
+  126: 151
+  139: 557
+  141: 163
+  143: 60
 voxide::ui_flush::<1024> @voxide:34555:24
  2: 26
  3.1: 3139
@@ -2369,7 +2345,7 @@ voxide::aabb_collides_dims:25934:444
  27: voxide::world::is_cross_plant:330
   1: 330
  40.1: 441
-voxide::draw_sky:24571:17
+voxide::draw_sky:24550:17
  0: 25
  5: 22
  7: 13
@@ -2585,12 +2561,11 @@ voxide::draw_sky:24571:17
   5.1: 168
   6: 180
  190: 180
- 194: voxide::draw_sun:395
-  4: 21
+ 194: voxide::draw_sun:374
   5: 22
-  9.5: 27
-  10.1: 25
-  13: voxide::square_above:300
+  19.5: 27
+  20.1: 25
+  23: voxide::square_above:300
    1: 20
    2: 23
    2: <i32 as core::cmp::Ord>::min @voxide:20
@@ -2684,33 +2659,33 @@ voxide::draw_sky:24571:17
  288: 527
  290: 21
 voxide::near_vertex:20904:1286
- 2: voxide::fog_band:3798
+ 12: voxide::fog_band:3798
   1: 1286
   1: <i32 as core::cmp::Ord>::max @voxide:1228
    4: 1228
   2: 1284
- 2.1: 1267
- 6: 1240
- 7: 338
- 11: 977
- 11.1: 921
- 11.3: 938
- 13: 1226
- 13.1: 569
- 16: 526
- 17: 525
- 20: voxide::tint_factor:2236
+ 12.1: 1267
+ 16: 1240
+ 17: 338
+ 21: 977
+ 21.1: 921
+ 21.3: 938
+ 23: 1226
+ 23.1: 569
+ 26: 526
+ 27: 525
+ 30: voxide::tint_factor:2236
   2: 730
   3: 753
   4: 753
- 24: <*mut voxide::ClipVert>::add @voxide:1319
+ 34: <*mut voxide::ClipVert>::add @voxide:1319
   34: 1319
- 24: <*mut voxide::ClipVert>::write @voxide:1283
+ 34: <*mut voxide::ClipVert>::write @voxide:1283
   5: core::ptr::write::<voxide::ClipVert> @voxide:1283
    23: 1283
- 28: 1187
- 29: 1273
- 35: 1281
+ 38: 1187
+ 39: 1273
+ 45: 1281
 voxide::ui_text:16010:52
  0: 57
  1: <psx_font::FontAtlas>::emit_text_packets::<voxide::ui_packet> @voxide:15903
@@ -2827,7 +2802,7 @@ voxide::world::recenter:13280:17
  30.4: 178
  30.5: 180
  73.2: 36
-voxide::mob::update:12673:33
+voxide::mob::update:12495:33
  0: 41
  8: 132
  10: 45
@@ -2835,7 +2810,7 @@ voxide::mob::update:12673:33
  13: 1
  13: voxide::mob::count_alive:1
   4.1: 1
- 14: voxide::mob::try_spawn:45
+ 14: voxide::mob::try_spawn:44
   1: voxide::mob::free_slot:4
    3.1: 2
    5.1: 1
@@ -2862,10 +2837,6 @@ voxide::mob::update:12673:33
     1.2: <psx_fx::rng::LcgRng>::next:1
      1.2: <u32>::wrapping_mul:1
       1.2: 1
-  56: voxide::mob::rng:1
-   4.3: <psx_fx::rng::LcgRng>::next_mixed:1
-    1.3: <psx_fx::rng::LcgRng>::next:1
-     1.4: 1
   56.1: 1
   59: 1
   62: 1
@@ -2899,7 +2870,7 @@ voxide::mob::update:12673:33
   7.1: 2
  32.1: 237
  33.1: 266
- 34: voxide::mob::step_mob:8154
+ 34: voxide::mob::step_mob:7977
   1.1: 140
   2: 122
   5: 139
@@ -2926,88 +2897,86 @@ voxide::mob::update:12673:33
    1.4: 128
   78: 133
   85: 141
-  126: 134
-  130: voxide::mob::is_hostile:136
+  130: 134
+  134: voxide::mob::is_hostile:136
    1.8: 136
-  131: 121
-  131: voxide::mob::eats:142
+  135: 121
+  135: voxide::mob::eats:142
    1: 142
-  132: 125
-  134.1: 132
-  141: 135
-  146: 134
-  196: voxide::mob::walk_q8:138
+  136: 125
+  138.1: 132
+  145: 135
+  150: 134
+  204: voxide::mob::walk_q8:138
    1: 138
-  197: 136
-  240: 42
-  249: 55
-  249.2: 45
-  250: 33
-  251: 54
-  262: voxide::mob::rng:359
-   4: <psx_fx::rng::LcgRng>::next_mixed:359
-    1: <psx_fx::rng::LcgRng>::next:274
-     1: 92
+  205: 136
+  248: 42
+  257: 55
+  257.2: 45
+  258: 33
+  259: 54
+  270: voxide::mob::rng:182
+   4: <psx_fx::rng::LcgRng>::next_mixed:182
+    1: <psx_fx::rng::LcgRng>::next:182
      1: <u32>::wrapping_add:81
       1.2: 81
      1: <u32>::wrapping_mul:101
       1: 101
-    2: 85
-  263: 98
-  263.2: 1
-  264: 1
-  266: 1
-  267.3: 2
-  274: 135
-  277: 113
-  278: 55
-  282: voxide::mob::dims:143
+  271: 98
+  271.2: 1
+  272: 1
+  274: 1
+  275.3: 2
+  282: 135
+  285: 113
+  286: 55
+  290: voxide::mob::dims:143
    1.3: 143
-  296: 128
-  296.1: 144
-  305: 124
-  306: 31
-  307.1: 43
-  313: 91
-  313.2: 39
-  314: 25
-  315.1: 49
-  323: 149
-  348: 145
-  348: <i32>::abs:268
+  304: 128
+  304.1: 144
+  313: 124
+  314: 31
+  315.1: 43
+  321: 91
+  321.2: 39
+  322: 25
+  323.1: 49
+  331: 149
+  356: 145
+  356: <i32>::abs:268
    4.21: 139
    4.24: 129
-  348.2: 120
-  349: 122
-  350: 51
-  350: <u8>::wrapping_add:41
-   1.7: 41
-  350: <i32 as core::cmp::Ord>::min @voxide:42
+  356.2: 120
+  357: 122
+  358: 51
+  358: <i32 as core::cmp::Ord>::min @voxide:42
    4: 42
-  352: 86
-  353: 89
-  354.1: 4
-  355: <u8 as core::cmp::Ord>::min @voxide:3
+  358: <u8>::wrapping_add:41
+   1.7: 41
+  360: 86
+  361: 89
+  362.1: 4
+  363: <u8 as core::cmp::Ord>::min @voxide:3
    4.2: 3
-  357: 3
-  357: <u8 as core::cmp::Ord>::min @voxide:7
+  365: 3
+  365: <u8 as core::cmp::Ord>::min @voxide:7
    4.1: 7
-  361: 131
-  396: 136
-  396: <i32 as core::cmp::Ord>::max @voxide:128
+  369: 131
+  404: 136
+  404: <i32 as core::cmp::Ord>::max @voxide:128
    4: 128
-  397: 127
-  398: 132
-  399: 129
-  400: 129
-  400: voxide::world_to_block_y:133
+  405: 127
+  406: 132
+  407: 129
+  408: 129
+  408: voxide::world_to_block_y:133
    1: voxide::floor_div:133
     1: 133
-  409: 124
-  410: 2
-  412: 2
-  414: 4
-  422: 153
+  417: 124
+  418: 2
+  420: 2
+  422: 4
+  430: 153
  38: 141
  38: <usize>::wrapping_add:113
   1.1: 113
@@ -3067,7 +3036,7 @@ voxide::mob::update:12673:33
   2.1: 44
   3.1: 280
   4: 255
-  58: 242
+  62: 242
  79: 38
 voxide::ui_flush::<2> @voxide:11502:21
  2: 21
@@ -3089,7 +3058,7 @@ voxide::ui_flush::<2> @voxide:11502:21
      15: 1149
  6.1: 1176
  10: 15
-voxide::draw_all_hud:11432:13
+voxide::draw_all_hud:11426:13
  0: 23
  1: voxide::sleep_fade:45
   1: voxide::sleep::darkness:45
@@ -3128,14 +3097,14 @@ voxide::draw_all_hud:11432:13
      21: 20
  7: voxide::attack_charge:109
   3: 23
+  3: <i32 as core::cmp::Ord>::min @voxide:14
+   4: 14
   3: voxide::equip::six_t:56
    1: voxide::equip::weapon_of:36
     1: 19
     1: voxide::tool_tier:17
      1: 17
    2.10: 20
-  3: <i32 as core::cmp::Ord>::min @voxide:14
-   4: 14
   3.3: 16
  8: 22
  12: voxide::draw_tutorial:565
@@ -3149,8 +3118,8 @@ voxide::draw_all_hud:11432:13
   18: voxide::mob::dragon_status:45
    3.1: 23
    4: 22
-  19: 16
-  19: voxide::rect:176
+  23: 16
+  23: voxide::rect:176
    1: 23
    1: voxide::ui_quad_flat:153
     2: voxide::ui_packet:153
@@ -3166,7 +3135,7 @@ voxide::draw_all_hud:11432:13
       10.1: 20
      5: core::ptr::copy_nonoverlapping::<u32> @voxide:22
       21: 22
-  20: voxide::rect:180
+  24: voxide::rect:180
    1: 19
    1: voxide::ui_quad_flat:161
     2: voxide::ui_packet:161
@@ -3182,8 +3151,8 @@ voxide::draw_all_hud:11432:13
       10.1: 20
      5: core::ptr::copy_nonoverlapping::<u32> @voxide:18
       21: 18
-  22: 23
-  25: 22
+  26: 23
+  29: 22
  13: voxide::draw_sleep_prompt:20
   1: 20
  17: voxide::tool_slot:19
@@ -3351,25 +3320,19 @@ voxide::draw_all_hud:11432:13
      5: core::ptr::copy_nonoverlapping::<u32> @voxide:23
       21: 23
  26: 21
- 26: voxide::draw_hud:118
+ 26: voxide::draw_hud:112
   1: 24
   7: 21
   25: 21
   29: 24
   31: 1
-  32: voxide::decimal3:5
-   1: 1
-   3: 1
-   4: 2
-   5: 1
-  32.1: 1
-  34: 1
-  35: 1
-  37: 1
+  39: 1
   40: 1
-  43: 1
-  44: 2
-  55: 14
+  42: 1
+  45: 1
+  48: 1
+  49: 2
+  60: 14
  27: 23
 voxide::draw_hotbar:11288:14
  0: 23
@@ -3753,10 +3716,6 @@ voxide::emit_box_masked:10557:268
  51.5: 31
  60: 6
  60: voxide::project_quad_gte:2526
-  11: voxide::project_quad_gte::{closure#0} @voxide:254
-   2: 86
-   3: 84
-   4: 84
   11: psx_gte::scene::project_triangle_scheduled:925
    3: psx_gte::scene::project_triangle_mips:925
     1: <psx_gte_core::math::Vec3I16>::xy_packed:82
@@ -3776,8 +3735,10 @@ voxide::emit_box_masked:10557:268
     75: 80
     76: 92
     81: 78
-  12: voxide::project_quad_gte::{closure#0} @voxide:72
-   4: 72
+  11: voxide::project_quad_gte::{closure#0} @voxide:254
+   2: 86
+   3: 84
+   4: 84
   12: psx_gte::scene::project_vertex_scheduled:407
    3: psx_gte::scene::project_vertex_mips:407
     1: <psx_gte_core::math::Vec3I16>::xy_packed:78
@@ -3787,6 +3748,8 @@ voxide::emit_box_masked:10557:268
     7: 86
     36: 87
     37: 66
+  12: voxide::project_quad_gte::{closure#0} @voxide:72
+   4: 72
   13: <u16 as core::cmp::Ord>::min @voxide:254
    4.3: 82
    4.5: 74
@@ -3841,7 +3804,7 @@ voxide::emit_box_masked:10557:268
  83.1: 88
  89: 92
  94.1: 305
-voxide::update_player:10499:25
+voxide::update_player:10459:25
  0: 42
  7: 43
  17: 33
@@ -3875,53 +3838,53 @@ voxide::update_player:10499:25
  49: 33
  49: <i32 as core::cmp::Ord>::clamp:41
   9: 41
- 67: 37
- 67: <psx_pad::Deadzone>::new:42
+ 60: 37
+ 60: <psx_pad::Deadzone>::new:42
   1.2: 42
- 68: <psx_pad::Deadzone>::scaled:86
+ 61: <psx_pad::Deadzone>::scaled:86
   1: 43
   2: psx_math::int32::isqrt_i32:43
    1: 43
- 78: <psx_pad::ActionInput<5>>::is_held @voxide:33
+ 71: <psx_pad::ActionInput<5>>::is_held @voxide:33
   2.1: 33
- 81: <psx_pad::ActionInput<5>>::is_held @voxide:66
+ 74: <psx_pad::ActionInput<5>>::is_held @voxide:66
   1.1: <psx_pad::ActionBinding>::mask:41
    1.2: 41
   2.2: 25
- 84: <psx_pad::ActionInput<5>>::is_held @voxide:64
+ 77: <psx_pad::ActionInput<5>>::is_held @voxide:64
   1.2: <psx_pad::ActionBinding>::mask:27
    1.3: 27
   2.3: 37
- 87: <psx_pad::ActionInput<5>>::is_held @voxide:86
+ 80: <psx_pad::ActionInput<5>>::is_held @voxide:86
   1.3: <psx_pad::ActionBinding>::mask:43
    1.4: 43
   2.4: 43
- 90: 31
- 99: <psx_pad::ActionInput<5>>::is_held @voxide:72
+ 83: 31
+ 92: <psx_pad::ActionInput<5>>::is_held @voxide:72
   1.4: <psx_pad::ActionBinding>::mask:30
    1: 30
   2: 42
- 100: 26
- 106: 33
- 107: 31
- 113: <u8>::saturating_sub:38
+ 93: 26
+ 99: 33
+ 100: 31
+ 106: <u8>::saturating_sub:38
   1: 38
- 115: 30
- 116: <psx_pad::ButtonState>::pressed_since:63
+ 108: 30
+ 109: <psx_pad::ButtonState>::pressed_since:63
   1: 37
   1.1: <psx_pad::ButtonState>::is_held:26
    1.5: 26
- 121: 29
- 121.1: 8
- 124: 29
- 124.3: 10
- 126: 46
- 127: 39
- 133: 36
- 146: 34
- 152: 24
- 153: 36
- 153: voxide::get_block_i32:876
+ 114: 29
+ 114.1: 8
+ 117: 29
+ 117.3: 10
+ 119: 46
+ 120: 39
+ 126: 36
+ 139: 34
+ 145: 24
+ 146: 36
+ 146: voxide::get_block_i32:876
   1: voxide::world::get:876
    1: 41
    4: voxide::floor_div:42
@@ -3949,34 +3912,34 @@ voxide::update_player:10499:25
     8: 114
     9: 125
     10: 22
- 154: voxide::world_to_block_x:102
+ 147: voxide::world_to_block_x:102
   1: voxide::floor_div:102
    1: 34
    4: 29
    4.3: 39
- 155: 31
- 155: voxide::world_to_block_y:32
+ 148: 31
+ 148: voxide::world_to_block_y:32
   1: voxide::floor_div:32
    1: 32
- 156: voxide::world_to_block_z:36
+ 149: voxide::world_to_block_z:36
   1: voxide::floor_div:36
    1: 36
- 161: 35
- 164: 39
- 164: voxide::bow::drawing:35
+ 154: 35
+ 157: 39
+ 157: voxide::bow::drawing:35
   1.1: 35
- 165: 46
- 165.3: 36
- 166: 38
- 166.3: 35
- 168: psx_math::sincos::sin_q12:217
+ 158: 46
+ 158.3: 36
+ 159: 38
+ 159.3: 35
+ 161: psx_math::sincos::sin_q12:217
   2: 30
   3: 35
   4.1: 41
   5: 36
   5.1: 37
   6: 38
- 169: psx_math::sincos::cos_q12:206
+ 162: psx_math::sincos::cos_q12:206
   2: <u16>::wrapping_add:37
    1: 37
   2: psx_math::sincos::sin_q12:169
@@ -3985,35 +3948,35 @@ voxide::update_player:10499:25
    5: 36
    5.1: 34
    6: 36
- 172: 36
- 174: 41
- 175: 41
- 177: 37
- 178: 46
- 179: 34
- 180: 30
- 185: 35
- 188: 34
- 225: 23
- 228: 27
- 229: 38
- 229: <i32>::abs:70
+ 165: 36
+ 167: 41
+ 168: 41
+ 170: 37
+ 171: 46
+ 172: 34
+ 173: 30
+ 178: 35
+ 181: 34
+ 218: 23
+ 221: 27
+ 222: 38
+ 222: <i32>::abs:70
   4.6: 34
   4.9: 36
- 229: <u32>::wrapping_add:34
+ 222: <u32>::wrapping_add:34
   1.2: 34
- 229.1: 29
- 251: 33
- 252: 30
- 252: voxide::world_to_block_x:54
+ 222.1: 29
+ 244: 33
+ 245: 30
+ 245: voxide::world_to_block_x:54
   1: voxide::floor_div:54
    4: 24
    4.3: 30
- 252.2: voxide::world_to_block_z:69
+ 245.2: voxide::world_to_block_z:69
   1: voxide::floor_div:69
    1: 36
    2.3: 33
- 252.3: voxide::world::column_loaded:320
+ 245.3: voxide::world::column_loaded:320
   1: voxide::floor_div:41
    1: 41
   2: voxide::floor_div:32
@@ -4028,27 +3991,27 @@ voxide::update_player:10499:25
   4.1: 38
   4.4: 33
   4.5: 33
- 253: 41
- 253: voxide::aabb_collides:38
+ 246: 41
+ 246: voxide::aabb_collides:38
   1: 38
- 254: 37
- 254.2: voxide::supported:1
+ 247: 37
+ 247.2: voxide::supported:1
   1: voxide::aabb_collides:1
    1: 1
- 256: 1
- 258: 2
- 261: 29
- 262: 35
- 262: voxide::world_to_block_x:115
+ 249: 1
+ 251: 2
+ 254: 29
+ 255: 35
+ 255: voxide::world_to_block_x:115
   1: voxide::floor_div:115
    1: 40
    4: 40
    4.3: 35
- 262.2: voxide::world_to_block_z:61
+ 255.2: voxide::world_to_block_z:61
   1: voxide::floor_div:61
    1: 30
    2.3: 31
- 262.3: voxide::world::column_loaded:357
+ 255.3: voxide::world::column_loaded:357
   1: voxide::floor_div:37
    1: 37
   2: voxide::floor_div:32
@@ -4063,22 +4026,22 @@ voxide::update_player:10499:25
   4.1: 43
   4.4: 40
   4.5: 40
- 263: 45
- 263: voxide::aabb_collides:34
+ 256: 45
+ 256: voxide::aabb_collides:34
   1: 34
- 264: 33
- 264.2: 2
- 264.2: voxide::supported:2
+ 257: 33
+ 257.2: 2
+ 257.2: voxide::supported:2
   1: voxide::aabb_collides:2
    1: 2
- 266: 1
- 267: 1
- 268: 4
- 269: 4
- 272: 35
- 279: 40
- 289: 38
- 289: voxide::at_ladder:2007
+ 259: 1
+ 260: 1
+ 261: 4
+ 262: 4
+ 265: 35
+ 272: 40
+ 282: 38
+ 282: voxide::at_ladder:1967
   1: voxide::world_to_block_x:72
    1: voxide::floor_div:72
     4: 31
@@ -4087,11 +4050,11 @@ voxide::update_player:10499:25
    1: voxide::floor_div:32
     1: 32
   3: 29
-  3: voxide::world_to_block_y:39
-   1: voxide::floor_div:39
-    1: 39
   3: voxide::kind_of:39
    1: voxide::bstate::kind_of:39
+    1: 39
+  3: voxide::world_to_block_y:39
+   1: voxide::floor_div:39
     1: 39
   3.1: 43
   3.4: voxide::get_block_i32:837
@@ -4122,13 +4085,12 @@ voxide::update_player:10499:25
      8: 95
      9: 93
      10: 40
-  4: 40
-  4: voxide::world_to_block_y:36
-   1: voxide::floor_div:36
-    1: 36
   4: voxide::kind_of:38
    1.1: voxide::bstate::kind_of:38
     1.3: 38
+  4: voxide::world_to_block_y:36
+   1: voxide::floor_div:36
+    1: 36
   4.2: voxide::get_block_i32:802
    1: voxide::world::get:802
     1: 40
@@ -4157,20 +4119,20 @@ voxide::update_player:10499:25
      8: 107
      9: 83
      10: 31
- 301: 42
- 315: 33
- 316: 40
- 324: 39
- 324: voxide::world_to_block_x:102
+ 294: 42
+ 308: 33
+ 309: 40
+ 317: 39
+ 317: voxide::world_to_block_x:102
   1: voxide::floor_div:102
    1: 35
    4: 28
    4.3: 39
- 324.3: voxide::world_to_block_z:61
+ 317.3: voxide::world_to_block_z:61
   1: voxide::floor_div:61
    1: 25
    2.3: 36
- 324.4: voxide::world::column_loaded:324
+ 317.4: voxide::world::column_loaded:324
   1: voxide::floor_div:30
    1: 30
   2: voxide::floor_div:36
@@ -4185,26 +4147,26 @@ voxide::update_player:10499:25
   4.1: 40
   4.4: 35
   4.5: 28
- 328: 27
- 329: 36
- 330: 24
- 337.3: 29
- 338: 2
- 338: voxide::aabb_collides:38
+ 321: 27
+ 322: 36
+ 323: 24
+ 330.3: 29
+ 331: 2
+ 331: voxide::aabb_collides:38
   1: 38
- 347: 39
- 352: voxide::world_to_block_y:37
+ 340: 39
+ 345: voxide::world_to_block_y:37
   1: voxide::floor_div:37
    1: 37
- 353: voxide::world_to_block_x:117
+ 346: voxide::world_to_block_x:117
   1: voxide::floor_div:117
    1: 43
    4: 35
    4.3: 39
- 354: voxide::world_to_block_z:31
+ 347: voxide::world_to_block_z:31
   1: voxide::floor_div:31
    1: 31
- 355: voxide::get_block_i32:872
+ 348: voxide::get_block_i32:872
   1: voxide::world::get:872
    1: 35
    4: voxide::floor_div:38
@@ -4232,40 +4194,40 @@ voxide::update_player:10499:25
     8: 126
     9: 119
     10: 42
- 358: voxide::shape::solid:100
+ 351: voxide::shape::solid:100
   1: 28
   1.1: 36
   2: 36
- 358.1: 31
- 364: 36
- 386: 28
- 388: 1
- 392: 33
- 393: 1
- 401: 24
- 401.2: 10
- 405: 29
- 405: <u32>::saturating_sub:30
+ 351.1: 31
+ 357: 36
+ 379: 28
+ 381: 1
+ 385: 33
+ 386: 1
+ 394: 24
+ 394.2: 10
+ 398: 29
+ 398: <u32>::saturating_sub:30
   1: 30
- 405.1: 6
- 408: <psx_pad::ButtonState>::pressed_since:28
+ 398.1: 6
+ 401: <psx_pad::ButtonState>::pressed_since:28
   1.3: 28
- 408.2: 8
- 408.5: 35
- 422: 40
- 423: 29
- 426: 39
- 427: 38
- 427: <i32>::abs:80
+ 401.2: 8
+ 401.5: 35
+ 416: 40
+ 417: 29
+ 420: 39
+ 421: 38
+ 421: <i32>::abs:80
   4.21: 42
   4.24: 38
- 427.1: 37
- 427.2: 25
- 428: 27
- 430: 44
- 431: 4
- 432: 4
- 436: voxide::get_block_i32:12
+ 421.1: 37
+ 421.2: 25
+ 422: 27
+ 424: 44
+ 425: 4
+ 426: 4
+ 430: voxide::get_block_i32:12
   1: voxide::world::get:12
    1: 1
    6: voxide::world::slot:4
@@ -4284,13 +4246,11 @@ voxide::update_player:10499:25
     7: 1
     8: 1
     9: 1
- 437: voxide::world_to_block_x:1
+ 431: voxide::world_to_block_x:1
   1: voxide::floor_div:1
    4.3: 1
- 438: 1
- 441: voxide::step_mat:1
-  1: 1
- 441: voxide::sfx::step_on:12
+ 432: 1
+ 435: voxide::sfx::step_on:12
   7: voxide::sfx::play:12
    2: 1
    19: 1
@@ -4302,11 +4262,11 @@ voxide::update_player:10499:25
       1: <psx_sfx::OneShot>::configure:4
        1: <psx_spu::Voice>::configure_sample:4
         1: <psx_spu::Voice>::set_volume:2
+         1: <psx_spu::Volume>::register_bits:1
+          1: 1
          1: psx_spu::write_reg16:1
           7: core::ptr::write_volatile::<u16> @psx_spu:1
            11: 1
-         1: <psx_spu::Volume>::register_bits:1
-          1: 1
         3: <psx_spu::Voice>::set_start_addr:1
          1: <psx_spu::SpuAddr>::register_value:1
           1: 1
@@ -4321,17 +4281,15 @@ voxide::update_player:10499:25
      3: <psx_sfx::OneShot>::ticks:2
       18: 1
       20.1: 1
- 448: 38
- 448: <i32 as core::cmp::Ord>::clamp:39
+ 435: voxide::step_mat:1
+  1: 1
+ 442: 38
+ 442: <i32 as core::cmp::Ord>::clamp:39
   9: 39
- 449: 36
-voxide::render_mobs:10058:14
+ 443: 36
+voxide::render_mobs:10001:14
  0: 21
  1: 8
- 4: psx_gte::scene::load_translation:57
-  65502: 15
-  65502.1: 23
-  65502.2: 19
  6: 25
  7: 18
  10.1: 131
@@ -4365,10 +4323,6 @@ voxide::render_mobs:10058:14
    9: 55
    12: 66
    12: voxide::project_quad_gte:1326
-    11: voxide::project_quad_gte::{closure#0} @voxide:207
-     2: 71
-     3: 58
-     4: 78
     11: psx_gte::scene::project_triangle_scheduled:560
      3: psx_gte::scene::project_triangle_mips:560
       1: <psx_gte_core::math::Vec3I16>::xy_packed:68
@@ -4385,6 +4339,10 @@ voxide::render_mobs:10058:14
       75: 5
       76: 65
       81: 65
+    11: voxide::project_quad_gte::{closure#0} @voxide:207
+     2: 71
+     3: 58
+     4: 78
     12: psx_gte::scene::project_vertex_scheduled:142
      3: psx_gte::scene::project_vertex_mips:142
       7: 72
@@ -4422,10 +4380,10 @@ voxide::render_mobs:10058:14
     7: <i16 as core::cmp::Ord>::max @voxide:9
      4.2: 9
     10: 12
-   21: voxide::depth_slot:12
-    7: 12
    21: <usize as core::cmp::Ord>::max @voxide:9
     4: 9
+   21: voxide::depth_slot:12
+    7: 12
    22: voxide::ui_quad_blend_depth:171
     1: voxide::ui_alloc:85
      2: 11
@@ -4598,20 +4556,20 @@ voxide::tri_above:9895:272
   7: 136
   8: 115
   9: 120
-  10: 138
-  11: 126
-  11: voxide::rgb:144
+  11: 138
+  12: 126
+  12: voxide::rgb:144
    1: 144
-  12: 123
-  12: <*mut u32>::add @voxide:139
+  13: 123
+  13: <*mut u32>::add @voxide:139
    34: 139
-  13: 128
-  13: voxide::rgb:130
+  14: 128
+  14: voxide::rgb:130
    1: 130
-  14: 124
-  14: <*mut u32>::add @voxide:125
+  15: 124
+  15: <*mut u32>::add @voxide:125
    34: 125
-  16.1: 16
+  17.1: 16
  48: voxide::ui_tri_gouraud:1689
   1: <psx_gpu::prim::TriGouraud>::new:335
    9: psx_hw::gpu::pack_color:166
@@ -4673,10 +4631,10 @@ voxide::render_world:8968:20
    7: 193
    7: psx_rt::scratchpad::is_on_scratchpad_stack:538
     3: 183
-    3: psx_rt::stack_pointer:176
-     5: 176
     3: <usize>::wrapping_sub:179
      1: 179
+    3: psx_rt::stack_pointer:176
+     5: 176
    10: 203
    20: psx_rt::scratchpad::call_on_stack:197
     5: 197
@@ -4685,20 +4643,20 @@ voxide::render_world:8968:20
   45: <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::run::<(), voxide::world::for_visible_faces::{closure#1}> @voxide:398
    7: psx_rt::scratchpad::is_on_scratchpad_stack:227
     3: 80
-    3: psx_rt::stack_pointer:76
-     5: 76
     3: <usize>::wrapping_sub:71
      1: 71
+    3: psx_rt::stack_pointer:76
+     5: 76
    10: 90
    20: psx_rt::scratchpad::call_on_stack:81
     5: 81
  14: <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::run::<(), voxide::render_world::{closure#0}> @voxide:83
   7: psx_rt::scratchpad::is_on_scratchpad_stack:47
    3: 17
-   3: psx_rt::stack_pointer:10
-    5: 10
    3: <usize>::wrapping_sub:20
     1: 20
+   3: psx_rt::stack_pointer:10
+    5: 10
   10: 17
   20: psx_rt::scratchpad::call_on_stack:19
    5: 19
@@ -4783,7 +4741,7 @@ voxide::refresh_mat_ccmd:8705:23
  88: 27
  90: 7
  92.2: 22
-main:8282:0
+main:8078:0
  139: voxide::sfx::tick:151
   2: 21
   2: <u32>::wrapping_add:11
@@ -4804,7 +4762,7 @@ main:8282:0
   4: <psx_sfx::Player<1>>::tick @voxide:19
    2: 19
   6: 20
- 140: voxide::music::tick:164
+ 140: voxide::music::tick:133
   2: 22
   2: <voxide::music::Phase as core::cmp::PartialEq>::eq:16
    0: 16
@@ -4813,17 +4771,11 @@ main:8282:0
    1: 25
   6.1: 21
   7: 2
-  8: 21
   8: <u32>::wrapping_sub:19
    1.1: 19
-  9: voxide::music::publish:18
-   3: 1
-   4: 2
-   9: 2
-   23: 1
-   24: <psx_io::cd::xa::Player>::is_streaming:4
-    1: <psx_io::cd::xa::Engine>::is_streaming:4
-     1: 2
+  18: voxide::music::publish:8
+   24: <psx_io::cd::xa::Player>::is_streaming:2
+    1: <psx_io::cd::xa::Engine>::is_streaming:2
      1: <psx_io::cd::xa::State as core::cmp::PartialEq>::eq:2
       0: 2
    25: <psx_io::cd::xa::Player>::elapsed_millis:6
@@ -4833,15 +4785,13 @@ main:8282:0
      4: <u32>::saturating_sub:1
       1: 1
      10: 1
-   33: core::ptr::write_volatile::<[u32; 16]> @voxide:2
-    11: 2
  145: psx_rt::interrupts::vblank_count:17
   4.1: core::ptr::read_volatile::<u32> @voxide:17
    11.1: 17
- 146: <u32>::wrapping_sub:15
-  1: 15
  146: <u32 as core::cmp::Ord>::max @voxide:21
   4: 21
+ 146: <u32>::wrapping_sub:15
+  1: 15
  148.1: 22
  162: psx_rt::interrupts::vblank_count:15
   4.2: core::ptr::read_volatile::<u32> @voxide:15
@@ -4885,9 +4835,9 @@ main:8282:0
      0: 18
  183: voxide::menus::quit_ready:19
   1: 19
- 226: 13
- 234: 15
- 237: voxide::sfx::blip:2
+ 215: 13
+ 223: 15
+ 226: voxide::sfx::blip:2
   1: voxide::sfx::play:2
    6: 1
    19: <psx_sfx::Player<4>>::play @voxide:1
@@ -4895,77 +4845,85 @@ main:8282:0
      3: <psx_sfx::OneShot>::ticks:1
       1: <psx_sfx::Sample>::ticks_at:1
        5: 1
- 241: 29
- 241: <psx_pad::ButtonState>::pressed_since:21
+ 230: 29
+ 230: <psx_pad::ButtonState>::pressed_since:21
   1.6: 21
- 249: 20
- 261: 3
- 266: voxide::nav_repeat:4
+ 238: 20
+ 250: 3
+ 255: voxide::nav_repeat:4
   1: 2
   7: 2
- 267: voxide::nav_repeat:4
+ 256: <psx_pad::ButtonState>::is_held:1
+  1.20: 1
+ 256: voxide::nav_repeat:4
   1: 3
   7: 1
- 267: <psx_pad::ButtonState>::is_held:1
-  1.20: 1
- 268: 2
- 272: 3
- 278: 1
- 301: 2
- 375: voxide::hotbar_sync:126
+ 257: 2
+ 261: 3
+ 267: 1
+ 290: 2
+ 376: voxide::hotbar_sync:126
   4: 18
   4.1: 23
   4.4: 29
   4.6: 25
   9: 15
   9.1: 16
- 376: voxide::equip::sync:15
+ 377: voxide::equip::sync:15
   1: 15
- 377: voxide::grid::return_all:41
+ 378: voxide::grid::return_all:41
   3.1: 22
   3.5: 19
- 378: 18
- 378: <psx_pad::ButtonState>::pressed_since:31
+ 379: 18
+ 379: <psx_pad::ButtonState>::pressed_since:31
   1.5: <psx_pad::ButtonState>::is_held:15
    1.6: 15
   1.9: 16
- 396: <psx_pad::ButtonState>::pressed_since:25
+ 399: <psx_pad::ButtonState>::pressed_since:25
   1.24: 25
- 406: 23
- 409: 13
- 410: 19
- 413: 3
- 415: 29
- 418: 20
- 418.4: 17
- 419: 17
- 428.1: 25
- 429: 38
- 431: 42
- 434: <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::run::<(), voxide::main::{closure#0}> @voxide:235
+ 409: 23
+ 420: 29
+ 423.4: 17
+ 424: 17
+ 433.1: 25
+ 434: 38
+ 436: 42
+ 439: <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::run::<(), voxide::main::{closure#0}> @voxide:235
   7: 43
   7: psx_rt::scratchpad::is_on_scratchpad_stack:111
    3: 32
-   3: psx_rt::stack_pointer:36
-    5: 36
    3: <usize>::wrapping_sub:43
     1: 43
+   3: psx_rt::stack_pointer:36
+    5: 36
   10: 43
   20: psx_rt::scratchpad::call_on_stack:38
    5: 38
- 435: 36
- 436: 22
- 436: voxide::mob::set_lure:33
+ 440: 36
+ 441: 22
+ 441: voxide::mob::set_lure:33
   2: 33
- 437: 34
- 437: voxide::spawn_sky:894
+ 442: 34
+ 442: voxide::spawn_sky:894
   1: voxide::sky_level:854
+   1: voxide::java_time:43
+    1: 43
    1: voxide::rain_amount:38
     4: voxide::weather::rain:38
      1: 38
    1: voxide::sky_bright_q12:690
     1: 39
     1: voxide::sun_height_q12:525
+     1: psx_math::sincos::cos_q12:241
+      2: <u16>::wrapping_add:35
+       1: 35
+      2: psx_math::sincos::sin_q12:206
+       2: 21
+       3: 25
+       4.1: 39
+       5: 38
+       5.1: 40
+       6: 43
      1: voxide::celestial_q12:284
       1: 39
       2: 46
@@ -4978,16 +4936,6 @@ main:8282:0
         5.1: 20
         6: 37
       3: 39
-     1: psx_math::sincos::cos_q12:241
-      2: <u16>::wrapping_add:35
-       1: 35
-      2: psx_math::sincos::sin_q12:206
-       2: 21
-       3: 25
-       4.1: 39
-       5: 38
-       5.1: 40
-       6: 43
     1.1: <i32 as core::cmp::Ord>::clamp:40
      9: 40
     2: 45
@@ -4995,57 +4943,53 @@ main:8282:0
    1: voxide::thunder_amount:46
     4: voxide::weather::thunder:46
      1: 46
-   1: voxide::java_time:43
-    1: 43
    2: 37
   2: 40
- 437.2: 34
- 439: 39
- 439: voxide::mob::contact_damage:1305
+ 450: 39
+ 450: voxide::mob::contact_damage:1305
   4.1: 241
   6.1: 285
   10.1: 260
   12: 251
   36: 230
   44: 38
- 439.1: voxide::mob::hazard_damage:57
+ 450.1: voxide::mob::hazard_damage:57
   2: 26
   3: 31
- 443: 35
- 446: voxide::cheat::god:42
+ 454: 35
+ 457: voxide::cheat::god:42
   1: 42
- 449: 37
- 462: 44
- 462: voxide::world_to_block_x:67
+ 460: 37
+ 473: 44
+ 473: voxide::world_to_block_x:67
   1: voxide::floor_div:67
    4: 30
    4.3: 37
- 462.1: voxide::world_to_block_z:38
+ 473.1: voxide::world_to_block_z:38
   1: voxide::floor_div:38
    1: 38
- 462.2: 33
- 463: 22
- 480.3: 14
- 483: voxide::sleep::tick:17
+ 473.2: 33
+ 474: 22
+ 505: voxide::sleep::tick:17
   2: 17
- 499: 17
- 504: 20
- 504.3: 20
- 509: 17
- 509.3: 15
- 510: 18
- 511: 19
- 512: 10
- 513: 15
- 514: 24
- 515: 9
- 516: 14
- 517: 22
- 517: <i32 as core::cmp::Ord>::min @voxide:15
+ 521: 17
+ 526: 20
+ 526.3: 20
+ 531: 17
+ 531.3: 15
+ 532: 18
+ 533: 19
+ 534: 10
+ 535: 15
+ 536: 24
+ 537: 9
+ 538: 14
+ 539: 22
+ 539: <i32 as core::cmp::Ord>::min @voxide:15
   4.2: 15
- 523: 12
- 524: 8
- 524: voxide::get_block_i32:224
+ 545: 12
+ 546: 8
+ 546: voxide::get_block_i32:224
   1: voxide::world::get:224
    1: 11
    4: voxide::floor_div:16
@@ -5074,8 +5018,7 @@ main:8282:0
     8: 30
     9: 30
     10: 5
- 528: voxide::gate_probe:68
-  2.3: 4
+ 551: voxide::gate_probe:64
   3: voxide::redstone::wire_power:64
    1: <voxide::redstone::Net>::wire_power:64
     1: <voxide::redstone::Net>::find:64
@@ -5093,11 +5036,9 @@ main:8282:0
       5: 7
      3.1: 9
      4: 8
- 529: 15
- 533: 6
- 533.3: 17
- 534: 9
- 534: voxide::get_block_i32:227
+ 557.3: 17
+ 558: 9
+ 558: voxide::get_block_i32:227
   1: voxide::world::get:227
    1: 8
    4: voxide::floor_div:21
@@ -5127,33 +5068,32 @@ main:8282:0
     8: 33
     9: 23
     10: 8
- 534.1: voxide::bstate::is_bed:7
+ 558.1: voxide::bstate::is_bed:7
   1: voxide::bstate::kind_of:7
    1: 7
- 538: 24
- 539: 18
- 540: voxide::bow::reset:2
+ 563: 18
+ 564: voxide::bow::reset:2
   2: 1
   4: 1
- 542.1: 13
- 542.1: voxide::sleep::active:16
+ 566.1: 13
+ 566.1: voxide::sleep::active:16
   1: 16
- 564: 20
- 564: <psx_pad::ButtonState>::pressed_since:37
+ 588: 20
+ 588: <psx_pad::ButtonState>::pressed_since:37
   1.11: <psx_pad::ButtonState>::is_held:21
    1.25: 21
   1.33: 16
- 567: 15
- 576: 21
- 581: 19
- 654: <psx_pad::ButtonState>::pressed_since:35
+ 591: 15
+ 600: 21
+ 605: 19
+ 678: <psx_pad::ButtonState>::pressed_since:35
   1.12: <psx_pad::ButtonState>::is_held:17
    1.28: 16
    1.29: 1
   1.36: 18
- 654.1: 3
- 663: 10
- 663: voxide::melee_damage:208
+ 678.1: 3
+ 687: 10
+ 687: voxide::melee_damage:208
   1: 19
   1: voxide::equip::damage100:37
    1: voxide::equip::weapon_of:37
@@ -5163,20 +5103,20 @@ main:8282:0
   1.3: 18
   2: voxide::attack_charge:74
    3: 18
-   3: voxide::equip::six_t:20
-    2.10: 20
    3: <i32 as core::cmp::Ord>::min @voxide:16
     4: 16
+   3: voxide::equip::six_t:20
+    2.10: 20
    3.3: 20
   3: 21
   4: 21
   6: 1
   8: 17
- 669: 22
- 669.1: 1
- 683: 17
- 683.1: 14
- 684: voxide::get_block_i32:4
+ 693: 22
+ 693.1: 1
+ 707: 17
+ 707.1: 14
+ 708: voxide::get_block_i32:4
   1: voxide::world::get:4
    6: voxide::world::slot:2
     1: <i32>::rem_euclid:1
@@ -5185,18 +5125,18 @@ main:8282:0
    11: voxide::world::rle::rget:2
     7: 1
     8: 1
- 693: voxide::get_block_i32:3
+ 717: voxide::get_block_i32:3
   1: voxide::world::get:3
    1: 1
    8.5: 1
    11: voxide::world::rle::rget:1
     5.3: 1
- 696: 1
- 696: voxide::world_to_block_z:1
+ 720: 1
+ 720: voxide::world_to_block_z:1
   1: voxide::floor_div:1
    1: 1
- 699: 1
- 724: voxide::sfx::break_block:3
+ 724: 1
+ 753: voxide::sfx::break_block:3
   1: voxide::sfx::play:3
    19: <psx_sfx::Player<4>>::play @voxide:3
     3: <psx_sfx::Player<4>>::play_on @voxide:3
@@ -5210,30 +5150,30 @@ main:8282:0
       1: <psx_sfx::Sample>::ticks_at:1
        5.1: 1
       20: 1
- 761: 1
- 787: voxide::set_block_i32:1
+ 790: 1
+ 816: voxide::set_block_i32:1
   1: 1
- 788: voxide::record_edit:1
+ 817: voxide::record_edit:1
   2: 1
- 798: 12
- 804: 20
- 804: <psx_pad::ButtonState>::is_held:12
+ 827: 12
+ 833: 20
+ 833: <psx_pad::ButtonState>::is_held:12
   1.33: 12
- 808: 19
- 948: 20
- 967: voxide::mob::death_count:16
+ 844: 19
+ 985: 20
+ 1004: voxide::mob::death_count:16
   1: 16
- 969.1: 17
- 1002: voxide::mob::clear_deaths:16
+ 1006.1: 17
+ 1039: voxide::mob::clear_deaths:16
   2: 16
- 1003: 19
- 1003: voxide::mob::take_xp:34
+ 1040: 19
+ 1040: voxide::mob::take_xp:34
   2: 18
   3: 16
- 1005: 20
- 1006: 7
- 1013: 22
- 1018: voxide::cave_amount:158
+ 1042: 20
+ 1043: 7
+ 1050: 22
+ 1055: voxide::cave_amount:158
   1: 16
   1: voxide::world::dimension:18
    1: 18
@@ -5247,97 +5187,96 @@ main:8282:0
   5: <i32 as core::cmp::Ord>::min @voxide:21
    4: 21
   5.1: 24
- 1020: 12
- 1020: voxide::world_to_block_x:37
+ 1057: 12
+ 1057: voxide::world_to_block_x:37
   1: voxide::floor_div:37
    4: 17
    4.3: 20
- 1021: 16
- 1021: voxide::world_to_block_z:14
+ 1058: 16
+ 1058: voxide::world_to_block_z:14
   1: voxide::floor_div:14
    1: 14
- 1023: 21
- 1024: 13
- 1024: voxide::lerp_u8:38
+ 1060: 21
+ 1061: 13
+ 1061: voxide::lerp_u8:38
   1.3: 21
   1.3: <i32 as core::cmp::Ord>::clamp:17
    9: 17
- 1025: voxide::lerp_u8:60
+ 1062: voxide::lerp_u8:60
   1: 21
   1.3: 20
   1.3: <i32 as core::cmp::Ord>::clamp:19
    9: 19
- 1026: voxide::lerp_u8:41
+ 1063: voxide::lerp_u8:41
   1: 17
   1.3: <i32 as core::cmp::Ord>::clamp:24
    9: 24
- 1029: 22
- 1030: 21
- 1031: 20
- 1033: 1
- 1033: voxide::music::pick_due:45
+ 1066: 22
+ 1067: 21
+ 1068: 20
+ 1070: 1
+ 1070: voxide::music::pick_due:45
   2: 18
   2: <u32>::wrapping_sub:2
    1: 2
+  2: <voxide::music::Phase as core::cmp::PartialEq>::eq:20
+   0: 20
   2: psx_rt::interrupts::vblank_count:3
    4: core::ptr::read_volatile::<u32> @voxide:3
     11: 3
-  2: <voxide::music::Phase as core::cmp::PartialEq>::eq:20
-   0: 20
   2.1: 2
- 1036: 13
- 1097: 18
- 1098: 17
- 1101: <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::run::<(), voxide::main::{closure#1}> @voxide:91
+ 1073: 13
+ 1134: 18
+ 1135: 17
+ 1138: <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::run::<(), voxide::main::{closure#1}> @voxide:91
   7: psx_rt::scratchpad::is_on_scratchpad_stack:48
    3: 16
-   3: psx_rt::stack_pointer:18
-    5: 18
    3: <usize>::wrapping_sub:14
     1: 14
+   3: psx_rt::stack_pointer:18
+    5: 18
   10: 18
   20: psx_rt::scratchpad::call_on_stack:25
    5: 25
- 1102: 19
- 1105: 17
- 1107: 16
- 1110: <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::run::<(), voxide::main::{closure#2}> @voxide:81
+ 1139: 19
+ 1142: 17
+ 1144: 16
+ 1147: <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::run::<(), voxide::main::{closure#2}> @voxide:81
   7: 16
   7: psx_rt::scratchpad::is_on_scratchpad_stack:44
    3: 14
-   3: psx_rt::stack_pointer:16
-    5: 16
    3: <usize>::wrapping_sub:14
     1: 14
+   3: psx_rt::stack_pointer:16
+    5: 16
   20: psx_rt::scratchpad::call_on_stack:21
    5: 21
- 1113: <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::run::<(), voxide::main::{closure#3}> @voxide:114
+ 1150: <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::run::<(), voxide::main::{closure#3}> @voxide:93
   7: 18
   7: psx_rt::scratchpad::is_on_scratchpad_stack:50
    3: 17
-   3: psx_rt::stack_pointer:15
-    5: 15
    3: <usize>::wrapping_sub:18
     1: 18
+   3: psx_rt::stack_pointer:15
+    5: 15
   20: psx_rt::scratchpad::call_on_stack:25
    5: 25
-  31: 21
- 1120: 23
- 1120: voxide::world::set_view:18
+ 1157: 23
+ 1157: voxide::world::set_view:18
   1: 18
- 1121: 20
- 1125: <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::run::<(), voxide::main::{closure#4}> @voxide:90
+ 1158: 20
+ 1162: <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::run::<(), voxide::main::{closure#4}> @voxide:90
   7: 20
   7: psx_rt::scratchpad::is_on_scratchpad_stack:53
    3: 11
-   3: psx_rt::stack_pointer:23
-    5: 23
    3: <usize>::wrapping_sub:19
     1: 19
+   3: psx_rt::stack_pointer:23
+    5: 23
   20: psx_rt::scratchpad::call_on_stack:17
    5: 17
- 1130: 13
- 1130: voxide::draw_pick_outline:303
+ 1167: 13
+ 1167: voxide::draw_pick_outline:303
   1: 25
   4: voxide::get_block_i32:237
    1: voxide::world::get:237
@@ -5378,27 +5317,27 @@ main:8282:0
   19: voxide::block_to_world_z:6
    1: 6
   20: 9
- 1134: <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::run::<(), voxide::main::{closure#5}> @voxide:129
+ 1171: <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::run::<(), voxide::main::{closure#5}> @voxide:129
   7: 23
   7: psx_rt::scratchpad::is_on_scratchpad_stack:68
    3: 15
-   3: psx_rt::stack_pointer:27
-    5: 27
    3: <usize>::wrapping_sub:26
     1: 26
+   3: psx_rt::stack_pointer:27
+    5: 27
   10: 19
   20: psx_rt::scratchpad::call_on_stack:19
    5: 19
- 1135: <u32>::saturating_sub:13
+ 1172: <u32>::saturating_sub:13
   1: 13
- 1136: 18
- 1137: 13
- 1139: 16
- 1140: 19
- 1141: 11
- 1144: 22
- 1152: 26
- 1153: voxide::tut_tick:239
+ 1173: 18
+ 1174: 13
+ 1176: 16
+ 1177: 19
+ 1178: 11
+ 1181: 22
+ 1189: 26
+ 1190: voxide::tut_tick:239
   2: 22
   5: 16
   6: 20
@@ -5407,35 +5346,35 @@ main:8282:0
   10: 24
   11: 16
   12: 18
-  12: <i32>::abs:19
-   4: 19
   12: <i16>::abs:17
    4.3: 17
+  12: <i32>::abs:19
+   4: 19
   12.1: 24
   30: 22
- 1154: 18
- 1155: <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::run::<(), voxide::main::{closure#6}> @voxide:108
+ 1191: 18
+ 1192: <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::run::<(), voxide::main::{closure#6}> @voxide:108
   7: 14
   7: psx_rt::scratchpad::is_on_scratchpad_stack:49
    3: 23
-   3: psx_rt::stack_pointer:13
-    5: 13
    3: <usize>::wrapping_sub:13
     1: 13
+   3: psx_rt::stack_pointer:13
+    5: 13
   10: 20
   20: psx_rt::scratchpad::call_on_stack:25
    5: 25
- 1159: 17
- 1159: voxide::cheat::hud:15
+ 1198: 17
+ 1198: voxide::cheat::hud:15
   1: 15
- 1167: 23
- 1168: 20
- 1172: 13
- 1174: 16
- 1175: 22
- 1177: 17
- 1178: 23
- 1178: <u32>::wrapping_add:12
+ 1201: 23
+ 1202: 20
+ 1206: 13
+ 1208: 16
+ 1209: 22
+ 1211: 17
+ 1212: 23
+ 1212: <u32>::wrapping_add:12
   1.3: 12
 voxide::update_survival:8109:28
  0: 39
@@ -5700,10 +5639,10 @@ voxide::update_survival:8109:28
  134: 36
  140: 39
  148: 40
- 154: 43
- 154.2: 37
- 182: 22
- 189: 38
+ 157: 43
+ 157.2: 37
+ 185: 22
+ 192: 38
 voxide::in_water_body:7960:108
  1: voxide::world_to_block_x:415
   1: voxide::floor_div:415
@@ -5714,11 +5653,11 @@ voxide::in_water_body:7960:108
   1: voxide::floor_div:151
    1: 151
  8: 132
+ 8: voxide::is_water:141
+  1: 141
  8: voxide::world_to_block_y:145
   1: voxide::floor_div:145
    1: 145
- 8: voxide::is_water:141
-  1: 141
  8.5: voxide::get_block_i32:3158
   1: voxide::world::get:3158
    1: 150
@@ -5783,7 +5722,7 @@ voxide::in_water_body:7960:108
   1: voxide::floor_div:146
    1: 146
  14: 142
-voxide::world_tick:7633:20
+voxide::world_tick:6868:20
  0: 21
  4: voxide::slack::set_urgent:19
   1: 19
@@ -5793,14 +5732,13 @@ voxide::world_tick:7633:20
   2.1: 19
   6.1: 12
  4.1: 20
- 5: 14
  5: voxide::slack::set_backlog:13
   1: 13
  5: voxide::world::blasts_pending:23
   1: 23
  5.1: voxide::world::chain_remesh_waiting:20
   2: 20
- 6: voxide::slack::frame_begin:576
+ 8: voxide::slack::frame_begin:576
   2: 21
   8: psx_rt::interrupts::vblank_count:19
    4: core::ptr::read_volatile::<u32> @voxide:19
@@ -5843,15 +5781,15 @@ voxide::world_tick:7633:20
   51: 19
   52: 15
   53: 20
- 9.1: 39
- 10: 25
- 11: 37
- 12: 39
+ 11.1: 39
+ 12: 25
  13: 37
- 15: 29
- 19: 36
- 20: 15
- 21: voxide::slack::job_done:90
+ 14: 39
+ 15: 37
+ 17: 29
+ 21: 36
+ 22: 15
+ 23: voxide::slack::job_done:90
   1: 15
   1: voxide::slack::spent:75
    2: psx_io::timers::counter:17
@@ -5862,21 +5800,21 @@ voxide::world_tick:7633:20
    3: <u16>::wrapping_sub:21
     1: 21
    4: 20
- 24: 38
- 26: voxide::apply_blast_kick:118
+ 26: 38
+ 28: voxide::apply_blast_kick:118
   1: voxide::tnt::take_kick:79
    2: 44
    3: 35
   2: 39
- 27: 35
- 28: 30
- 29: 31
- 30: 34
- 31: 34
- 32: 3
- 34: 37
- 35: 3
- 37: voxide::tick_particles:2836
+ 29: 35
+ 30: 30
+ 31: 31
+ 32: 34
+ 33: 34
+ 34: 3
+ 36: 37
+ 37: 3
+ 39: voxide::tick_particles:2836
   2.1: 1257
   4.1: 1257
   4.4: 21
@@ -5891,55 +5829,24 @@ voxide::world_tick:7633:20
   10.1: 29
   10.3: 32
   11.1: 23
- 38: voxide::tick_drops:2314
+ 40: voxide::tick_drops:2314
   2.1: 778
   3.1: 758
   4: 778
- 39: 29
- 39: <u32>::wrapping_add:38
+ 41: 29
+ 41: <u32>::wrapping_add:38
   1: 38
- 40: 27
- 40: voxide::gate_snapshot:863
-  2: 26
-  3: 37
-  3: voxide::tnt::live_count:32
-   1: 32
-  4: 29
+ 42: voxide::gate_snapshot:139
   4: voxide::edit_count:31
    1: <voxide::edits::Edits>::len:31
     1: 31
-  5: 36
   5: voxide::world::blasts_pending:41
    1: 41
-  6: 34
-  7: 33
-  7: voxide::world::blasts_completed:27
-   1: 27
-  8: voxide::blocks::last:37
-   1: 37
-  9: 30
-  10: 23
-  11: 32
-  12: 36
-  12: voxide::redstone::emitters:35
-   1: <voxide::redstone::Net>::len:35
-    1: 35
-  13: 30
-  13: voxide::bow::held_ticks:33
-   1: 33
-  14: 34
-  14: voxide::mob::player_arrows:41
-   4.1: 41
-  15: 36
-  16: 31
   16: voxide::sleep::darkness:67
    1: 34
    2: 33
-  17: 32
-  17: voxide::redstone::worked:40
-   1: 40
- 41: 35
- 45: 25
+ 43: 35
+ 47: 25
 voxide::emit_body_box:6799:61
  0: 78
  12: 86
@@ -5953,10 +5860,6 @@ voxide::emit_body_box:6799:61
  23.5: 68
  32: 168
  32: voxide::project_quad_gte:4370
-  11: voxide::project_quad_gte::{closure#0} @voxide:560
-   2: 177
-   3: 187
-   4: 196
   11: psx_gte::scene::project_triangle_scheduled:1843
    3: psx_gte::scene::project_triangle_mips:1843
     1: <psx_gte_core::math::Vec3I16>::xy_packed:184
@@ -5976,8 +5879,10 @@ voxide::emit_body_box:6799:61
     75: 26
     76: 172
     81: 173
-  12: voxide::project_quad_gte::{closure#0} @voxide:187
-   4: 187
+  11: voxide::project_quad_gte::{closure#0} @voxide:560
+   2: 177
+   3: 187
+   4: 196
   12: psx_gte::scene::project_vertex_scheduled:730
    3: psx_gte::scene::project_vertex_mips:730
     1: <psx_gte_core::math::Vec3I16>::xy_packed:155
@@ -5987,6 +5892,8 @@ voxide::emit_body_box:6799:61
     7: 192
     36: 20
     37: 174
+  12: voxide::project_quad_gte::{closure#0} @voxide:187
+   4: 187
   13: <u16 as core::cmp::Ord>::min @voxide:556
    4.3: 193
    4.5: 191
@@ -6168,7 +6075,7 @@ voxide::ui_sprite:4534:179
     4: 164
     5: 154
  10: 151
-voxide::world::greedy_plane:3471:1
+voxide::world::greedy_plane:3146:1
  0: 7
  10.1: 5
  12: 4
@@ -6176,7 +6083,7 @@ voxide::world::greedy_plane:3471:1
  13: 3
  17: 5
  22: 1
- 22: voxide::world::build_mask:2658
+ 22: voxide::world::build_mask:2354
   6: 8
   12: 2
   22: 1
@@ -6185,17 +6092,15 @@ voxide::world::greedy_plane:3471:1
     1.3: 1
   25.3: 1
   25.5: 1
-  34.1: 4
-  38.1: 68
-  39: voxide::world::cell_to_local:46
+  33.1: 4
+  37: voxide::world::cell_to_local:46
    1: 46
-  40: 77
-  40: voxide::world::lidx:70
+  38: 77
+  38: voxide::world::lidx:70
    1.4: 70
-  40.1: 60
-  42.1: 82
-  43: 63
-  44: voxide::world::rle::rget:874
+  38.1: 60
+  40.1: 82
+  42: voxide::world::rle::rget:874
    2: 65
    5.1: 50
    5.3: 66
@@ -6203,13 +6108,13 @@ voxide::world::greedy_plane:3471:1
    8: 287
    9: 287
    10: 56
-  46: voxide::world::lidx:52
+  44: voxide::world::lidx:52
    1.5: 52
-  47: 67
-  49: 68
-  54.1: 63
-  62: 2
-  62: voxide::world::sky_bucket:14
+  45: 67
+  47: 68
+  52.1: 63
+  60: 2
+  60: voxide::world::sky_bucket:14
    1: 1
    1.1: 1
    2: 1
@@ -6227,33 +6132,28 @@ voxide::world::greedy_plane:3471:1
      0.1: 1
    15: <i32 as core::cmp::Ord>::min @voxide:1
     4: 1
-  64: 77
-  64.1: 74
-  65: 73
-  66: 56
-  68: 7
-  68.1: 5
-  69: 7
-  73: 4
-  76: 1
-  92: 4
-  97: <(usize, u32) as core::cmp::PartialEq>::ne @voxide:5
+  62: 77
+  62.1: 74
+  63: 56
+  65: 7
+  65.1: 5
+  69: 4
+  88: 4
+  93: <(usize, u32) as core::cmp::PartialEq>::ne @voxide:5
    1: 2
    1: <usize as core::cmp::PartialEq>::ne:3
     0: 3
-  98: 1
-  100: 4
-  105.1: 2
-  107.1: 9
-  108.1: 7
-  109.1: 8
-  110: <u32>::trailing_zeros:17
+  94: 1
+  101.1: 2
+  103.1: 9
+  104.1: 7
+  106: <u32>::trailing_zeros:17
    1: 17
-  112: 7
-  114: 13
-  114.1: 12
-  115: 11
-  117: voxide::world::sky_bucket:77
+  108: 7
+  110: 13
+  110.1: 12
+  111: 11
+  113: voxide::world::sky_bucket:77
    1: 14
    1.1: 8
    2: 13
@@ -6271,28 +6171,25 @@ voxide::world::greedy_plane:3471:1
      0.1: 2
    15: <i32 as core::cmp::Ord>::min @voxide:5
     4: 5
-  117.1: 13
-  118: 17
-  118.1: 16
-  120: 14
-  124: 2
-  129: 3
-  131.1: 16
-  132: 16
-  132.1: 17
-  132.3: 16
-  133.1: 15
-  134: <u64>::trailing_zeros:9
+  113.1: 13
+  120: 2
+  125: 3
+  127.1: 16
+  128: 16
+  128.1: 17
+  128.3: 16
+  129.1: 15
+  130: <u64>::trailing_zeros:9
    1: 9
-  136: 4
-  139: 6
-  139: voxide::world::lidx:9
+  132: 4
+  135: 6
+  135: voxide::world::lidx:9
    1: 9
-  140: 5
-  140.1: 8
-  141: 5
-  143: 5
-  143: voxide::world::sky_bucket:49
+  136: 5
+  136.1: 8
+  137: 5
+  139: 5
+  139: voxide::world::sky_bucket:49
    1.1: 4
    2: 6
    3: 6
@@ -6308,28 +6205,25 @@ voxide::world::greedy_plane:3471:1
      0.1: 5
    15: <i32 as core::cmp::Ord>::min @voxide:4
     4: 4
-  143.1: 7
-  144: 9
-  144.1: 7
-  146: 3
-  150: 17
-  157.1: 12
-  158.1: 18
-  158.3: 16
-  159.1: 16
-  160: <u64>::trailing_zeros:12
+  139.1: 7
+  146: 17
+  153.1: 12
+  154.1: 18
+  154.3: 16
+  155.1: 16
+  156: <u64>::trailing_zeros:12
    1: 12
-  162: 8
-  165: 8
-  165: voxide::world::lidx:9
+  158: 8
+  161: 8
+  161: voxide::world::lidx:9
    1.2: 9
-  166: 9
-  166: voxide::world::lidx:9
+  162: 9
+  162: voxide::world::lidx:9
    1.3: 9
-  166.1: 9
-  167: 12
-  169: 9
-  169: voxide::world::sky_bucket:65
+  162.1: 9
+  163: 12
+  165: 9
+  165: voxide::world::sky_bucket:65
    1.1: 6
    2: 12
    3: 7
@@ -6345,10 +6239,9 @@ voxide::world::greedy_plane:3471:1
      0.1: 5
    15: <i32 as core::cmp::Ord>::min @voxide:6
     4: 6
-  169.1: 9
-  170.1: 10
-  172: 14
-  176: 20
+  165.1: 9
+  166.1: 10
+  172: 20
  31: 6
  32: 1
  33: 2
@@ -6372,7 +6265,6 @@ voxide::world::greedy_plane:3471:1
  74.1: 11
  75: 10
  75.1: 15
- 82: 14
  84.1: 15
  86.1: 22
  87: 28
@@ -6433,7 +6325,6 @@ voxide::world::greedy_plane:3471:1
   4.2: 16
  108: 4
  109: 4
- 112: 7
 <psx_io::periph::Cd>::command_within:3312:0
  0: 1
  6: psx_io::cd::run_command::<psx_io::cd::Mmio> @psx_io:3308
@@ -6754,8 +6645,8 @@ voxide::draw_held_item:3292:15
    3: 25
   33: voxide::held_box::{closure#1} @voxide:22
    0: 22
-  37: 19
-  37: voxide::held_box::{closure#2} @voxide:199
+  42: 19
+  42: voxide::held_box::{closure#2} @voxide:199
    5: voxide::ui_quad_textured:199
     1: voxide::ui_alloc:86
      3: 19
@@ -6774,7 +6665,7 @@ voxide::draw_held_item:3292:15
       1: 15
     9.1: 14
     10: 24
-  38: voxide::held_box::{closure#0} @voxide:19
+  43: voxide::held_box::{closure#0} @voxide:19
    3: 19
  182.2: 24
 voxide::draw_box_outline:3290:10
@@ -6961,10 +6852,10 @@ voxide::trace_pick:2579:11
  42: 65
  42: voxide::is_lava:12
   1.2: 12
- 42: voxide::is_water:11
-  1: 11
  42: voxide::is_portal:9
   1: 9
+ 42: voxide::is_water:11
+  1: 11
  42.1: 7
  48: 7
  48: voxide::is_small_block:9
@@ -7012,7 +6903,7 @@ voxide::ui_frame_begin:2571:15
   3: 25
   4: 13
  6: 15
-voxide::world::rle::decode_cols::<false> @voxide:2449:0
+voxide::world::rle::decode_cols::<false> @voxide:2244:0
  0: 2
  7.1: 6
  8: 10
@@ -7020,10 +6911,6 @@ voxide::world::rle::decode_cols::<false> @voxide:2449:0
  13.1: 50
  14: 55
  15: 57
- 15.1: 44
- 17: 54
- 18: 50
- 18.2: 57
  19: 52
  21.1: 553
  22: 544
@@ -7052,7 +6939,7 @@ voxide::world::rle::decode_cols::<false> @voxide:2449:0
  57.1: 11
  58.1: 11
  59: 10
- 100: 1
+ 104: 1
 voxide::crop_tick:2360:33
  0: 40
  2.1: 748
@@ -7093,11 +6980,11 @@ voxide::portal_tick:2052:37
   1: voxide::floor_div:33
    1: 33
  3: 36
+ 3: voxide::is_portal:35
+  1: 35
  3: voxide::world_to_block_y:28
   1: voxide::floor_div:28
    1: 28
- 3: voxide::is_portal:35
-  1: 35
  3.4: voxide::get_block_i32:804
   1: voxide::world::get:804
    1: 47
@@ -7271,7 +7158,19 @@ voxide::render_particles:1645:19
  19: 23
 voxide::sunset_warmth:1403:57
  1: 57
+ 4: voxide::java_time:58
+  1: 58
  4: voxide::sun_height_q12:784
+  1: psx_math::sincos::cos_q12:367
+   2: <u16>::wrapping_add:58
+    1: 58
+   2: psx_math::sincos::sin_q12:309
+    2: 54
+    3: 53
+    4.1: 50
+    5: 42
+    5.1: 57
+    6: 53
   1: voxide::celestial_q12:417
    1: 54
    2: 58
@@ -7284,18 +7183,6 @@ voxide::sunset_warmth:1403:57
      5.1: 39
      6: 54
    3: 57
-  1: psx_math::sincos::cos_q12:367
-   2: <u16>::wrapping_add:58
-    1: 58
-   2: psx_math::sincos::sin_q12:309
-    2: 54
-    3: 53
-    4.1: 50
-    5: 42
-    5.1: 57
-    6: 53
- 4: voxide::java_time:58
-  1: 58
  6: 48
  10: 54
  11: 46
@@ -7307,7 +7194,7 @@ voxide::sunset_warmth:1403:57
  12: 58
  13: 57
  14.1: 40
-voxide::world::rle::decode_cols::<true> @voxide:1398:0
+voxide::world::rle::decode_cols::<true> @voxide:1263:0
  0: 1
  5: 1
  7.1: 7
@@ -7316,10 +7203,6 @@ voxide::world::rle::decode_cols::<true> @voxide:1398:0
  13.1: 29
  14: 28
  15: 29
- 15.1: 29
- 17: 21
- 18: 31
- 18.2: 31
  19: 25
  21.1: 283
  22: 280
@@ -7329,7 +7212,6 @@ voxide::world::rle::decode_cols::<true> @voxide:1398:0
  28: 20
  31.1: 21
  32: 24
- 33: 23
  34.1: 13
  35: 5
  35.1: 5
@@ -7377,25 +7259,18 @@ voxide::world::rle::decode_cols::<true> @voxide:1398:0
   1: 2
  83.1: 1
  83.2: 1
- 85: 1
- 85.1: 2
- 87: 1
  89: 1
- 92: 7
- 94: 3
- 100: 1
-<psx_pad::controllers::Controllers>::step::<psx_io::periph::ControllerPort> @voxide:1171:12
+ 89.1: 2
+ 91: 1
+ 93: 1
+ 96: 7
+ 98: 3
+ 104: 1
+<psx_pad::controllers::Controllers>::step::<psx_io::periph::ControllerPort> @voxide:866:12
  3: 22
- 10: 20
- 10: <core::option::Option<(psx_io::controller_port::Port, u16)>>::take @voxide:38
-  2: core::mem::replace::<core::option::Option<(psx_io::controller_port::Port, u16)>> @voxide:38
-   14: 21
-   15: 17
- 14: <psx_pad::controllers::Slot>::step::<psx_io::periph::ControllerPort, true> @voxide:973
-  11: 21
-  12: psx_pad::poll_state::<psx_io::periph::ControllerPort> @voxide:891
-   11: psx_pad::poll_once::<psx_io::periph::ControllerPort> @voxide:774
-    9: 21
+ 14: <psx_pad::controllers::Slot>::step::<psx_io::periph::ControllerPort, true> @voxide:844
+  12: psx_pad::poll_state::<psx_io::periph::ControllerPort> @voxide:844
+   11: psx_pad::poll_once::<psx_io::periph::ControllerPort> @voxide:753
     10: psx_pad::poll_selected::<psx_io::periph::ControllerPort> @voxide:713
      8: 19
      13: 17
@@ -7433,17 +7308,6 @@ voxide::world::rle::decode_cols::<true> @voxide:1398:0
     8: 18
     9: psx_pad::decode_buttons:18
      3: 18
-   12: 26
-  16.1: 22
-  19.1: 19
-  45: 20
- 16: core::mem::replace::<psx_io::controller_port::Port> @voxide:34
-  14.1: 18
-  15.1: 16
- 17.1: 22
- 20.1: 19
- 21: 24
- 23.2: 19
 voxide::mob::ray_pick:1156:21
  0: 24
  2: 17
@@ -7468,14 +7332,14 @@ voxide::mob::ray_pick:1156:21
   2: 20
   9: voxide::mob::java_half_w:9
    2.1: 9
-  10: <i32 as core::cmp::Ord>::max @voxide:65
+  14: <i32 as core::cmp::Ord>::max @voxide:65
    4.2: 30
    4.6: 35
-  10.1: 32
-  11: 26
-  12: 8
-  13: 6
-  14: 22
+  14.1: 32
+  15: 26
+  16: 8
+  17: 6
+  18: 22
  15: 32
  15: voxide::mob::slab:36
   1: 14
@@ -7495,9 +7359,21 @@ voxide::world_lighting:1121:21
   4: voxide::weather::thunder:22
    1: 22
  22: voxide::day_light:361
+  1: voxide::java_time:19
+   1: 19
   1: voxide::sky_bright_q12:323
    1: 19
    1: voxide::sun_height_q12:282
+    1: psx_math::sincos::cos_q12:124
+     2: <u16>::wrapping_add:12
+      1: 12
+     2: psx_math::sincos::sin_q12:112
+      2: 21
+      3: 13
+      4.1: 20
+      5: 20
+      5.1: 16
+      6: 22
     1: voxide::celestial_q12:158
      1: 21
      2: 21
@@ -7510,20 +7386,8 @@ voxide::world_lighting:1121:21
        5.1: 20
        6: 21
      3: 20
-    1: psx_math::sincos::cos_q12:124
-     2: <u16>::wrapping_add:12
-      1: 12
-     2: psx_math::sincos::sin_q12:112
-      2: 21
-      3: 13
-      4.1: 20
-      5: 20
-      5.1: 16
-      6: 22
    1.1: <i32 as core::cmp::Ord>::clamp:22
     9: 22
-  1: voxide::java_time:19
-   1: 19
   2: 19
  23: voxide::day_light:61
   1: voxide::sky_bright_q12:41
@@ -7602,10 +7466,10 @@ voxide::world::stream_backlog:1121:14
  4: <core::mem::manually_drop::ManuallyDrop<voxide::world::for_visible_faces::{closure#0}>>::take @voxide:240
   3: core::ptr::read::<voxide::world::for_visible_faces::{closure#0}> @voxide:240
    39: 240
- 5: voxide::world::for_visible_faces::{closure#0} @voxide:201
-  0: 201
  5: <core::mem::maybe_uninit::MaybeUninit<(usize, usize)>>::write @voxide:214
   1: 214
+ 5: voxide::world::for_visible_faces::{closure#0} @voxide:201
+  0: 201
  6: 198
 voxide::emit_face_box:1050:61
  0: 72
@@ -7623,10 +7487,6 @@ voxide::emit_face_box:1050:61
   22: 6
   27: 19
   27: voxide::project_quad_gte:322
-   11: voxide::project_quad_gte::{closure#0} @voxide:41
-    2: 16
-    3: 12
-    4: 13
    11: psx_gte::scene::project_triangle_scheduled:147
     3: psx_gte::scene::project_triangle_mips:147
      1: <psx_gte_core::math::Vec3I16>::xy_packed:20
@@ -7645,6 +7505,10 @@ voxide::emit_face_box:1050:61
      76: 12
      80: 2
      81: 10
+   11: voxide::project_quad_gte::{closure#0} @voxide:41
+    2: 16
+    3: 12
+    4: 13
    12: psx_gte::scene::project_vertex_scheduled:47
     3: psx_gte::scene::project_vertex_mips:47
      1: <psx_gte_core::math::Vec3I16>::xy_packed:12
@@ -7804,7 +7668,7 @@ voxide::sap_tick:868:38
  6.1: 269
  20: 248
  22: 39
-voxide::gte_load_camera:832:19
+voxide::gte_load_camera:639:19
  1: 19
  3: 15
  4: 19
@@ -7849,22 +7713,8 @@ voxide::gte_load_camera:832:19
  40: voxide::world_to_block_z:15
   1: voxide::floor_div:15
    1: 15
- 42: psx_gte::scene::load_rotation:92
+ 42: psx_gte::scene::load_rotation:21
   5: 21
-  12: 12
-  12.1: 10
-  12.2: 12
-  12.3: 17
-  12.4: 20
- 43: psx_gte::scene::load_translation:55
-  65502: 16
-  65502.1: 19
-  65502.2: 20
- 44: psx_gte::scene::set_screen_offset:44
-  65476.3: 26
-  65476.4: 18
- 45: psx_gte::scene::set_projection_plane:23
-  65468.5: 23
  46: 13
 voxide::draw_count:820:33
  0: 56
@@ -7898,65 +7748,24 @@ voxide::face_tile:700:265
  2: 150
  9: 45
  91: 228
-voxide::publish_settings:690:20
- 0: 22
- 2: core::ptr::read_volatile::<[u32; 21]> @voxide:30
-  11: 30
- 3: 15
- 4: 15
- 5: 15
- 6: 9
- 7: 16
- 8: 19
+voxide::publish_settings:49:20
  8: <str as core::cmp::PartialEq>::eq:20
   1: <&[u8] as core::cmp::PartialEq>::eq @voxide:20
    1: <[u8] as core::cmp::PartialEq>::eq @voxide:20
     2: 20
- 8.13: 22
- 9: 16
- 11: 15
- 12: 21
  12: voxide::msg_code:20
   2: <str as core::cmp::PartialEq>::eq:20
    1: <&[u8] as core::cmp::PartialEq>::eq @voxide:20
     1: <[u8] as core::cmp::PartialEq>::eq @voxide:20
      2: 20
- 13: 18
- 14: 17
- 17.1: 147
- 18.1: 147
- 24.1: 3
- 30.1: 3
- 33: 1
- 34: 3
- 35: 1
- 35: voxide::mob::alive_count:3
-  4.1: 3
- 36: 2
- 37: 3
  37: voxide::weather::raining:3
   1: 3
- 38: 3
  38: voxide::weather::thundering:3
   1: 3
- 39: 2
- 40: 1
  40: voxide::cheat::god:1
   1: 1
- 41: 2
  41: voxide::cheat::hud:2
   1: 2
- 42: <core::slice::iter::Iter<u8> as core::iter::traits::iterator::Iterator>::any::<voxide::publish_settings::{closure#0}> @voxide:5
-  6: 2
-  6: voxide::publish_settings::{closure#0} @voxide:3
-   0: 3
- 43: 2
- 44: 1
- 45: 2
- 46: 3
- 48: core::ptr::write_volatile::<[u32; 21]> @voxide:29
-  11: 29
- 50: 28
 voxide::screen_tint:662:20
  1: 20
  1: voxide::world_to_block_x:53
@@ -8078,14 +7887,14 @@ voxide::weather::tick:523:30
  52.2: 38
  55: <u32>::saturating_sub:26
   1: 26
- 57: voxide::world::set_raining:44
-  1: 44
  57: voxide::weather::raining:30
   1: 30
+ 57: voxide::world::set_raining:44
+  1: 44
  58: voxide::mob::set_raining:35
   1: 35
  60: 31
-voxide::inv::draw_player_page:494:0
+voxide::inv::draw_player_page:481:0
  0: 2
  1: 2
  2: 4
@@ -8111,24 +7920,23 @@ voxide::inv::draw_player_page:494:0
   1.4: 3
  38.1: 8
  41: 2
- 43.1: 14
- 43.2: 15
- 45: 17
- 46: 14
- 47: 12
- 48: 10
- 51: 9
- 53: 2
- 54: 1
- 55: 2
- 56: 4
+ 47.1: 14
+ 47.2: 15
+ 49: 17
+ 50: 14
+ 51: 12
+ 52: 10
+ 55: 9
  57: 2
- 57.1: 2
- 58: 3
+ 58: 1
  59: 2
- 59.1: 1
- 60: 2
- 61: voxide::armored:26
+ 60: 4
+ 61: 2
+ 61.1: 2
+ 62: 3
+ 63: 2
+ 70: 2
+ 71: voxide::armored:26
   4: 2
   5: 2
   7: 2
@@ -8144,97 +7952,87 @@ voxide::inv::draw_player_page:494:0
   12: 3
   12: <i32 as core::cmp::Ord>::max @voxide:4
    4.2: 4
- 61.1: 3
- 61.2: 3
- 65.1: 5
- 66: 8
- 67: 7
- 68: voxide::grid::kind:6
+ 81.1: 5
+ 82: 8
+ 83: 7
+ 84: voxide::grid::kind:6
   1.4: 6
- 68.1: 6
- 74: 3
- 76: 2
- 77: 2
- 78: 2
- 86: voxide::equip::weapon_of:1
+ 84.1: 6
+ 90: 3
+ 92: 2
+ 93: 2
+ 94: 2
+ 102: voxide::equip::weapon_of:1
   1: voxide::tool_tier:1
    1: 1
- 87: 3
- 90: 8
- 91: 8
- 92.1: 5
- 93: voxide::tool_tier:14
+ 103: 3
+ 106: 8
+ 107: 8
+ 108.1: 5
+ 109: voxide::tool_tier:14
   1.6: 10
   3.2: 2
   4.2: 2
- 94: 2
- 95: 3
- 98: <u8 as core::cmp::Ord>::max @voxide:4
+ 110: 2
+ 111: 3
+ 114: <u8 as core::cmp::Ord>::max @voxide:4
   4: 4
- 99: 6
- 100: 4
- 100: voxide::tool_tile:7
+ 115: 6
+ 116: 4
+ 116: voxide::tool_tile:7
   1: 7
- 100.1: 6
- 102: 4
- 103: 3
- 105: 7
- 107: voxide::equip::stats:13
+ 116.1: 6
+ 118: 4
+ 119: 3
+ 121: 7
+ 123: voxide::equip::stats:13
   1: voxide::equip::weapon_index:4
    1: 4
   2.1: 2
   2.3: 3
   2.5: 4
- 108: 1
- 110: 3
- 111: 4
- 111.1: 2
- 112: 2
- 113: 1
- 113.1: 2
- 118: 12
- 119: 14
- 120: 15
- 127: 9
- 129: 2
- 132: 3
+ 124: 1
+ 126: 3
+ 127: 4
+ 134: 2
  135: 1
- 136: 1
- 138: 2
- 140: 2
- 140: voxide::armor_piece:2
+ 146: 12
+ 147: 14
+ 148: 15
+ 155: 9
+ 157: 2
+ 160: 3
+ 163: 1
+ 164: 1
+ 166: 2
+ 168: 2
+ 168: voxide::armor_piece:2
   1: 2
- 140.1: 2
- 144: 3
- 202: 1
- 222: 4
- 226: 1
- 226.3: 2
- 229: 2
- 229.1: 1
- 230: 2
- 234: 4
- 234.1: 1
- 235: 3
- 236: 4
- 244: 1
- 245: 2
- 246: 2
-voxide::world::build_sky_top:464:0
+ 168.1: 2
+ 172: 3
+ 230: 1
+ 250: 4
+ 254: 1
+ 263: 2
+ 263.1: 1
+ 264: 2
+ 268: 4
+ 268.1: 1
+ 269: 3
+ 270: 4
+ 278: 1
+ 279: 2
+ 280: 2
+voxide::world::build_sky_top:432:0
  0: 1
  1: 1
  5.1: 9
  6.1: 10
- 7: 11
- 7: <u64>::leading_zeros:11
-  1: 11
- 7.2: 8
- 8.1: 8
- 9: 10
- 9.2: 9
- 12.1: 2
- 13: 3
- 13: voxide::world::is_light_source:9
+ 12.1: 8
+ 13: 10
+ 13.2: 9
+ 17: 3
+ 17: voxide::world::is_light_source:9
   1: 3
   1: voxide::is_lava:2
    1.2: 2
@@ -8242,11 +8040,11 @@ voxide::world::build_sky_top:464:0
    1: voxide::bstate::kind_of:2
     1: 2
   1.1: 2
- 13.2: 2
- 14.1: 2
- 17: 2
- 20: 8
- 24.1: voxide::world::flood_light:358
+ 17.2: 2
+ 19.1: 2
+ 22: 2
+ 25: 8
+ 29.1: voxide::world::flood_light:358
   2: <i32 as core::cmp::Ord>::max @voxide:1
    4: 1
   7: <i32 as core::cmp::Ord>::min @voxide:1
@@ -8388,13 +8186,13 @@ voxide::world::commit_mesh_inner:316:0
   1: 7
  60.1: 3
  60.2: 6
- 62: 7
- 62.1: 4
- 64: 8
- 65: 2
- 66: 5
- 75: 1
- 78.1: 1
+ 66: 7
+ 66.1: 4
+ 68: 8
+ 69: 2
+ 70: 5
+ 79: 1
+ 82.1: 1
 voxide::block_light:310:0
  0: 1
  21.1: 2
@@ -8450,15 +8248,13 @@ voxide::world::rebuild_plane_bounds:278:0
  39: 4
  40: 7
  46: 1
-voxide::world::mesh_edit_tick:275:0
+voxide::world::mesh_edit_tick:274:0
  0: 1
  2: 2
  7: 1
  8: 1
  9: <usize as core::cmp::Ord>::min @voxide:1
   4: 1
- 11: voxide::world::col_masks_reset:1
-  3: 1
  14: voxide::world::decode_blocks::<false> @voxide:1
   3: 1
  17: 1
@@ -8522,24 +8318,22 @@ voxide::hud_tool:254:23
    1.2: 38
  14: 44
  21.2: 32
-voxide::world::build_y_cols:243:0
+voxide::world::build_y_cols:208:0
  0: 1
  3: core::ptr::write_bytes::<[[u16; 16]; 64]> @voxide:2
   12: 2
  6.1: 21
  7.1: 23
  8.1: 23
- 8.5: 18
- 9: 17
- 10: 19
- 13: 21
- 15.1: 20
- 16: <u32>::trailing_zeros:20
-  1: 20
+ 14: 19
  17: 21
- 18.3: 21
- 22: 15
- 25: 1
+ 19.1: 20
+ 20: <u32>::trailing_zeros:20
+  1: 20
+ 21: 21
+ 22.3: 21
+ 26: 15
+ 29: 1
 voxide::queue_dither:236:11
  1: 13
  2: voxide::ui_alloc:172
@@ -8585,17 +8379,14 @@ voxide::icon_tile:209:97
   1: 44
  48: 38
  50: 29
-psx_pad::pad_begin::<psx_io::periph::ControllerPort> @psx_pad:205:12
- 1: <psx_io::periph::ControllerPort as psx_io::controller_port::Transport>::begin_pad @psx_pad:185
-  1: 16
+psx_pad::pad_begin::<psx_io::periph::ControllerPort> @psx_pad:152:12
+ 1: <psx_io::periph::ControllerPort as psx_io::controller_port::Transport>::begin_pad @psx_pad:132
   2: <psx_io::periph::ControllerPort as psx_io::controller_port::Transport>::control:15
    3: psx_io::read_u16:15
     3: core::ptr::read_volatile::<u16> @psx_pad:15
      11: 15
-  2.1: 15
   7: <u16>::wrapping_sub:15
    1: 15
-  7.1: 22
   7.1: <psx_io::periph::ControllerPort as psx_io::controller_port::Transport>::clock:16
    1: psx_io::timers::counter:16
     4: psx_io::read_u32:16
@@ -8621,10 +8412,10 @@ voxide::weather::lightning_tick:204:36
  7: 14
  15: 16
  18.1: 18
- 23: voxide::world::dimension:16
-  1: 16
  23: voxide::weather::raining:12
   1: 12
+ 23: voxide::world::dimension:16
+  1: 16
  23.1: 11
  39.1: 32
 voxide::cloud_color:199:9
@@ -8825,15 +8616,14 @@ voxide::world::stream_tick_claim:131:22
   7: 19
   7: psx_rt::scratchpad::is_on_scratchpad_stack:48
    3: 21
-   3: psx_rt::stack_pointer:11
-    5: 11
    3: <usize>::wrapping_sub:16
     1: 16
+   3: psx_rt::stack_pointer:11
+    5: 11
   20: psx_rt::scratchpad::call_on_stack:22
    5: 22
  5: 20
-<psx_io::periph::ControllerPort as psx_io::controller_port::Transport>::open @voxide:123:16
- 0: 18
+<psx_io::periph::ControllerPort as psx_io::controller_port::Transport>::open @voxide:90:16
  1: <psx_io::periph::ControllerPort as psx_io::controller_port::Transport>::select @voxide:64
   1: <psx_io::periph::ControllerPort as psx_io::controller_port::Transport>::select_with @voxide:64
    1: <psx_io::periph::ControllerPort as psx_io::controller_port::Transport>::set_mode:17
@@ -8844,33 +8634,29 @@ voxide::world::stream_tick_claim:131:22
     2: psx_io::write_u16:14
      3: core::ptr::write_volatile::<u16> @voxide:14
       11: 14
-   6: psx_hw::sio::sio0::selected_ctrl:17
-    5: 17
    6: <psx_io::periph::ControllerPort as psx_io::controller_port::Transport>::set_control:16
     3: psx_io::write_u16:16
      3: core::ptr::write_volatile::<u16> @voxide:16
       11: 16
+   6: psx_hw::sio::sio0::selected_ctrl:17
+    5: 17
  2: <psx_io::periph::ControllerPort as psx_io::controller_port::Transport>::clock:26
   1: psx_io::timers::counter:26
    4: psx_io::read_u32:26
     3: core::ptr::read_volatile::<u32> @voxide:26
      11: 26
- 3: 15
 voxide::world::fire_tick:113:33
  0: 35
  1: 40
  17.1: 38
-voxide::ui_brightness:111:11
- 2: 23
- 2: <psx_display::brightness::Brightness>::overlay:18
-  1: 18
- 6: psx_rt::interrupts::vblank_count:18
+voxide::ui_brightness:70:11
+ 4: psx_rt::interrupts::vblank_count:18
   4: core::ptr::read_volatile::<u32> @voxide:18
    11: 18
- 6: voxide::loading::fade_packet:37
+ 4: voxide::loading::fade_packet:37
   3: 18
   8: 19
- 9: 15
+ 7: 15
 voxide::take_hit:110:22
  0: 39
  1: 31
@@ -9115,11 +8901,11 @@ voxide::inv::player_input:66:0
  5: 3
  7.1: 3
  7.2: 5
+ 8: <psx_pad::ButtonState>::is_held:7
+  1.8: 7
  8: voxide::nav_repeat:13
   1: 7
   7: 6
- 8: <psx_pad::ButtonState>::is_held:7
-  1.8: 7
  8.1: 6
  17: 3
  19: 3
@@ -9155,13 +8941,9 @@ voxide::world::gen_tick:64:16
 voxide::tnt::pending_count:63:31
  1: 37
  13.1: 26
-voxide::inv::number:60:6
+voxide::inv::number:14:6
  0: 6
- 5: 12
- 5.1: 12
- 6: 12
- 7: 10
- 12: 8
+ 2: 8
 <psx_rt::scratchpad::ScratchpadStack<0, 1024>>::stack_entry::<(), voxide::world::stream_tick> @voxide:59:14
  0: 14
  5: <voxide::world::stream_tick as core::ops::function::FnOnce<()>>::call_once @voxide:20
@@ -9312,11 +9094,11 @@ voxide::world::rle::col_store:37:0
  14: 1
  17: <*mut u8>::add @voxide:1
   34: 1
- 19.1: 5
- 20.1: 4
- 20.3: 6
- 26.1: 1
- 27.1: 1
+ 23.1: 5
+ 24.1: 4
+ 24.3: 6
+ 30.1: 1
+ 31.1: 1
 voxide::inv::prompt:35:4
  0: 8
  1: 5
@@ -9340,29 +9122,18 @@ voxide::inv::draw_inventory:33:1
  9: 3
  10: 1
  11: 1
- 136: 2
- 136.2: 4
+ 141: 2
+ 141.2: 4
 voxide::inv::player_spot:32:1
  0: 2
- 2: 5
- 3: 3
- 3.1: 3
- 20: voxide::inv::spot:14
+ 8: 5
+ 9: 3
+ 9.1: 3
+ 36: voxide::inv::spot:14
   1: 5
   3: 4
   8: 5
- 21: 5
-voxide::inv::tenths:32:1
- 0: 3
- 1: 3
- 2: 4
- 4: <[u8]>::copy_from_slice @voxide:4
-  5: 4
- 5.1: 2
- 6: 4
- 6.1: 5
- 7: 2
- 8: 5
+ 37: 5
 voxide::inv::inventory_input:27:1
  0: 3
  3: 1
@@ -9384,7 +9155,7 @@ voxide::inv::inventory_input:27:1
    1.6: 2
  43: 3
  44: 2
- 134.1: 3
+ 138.1: 3
 psx_io::cd::read_response_fifo:24:0
  0: 2
  3: 1
@@ -9410,16 +9181,9 @@ voxide::inv::panel:21:1
  5: 2
  6: 2
  7: 4
-voxide::music::publish:19:1
- 3: 1
- 4: 2
- 9: 2
- 13: 2
- 21: 1
- 23: 2
- 24: <psx_io::cd::xa::Player>::is_streaming:3
-  1: <psx_io::cd::xa::Engine>::is_streaming:3
-   1: 2
+voxide::music::publish:5:1
+ 24: <psx_io::cd::xa::Player>::is_streaming:1
+  1: <psx_io::cd::xa::Engine>::is_streaming:1
    1: <psx_io::cd::xa::State as core::cmp::PartialEq>::eq:1
     0: 1
  25: <psx_io::cd::xa::Player>::elapsed_millis:4
@@ -9428,8 +9192,6 @@ voxide::music::publish:19:1
    4: <u32>::saturating_sub:1
     1: 1
    10: 2
- 33: core::ptr::write_volatile::<[u32; 16]> @voxide:2
-  11: 2
 voxide::hint_item:19:3
  0: 6
  1: 2
@@ -9479,8 +9241,8 @@ voxide::world::set:19:0
  70: voxide::world::set_dirty:1
   3.1: 1
  75: 1
-voxide::world::arena_alloc:19:0
- 1: voxide::world::arena_alloc_inner:18
+voxide::world::arena_alloc:16:0
+ 1: voxide::world::arena_alloc_inner:15
   2.1: 1
   9.1: 1
   15: 1
@@ -9494,11 +9256,8 @@ voxide::world::arena_alloc:19:0
   30: 1
   35.1: 1
   36: 1
-  36.2: 1
-  36.3: 1
-  36.5: 1
-  37: 1
-  43.3: 1
+  41: 1
+  47.3: 1
  5: 1
 voxide::inv::prompt_bar:17:2
  0: 2
@@ -9508,7 +9267,7 @@ voxide::inv::prompt_bar:17:2
  5: 4
  6: 4
 voxide::blocks::after_break:17:0
- 17: voxide::blocks::settle:17
+ 21: voxide::blocks::settle:17
   2.1: 1
   3.1: 1
   5: voxide::get_block_i32:13
@@ -9600,12 +9359,9 @@ voxide::inv::tab_list:14:5
  10: <u32>::checked_sub:1
   6: 1
  11.1: 1
-core::slice::copy_from_slice_impl::<u8> @voxide:11:4
- 0: 4
- 15: 1
+core::slice::copy_from_slice_impl::<u8> @voxide:3:4
  23: core::ptr::copy_nonoverlapping::<u8> @voxide:3
   21: 3
- 25: 3
 voxide::world::wake_fluid:11:0
  4: voxide::world::get:4
   1: 1
@@ -9684,7 +9440,7 @@ voxide::world::begin_mesh_edit:4:0
   1.6: 1
  24: voxide::world::is_cross_plant:1
   1: 1
-voxide::music::start:2:0
+voxide::music::start:1:0
  16: <psx_io::cd::xa::Player>::play:1
   1: <psx_io::cd::xa::Engine>::start::<psx_io::periph::Cd> @psx_io:1
    4: <psx_io::cd::xa::Engine>::start::<psx_io::periph::Cd>::{closure#0} @psx_io:1
@@ -9693,7 +9449,6 @@ voxide::music::start:2:0
       1: <psx_io::periph::Cd>::try_command:1
        1: <core::result::Result<psx_io::cd::Response, psx_io::cd::CdError>>::ok @psx_io:1
         5: 1
- 33: 1
 <psx_io::cd::xa::Engine>::begin_read_at::<psx_io::periph::Cd> @psx_io:2:0
  7: <psx_io::periph::Cd as psx_io::cd::xa::Drive>::set_target:2
   1: <psx_io::periph::Cd>::try_set_target_lba:2
