@@ -15,6 +15,7 @@ use crate::sfxdata::{
     S_EXPLODE, S_HISS, S_HURT, S_PIG, S_PLACE, S_SHEEP, S_SPLASH, S_STEP_GRASS, S_STEP_SAND,
     S_STEP_STONE, S_STEP_WOOD, S_ZOMBIE,
 };
+use psx_io::periph::Cd;
 use psx_pack::cd::{self, SectorReader, SECTOR_WORDS};
 use psx_pack::SECTOR_BYTES;
 use psx_sfx::{LoopingSample, OneShot, Player, Sample as SfxSample};
@@ -88,7 +89,8 @@ pub fn init() {
 }
 
 unsafe fn stream_bank() -> bool {
-    let mut rd = SectorReader::new();
+    // SAFETY: boot only: nothing else drives the CD controller while the bank streams in.
+    let mut rd = SectorReader::with_cd(unsafe { Cd::steal() });
     let mut scratch = [0u32; SECTOR_WORDS];
     let Some(entry) = cd::find_entry(
         &mut rd,
@@ -387,7 +389,7 @@ impl Synth {
 /// SPU-ADPCM, filter 0 to 4 per 28-sample block (the same coding as
 /// tools/voxide-tools, with the shift chosen from the block's largest
 /// residual instead of a full search, to keep boot short).
-const ADPCM_K: [(i32, i32); 5] = [(0, 0), (60, 0), (115, -52), (98, -55), (122, -60)];
+const ADPCM_K: [(i32, i32); 5] = psx_hw::adpcm::FILTERS;
 
 fn adpcm_block(s: &[i32; 28], p1: &mut i32, p2: &mut i32, out: &mut [u8]) {
     // Pick the filter whose residuals (on the source) stay smallest.
