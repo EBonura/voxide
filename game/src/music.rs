@@ -325,6 +325,9 @@ pub fn start(title: bool) {
 #[inline]
 pub fn tick() {
     let x = m();
+    // A stop sends the Pause without waiting for the drive (a Pause out of a read takes
+    // about eight frames); one look a frame completes it, whatever the phase.
+    x.player.poll_stop();
     if x.phase == Phase::Off || x.phase == Phase::Idle {
         return;
     }
