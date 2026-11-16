@@ -336,28 +336,11 @@ pub fn draw_hud(font: &FontAtlas, p: &Player, fps: u32) {
 }
 
 /// Append `v` in decimal at `n`; returns the new length.
-fn put_int(buf: &mut [u8], mut n: usize, v: i32) -> usize {
-    if v < 0 {
-        buf[n] = b'-';
-        n += 1;
-    }
-    let mut u = v.unsigned_abs();
-    let mut digits = [0u8; 10];
-    let mut d = 0;
-    loop {
-        digits[d] = b'0' + (u % 10) as u8;
-        d += 1;
-        u /= 10;
-        if u == 0 {
-            break;
-        }
-    }
-    while d > 0 {
-        d -= 1;
-        buf[n] = digits[d];
-        n += 1;
-    }
-    n
+fn put_int(buf: &mut [u8], n: usize, v: i32) -> usize {
+    let mut digits = [0u8; psx_math::fmt::I32_DEC_MAX];
+    let s = psx_math::fmt::i32_dec(&mut digits, v).as_bytes();
+    buf[n..n + s.len()].copy_from_slice(s);
+    n + s.len()
 }
 
 #[inline(never)]

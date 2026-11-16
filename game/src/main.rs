@@ -4781,17 +4781,10 @@ fn setting_value(row: usize, buf: &mut [u8; 12]) -> usize {
             _ => (sfx::volume_pct(), true),
         }
     };
-    let mut n = 0;
-    if v >= 100 {
-        buf[n] = b'0' + (v / 100) as u8;
-        n += 1;
-    }
-    if v >= 10 {
-        buf[n] = b'0' + ((v / 10) % 10) as u8;
-        n += 1;
-    }
-    buf[n] = b'0' + (v % 10) as u8;
-    n += 1;
+    let mut digits = [0u8; psx_math::fmt::I32_DEC_MAX];
+    let s = psx_math::fmt::i32_dec(&mut digits, v).as_bytes();
+    buf[..s.len()].copy_from_slice(s);
+    let mut n = s.len();
     if pct {
         buf[n] = b'%';
         n += 1;
