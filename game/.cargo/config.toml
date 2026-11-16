@@ -6,6 +6,10 @@ target = "mipsel-sony-psx"
 # workspace root is the repo root.
 target-dir = "target"
 
+[env]
+# Hazard trampoline table size in code words (was the psx-rt feature hazard-trampolines-256).
+PSX_HAZARD_TRAMPOLINE_WORDS = "256"
+
 [unstable]
 # No prebuilt std for the PSX target: compile core ourselves.
 build-std = ["core"]
