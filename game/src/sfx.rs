@@ -355,10 +355,7 @@ impl Synth {
 
     /// Next sample, about +/-32k before scaling.
     fn next(&mut self) -> i32 {
-        self.seed = self
-            .seed
-            .wrapping_mul(1_664_525)
-            .wrapping_add(1_013_904_223);
+        self.seed = psx_fx::NrLcg::step(self.seed);
         let w = (self.seed >> 16) as i32 - 32_768;
         // Crack: bright noise (one-pole at about 2 kHz), gone in 0.2 s.
         self.crack += ((w - self.crack) * 13_000) >> 15;
@@ -632,10 +629,7 @@ impl RainSynth {
     }
 
     fn next(&mut self) -> i32 {
-        self.seed = self
-            .seed
-            .wrapping_mul(1_664_525)
-            .wrapping_add(1_013_904_223);
+        self.seed = psx_fx::NrLcg::step(self.seed);
         let w = (self.seed >> 16) as i32 - 32_768;
         self.lp += ((w - self.lp) * 8_000) >> 15;
         let hiss = (w - self.lp) >> 2;

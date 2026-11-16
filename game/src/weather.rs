@@ -580,7 +580,7 @@ const SEG_H: i32 = 16 * BLOCK;
 struct Shape(u32);
 impl Shape {
     fn step(&mut self, n: i32) -> i32 {
-        self.0 = self.0.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+        self.0 = psx_fx::LcgRng::step(self.0);
         ((self.0 >> 16) % n as u32) as i32
     }
 }
@@ -779,7 +779,7 @@ fn rain_sound(p: &Player) {
     let mut k = 0;
     while k < 4 {
         let r = unsafe {
-            SEED = SEED.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            SEED = psx_fx::LcgRng::step(SEED);
             SEED >> 8
         };
         let (x, z) = (
