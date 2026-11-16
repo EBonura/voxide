@@ -5293,7 +5293,7 @@ fn spawn_player() -> Player {
 fn world_rand() -> u32 {
     static mut SEED: u32 = 0x2545_F491;
     unsafe {
-        SEED = SEED.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+        SEED = psx_fx::LcgRng::step(SEED);
         SEED >> 8
     }
 }
@@ -6910,14 +6910,6 @@ fn emit_box_masked(
     }
 }
 
-fn scale_rgb(c: (u8, u8, u8), pct: u32) -> (u8, u8, u8) {
-    (
-        (c.0 as u32 * pct / 100).min(255) as u8,
-        (c.1 as u32 * pct / 100).min(255) as u8,
-        (c.2 as u32 * pct / 100).min(255) as u8,
-    )
-}
-
 /// First-person held item in the bottom-right: the arm, then the item as Java
 /// holds it (a flat icon, or the block's 3D model in its real tiles), with an
 /// idle bob and a downward dip while swinging (mining/placing).
@@ -7475,7 +7467,7 @@ fn render_mob(cam: &Camera, m: mob::MobView, count: &mut usize) {
     } else {
         mob_color(m.kind)
     };
-    let legc = scale_rgb(base, 72);
+    let legc = psx_math::color::scale_rgb(base, 72, 100);
     let biped = m.kind == mob::ZOMBIE
         || m.kind == mob::SKELETON
         || m.kind == mob::SAPPER
