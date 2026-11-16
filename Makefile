@@ -139,7 +139,7 @@ GATE_DIR ?= $(ROOT)/build/gate
 GATE_SYMBOLS ?= $(ROOT)/build/gate-symbols.txt
 gate-symbols: psoxide
 	@mkdir -p "$(ROOT)/build"
-	$(PSOXIDE_SIZE) block "$(GATE_EXE)" VOXG:2:80:VOXIDE_GATE_STATE VSET:3:84:VOXIDE_SETTINGS_STATE \
+	$(PSOXIDE_SIZE) block "$(GATE_EXE)" VOXG:3:88:VOXIDE_GATE_STATE VSET:3:84:VOXIDE_SETTINGS_STATE \
 		VMUS:1:64:VOXIDE_MUSIC_STATE > "$(GATE_SYMBOLS)"
 
 gate-disc:

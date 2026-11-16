@@ -5572,7 +5572,7 @@ fn enter_dimension(dim: u8, bx: i32, bz: i32, fb: &mut screen::Screen, font: &Fo
 /// Advanced only by world_tick; animations read it instead of a frame count.
 static mut SIM_TICK: u32 = 0;
 /// A versioned, initialized block the journey locates in the exact PS-X EXE.
-/// Layout (version 2, 80 bytes): magic, version, byte length, sim tick, live
+/// Layout (version 3, 88 bytes): magic, version, byte length, sim tick, live
 /// TNT, block edits, pending blasts, player health and completed block blasts,
 /// then what the shaped blocks and the bow report, as cell ids (bstate.rs):
 ///   9 the cell the player last placed, 10 its second cell (a door's upper
@@ -5581,16 +5581,19 @@ static mut SIM_TICK: u32 = 0;
 ///   in sim ticks; 14 player arrows in flight; 15 arrows in the pack; 16 how
 ///   dark the sleep fade is (0..4); 17 the power of the dust under the
 ///   crosshair (0..15); 18 doors, pistons and TNT redstone has worked; 19 the
-///   world clock in sim ticks (the day, DAY_LEN to a turn).
+///   world clock in sim ticks (the day, DAY_LEN to a turn); 20 the camera
+///   yaw (0..4095, 4096 to the turn); 21 the camera pitch (signed, 1024 is 90
+///   degrees down), so a journey turns until the view is where it wants it
+///   instead of for a number of ticks, whatever the frame pacing.
 /// It only mirrors gameplay state.
 psx_telemetry::receipts! {
 #[used]
 #[no_mangle]
-pub static mut VOXIDE_GATE_STATE: [u32; 20] = [
+pub static mut VOXIDE_GATE_STATE: [u32; 22] = [
     u32::from_le_bytes(*b"VOXG"),
-    2,
-    80,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    3,
+    88,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
 /// What is under the crosshair, for the gate (once a frame).
@@ -5622,6 +5625,8 @@ fn gate_snapshot(player: &Player) {
         VOXIDE_GATE_STATE[15] = INV[ARROW as usize] as u32;
         VOXIDE_GATE_STATE[16] = sleep::darkness() as u32;
         VOXIDE_GATE_STATE[18] = redstone::worked();
+        VOXIDE_GATE_STATE[20] = player.yaw as u32;
+        VOXIDE_GATE_STATE[21] = player.pitch as i32 as u32;
     }
 }
 }
