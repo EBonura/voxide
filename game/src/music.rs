@@ -184,51 +184,30 @@ fn find_song_files() -> [Option<File>; FILES] {
     if !reader.prepare() {
         return files;
     }
-    let Some(root) =
-        read_sector(&mut reader, &mut sector, iso::PVD_LBA).and_then(iso::root_directory)
-    else {
-        return files;
-    };
-    let Some(directory) = read_sector(&mut reader, &mut sector, root.0) else {
-        return files;
-    };
+    let mut found = [None; FILES];
+    iso::find_in_root(
+        &mut sector,
+        |lba, into| read_sector(&mut reader, lba, into),
+        &SONG_NAMES,
+        &mut found,
+    );
     let mut n = 0;
     while n < FILES {
-        let name = [
-            b'M',
-            b'U',
-            b'S',
-            b'I',
-            b'C',
-            b'1' + n as u8,
-            b'.',
-            b'X',
-            b'A',
-        ];
-        if let Ok(name) = core::str::from_utf8(&name) {
-            files[n] = iso::find_in_directory(directory, name).map(|(lba, size)| {
-                File::from_directory_entry(lba, size, n as u8 + 1, DriveSpeed::Single)
-            });
-        }
+        files[n] = found[n].map(|(lba, size)| {
+            File::from_directory_entry(lba, size, n as u8 + 1, DriveSpeed::Single)
+        });
         n += 1;
     }
     files
 }
 
-/// One data sector as bytes.
-fn read_sector<'s>(
-    reader: &mut SectorReader,
-    sector: &'s mut [u32; SECTOR_WORDS],
-    lba: u32,
-) -> Option<&'s [u8; iso::BYTES]> {
-    if !reader.start_read(lba) {
-        reader.stop();
-        return None;
-    }
-    let ok = reader.read_sector(sector);
-    reader.stop();
-    ok.then(|| iso::as_bytes(sector))
+/// One sector read, kept out of line.
+#[inline(never)]
+fn read_sector(reader: &mut SectorReader, lba: u32, sector: &mut [u32; SECTOR_WORDS]) -> bool {
+    reader.read_at(lba, sector)
 }
+
+const SONG_NAMES: [&str; FILES] = ["MUSIC1.XA"];
 
 /// The title screen is up: the menu song comes after Java's 1 to 30 seconds.
 #[inline(never)]
