@@ -73,6 +73,7 @@ edit store that no longer forgets a build.
   over 0.4 s (`game/src/loading.rs`, `world::load_stage`).
   In-game loads now wait for the frame still being rasterised before drawing.
   `tests/loading-screen.toml` checks the screen by colour counts.
+- The thunder and the rain are encoded to SPU-ADPCM through `psx_hw::adpcm` (the SDK kernel) instead of a private copy. The old encoder predicted with one `>> 6` of the sum of the two products where the SPU shifts each product, so its history drifted from what the SPU plays back. The thunder stream therefore changes (1530 of its 1575 blocks, since one different block moves every later history), toward what the SPU reconstructs: against the synthesised source its decode error falls from a mean of 34.9 to 15.9 (units of a 16-bit sample) with the same peak of 1019. The rain stream is byte for byte what it was. `tools/host-tests/tests/adpcm_error.rs` builds both inputs from the game source and checks that the new encoder is not worse in mean and peak. On a synthetic sweep the two forms disagree on 0.85 percent of blocks. Ship text -996 B (`adpcm_block` 2,116 to 1,120 B).
 
 ## 0.4.1 | TBD
 
