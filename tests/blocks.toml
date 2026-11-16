@@ -112,9 +112,11 @@ kind = "not_flat"
 # ---- a door -----------------------------------------------------------------
 
 [[step]]
-label = "look down at the ground ahead"
-rstick = [128, 255]
-hold = 20
+label = "look down at the ground ahead: until the view is 354 units (31 degrees) below the horizon"
+sync = "poll"
+rstick = [128, 200]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 84) <= -354" }
+timeout = 400
 wait = 20
 
 [[step]]
@@ -169,9 +171,11 @@ note = "the door used is open"
 # cell of the ground.
 
 [[step]]
-label = "turn left and take the bed (third slot)"
-rstick = [0, 128]
-hold = 16
+label = "turn left to yaw 3741 and take the bed (third slot)"
+sync = "poll"
+rstick = [64, 128]
+hold_until = { kind = "expr", expr = "((i32(VOXIDE_GATE_STATE + 80) - 3741 + 2048) & 4095) - 2048 <= 0" }
+timeout = 400
 wait = 10
 
 [[step]]
@@ -204,9 +208,11 @@ value = 146
 note = "and its head"
 
 [[step]]
-label = "turn right and take the lever (fourth slot)"
-rstick = [255, 128]
-hold = 32
+label = "turn right to yaw 281 and take the lever (fourth slot)"
+sync = "poll"
+rstick = [192, 128]
+hold_until = { kind = "expr", expr = "((i32(VOXIDE_GATE_STATE + 80) - 281 + 2048) & 4095) - 2048 >= 0" }
+timeout = 400
 wait = 10
 
 [[step]]
@@ -249,9 +255,11 @@ value = 162
 note = "the lever used is on"
 
 [[step]]
-label = "turn right and take the dust (fifth slot)"
-rstick = [255, 128]
-hold = 16
+label = "turn right to yaw 710 and take the dust (fifth slot)"
+sync = "poll"
+rstick = [192, 128]
+hold_until = { kind = "expr", expr = "((i32(VOXIDE_GATE_STATE + 80) - 710 + 2048) & 4095) - 2048 >= 0" }
+timeout = 400
 wait = 10
 
 [[step]]
@@ -276,9 +284,11 @@ value = 21
 note = "redstone dust"
 
 [[step]]
-label = "turn right and take the redstone torch (sixth slot)"
-rstick = [255, 128]
-hold = 16
+label = "turn right to yaw 1065 and take the redstone torch (sixth slot)"
+sync = "poll"
+rstick = [192, 128]
+hold_until = { kind = "expr", expr = "((i32(VOXIDE_GATE_STATE + 80) - 1065 + 2048) & 4095) - 2048 >= 0" }
+timeout = 400
 wait = 10
 
 [[step]]
@@ -303,9 +313,11 @@ value = 102
 note = "a redstone torch on the floor (its own block, not the light torch)"
 
 [[step]]
-label = "turn right and take the piston (seventh slot)"
-rstick = [255, 128]
-hold = 16
+label = "turn right to yaw 1397 and take the piston (seventh slot)"
+sync = "poll"
+rstick = [192, 128]
+hold_until = { kind = "expr", expr = "((i32(VOXIDE_GATE_STATE + 80) - 1397 + 2048) & 4095) - 2048 >= 0" }
+timeout = 400
 wait = 10
 
 [[step]]
@@ -339,9 +351,11 @@ wait = 12
 repeat = 2
 
 [[step]]
-label = "look up to the horizon, so the arrow has somewhere to fly"
-rstick = [128, 0]
-hold = 22
+label = "look up to the horizon, so the arrow has somewhere to fly: until the view is 74 units above it"
+sync = "poll"
+rstick = [128, 56]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 84) >= 74" }
+timeout = 400
 wait = 10
 
 [[step]]

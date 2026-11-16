@@ -359,9 +359,11 @@ wait = 30
 # ---- TNT -------------------------------------------------------------------
 
 [[step]]
-label = "look down at the ground in front"
-rstick = [128, 255]
-hold = 40
+label = "look down at the ground in front: until the view is 744 units (65 degrees) below the horizon"
+sync = "poll"
+rstick = [128, 200]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 84) <= -744" }
+timeout = 400
 wait = 20
 
 [[step]]
@@ -423,10 +425,17 @@ hold = 50
 wait = 2
 
 [[step]]
-label = "raise the view back toward the TNT site"
-rstick = [128, 0]
-hold = 30
+label = "raise the view back toward the TNT site: until it is 186 units below the horizon"
+sync = "poll"
+rstick = [128, 40]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 84) >= -186" }
+timeout = 400
 wait = 2
+
+[[step]]
+label = "the primed TNT flashes white for 15 ticks in every 30 (blast::flashing): take the checkpoint in the lit half, whatever tick the view settled on"
+wait_until = { kind = "pixels", color = [206, 206, 206], color_tol = 4, region = { x = 130, y = 75, w = 100, h = 65 }, min_count = 800 }
+timeout = 40
 
 [[step]]
 checkpoint = "tnt-safe-before-blast"
@@ -444,14 +453,14 @@ kind = "ram"
 sym = "VOXIDE_GATE_STATE"
 offset = 4
 op = "eq"
-value = 2
+value = 3
 note = "gate-state layout version"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_GATE_STATE"
 offset = 8
 op = "eq"
-value = 80
+value = 88
 note = "gate-state byte length"
 [[step.assert]]
 kind = "ram"
@@ -519,7 +528,7 @@ sym = "VOXIDE_GATE_STATE"
 offset = 20
 op = "ge"
 value = 100
-note = "the completed blast made a crater; the exact count is asserted at world-saved"
+note = "the completed blast made a crater; the size of the crater that is saved and reloaded is asserted at world-saved"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_GATE_STATE"
@@ -573,9 +582,10 @@ kind = "not_flat"
 kind = "ram"
 sym = "VOXIDE_GATE_STATE"
 offset = 20
-op = "eq"
-value = 142
-note = "the saved game has the completed crater edits: 142 when the fuse is lit on simulation tick 1132 (the blast seed is SIM_TICK, so the count follows the tick the TNT goes off at; the journey waits on the game's own tick counter, by polls, before the flint, so build speed and boot timing do not move it; the source before the Mask64 mesher and the one after both give 142)"
+op = "between"
+value = 130
+value_hi = 150
+note = "the saved game has the completed crater edits. The count is a pure function of the blast seed (SIM_TICK when the fuse runs out, plus the block), so it follows the tick the TNT was lit on, and that tick depends on how the frames fell (a frame of two vblanks runs two sim ticks at once): flint thresholds 1128 to 1136 gave 136 to 145 on the real and the mister models, and the same threshold gave 142 on one pacing and 140 on another. So the journey pins the size of the crater, not the exact count: the edits a persisted save must keep are the same ones the blast made, and the reboot below must bring back a crater of the same size"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_GATE_STATE"
@@ -649,8 +659,9 @@ kind = "not_flat"
 kind = "ram"
 sym = "VOXIDE_GATE_STATE"
 offset = 20
-op = "eq"
-value = 142
+op = "between"
+value = 130
+value_hi = 150
 note = "the actual world edit log was restored from card"
 [[step.assert]]
 kind = "ram"

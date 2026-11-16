@@ -354,9 +354,11 @@ value = 1
 label = "PLAY GAME: a new world, straight in"
 press = ["cross"]
 hold = 4
-wait = 150
+wait = 2
 [[step]]
-wait = 60
+label = "the new world is up when its sim clock runs; sample it at once, before the first ambient spawn (the spawn timer is 120 sim ticks), not after a fixed wait"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 12, op = "ge", value = 1 }
+timeout = 1500
 [[step]]
 press = ["start"]
 hold = 4
@@ -386,8 +388,10 @@ value = 2
 kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
 offset = 52
-op = "eq"
-value = 4
+op = "between"
+value = 3
+value_hi = 4
+note = "the new world's own roster: populate() stands four passive mobs in a row ahead of the player and skips a spot a tree or water holds, and the world is seeded from the frame count at the quit, so it is 3 or 4 whatever the frame pacing (never the dirtied world's fifth mob, a pig)"
 [[step.assert]]
 kind = "ram"
 sym = "VOXIDE_SETTINGS_STATE"
