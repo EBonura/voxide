@@ -1,5 +1,5 @@
 # psoxide-pgo features: (default)
-# psoxide-pgo source: 22399638f00384aaaf7a9f14ec0a748c29608bb5
+# psoxide-pgo source: 522e2ab820418e9e966da8b32ac0983f3a2762a8
 # psoxide-pgo file: b902b52ae70d268d78c19e5bb47b100dfa4edb99 game/src/blocks.rs
 # psoxide-pgo file: db2a2d922e6b3d0c2518bcc0905b6420b8609a5e game/src/bow.rs
 # psoxide-pgo file: 528f61e048700832862e4d23b3d6655b5d17f972 game/src/bstate.rs
@@ -10,7 +10,7 @@
 # psoxide-pgo file: 8e4e1dce7bd107fb3766626f4904c2a7743ed9ff game/src/hand.rs
 # psoxide-pgo file: 343460abbc4b4de458d4aa0ee406f6361ce09f8d game/src/inv.rs
 # psoxide-pgo file: 7b96b8e38d28a72afce5539dc8f557f939c5e952 game/src/loading.rs
-# psoxide-pgo file: d8d9b8f1e1a4ffbf92b7523be1e59c4389d26c35 game/src/main.rs
+# psoxide-pgo file: b8a06c7b283f392c36126da0ee96fd8acb6f0220 game/src/main.rs
 # psoxide-pgo file: 18fb340d472f395cbfcc0734ec7e6aa4fb1170e9 game/src/menus.rs
 # psoxide-pgo file: 29c0dd1111b5703c3cddcc07b6b00ceccb80b3a4 game/src/mob.rs
 # psoxide-pgo file: f96c376700778e3b21819d858196e7417f175265 game/src/music.rs
