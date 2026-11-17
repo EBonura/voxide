@@ -1,5 +1,5 @@
 # psoxide-pgo features: (default)
-# psoxide-pgo source: 522e2ab820418e9e966da8b32ac0983f3a2762a8
+# psoxide-pgo source: 95f5333e2ccde3067191ab982ec4525ba190ece1
 # psoxide-pgo file: b902b52ae70d268d78c19e5bb47b100dfa4edb99 game/src/blocks.rs
 # psoxide-pgo file: db2a2d922e6b3d0c2518bcc0905b6420b8609a5e game/src/bow.rs
 # psoxide-pgo file: 528f61e048700832862e4d23b3d6655b5d17f972 game/src/bstate.rs
@@ -10,14 +10,14 @@
 # psoxide-pgo file: 8e4e1dce7bd107fb3766626f4904c2a7743ed9ff game/src/hand.rs
 # psoxide-pgo file: 343460abbc4b4de458d4aa0ee406f6361ce09f8d game/src/inv.rs
 # psoxide-pgo file: 7b96b8e38d28a72afce5539dc8f557f939c5e952 game/src/loading.rs
-# psoxide-pgo file: b8a06c7b283f392c36126da0ee96fd8acb6f0220 game/src/main.rs
+# psoxide-pgo file: 12f77b261e5f5c8fcf4ad8b8f045e9c1c7d0e131 game/src/main.rs
 # psoxide-pgo file: 18fb340d472f395cbfcc0734ec7e6aa4fb1170e9 game/src/menus.rs
 # psoxide-pgo file: 29c0dd1111b5703c3cddcc07b6b00ceccb80b3a4 game/src/mob.rs
-# psoxide-pgo file: f96c376700778e3b21819d858196e7417f175265 game/src/music.rs
+# psoxide-pgo file: 0a9197949b9ffbcc2959ae6be75937869f69de23 game/src/music.rs
 # psoxide-pgo file: 93f3081cb446614c59c7a42ba68ff81226632ddb game/src/redstone.rs
 # psoxide-pgo file: 59e4c5f8989fb0ddb898cd9bef7cee38c7431678 game/src/save.rs
 # psoxide-pgo file: fb0ac2eae2438de4c55806b221c41ad923b36ffb game/src/seal.rs
-# psoxide-pgo file: e66349580565ddbe58b4f48c71ae2d0928bc97c8 game/src/sfx.rs
+# psoxide-pgo file: ef7cff8429376fd2e2e7e652e72e58c819b8cbda game/src/sfx.rs
 # psoxide-pgo file: cbf6d6d988fdd75cced8b59c59226a98865158fb game/src/shape.rs
 # psoxide-pgo file: 1aed9d5f0ece1dc087a38dba5965c4f413b00af3 game/src/slack.rs
 # psoxide-pgo file: 2ad145b65fc261914a377faf3c4fba02f1cc741d game/src/sleep.rs
@@ -26,16 +26,16 @@
 # psoxide-pgo file: 2cab3b36cf36c30f1566da1abea89e1e5a12aed5 game/src/weather.rs
 # psoxide-pgo file: 5e3d246029586ebce8917200e3f0564cef10acb2 game/src/world.rs
 # psoxide-pgo file: 3cf5ce32226ba9fb13b29466b4bfe599370f110a game/src/world/rle.rs
-# psoxide-pgo func: 8869 8870 10 <voxide::CellPlane<0> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
-# psoxide-pgo func: 8877 8886 10 <voxide::CellPlane<0> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
-# psoxide-pgo func: 8869 8870 10 <voxide::CellPlane<2> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
-# psoxide-pgo func: 8877 8886 10 <voxide::CellPlane<2> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
-# psoxide-pgo func: 8869 8870 10 <voxide::CellPlane<3> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
-# psoxide-pgo func: 8877 8886 10 <voxide::CellPlane<3> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
-# psoxide-pgo func: 8869 8870 10 <voxide::CellPlane<4> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
-# psoxide-pgo func: 8877 8886 10 <voxide::CellPlane<4> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
-# psoxide-pgo func: 8869 8870 10 <voxide::CellPlane<5> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
-# psoxide-pgo func: 8877 8886 10 <voxide::CellPlane<5> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
+# psoxide-pgo func: 8874 8875 10 <voxide::CellPlane<0> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
+# psoxide-pgo func: 8882 8891 10 <voxide::CellPlane<0> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
+# psoxide-pgo func: 8874 8875 10 <voxide::CellPlane<2> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
+# psoxide-pgo func: 8882 8891 10 <voxide::CellPlane<2> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
+# psoxide-pgo func: 8874 8875 10 <voxide::CellPlane<3> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
+# psoxide-pgo func: 8882 8891 10 <voxide::CellPlane<3> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
+# psoxide-pgo func: 8874 8875 10 <voxide::CellPlane<4> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
+# psoxide-pgo func: 8882 8891 10 <voxide::CellPlane<4> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
+# psoxide-pgo func: 8874 8875 10 <voxide::CellPlane<5> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::distance @voxide
+# psoxide-pgo func: 8882 8891 10 <voxide::CellPlane<5> as psx_math::attributed_clip::AttributedClipPlane<voxide::ClipVert>>::intersection @voxide
 # psoxide-pgo func: 140 155 4 <voxide::edits::Edits>::add_chunk
 # psoxide-pgo func: 125 136 4 <voxide::edits::Edits>::find_chunk
 # psoxide-pgo func: 159 170 4 <voxide::edits::Edits>::find_edit
@@ -48,113 +48,113 @@
 # psoxide-pgo func: 371 489 14 <voxide::redstone::Net>::step::<voxide::redstone::Live> @voxide
 # psoxide-pgo func: 178 180 14 <voxide::redstone::Net>::wire_power
 # psoxide-pgo func: 2929 4149 10 main
-# psoxide-pgo func: 6640 6641 10 voxide::aabb_collides
-# psoxide-pgo func: 6710 6750 10 voxide::aabb_collides_dims
+# psoxide-pgo func: 6645 6646 10 voxide::aabb_collides
+# psoxide-pgo func: 6715 6755 10 voxide::aabb_collides_dims
 # psoxide-pgo func: 1312 1425 10 voxide::advance_streaming
-# psoxide-pgo func: 9328 9329 10 voxide::ao_factor
+# psoxide-pgo func: 9333 9334 10 voxide::ao_factor
 # psoxide-pgo func: 1271 1279 10 voxide::ao_shade
-# psoxide-pgo func: 5900 5912 10 voxide::apply_blast_kick
-# psoxide-pgo func: 13257 13270 10 voxide::apply_sunset
+# psoxide-pgo func: 5905 5917 10 voxide::apply_blast_kick
+# psoxide-pgo func: 13262 13275 10 voxide::apply_sunset
 # psoxide-pgo func: 599 602 10 voxide::armor_piece
 # psoxide-pgo func: 633 646 10 voxide::armor_points
 # psoxide-pgo func: 614 615 10 voxide::armor_tile
 # psoxide-pgo func: 2011 2023 10 voxide::armored
-# psoxide-pgo func: 6697 6703 10 voxide::at_ladder
+# psoxide-pgo func: 6702 6708 10 voxide::at_ladder
 # psoxide-pgo func: 1976 1979 10 voxide::attack_charge
-# psoxide-pgo func: 10591 10596 10 voxide::billboard
-# psoxide-pgo func: 13155 13192 10 voxide::block_light
-# psoxide-pgo func: 13283 13366 10 voxide::block_name
-# psoxide-pgo func: 13893 13894 10 voxide::block_to_world_z
+# psoxide-pgo func: 10596 10601 10 voxide::billboard
+# psoxide-pgo func: 13160 13197 10 voxide::block_light
+# psoxide-pgo func: 13288 13371 10 voxide::block_name
+# psoxide-pgo func: 13898 13899 10 voxide::block_to_world_z
 # psoxide-pgo func: 308 331 0 voxide::blocks::after_break
 # psoxide-pgo func: 266 280 0 voxide::blocks::hangs_on
 # psoxide-pgo func: 336 358 0 voxide::blocks::settle
 # psoxide-pgo func: 69 70 1 voxide::bow::drawing
 # psoxide-pgo func: 73 77 1 voxide::bow::reset
 # psoxide-pgo func: 96 127 1 voxide::bow::update
-# psoxide-pgo func: 12557 12575 10 voxide::bow_use
+# psoxide-pgo func: 12562 12580 10 voxide::bow_use
 # psoxide-pgo func: 266 267 2 voxide::bstate::is_bed
 # psoxide-pgo func: 139 143 2 voxide::bstate::kind_of
-# psoxide-pgo func: 6123 6153 10 voxide::camera_from_player
-# psoxide-pgo func: 9347 9351 10 voxide::camera_space_world
-# psoxide-pgo func: 9350 9350 10 voxide::camera_space_world::{closure#0} @voxide
+# psoxide-pgo func: 6128 6158 10 voxide::camera_from_player
+# psoxide-pgo func: 9352 9356 10 voxide::camera_space_world
+# psoxide-pgo func: 9355 9355 10 voxide::camera_space_world::{closure#0} @voxide
 # psoxide-pgo func: 1491 1496 10 voxide::cave_amount
-# psoxide-pgo func: 13120 13123 10 voxide::celestial_q12
-# psoxide-pgo func: 9069 9075 10 voxide::cell_verdict
+# psoxide-pgo func: 13125 13128 10 voxide::celestial_q12
+# psoxide-pgo func: 9074 9080 10 voxide::cell_verdict
 # psoxide-pgo func: 118 119 3 voxide::cheat::god
 # psoxide-pgo func: 122 123 3 voxide::cheat::hud
-# psoxide-pgo func: 8893 8917 10 voxide::clip_cell_plane_c::<0> @voxide
-# psoxide-pgo func: 8893 8917 10 voxide::clip_cell_plane_c::<1> @voxide
-# psoxide-pgo func: 8893 8917 10 voxide::clip_cell_plane_c::<2> @voxide
-# psoxide-pgo func: 8893 8917 10 voxide::clip_cell_plane_c::<3> @voxide
-# psoxide-pgo func: 8893 8917 10 voxide::clip_cell_plane_c::<4> @voxide
-# psoxide-pgo func: 8893 8917 10 voxide::clip_cell_plane_c::<5> @voxide
-# psoxide-pgo func: 9045 9053 10 voxide::clip_code
-# psoxide-pgo func: 8925 8937 10 voxide::clip_distance
-# psoxide-pgo func: 8833 8835 10 voxide::clip_distance_c::<0> @voxide
-# psoxide-pgo func: 8833 8836 10 voxide::clip_distance_c::<1> @voxide
-# psoxide-pgo func: 8833 8837 10 voxide::clip_distance_c::<2> @voxide
-# psoxide-pgo func: 8833 8838 10 voxide::clip_distance_c::<3> @voxide
-# psoxide-pgo func: 8833 8839 10 voxide::clip_distance_c::<4> @voxide
-# psoxide-pgo func: 8833 8840 10 voxide::clip_distance_c::<5> @voxide
-# psoxide-pgo func: 8942 8954 10 voxide::clip_intersection
-# psoxide-pgo func: 8945 8945 10 voxide::clip_intersection::{closure#0} @voxide
-# psoxide-pgo func: 8964 8975 10 voxide::clip_line_segment
-# psoxide-pgo func: 8847 8855 10 voxide::clip_polygon_plane_c::<0> @voxide
-# psoxide-pgo func: 8847 8855 10 voxide::clip_polygon_plane_c::<2> @voxide
-# psoxide-pgo func: 8847 8855 10 voxide::clip_polygon_plane_c::<3> @voxide
-# psoxide-pgo func: 8847 8855 10 voxide::clip_polygon_plane_c::<4> @voxide
-# psoxide-pgo func: 8847 8855 10 voxide::clip_polygon_plane_c::<5> @voxide
-# psoxide-pgo func: 8983 8991 10 voxide::clip_project
-# psoxide-pgo func: 10118 10157 10 voxide::clip_quad_near
-# psoxide-pgo func: 10928 10955 10 voxide::cloud_color
-# psoxide-pgo func: 12819 12841 10 voxide::crop_tick
-# psoxide-pgo func: 13144 13146 10 voxide::day_light
-# psoxide-pgo func: 10960 10967 10 voxide::depth_slot
-# psoxide-pgo func: 12009 12013 10 voxide::dim_screen
-# psoxide-pgo func: 12259 12286 10 voxide::draw_all_hud
-# psoxide-pgo func: 11515 11540 10 voxide::draw_armor
-# psoxide-pgo func: 12443 12456 10 voxide::draw_boss_bar
-# psoxide-pgo func: 11218 11264 10 voxide::draw_box_outline
-# psoxide-pgo func: 11083 11113 10 voxide::draw_break_overlay
-# psoxide-pgo func: 12015 12017 10 voxide::draw_centered
-# psoxide-pgo func: 11374 11396 10 voxide::draw_count
-# psoxide-pgo func: 12321 12326 10 voxide::draw_crosshair
-# psoxide-pgo func: 11576 11585 10 voxide::draw_food
-# psoxide-pgo func: 13088 13097 10 voxide::draw_frame_sky
-# psoxide-pgo func: 11554 11570 10 voxide::draw_hearts
-# psoxide-pgo func: 6912 7094 10 voxide::draw_held_item
-# psoxide-pgo func: 6929 6929 10 voxide::draw_held_item::{closure#0} @voxide
-# psoxide-pgo func: 7069 7069 10 voxide::draw_held_item::{closure#1} @voxide
-# psoxide-pgo func: 11398 11487 10 voxide::draw_hotbar
-# psoxide-pgo func: 12458 12524 10 voxide::draw_hud
-# psoxide-pgo func: 11361 11369 10 voxide::draw_icon
-# psoxide-pgo func: 11594 11612 10 voxide::draw_menu
-# psoxide-pgo func: 11194 11215 10 voxide::draw_pick_outline
-# psoxide-pgo func: 10630 10920 10 voxide::draw_sky
-# psoxide-pgo func: 10690 10694 10 voxide::draw_sky::{closure#0} @voxide
+# psoxide-pgo func: 8898 8922 10 voxide::clip_cell_plane_c::<0> @voxide
+# psoxide-pgo func: 8898 8922 10 voxide::clip_cell_plane_c::<1> @voxide
+# psoxide-pgo func: 8898 8922 10 voxide::clip_cell_plane_c::<2> @voxide
+# psoxide-pgo func: 8898 8922 10 voxide::clip_cell_plane_c::<3> @voxide
+# psoxide-pgo func: 8898 8922 10 voxide::clip_cell_plane_c::<4> @voxide
+# psoxide-pgo func: 8898 8922 10 voxide::clip_cell_plane_c::<5> @voxide
+# psoxide-pgo func: 9050 9058 10 voxide::clip_code
+# psoxide-pgo func: 8930 8942 10 voxide::clip_distance
+# psoxide-pgo func: 8838 8840 10 voxide::clip_distance_c::<0> @voxide
+# psoxide-pgo func: 8838 8841 10 voxide::clip_distance_c::<1> @voxide
+# psoxide-pgo func: 8838 8842 10 voxide::clip_distance_c::<2> @voxide
+# psoxide-pgo func: 8838 8843 10 voxide::clip_distance_c::<3> @voxide
+# psoxide-pgo func: 8838 8844 10 voxide::clip_distance_c::<4> @voxide
+# psoxide-pgo func: 8838 8845 10 voxide::clip_distance_c::<5> @voxide
+# psoxide-pgo func: 8947 8959 10 voxide::clip_intersection
+# psoxide-pgo func: 8950 8950 10 voxide::clip_intersection::{closure#0} @voxide
+# psoxide-pgo func: 8969 8980 10 voxide::clip_line_segment
+# psoxide-pgo func: 8852 8860 10 voxide::clip_polygon_plane_c::<0> @voxide
+# psoxide-pgo func: 8852 8860 10 voxide::clip_polygon_plane_c::<2> @voxide
+# psoxide-pgo func: 8852 8860 10 voxide::clip_polygon_plane_c::<3> @voxide
+# psoxide-pgo func: 8852 8860 10 voxide::clip_polygon_plane_c::<4> @voxide
+# psoxide-pgo func: 8852 8860 10 voxide::clip_polygon_plane_c::<5> @voxide
+# psoxide-pgo func: 8988 8996 10 voxide::clip_project
+# psoxide-pgo func: 10123 10162 10 voxide::clip_quad_near
+# psoxide-pgo func: 10933 10960 10 voxide::cloud_color
+# psoxide-pgo func: 12824 12846 10 voxide::crop_tick
+# psoxide-pgo func: 13149 13151 10 voxide::day_light
+# psoxide-pgo func: 10965 10972 10 voxide::depth_slot
+# psoxide-pgo func: 12014 12018 10 voxide::dim_screen
+# psoxide-pgo func: 12264 12291 10 voxide::draw_all_hud
+# psoxide-pgo func: 11520 11545 10 voxide::draw_armor
+# psoxide-pgo func: 12448 12461 10 voxide::draw_boss_bar
+# psoxide-pgo func: 11223 11269 10 voxide::draw_box_outline
+# psoxide-pgo func: 11088 11118 10 voxide::draw_break_overlay
+# psoxide-pgo func: 12020 12022 10 voxide::draw_centered
+# psoxide-pgo func: 11379 11401 10 voxide::draw_count
+# psoxide-pgo func: 12326 12331 10 voxide::draw_crosshair
+# psoxide-pgo func: 11581 11590 10 voxide::draw_food
+# psoxide-pgo func: 13093 13102 10 voxide::draw_frame_sky
+# psoxide-pgo func: 11559 11575 10 voxide::draw_hearts
+# psoxide-pgo func: 6917 7099 10 voxide::draw_held_item
+# psoxide-pgo func: 6934 6934 10 voxide::draw_held_item::{closure#0} @voxide
+# psoxide-pgo func: 7074 7074 10 voxide::draw_held_item::{closure#1} @voxide
+# psoxide-pgo func: 11403 11492 10 voxide::draw_hotbar
+# psoxide-pgo func: 12463 12529 10 voxide::draw_hud
+# psoxide-pgo func: 11366 11374 10 voxide::draw_icon
+# psoxide-pgo func: 11599 11617 10 voxide::draw_menu
+# psoxide-pgo func: 11199 11220 10 voxide::draw_pick_outline
+# psoxide-pgo func: 10635 10925 10 voxide::draw_sky
+# psoxide-pgo func: 10695 10699 10 voxide::draw_sky::{closure#0} @voxide
 # psoxide-pgo func: 2830 2839 10 voxide::draw_sleep_prompt
-# psoxide-pgo func: 10564 10587 10 voxide::draw_sun
-# psoxide-pgo func: 11354 11358 10 voxide::draw_tile
+# psoxide-pgo func: 10569 10592 10 voxide::draw_sun
+# psoxide-pgo func: 11359 11363 10 voxide::draw_tile
 # psoxide-pgo func: 2795 2824 10 voxide::draw_tutorial
-# psoxide-pgo func: 11497 11507 10 voxide::draw_xp
+# psoxide-pgo func: 11502 11512 10 voxide::draw_xp
 # psoxide-pgo func: 1712 1713 10 voxide::edit_count
-# psoxide-pgo func: 7240 7306 10 voxide::emit_body_box
-# psoxide-pgo func: 6795 6806 10 voxide::emit_box
-# psoxide-pgo func: 6812 6906 10 voxide::emit_box_masked
-# psoxide-pgo func: 9156 9325 10 voxide::emit_clipped_cell
-# psoxide-pgo func: 9212 9212 10 voxide::emit_clipped_cell::{closure#0} @voxide
-# psoxide-pgo func: 9254 9254 10 voxide::emit_clipped_cell::{closure#1} @voxide
-# psoxide-pgo func: 9255 9257 10 voxide::emit_clipped_cell::{closure#2} @voxide
-# psoxide-pgo func: 9857 10090 10 voxide::emit_face
-# psoxide-pgo func: 9880 9884 10 voxide::emit_face::{closure#0} @voxide
-# psoxide-pgo func: 7672 7691 10 voxide::emit_face_box
-# psoxide-pgo func: 7313 7375 10 voxide::emit_head_box_dir
-# psoxide-pgo func: 9526 9737 10 voxide::emit_near_face
-# psoxide-pgo func: 9563 9564 10 voxide::emit_near_face::{closure#0} @voxide
-# psoxide-pgo func: 9566 9571 10 voxide::emit_near_face::{closure#1} @voxide
-# psoxide-pgo func: 9574 9578 10 voxide::emit_near_face::{closure#2} @voxide
-# psoxide-pgo func: 9588 9594 10 voxide::emit_near_face::{closure#3} @voxide
-# psoxide-pgo func: 9602 9621 10 voxide::emit_near_face::{closure#4} @voxide
+# psoxide-pgo func: 7245 7311 10 voxide::emit_body_box
+# psoxide-pgo func: 6800 6811 10 voxide::emit_box
+# psoxide-pgo func: 6817 6911 10 voxide::emit_box_masked
+# psoxide-pgo func: 9161 9330 10 voxide::emit_clipped_cell
+# psoxide-pgo func: 9217 9217 10 voxide::emit_clipped_cell::{closure#0} @voxide
+# psoxide-pgo func: 9259 9259 10 voxide::emit_clipped_cell::{closure#1} @voxide
+# psoxide-pgo func: 9260 9262 10 voxide::emit_clipped_cell::{closure#2} @voxide
+# psoxide-pgo func: 9862 10095 10 voxide::emit_face
+# psoxide-pgo func: 9885 9889 10 voxide::emit_face::{closure#0} @voxide
+# psoxide-pgo func: 7677 7696 10 voxide::emit_face_box
+# psoxide-pgo func: 7318 7380 10 voxide::emit_head_box_dir
+# psoxide-pgo func: 9531 9742 10 voxide::emit_near_face
+# psoxide-pgo func: 9568 9569 10 voxide::emit_near_face::{closure#0} @voxide
+# psoxide-pgo func: 9571 9576 10 voxide::emit_near_face::{closure#1} @voxide
+# psoxide-pgo func: 9579 9583 10 voxide::emit_near_face::{closure#2} @voxide
+# psoxide-pgo func: 9593 9599 10 voxide::emit_near_face::{closure#3} @voxide
+# psoxide-pgo func: 9607 9626 10 voxide::emit_near_face::{closure#4} @voxide
 # psoxide-pgo func: 63 65 5 voxide::equip::damage100
 # psoxide-pgo func: 216 275 5 voxide::equip::draw_figure
 # psoxide-pgo func: 69 71 5 voxide::equip::six_t
@@ -162,41 +162,41 @@
 # psoxide-pgo func: 188 190 5 voxide::equip::sync
 # psoxide-pgo func: 41 42 5 voxide::equip::weapon_index
 # psoxide-pgo func: 53 55 5 voxide::equip::weapon_of
-# psoxide-pgo func: 9783 9790 10 voxide::face_fields
-# psoxide-pgo func: 9827 9830 10 voxide::face_mat
-# psoxide-pgo func: 12910 13001 10 voxide::face_tile
-# psoxide-pgo func: 13006 13054 10 voxide::face_tint
-# psoxide-pgo func: 13037 13037 10 voxide::face_tint::{closure#0} @voxide
-# psoxide-pgo func: 13052 13052 10 voxide::face_tint::{closure#1} @voxide
-# psoxide-pgo func: 9799 9817 10 voxide::face_verts
-# psoxide-pgo func: 7383 7386 10 voxide::facing_axis
+# psoxide-pgo func: 9788 9795 10 voxide::face_fields
+# psoxide-pgo func: 9832 9835 10 voxide::face_mat
+# psoxide-pgo func: 12915 13006 10 voxide::face_tile
+# psoxide-pgo func: 13011 13059 10 voxide::face_tint
+# psoxide-pgo func: 13042 13042 10 voxide::face_tint::{closure#0} @voxide
+# psoxide-pgo func: 13057 13057 10 voxide::face_tint::{closure#1} @voxide
+# psoxide-pgo func: 9804 9822 10 voxide::face_verts
+# psoxide-pgo func: 7388 7391 10 voxide::facing_axis
 # psoxide-pgo func: 429 434 10 voxide::fire_odds
-# psoxide-pgo func: 13910 13914 10 voxide::floor_div
+# psoxide-pgo func: 13915 13919 10 voxide::floor_div
 # psoxide-pgo func: 1676 1678 10 voxide::fog_band
-# psoxide-pgo func: 11795 11819 10 voxide::frame_present
-# psoxide-pgo func: 13674 13701 10 voxide::furn_tick
-# psoxide-pgo func: 7396 7398 10 voxide::gait
-# psoxide-pgo func: 13881 13882 10 voxide::get_block_i32
+# psoxide-pgo func: 11800 11824 10 voxide::frame_present
+# psoxide-pgo func: 13679 13706 10 voxide::furn_tick
+# psoxide-pgo func: 7401 7403 10 voxide::gait
+# psoxide-pgo func: 13886 13887 10 voxide::get_block_i32
 # psoxide-pgo func: 84 85 6 voxide::grid::kind
 # psoxide-pgo func: 93 138 6 voxide::grid::matched
 # psoxide-pgo func: 141 143 6 voxide::grid::output
 # psoxide-pgo func: 200 204 6 voxide::grid::return_all
 # psoxide-pgo func: 1546 1573 10 voxide::ground_haze
-# psoxide-pgo func: 10233 10239 10 voxide::gte_begin_chunk
-# psoxide-pgo func: 10165 10211 10 voxide::gte_load_camera
+# psoxide-pgo func: 10238 10244 10 voxide::gte_begin_chunk
+# psoxide-pgo func: 10170 10216 10 voxide::gte_load_camera
 # psoxide-pgo func: 119 226 7 voxide::hand::decide
 # psoxide-pgo func: 230 231 7 voxide::hand::label
-# psoxide-pgo func: 7136 7179 10 voxide::held_box
-# psoxide-pgo func: 7147 7150 10 voxide::held_box::{closure#0} @voxide
-# psoxide-pgo func: 7153 7153 10 voxide::held_box::{closure#1} @voxide
-# psoxide-pgo func: 7154 7159 10 voxide::held_box::{closure#2} @voxide
-# psoxide-pgo func: 7097 7102 10 voxide::held_flat
-# psoxide-pgo func: 7110 7128 10 voxide::held_model
-# psoxide-pgo func: 12057 12061 10 voxide::hint_item
-# psoxide-pgo func: 13456 13467 10 voxide::hotbar_sync
-# psoxide-pgo func: 13797 13818 10 voxide::hud_tool
-# psoxide-pgo func: 11300 11350 10 voxide::icon_tile
-# psoxide-pgo func: 6680 6694 10 voxide::in_water_body
+# psoxide-pgo func: 7141 7184 10 voxide::held_box
+# psoxide-pgo func: 7152 7155 10 voxide::held_box::{closure#0} @voxide
+# psoxide-pgo func: 7158 7158 10 voxide::held_box::{closure#1} @voxide
+# psoxide-pgo func: 7159 7164 10 voxide::held_box::{closure#2} @voxide
+# psoxide-pgo func: 7102 7107 10 voxide::held_flat
+# psoxide-pgo func: 7115 7133 10 voxide::held_model
+# psoxide-pgo func: 12062 12066 10 voxide::hint_item
+# psoxide-pgo func: 13461 13472 10 voxide::hotbar_sync
+# psoxide-pgo func: 13802 13823 10 voxide::hud_tool
+# psoxide-pgo func: 11305 11355 10 voxide::icon_tile
+# psoxide-pgo func: 6685 6699 10 voxide::in_water_body
 # psoxide-pgo func: 629 638 8 voxide::inv::draw_hand
 # psoxide-pgo func: 1493 1634 8 voxide::inv::draw_inventory
 # psoxide-pgo func: 2089 2369 8 voxide::inv::draw_player_page
@@ -224,11 +224,11 @@
 # psoxide-pgo func: 466 467 10 voxide::is_lava
 # psoxide-pgo func: 330 331 10 voxide::is_portal
 # psoxide-pgo func: 494 495 10 voxide::is_small_block
-# psoxide-pgo func: 12904 12907 10 voxide::is_transparent
+# psoxide-pgo func: 12909 12912 10 voxide::is_transparent
 # psoxide-pgo func: 530 531 10 voxide::is_water
-# psoxide-pgo func: 13196 13197 10 voxide::java_time
+# psoxide-pgo func: 13201 13202 10 voxide::java_time
 # psoxide-pgo func: 501 502 10 voxide::kind_of
-# psoxide-pgo func: 13227 13228 10 voxide::lerp_u8
+# psoxide-pgo func: 13232 13233 10 voxide::lerp_u8
 # psoxide-pgo func: 384 407 9 voxide::loading::fade_packet
 # psoxide-pgo func: 3365 3365 10 voxide::main::{closure#0} @voxide
 # psoxide-pgo func: 4070 4070 10 voxide::main::{closure#1} @voxide
@@ -237,8 +237,8 @@
 # psoxide-pgo func: 4094 4094 10 voxide::main::{closure#4} @voxide
 # psoxide-pgo func: 4103 4103 10 voxide::main::{closure#5} @voxide
 # psoxide-pgo func: 4124 4124 10 voxide::main::{closure#6} @voxide
-# psoxide-pgo func: 9838 9844 10 voxide::mat_words
-# psoxide-pgo func: 12091 12097 10 voxide::mc_slot
+# psoxide-pgo func: 9843 9849 10 voxide::mat_words
+# psoxide-pgo func: 12096 12102 10 voxide::mc_slot
 # psoxide-pgo func: 1989 2001 10 voxide::melee_damage
 # psoxide-pgo func: 4588 4594 10 voxide::menu_card_input
 # psoxide-pgo func: 302 303 11 voxide::menus::quit_ready
@@ -276,57 +276,57 @@
 # psoxide-pgo func: 960 1039 12 voxide::mob::update
 # psoxide-pgo func: 1641 1703 12 voxide::mob::update_arrows
 # psoxide-pgo func: 68 69 12 voxide::mob::walk_q8
-# psoxide-pgo func: 6775 6788 10 voxide::mob_color
-# psoxide-pgo func: 7195 7208 10 voxide::mob_face_tile
+# psoxide-pgo func: 6780 6793 10 voxide::mob_color
+# psoxide-pgo func: 7200 7213 10 voxide::mob_face_tile
 # psoxide-pgo func: 271 275 13 voxide::music::length_ms
 # psoxide-pgo func: 281 283 13 voxide::music::pick_due
-# psoxide-pgo func: 351 367 13 voxide::music::poll
+# psoxide-pgo func: 354 370 13 voxide::music::poll
 # psoxide-pgo func: 288 322 13 voxide::music::start
-# psoxide-pgo func: 326 344 13 voxide::music::tick
+# psoxide-pgo func: 326 347 13 voxide::music::tick
 # psoxide-pgo func: 2673 2680 10 voxide::nav_repeat
-# psoxide-pgo func: 9031 9036 10 voxide::near_pos
-# psoxide-pgo func: 9355 9356 10 voxide::near_shell_meshable
-# psoxide-pgo func: 9360 9361 10 voxide::near_shell_see_through
-# psoxide-pgo func: 9087 9132 10 voxide::near_vertex
+# psoxide-pgo func: 9036 9041 10 voxide::near_pos
+# psoxide-pgo func: 9360 9361 10 voxide::near_shell_meshable
+# psoxide-pgo func: 9365 9366 10 voxide::near_shell_see_through
+# psoxide-pgo func: 9092 9137 10 voxide::near_vertex
 # psoxide-pgo func: 1288 1290 10 voxide::opaque
-# psoxide-pgo func: 8997 9000 10 voxide::pack_clip_color
-# psoxide-pgo func: 9004 9005 10 voxide::pack_clip_uv
-# psoxide-pgo func: 7808 7816 10 voxide::plant_tile
-# psoxide-pgo func: 5702 5727 10 voxide::portal_tick
-# psoxide-pgo func: 10427 10440 10 voxide::project_dir
-# psoxide-pgo func: 8723 8733 10 voxide::project_point_gte
-# psoxide-pgo func: 10320 10358 10 voxide::project_quad_gte
-# psoxide-pgo func: 10324 10328 10 voxide::project_quad_gte::{closure#0} @voxide
-# psoxide-pgo func: 10367 10377 10 voxide::project_quad_sw
-# psoxide-pgo func: 10300 10310 10 voxide::quad_exploded
-# psoxide-pgo func: 13071 13082 10 voxide::queue_dither
+# psoxide-pgo func: 9002 9005 10 voxide::pack_clip_color
+# psoxide-pgo func: 9009 9010 10 voxide::pack_clip_uv
+# psoxide-pgo func: 7813 7821 10 voxide::plant_tile
+# psoxide-pgo func: 5707 5732 10 voxide::portal_tick
+# psoxide-pgo func: 10432 10445 10 voxide::project_dir
+# psoxide-pgo func: 8728 8738 10 voxide::project_point_gte
+# psoxide-pgo func: 10325 10363 10 voxide::project_quad_gte
+# psoxide-pgo func: 10329 10333 10 voxide::project_quad_gte::{closure#0} @voxide
+# psoxide-pgo func: 10372 10382 10 voxide::project_quad_sw
+# psoxide-pgo func: 10305 10315 10 voxide::quad_exploded
+# psoxide-pgo func: 13076 13087 10 voxide::queue_dither
 # psoxide-pgo func: 5302 5306 10 voxide::rain_amount
 # psoxide-pgo func: 5027 5030 10 voxide::read_pad
 # psoxide-pgo func: 1780 1788 10 voxide::record_edit
-# psoxide-pgo func: 11962 11964 10 voxide::rect
+# psoxide-pgo func: 11967 11969 10 voxide::rect
 # psoxide-pgo func: 642 655 14 voxide::redstone::tick
 # psoxide-pgo func: 625 626 14 voxide::redstone::wire_power
 # psoxide-pgo func: 1580 1672 10 voxide::refresh_mat_ccmd
 # psoxide-pgo func: 1655 1655 10 voxide::refresh_mat_ccmd::{closure#0} @voxide
 # psoxide-pgo func: 1657 1657 10 voxide::refresh_mat_ccmd::{closure#1} @voxide
-# psoxide-pgo func: 8703 8714 10 voxide::render_drops
-# psoxide-pgo func: 7444 7667 10 voxide::render_mob
-# psoxide-pgo func: 7601 7610 10 voxide::render_mob::{closure#0} @voxide
-# psoxide-pgo func: 7408 7430 10 voxide::render_mob_shadow
-# psoxide-pgo func: 7757 7793 10 voxide::render_mobs
-# psoxide-pgo func: 9372 9515 10 voxide::render_near_block_shell
-# psoxide-pgo func: 9474 9485 10 voxide::render_near_block_shell::{closure#0} @voxide
-# psoxide-pgo func: 9488 9488 10 voxide::render_near_block_shell::{closure#1} @voxide
-# psoxide-pgo func: 8738 8757 10 voxide::render_particles
-# psoxide-pgo func: 7827 7948 10 voxide::render_plants
-# psoxide-pgo func: 7835 7947 10 voxide::render_plants::{closure#0} @voxide
-# psoxide-pgo func: 6754 6772 10 voxide::render_world
-# psoxide-pgo func: 6768 6768 10 voxide::render_world::{closure#0} @voxide
-# psoxide-pgo func: 11814 11815 10 voxide::rgb
-# psoxide-pgo func: 12879 12901 10 voxide::sap_tick
+# psoxide-pgo func: 8708 8719 10 voxide::render_drops
+# psoxide-pgo func: 7449 7672 10 voxide::render_mob
+# psoxide-pgo func: 7606 7615 10 voxide::render_mob::{closure#0} @voxide
+# psoxide-pgo func: 7413 7435 10 voxide::render_mob_shadow
+# psoxide-pgo func: 7762 7798 10 voxide::render_mobs
+# psoxide-pgo func: 9377 9520 10 voxide::render_near_block_shell
+# psoxide-pgo func: 9479 9490 10 voxide::render_near_block_shell::{closure#0} @voxide
+# psoxide-pgo func: 9493 9493 10 voxide::render_near_block_shell::{closure#1} @voxide
+# psoxide-pgo func: 8743 8762 10 voxide::render_particles
+# psoxide-pgo func: 7832 7953 10 voxide::render_plants
+# psoxide-pgo func: 7840 7952 10 voxide::render_plants::{closure#0} @voxide
+# psoxide-pgo func: 6759 6777 10 voxide::render_world
+# psoxide-pgo func: 6773 6773 10 voxide::render_world::{closure#0} @voxide
+# psoxide-pgo func: 11819 11820 10 voxide::rgb
+# psoxide-pgo func: 12884 12906 10 voxide::sap_tick
 # psoxide-pgo func: 511 512 15 voxide::save::busy
-# psoxide-pgo func: 12230 12252 10 voxide::screen_tint
-# psoxide-pgo func: 9851 9852 10 voxide::screen_xy
+# psoxide-pgo func: 12235 12257 10 voxide::screen_tint
+# psoxide-pgo func: 9856 9857 10 voxide::screen_xy
 # psoxide-pgo func: 130 133 16 voxide::seal::axis
 # psoxide-pgo func: 99 100 16 voxide::seal::byte
 # psoxide-pgo func: 187 231 16 voxide::seal::grow_polygon::<voxide::emit_clipped_cell::{closure#1}, voxide::emit_clipped_cell::{closure#2}> @voxide
@@ -335,22 +335,22 @@
 # psoxide-pgo func: 122 123 16 voxide::seal::neg_if
 # psoxide-pgo func: 104 105 16 voxide::seal::sgn
 # psoxide-pgo func: 113 117 16 voxide::seal::signs
-# psoxide-pgo func: 13885 13886 10 voxide::set_block_i32
-# psoxide-pgo func: 9140 9148 10 voxide::set_clip_cell
+# psoxide-pgo func: 13890 13891 10 voxide::set_block_i32
+# psoxide-pgo func: 9145 9153 10 voxide::set_clip_cell
 # psoxide-pgo func: 188 190 17 voxide::sfx::blip
 # psoxide-pgo func: 165 166 17 voxide::sfx::break_block
 # psoxide-pgo func: 227 228 17 voxide::sfx::chicken
 # psoxide-pgo func: 221 222 17 voxide::sfx::cow
 # psoxide-pgo func: 129 150 17 voxide::sfx::play
-# psoxide-pgo func: 690 711 17 voxide::sfx::rain
+# psoxide-pgo func: 645 666 17 voxide::sfx::rain
 # psoxide-pgo func: 224 225 17 voxide::sfx::sheep
 # psoxide-pgo func: 174 181 17 voxide::sfx::step_on
-# psoxide-pgo func: 486 532 17 voxide::sfx::thunder_step
+# psoxide-pgo func: 441 487 17 voxide::sfx::thunder_step
 # psoxide-pgo func: 52 58 17 voxide::sfx::tick
 # psoxide-pgo func: 367 368 18 voxide::shape::is_shape
 # psoxide-pgo func: 373 377 18 voxide::shape::solid
-# psoxide-pgo func: 13134 13137 10 voxide::sky_bright_q12
-# psoxide-pgo func: 13110 13112 10 voxide::sky_level
+# psoxide-pgo func: 13139 13142 10 voxide::sky_bright_q12
+# psoxide-pgo func: 13115 13117 10 voxide::sky_level
 # psoxide-pgo func: 142 195 19 voxide::slack::frame_begin
 # psoxide-pgo func: 105 108 19 voxide::slack::idle_begin
 # psoxide-pgo func: 131 135 19 voxide::slack::idle_end
@@ -363,55 +363,55 @@
 # psoxide-pgo func: 24 25 20 voxide::sleep::active
 # psoxide-pgo func: 68 78 20 voxide::sleep::darkness
 # psoxide-pgo func: 44 50 20 voxide::sleep::tick
-# psoxide-pgo func: 11993 12005 10 voxide::sleep_fade
-# psoxide-pgo func: 8430 8453 10 voxide::spawn_particles
-# psoxide-pgo func: 13210 13212 10 voxide::spawn_sky
-# psoxide-pgo func: 10543 10552 10 voxide::square_above
-# psoxide-pgo func: 6630 6632 10 voxide::step_mat
-# psoxide-pgo func: 13127 13128 10 voxide::sun_height_q12
-# psoxide-pgo func: 13241 13255 10 voxide::sunset_warmth
-# psoxide-pgo func: 6674 6675 10 voxide::supported
+# psoxide-pgo func: 11998 12010 10 voxide::sleep_fade
+# psoxide-pgo func: 8435 8458 10 voxide::spawn_particles
+# psoxide-pgo func: 13215 13217 10 voxide::spawn_sky
+# psoxide-pgo func: 10548 10557 10 voxide::square_above
+# psoxide-pgo func: 6635 6637 10 voxide::step_mat
+# psoxide-pgo func: 13132 13133 10 voxide::sun_height_q12
+# psoxide-pgo func: 13246 13260 10 voxide::sunset_warmth
+# psoxide-pgo func: 6679 6680 10 voxide::supported
 # psoxide-pgo func: 2031 2056 10 voxide::take_hit
 # psoxide-pgo func: 3488 3492 21 voxide::tex::digit_uv
 # psoxide-pgo func: 3497 3501 21 voxide::tex::tile_uv
 # psoxide-pgo func: 5294 5298 10 voxide::thunder_amount
-# psoxide-pgo func: 8610 8692 10 voxide::tick_drops
-# psoxide-pgo func: 8455 8466 10 voxide::tick_particles
-# psoxide-pgo func: 9338 9342 10 voxide::tint_factor
+# psoxide-pgo func: 8615 8697 10 voxide::tick_drops
+# psoxide-pgo func: 8460 8471 10 voxide::tick_particles
+# psoxide-pgo func: 9343 9347 10 voxide::tint_factor
 # psoxide-pgo func: 56 69 22 voxide::tnt::pending_count
 # psoxide-pgo func: 473 507 22 voxide::tnt::render
 # psoxide-pgo func: 407 410 22 voxide::tnt::take_kick
 # psoxide-pgo func: 231 242 22 voxide::tnt::tick
-# psoxide-pgo func: 13859 13860 10 voxide::tool_for
+# psoxide-pgo func: 13864 13865 10 voxide::tool_for
 # psoxide-pgo func: 670 671 10 voxide::tool_slot
-# psoxide-pgo func: 13871 13876 10 voxide::tool_tier
-# psoxide-pgo func: 13831 13834 10 voxide::tool_tile
-# psoxide-pgo func: 10991 11075 10 voxide::trace_pick
-# psoxide-pgo func: 10488 10540 10 voxide::tri_above
-# psoxide-pgo func: 10508 10508 10 voxide::tri_above::{closure#0} @voxide
+# psoxide-pgo func: 13876 13881 10 voxide::tool_tier
+# psoxide-pgo func: 13836 13839 10 voxide::tool_tile
+# psoxide-pgo func: 10996 11080 10 voxide::trace_pick
+# psoxide-pgo func: 10493 10545 10 voxide::tri_above
+# psoxide-pgo func: 10513 10513 10 voxide::tri_above::{closure#0} @voxide
 # psoxide-pgo func: 2744 2778 10 voxide::tut_tick
-# psoxide-pgo func: 11699 11709 10 voxide::ui_alloc
-# psoxide-pgo func: 12046 12054 10 voxide::ui_badge
+# psoxide-pgo func: 11704 11714 10 voxide::ui_alloc
+# psoxide-pgo func: 12051 12059 10 voxide::ui_badge
 # psoxide-pgo func: 4633 4640 10 voxide::ui_brightness
-# psoxide-pgo func: 11762 11779 10 voxide::ui_finish_sky
-# psoxide-pgo func: 11731 11741 10 voxide::ui_flush::<1024> @voxide
-# psoxide-pgo func: 11731 11741 10 voxide::ui_flush::<2> @voxide
-# psoxide-pgo func: 11745 11751 10 voxide::ui_frame_begin
-# psoxide-pgo func: 11914 11916 10 voxide::ui_line
-# psoxide-pgo func: 11714 11721 10 voxide::ui_packet
-# psoxide-pgo func: 11873 11888 10 voxide::ui_quad_blend_depth
-# psoxide-pgo func: 11819 11821 10 voxide::ui_quad_flat
-# psoxide-pgo func: 11935 11945 10 voxide::ui_quad_textured
-# psoxide-pgo func: 11687 11691 10 voxide::ui_reset
-# psoxide-pgo func: 11922 11932 10 voxide::ui_sprite
-# psoxide-pgo func: 11784 11789 10 voxide::ui_submit_tail
-# psoxide-pgo func: 11955 11957 10 voxide::ui_text
-# psoxide-pgo func: 11852 11869 10 voxide::ui_tri_add_gouraud
-# psoxide-pgo func: 11833 11845 10 voxide::ui_tri_blend
-# psoxide-pgo func: 11825 11827 10 voxide::ui_tri_gouraud
-# psoxide-pgo func: 6176 6619 10 voxide::update_player
-# psoxide-pgo func: 6211 6211 10 voxide::update_player::{closure#1} @voxide
-# psoxide-pgo func: 5928 6120 10 voxide::update_survival
+# psoxide-pgo func: 11767 11784 10 voxide::ui_finish_sky
+# psoxide-pgo func: 11736 11746 10 voxide::ui_flush::<1024> @voxide
+# psoxide-pgo func: 11736 11746 10 voxide::ui_flush::<2> @voxide
+# psoxide-pgo func: 11750 11756 10 voxide::ui_frame_begin
+# psoxide-pgo func: 11919 11921 10 voxide::ui_line
+# psoxide-pgo func: 11719 11726 10 voxide::ui_packet
+# psoxide-pgo func: 11878 11893 10 voxide::ui_quad_blend_depth
+# psoxide-pgo func: 11824 11826 10 voxide::ui_quad_flat
+# psoxide-pgo func: 11940 11950 10 voxide::ui_quad_textured
+# psoxide-pgo func: 11692 11696 10 voxide::ui_reset
+# psoxide-pgo func: 11927 11937 10 voxide::ui_sprite
+# psoxide-pgo func: 11789 11794 10 voxide::ui_submit_tail
+# psoxide-pgo func: 11960 11962 10 voxide::ui_text
+# psoxide-pgo func: 11857 11874 10 voxide::ui_tri_add_gouraud
+# psoxide-pgo func: 11838 11850 10 voxide::ui_tri_blend
+# psoxide-pgo func: 11830 11832 10 voxide::ui_tri_gouraud
+# psoxide-pgo func: 6181 6624 10 voxide::update_player
+# psoxide-pgo func: 6216 6216 10 voxide::update_player::{closure#1} @voxide
+# psoxide-pgo func: 5933 6125 10 voxide::update_survival
 # psoxide-pgo func: 291 296 23 voxide::weather::flash
 # psoxide-pgo func: 358 397 23 voxide::weather::lightning_tick
 # psoxide-pgo func: 165 166 23 voxide::weather::rain
@@ -496,14 +496,14 @@
 # psoxide-pgo func: 3280 3300 24 voxide::world::try_ignite
 # psoxide-pgo func: 2677 2699 24 voxide::world::wake_fluid
 # psoxide-pgo func: 5336 5425 10 voxide::world_lighting
-# psoxide-pgo func: 5648 5695 10 voxide::world_tick
-# psoxide-pgo func: 13897 13898 10 voxide::world_to_block_x
-# psoxide-pgo func: 13901 13902 10 voxide::world_to_block_y
-# psoxide-pgo func: 13905 13906 10 voxide::world_to_block_z
+# psoxide-pgo func: 5653 5700 10 voxide::world_tick
+# psoxide-pgo func: 13902 13903 10 voxide::world_to_block_x
+# psoxide-pgo func: 13906 13907 10 voxide::world_to_block_y
+# psoxide-pgo func: 13910 13911 10 voxide::world_to_block_z
 # psoxide-pgo func: 1936 1938 10 voxide::xp_level
 # psoxide-pgo func: 1925 1931 10 voxide::xp_total
 # psoxide-pgo func: 5765 6009 24 voxide_chunk_faces
-# psoxide-pgo func: 9745 9770 10 voxide_emit_faces
+# psoxide-pgo func: 9750 9775 10 voxide_emit_faces
 # psoxide-pgo func: 5605 5665 24 voxide_plane_in_frustum
 voxide_emit_faces:590204:88
  0: 88
@@ -4685,17 +4685,17 @@ main:8061:0
    2: 19
   6: 20
  137: voxide::music::tick:133
-  2: 22
-  2: <voxide::music::Phase as core::cmp::PartialEq>::eq:16
+  5: 22
+  5: <voxide::music::Phase as core::cmp::PartialEq>::eq:16
    0: 16
-  6: 20
-  6: <u32>::wrapping_sub:25
+  9: 20
+  9: <u32>::wrapping_sub:25
    1: 25
-  6.1: 21
-  7: 2
-  8: <u32>::wrapping_sub:19
+  9.1: 21
+  10: 2
+  11: <u32>::wrapping_sub:19
    1.1: 19
-  18: voxide::music::publish:8
+  21: voxide::music::publish:8
    24: <psx_io::cd::xa::Player>::is_streaming:2
     1: <psx_io::cd::xa::Engine>::is_streaming:2
      1: <psx_io::cd::xa::State as core::cmp::PartialEq>::eq:2
@@ -9242,18 +9242,12 @@ voxide::inv::tab_list:14:5
  0: 5
  1: 4
  2: 5
-<psx_io::cd::xa::Engine>::poll::<psx_io::periph::Cd> @psx_io:13:0
+<psx_io::cd::xa::Engine>::poll::<psx_io::periph::Cd> @psx_io:4:0
  0: 1
- 5: 2
- 13: 1
  13: <psx_io::cd::xa::State as core::cmp::PartialEq>::eq:1
   0: 1
- 16.3: 2
  22: 1
  23: 1
- 26.1: 1
- 27: 1
- 35.2: 2
 <psx_io::periph::Cd as psx_io::cd::xa::Drive>::head_lba:11:0
  0: 1
  1: <psx_io::periph::Cd>::try_play_position:3
