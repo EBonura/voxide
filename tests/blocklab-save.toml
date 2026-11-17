@@ -122,6 +122,13 @@ timeout = 1500
 label = "PLAY GAME: straight into the world"
 press = ["cross"]
 hold = 4
+
+[[step]]
+label = "the new world ticks (the start waits on the game, not a fixed count)"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 12, op = "ge", value = 10 }
+timeout = 800
+
+[[step]]
 wait = 60
 
 [[step]]
