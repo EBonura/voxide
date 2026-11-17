@@ -356,6 +356,11 @@ press = ["cross"]
 hold = 4
 wait = 2
 [[step]]
+label = "the old world is gone: the sim clock restarted below the value it had at the quit"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 12, op = "lt", value = 20 }
+timeout = 1500
+
+[[step]]
 label = "the new world is up when its sim clock runs; sample it at once, before the first ambient spawn (the spawn timer is 120 sim ticks), not after a fixed wait"
 wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 12, op = "ge", value = 1 }
 timeout = 1500
