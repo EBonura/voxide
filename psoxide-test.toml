@@ -1,0 +1,112 @@
+# VoXide's test description for psoxide-test (the SDK's harness, tools/psoxide-test).
+# It declares what to build and check; the harness decides how. Baseline: psoxide-test.baseline.toml.
+schema = 1
+name = "VoXide"
+repository = "EBonura/voxide"
+
+# The shipping disc (what the library gets): sample profile applied, no state receipts. `make disc`
+# is not used: it also installs into the user's game library.
+[[build]]
+name = "ship"
+out = "build/ship"
+commands = [
+  ["make", "compile"],
+  ["make", "pack", "PACK_OUT={out}/voxide.bin"],
+]
+collect = { "voxide.exe" = "game/target/mipsel-sony-psx/release/voxide.exe", "link.map" = "game/target/mipsel-sony-psx/psoxide-pgo-maps/*" }
+disc = "voxide.cue"
+map = "link.map"
+
+# The journeys' disc: the shipping code plus the result receipts, packed with --diag; the state blocks
+# are located in its exe (gate-symbols.txt).
+[[build]]
+name = "gate"
+out = "build/gate"
+commands = [["make", "gate-disc", "GATE_DIR={out}", "GATE_SYMBOLS={out}/gate-symbols.txt"]]
+collect = { "voxide.exe" = "game/target/mipsel-sony-psx/release/voxide.exe", "link.map" = "game/target/mipsel-sony-psx/psoxide-pgo-maps/*" }
+disc = "voxide.cue"
+map = "link.map"
+
+# The three lab discs (make gate-labs), built without the profile: the lab code overflows .bss with the
+# profile-ordered layout. Never shipped.
+[[build]]
+name = "gate-blocks"
+out = "build/gate-blocks"
+commands = [["make", "gate-disc", "FEATURES=block-lab", "PGO_VARIANT=off", "GATE_DIR={out}", "GATE_SYMBOLS={out}/gate-symbols.txt"]]
+collect = { "voxide.exe" = "game/target/mipsel-sony-psx/release/voxide.exe", "link.map" = "game/target/mipsel-sony-psx/psoxide-pgo-maps/*" }
+disc = "voxide.cue"
+map = "link.map"
+
+[[build]]
+name = "gate-lab"
+out = "build/gate-lab"
+commands = [["make", "gate-disc", "FEATURES=music-lab", "PGO_VARIANT=off", "GATE_DIR={out}", "GATE_SYMBOLS={out}/gate-symbols.txt"]]
+collect = { "voxide.exe" = "game/target/mipsel-sony-psx/release/voxide.exe", "link.map" = "game/target/mipsel-sony-psx/psoxide-pgo-maps/*" }
+disc = "voxide.cue"
+map = "link.map"
+
+[[build]]
+name = "gate-pull"
+out = "build/gate-pull"
+commands = [["make", "gate-disc", "FEATURES=save-pull", "PGO_VARIANT=off", "GATE_DIR={out}", "GATE_SYMBOLS={out}/gate-symbols.txt"]]
+collect = { "voxide.exe" = "game/target/mipsel-sony-psx/release/voxide.exe", "link.map" = "game/target/mipsel-sony-psx/psoxide-pgo-maps/*" }
+disc = "voxide.cue"
+map = "link.map"
+
+[size]
+build = "ship"
+
+# The two tapes of the sample profile: train (the profile's own route) and unseen (the holdout, a
+# different walk on the sticks). Polls 252..1200 are gameplay on both.
+[[speed]]
+name = "train"
+build = "ship"
+tape = "pgo/train.pxtape"
+polls = [252, 1200]
+offsets = [-48, -36, -24, -12, 0, 12, 24, 36]
+launch_args = ["--embedded-playtest"]
+
+[[speed]]
+name = "unseen"
+build = "ship"
+tape = "pgo/unseen.pxtape"
+polls = [252, 1200]
+offsets = [-48, -36, -24, -12, 0, 12, 24, 36]
+launch_args = ["--embedded-playtest"]
+
+[journeys]
+files = "tests/*.toml"
+precheck = ["smoke-boot-play", "settings-title-ui"]
+
+[cross]
+smoke = ["tests/smoke-boot-play.toml"]
+# The shipping disc has no state blocks: it must boot and present with no input on every emulator.
+boot = { build = "ship", frames = 3000 }
+
+[[host]]
+name = "no64"
+command = ["make", "no64"]
+
+# Load-delay hazards in guest asm (fleet rule since SDK 580daa02), with the pin's own scanner.
+[[host]]
+name = "check-mfc0"
+command = ["cargo", "run", "-q", "--release", "--locked", "--manifest-path", ".psoxide/tools/psoxide-hazard/Cargo.toml", "--bin", "check-mfc0", "--", "game"]
+
+# Every host test target except fire_blast, which fails on main (its rustc harness does not link
+# psx_math): left out by name until the owner fixes it, not skipped silently.
+[[host]]
+name = "host-tests"
+command = ["cargo", "test", "-q", "--no-fail-fast", "--manifest-path", "tools/host-tests/Cargo.toml", "--test", "adpcm_error", "--test", "blast_capacity", "--test", "blocks", "--test", "fluid_ignite", "--test", "full_card", "--test", "hand", "--test", "mask_equiv", "--test", "menu_tree", "--test", "music_plan", "--test", "near_grid", "--test", "sapper_capacity", "--test", "seal", "--test", "settings_card", "--test", "settings_profile", "--test", "shared_clip", "--test", "tnt_capacity", "--test", "tnt_pending", "--test", "units"]
+
+[[host]]
+name = "voxide-tools"
+command = ["cargo", "test", "-q", "--manifest-path", "tools/voxide-tools/Cargo.toml"]
+
+[clean]
+build = "ship"
+seed = [".psoxide"]
+compare = ["voxide.bin", "voxide.cue", "voxide.exe"]
+
+[install]
+build = "ship"
+name = "VoXide"

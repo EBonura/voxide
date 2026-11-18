@@ -1,0 +1,69 @@
+# Cross-emulator smoke (psoxide-test [cross]): the gate disc (the shipping code plus the state receipts)
+# boots to the title, PLAY GAME enters the world, the world's own clock runs, and Start opens the game
+# menu. Closed loop only: every press is held until the game's own state says it took, every wait ends on
+# game state, every checkpoint reads RAM. The same file runs on PSoXide (the gate), PCSX-ReARMed and
+# PCSX-Redux; the harness swaps the pad for each run of [cross] pads.
+# VOXIDE_SETTINGS_STATE +12 is the menu context (0 world, 1 title, 4 pause tree). VOXIDE_GATE_STATE +12 is
+# the sim tick (the one game clock), advanced only while the world runs.
+name = "voxide-smoke"
+title = "VoXide smoke: title, PLAY GAME into the world, the world clock runs, Start opens the game menu"
+disc = "build/gate/voxide.cue"
+symbols = "build/gate/gate-symbols.txt"
+pad = "dualshock"
+
+# The title appears when the world behind it is generated; the disc read and the generation take a
+# while on every emulator, the ceiling is generous and the wait ends on state.
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 3000
+
+[[step]]
+checkpoint = "title"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+value = 1
+
+# PLAY GAME is the first row; Cross enters the world (context 0).
+[[step]]
+press = ["cross"]
+hold_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 0 }
+timeout = 1500
+
+[[step]]
+label = "the world clock runs"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 12, op = "ge", value = 30 }
+timeout = 1500
+
+[[step]]
+checkpoint = "in-play"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+value = 0
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_GATE_STATE"
+offset = 12
+op = "ge"
+value = 30
+note = "the sim clock advanced"
+
+# Start opens the game menu (the pause tree, context 4): the pad is read in play.
+[[step]]
+press = ["start"]
+hold_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 4 }
+timeout = 600
+
+[[step]]
+checkpoint = "input-moves-the-game"
+golden = false
+[[step.assert]]
+kind = "ram"
+sym = "VOXIDE_SETTINGS_STATE"
+offset = 12
+value = 4
