@@ -1,8 +1,8 @@
 # Written by `psoxide-test bless`; edit only by blessing again (decision 4: a bar changes by editing
 # psoxide-test.toml with a reason, never by hand-editing these numbers).
 schema = 1
-blessed_commit = "dfc9b6cd52c3a86016e36cd764cab86b11df67aa+dirty"
-sdk_pin = "aaf06b0ffa5d3fbf0868e7e6c40f4f3999d695f6"
+blessed_commit = "b9af4a77d37ce1d32ecaa09e321281e1a848eeeb"
+sdk_pin = "0187c5f4fab876cbeaa9a99a37df305ccae1e4a3"
 
 [size.ship]
 text = 678820
@@ -27,113 +27,144 @@ vblanks = ["1:670,2:277", "1:669,2:277", "1:670,2:277", "1:674,2:272", "1:680,2:
 [journeys.blocklab]
 ticks = 2955
 open_loop = 35
+clock_waits = 0
 
 [journeys.blocklab-save]
 ticks = 4014
 open_loop = 16
+clock_waits = 0
 
 [journeys.blocks]
 ticks = 2148
 open_loop = 29
+clock_waits = 0
 
 [journeys.distant-mining]
 ticks = 685
 open_loop = 27
+clock_waits = 0
 
 [journeys.journey]
 ticks = 2864
 open_loop = 44
+clock_waits = 0
 
 [journeys.loading-screen]
 ticks = 473
 open_loop = 2
+clock_waits = 0
 
 [journeys.music]
 ticks = 5697
 open_loop = 19
+clock_waits = 0
 
 [journeys.music-lab]
 ticks = 3406
 open_loop = 3
+clock_waits = 0
 
 [journeys.save-repin]
 ticks = 4986
 open_loop = 49
+clock_waits = 0
 
 [journeys.settings-flagged-seen]
 ticks = 442
 open_loop = 1
+clock_waits = 0
 
 [journeys.settings-legacy-seen]
 ticks = 625
 open_loop = 7
+clock_waits = 0
 
 [journeys.settings-load]
 ticks = 610
 open_loop = 2
+clock_waits = 0
 
 [journeys.settings-manual]
 ticks = 2395
 open_loop = 50
+clock_waits = 0
 
 [journeys.settings-menu-quit]
 ticks = 2001
 open_loop = 21
+clock_waits = 0
 
 [journeys.settings-menu-quit-blank]
 ticks = 1805
 open_loop = 12
+clock_waits = 0
 
 [journeys.settings-menu-quit-full]
 ticks = 1799
 open_loop = 13
+clock_waits = 0
 
 [journeys.settings-menu-quit-inferno]
 ticks = 2366
 open_loop = 30
+clock_waits = 0
 
 [journeys.settings-menu-quit-nocard]
 ticks = 1921
 open_loop = 16
+clock_waits = 0
 
 [journeys.settings-menu-quit-removed]
 ticks = 1838
 open_loop = 13
+clock_waits = 0
 
 [journeys.settings-menu-quit-state]
 ticks = 2019
 open_loop = 40
+clock_waits = 0
 
 [journeys.settings-menu-tree]
 ticks = 2640
 open_loop = 91
+clock_waits = 0
 
 [journeys.settings-options-ui]
 ticks = 1112
 open_loop = 32
+clock_waits = 0
 
 [journeys.settings-title-load]
 ticks = 1599
 open_loop = 16
+clock_waits = 0
 
 [journeys.settings-title-load-nocard]
 ticks = 697
 open_loop = 7
+clock_waits = 0
 
 [journeys.settings-title-load-nosave]
 ticks = 755
 open_loop = 6
+clock_waits = 0
 
 [journeys.settings-title-ui]
 ticks = 758
 open_loop = 14
+clock_waits = 0
 
 [journeys.settings-unformatted]
 ticks = 1719
 open_loop = 18
+clock_waits = 0
 
 [journeys.smoke-boot-play]
 ticks = 467
 open_loop = 0
+clock_waits = 0
 
 [host]
+
+[maps]
+ship = "d254a843a8465934039d60c84f97a135771a60d68e67335e3226bf70ac60278b"
