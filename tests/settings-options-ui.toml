@@ -1,7 +1,8 @@
 name = "voxide-settings-options-ui"
 title = "VoXide: settings exits and controls introduction never autosave"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 memcard = "fresh"
 max_ticks = 9000
 

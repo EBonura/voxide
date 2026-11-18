@@ -3,7 +3,8 @@
 name = "voxide-settings-title-load-nosave"
 title = "VoXide: title LOAD WORLD on a card with no world save"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 max_ticks = 3000
 
 [card_fixture]

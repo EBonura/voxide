@@ -13,7 +13,8 @@
 name = "voxide-blocks"
 title = "VoXide: placing a door, a bed, a lever and a piston by hand, and opening the door"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 max_ticks = 6000
 
 [card_fixture]

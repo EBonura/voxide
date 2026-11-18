@@ -9,7 +9,8 @@
 name = "voxide-settings-menu-tree"
 title = "VoXide: the nested options tree, title and pause"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 memcard = "fresh"
 max_ticks = 12000
 

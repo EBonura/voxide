@@ -13,7 +13,8 @@
 name = "voxide-music-lab"
 title = "VoXide: music pieces, the delay between them, and the pause menu"
 disc = ["build/gate-lab/voxide.cue"]
-symbols = ["build/gate-lab-symbols.txt"]
+symbols = ["build/gate-lab/gate-symbols.txt"]
+pad = "dualshock"
 memcard = "fresh"
 max_ticks = 9000
 

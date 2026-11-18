@@ -20,7 +20,8 @@
 name = "voxide"
 title = "VoXide: splash to menus, inventory, crafting and TNT"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 max_ticks = 6000
 
 # ---- splash ---------------------------------------------------------------

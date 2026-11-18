@@ -1,7 +1,8 @@
 name = "voxide-settings-load"
 title = "VoXide: explicit settings save cold loads without automatic writes"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 max_ticks = 1800
 [card_fixture]
 path = "tests/fixtures/manual-saved.mcd"

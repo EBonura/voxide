@@ -5,7 +5,8 @@
 name = "voxide-settings-menu-quit-nocard"
 title = "VoXide: SAVE AND QUIT with no memory card stays in the game menu"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 max_ticks = 12000
 memcard = "none"
 

@@ -8,7 +8,8 @@
 name = "voxide-settings-menu-quit-state"
 title = "VoXide: a new world after SAVE AND QUIT carries nothing of the old one"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 memcard = "fresh"
 max_ticks = 14000
 

@@ -17,7 +17,8 @@
 name = "voxide-distant-mining"
 title = "VoXide: mining a distant block shows no attack bar"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 max_ticks = 3000
 
 [card_fixture]

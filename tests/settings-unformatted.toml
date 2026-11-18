@@ -4,7 +4,8 @@
 name = "voxide-settings-unformatted"
 title = "VoXide: an unformatted settings card is formatted only when Save is pressed twice"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 memcard = "fresh"
 max_ticks = 4000
 [card_fixture]

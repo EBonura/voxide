@@ -5,7 +5,8 @@
 name = "voxide-settings-menu-quit"
 title = "VoXide: SAVE AND QUIT TO TITLE and back"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 memcard = "fresh"
 max_ticks = 12000
 

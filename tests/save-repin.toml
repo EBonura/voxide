@@ -21,7 +21,8 @@
 name = "voxide"
 title = "VoXide: TNT world saved, rebooted and loaded"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 max_ticks = 12000
 
 # ---- splash ---------------------------------------------------------------

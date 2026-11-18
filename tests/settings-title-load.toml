@@ -4,7 +4,8 @@
 name = "voxide-settings-title-load"
 title = "VoXide: title LOAD WORLD brings the saved world back"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 memcard = "fresh"
 max_ticks = 16000
 

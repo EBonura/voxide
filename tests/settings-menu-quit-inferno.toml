@@ -4,7 +4,8 @@
 name = "voxide-settings-menu-quit-inferno"
 title = "VoXide: SAVE AND QUIT TO TITLE from another dimension"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 memcard = "fresh"
 max_ticks = 14000
 

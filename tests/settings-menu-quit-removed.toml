@@ -6,7 +6,8 @@
 name = "voxide-settings-menu-quit-removed"
 title = "VoXide: SAVE AND QUIT with the card pulled mid-save stays in the game menu"
 disc = ["build/gate-pull/voxide.cue"]
-symbols = ["build/gate-pull-symbols.txt"]
+symbols = ["build/gate-pull/gate-symbols.txt"]
+pad = "dualshock"
 max_ticks = 12000
 memcard = "fresh"
 

@@ -4,7 +4,8 @@
 name = "voxide-settings-menu-quit-full"
 title = "VoXide: SAVE AND QUIT onto a full card stays in the game menu"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 max_ticks = 12000
 [card_fixture]
 path = "tests/fixtures/full.mcd"

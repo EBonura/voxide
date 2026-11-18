@@ -1,6 +1,6 @@
 # VoXide's shaped blocks, redstone, bed and bow on a proving ground. Built with
 #
-#   make gate-disc FEATURES=block-lab GATE_DIR=$PWD/build/gate-blocks GATE_SYMBOLS=$PWD/build/gate-blocks-symbols.txt
+#   make gate-disc FEATURES=block-lab GATE_DIR=$PWD/build/gate-blocks GATE_SYMBOLS=$PWD/build/gate-blocks/gate-symbols.txt
 #   psoxide-gate run tests/blocklab.toml --disc build/gate-blocks/voxide.cue --no-hw
 #
 # The first SELECT builds the ground in front of the spawn (src/blocklab.rs); each
@@ -19,7 +19,8 @@
 name = "voxide-blocklab"
 title = "VoXide: doors, levers, dust, a piston, a bed and the bow on a proving ground"
 disc = ["build/gate-blocks/voxide.cue"]
-symbols = ["build/gate-blocks-symbols.txt"]
+symbols = ["build/gate-blocks/gate-symbols.txt"]
+pad = "dualshock"
 max_ticks = 16000
 
 [card_fixture]

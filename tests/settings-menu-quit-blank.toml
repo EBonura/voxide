@@ -4,7 +4,8 @@
 name = "voxide-settings-menu-quit-blank"
 title = "VoXide: SAVE AND QUIT TO TITLE formats a blank card only when asked twice"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 memcard = "fresh"
 max_ticks = 12000
 [card_fixture]

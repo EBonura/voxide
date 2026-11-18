@@ -12,7 +12,8 @@
 name = "voxide-loading-screen"
 title = "VoXide: the dirt loading screen builds the world, then the title appears"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 max_ticks = 3000
 
 [[step]]

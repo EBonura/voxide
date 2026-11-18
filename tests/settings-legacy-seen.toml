@@ -6,7 +6,8 @@
 name = "voxide"
 title = "VoXide: a card with the legacy controls marker loads and plays"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 max_ticks = 3000
 
 [card_fixture]

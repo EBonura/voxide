@@ -4,7 +4,8 @@
 name = "voxide-settings-title-load-nocard"
 title = "VoXide: title LOAD WORLD with no memory card"
 disc = ["build/gate/voxide.cue"]
-symbols = ["build/gate-symbols.txt"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
 memcard = "none"
 max_ticks = 6000
 
