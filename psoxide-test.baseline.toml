@@ -1,10 +1,10 @@
 # Written by `psoxide-test bless`; edit only by blessing again (decision 4: a bar changes by editing
 # psoxide-test.toml with a reason, never by hand-editing these numbers).
 schema = 1
-blessed_commit = "74a80118b69ca6af34cdf4a03e1c434e1a4c21f4+dirty"
+blessed_commit = "dfc9b6cd52c3a86016e36cd764cab86b11df67aa+dirty"
 sdk_pin = "aaf06b0ffa5d3fbf0868e7e6c40f4f3999d695f6"
 
-[size]
+[size.ship]
 text = 678820
 data = 96872
 bss = 1121964
@@ -135,3 +135,5 @@ open_loop = 18
 [journeys.smoke-boot-play]
 ticks = 467
 open_loop = 0
+
+[host]
