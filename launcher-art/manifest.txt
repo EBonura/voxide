@@ -3,3 +3,4 @@
 id voxide
 front voxide-day.png
 back voxide-day.png voxide-night.png
+shots voxide-day.png voxide-night.png
