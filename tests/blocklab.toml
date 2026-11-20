@@ -377,6 +377,11 @@ wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 64, op = "eq", 
 timeout = 300
 
 [[step]]
+label = "and the frame shows it (the state leads the picture by a frame)"
+wait_until = { kind = "pixels", color = [0, 0, 0], color_tol = 2, region = { x = 20, y = 20, w = 280, h = 160 }, min_count = 40000 }
+timeout = 120
+
+[[step]]
 checkpoint = "asleep"
 golden = false
 [[step.assert]]
