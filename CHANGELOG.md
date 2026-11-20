@@ -6,6 +6,12 @@ Blocks that carry state and have shapes: real doors, beds, levers, redstone
 dust and torches, pistons and ladders, a bow that is drawn and let go, and an
 edit store that no longer forgets a build.
 
+- Torches light the world. A placed torch (and lava, fire and lumistone) throws three tiers of light
+  that lights the ground and walls around it by the brighter of that and the sky, so a torch lights a
+  cave or a field at night; before, a chunk with lava in it never lit its torches (the six light
+  sources went to the lava cells found first), and a lit face was still dimmed by the night. Torch
+  light crosses chunk borders, and placing or breaking a torch remeshes the neighbours it reaches
+  (`game/src/light.rs`, `LIMITS.md`).
 - A block can carry state. A cell is still one byte; ids below 128 are what the
   inventory and recipes talk about, and a kind that needs state (a door's swing
   and facing, a bed's head or foot, a torch's wall, a lever's switch, a ladder's

@@ -1,0 +1,250 @@
+# A torch lights the ground at night. The player gives themselves a kit, sets the clock to
+# midnight, takes a torch from the inventory, looks down at the ground and places it with L2. The
+# frame after the chunk remeshes must differ from the frame before over the ground around the
+# torch: before the fix the torch lit nothing (its place in the chunk's six light sources went to
+# the lava cells found first, and a lit face was still scaled by the night).
+#
+#   psoxide-gate run tests/torch-light-night.toml --disc build/gate/voxide.cue --no-hw
+#
+# Closed loop: every wait is the game's own state or its pad polls.
+name = "voxide-torch-light-night"
+title = "VoXide: a torch placed on the ground at midnight lights it"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
+max_ticks = 4000
+
+[card_fixture]
+path = "tests/cards/legacy-controls-seen.mcd"
+sha256 = "a0bc97a529dc33cdda8c438ec8e06a5ebc19e119fad846128d8827131c4a2f08"
+
+[[step]]
+label = "the title appears over the generated world"
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 3000
+
+[[step]]
+label = "PLAY GAME goes directly to the world"
+press = ["cross"]
+hold_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 0 }
+timeout = 1500
+
+[[step]]
+label = "the world clock runs"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 12, op = "ge", value = 120 }
+timeout = 1500
+
+[[step]]
+label = "Start opens the game menu: OPTIONS, GAMEPLAY, CHEATS"
+press = ["start"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+press = ["down"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+press = ["cross"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+press = ["down"]
+sync = "poll"
+hold = 3
+wait = 10
+repeat = 3
+
+[[step]]
+press = ["cross"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+press = ["down"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+press = ["cross"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "GIVE EVERYTHING is the fourth row of CHEATS"
+press = ["down"]
+sync = "poll"
+hold = 3
+wait = 10
+repeat = 3
+
+[[step]]
+press = ["cross"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "TIME is the next row; MIDNIGHT is two choices right of NOON"
+press = ["down"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+press = ["right"]
+sync = "poll"
+hold = 3
+wait = 10
+repeat = 2
+
+[[step]]
+press = ["cross"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "back out of CHEATS, GAMEPLAY, OPTIONS and the game menu"
+press = ["circle"]
+sync = "poll"
+hold = 3
+wait = 10
+repeat = 4
+
+[[step]]
+label = "the inventory"
+press = ["triangle"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "the BLOCKS tab"
+press = ["r1"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "the torch is the fourth row, third column"
+press = ["down"]
+sync = "poll"
+hold = 3
+wait = 10
+repeat = 3
+
+[[step]]
+press = ["right"]
+sync = "poll"
+hold = 3
+wait = 10
+repeat = 2
+
+[[step]]
+label = "take the stack"
+press = ["cross"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "onto the hotbar, third slot"
+press = ["down"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "swap it into the hotbar"
+press = ["cross"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "put the hand back and close the inventory"
+press = ["circle"]
+sync = "poll"
+hold = 3
+wait = 10
+repeat = 2
+
+[[step]]
+label = "the torch is in hand"
+press = ["r1"]
+sync = "poll"
+hold = 3
+wait = 10
+repeat = 2
+
+[[step]]
+label = "look down at the ground ahead"
+sync = "poll"
+rstick = [128, 200]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 84) <= -354" }
+timeout = 600
+wait = 10
+
+[[step]]
+sync = "poll"
+wait = 30
+
+[[step]]
+checkpoint = "night-before"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "L2 places the torch"
+press = ["l2"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "the torch is placed"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 36, op = "ne", value = 0 }
+timeout = 300
+
+[[step]]
+label = "let the chunk remesh"
+sync = "poll"
+wait = 60
+
+[[step]]
+checkpoint = "night-lit"
+golden = false
+[[step.assert]]
+kind = "frame_diff"
+from = "night-before"
+region = { x = 0, y = 60, w = 320, h = 130 }
+color_tol = 24
+min_changed = 0.5
+note = "the ground around the torch is lit"
+
+[[step]]
+label = "and a while longer"
+sync = "poll"
+wait = 300
+
+[[step]]
+checkpoint = "night-still-lit"
+golden = false
+[[step.assert]]
+kind = "frame_diff"
+from = "night-before"
+region = { x = 0, y = 60, w = 320, h = 130 }
+color_tol = 24
+min_changed = 0.5
+note = "the light stays"
+
