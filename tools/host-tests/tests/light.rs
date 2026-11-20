@@ -1,6 +1,8 @@
 //! Block light (game/src/light.rs): the tiers a torch or a lava cell throws, clipped to the chunk
 //! being meshed, with sources that may stand in a neighbouring chunk.
 
+#![feature(optimize_attribute)]
+
 #[path = "../../../game/src/light.rs"]
 mod light;
 

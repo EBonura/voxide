@@ -49,7 +49,8 @@ falloff would need 14 block levels against 4 sky buckets = 56 light levels, a co
 56 x 512 B = 28 KB (this one is 16 x 512 B = 8 KB: a face shade has four rows, not six) and 6 face bits, and a table build several times dearer.
 
 Torch light is stopped by solid blocks, as Java's is, and goes round corners: it is a flood through
-the cells that let light pass (air, water, plants, shaped blocks such as doors and slabs, leaves),
+the cells that let light pass (air, water, glass, plants, shaped blocks such as doors and slabs,
+leaves),
 counted in steps, so the tiers are 3, 6 and 9 steps from the torch and a thin wall does not shorten
 the way. A torch in a pit under a cover leaves the ground round it dark, a torch in a tunnel does
 not light the tunnel behind two blocks of rock, a torch in a doorway lights what is in front of the
@@ -75,8 +76,8 @@ torch list 384 B, the kept lights 6.8 KB (32 x 212 B); the flood works in the fi
 face scratch, which is empty while a mesh sets its lighting up. Far-LOD chunks are skylit only.
 
 Not stopped by walls: lava, fire and lumistone (their light still goes through blocks, within their
-own chunk), and the light the mob-spawn rule sees (main.rs `block_light`, taxicab). Leaves and water
-let light through without dimming it (Java dims it one and two levels more).
+own chunk), and the light the mob-spawn rule sees (main.rs `block_light`, taxicab). Leaves, glass and
+water let light through without dimming it (Java dims leaves and water one and two levels more).
 
 ## Block states
 

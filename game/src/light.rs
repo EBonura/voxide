@@ -233,6 +233,7 @@ fn get_bits(bits: &FloodBits, at: usize, w: u32) -> u32 {
 
 /// Write the cells lit after the steps so far (`lit`, in the grid of an [`OpenMap`]) as the run
 /// of radius `r` starting at bit `at`.
+#[optimize(size)]
 fn pack_run(lit: &[u32; GRID * GRID], r: i32, out: &mut FloodBits, mut at: usize) {
     let mut dx = -r;
     while dx <= r {
@@ -258,6 +259,7 @@ pub type Work = [u32; GRID * GRID];
 /// block), and keep what the first 3, 6 and 9 steps reach. A column of heights is a word, so a
 /// step is a few operations a column and not a visit a cell. `work` is overwritten; it lives
 /// outside the function because the stream mesher runs on a scratchpad stack of one kilobyte.
+#[optimize(size)]
 pub fn reflow(open: &OpenMap, work: &mut Work, out: &mut FloodBits) {
     *out = [0; FLOOD_WORDS];
     *work = [0; GRID * GRID];
@@ -369,6 +371,7 @@ pub fn apply(cols: &mut Cols, bits: &FloodBits, sx: i32, sy: i32, sz: i32) -> bo
 }
 
 /// The tier (0 to 3) a torch's light gives the cell at offset (`dx`, `dy`, `dz`) from it.
+#[optimize(size)]
 pub fn flood_tier(bits: &FloodBits, dx: i32, dy: i32, dz: i32) -> u16 {
     let flat = dx.abs() + dz.abs();
     let mut k = 0;

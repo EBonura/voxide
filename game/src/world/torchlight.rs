@@ -116,6 +116,7 @@ fn find(dim: u8, x: i32, y: i32, z: i32) -> Option<usize> {
 
 /// The entry of the torch at the world cell, making one (DIRTY, with no light) when it has none.
 /// `None` when the table is full of torches nearer the player.
+#[optimize(size)]
 pub fn ensure(x: i32, y: i32, z: i32) -> Option<usize> {
     let dim = unsafe { DIM };
     if let Some(i) = find(dim, x, y, z) {
@@ -174,6 +175,7 @@ pub fn apply(cols: &mut light::Cols, i: usize, cx: i32, cz: i32) -> bool {
 
 /// The tier (0 to 3) the torches' light gives the world cell, for the faces the greedy mesh does
 /// not carry. Only worked-out entries count.
+#[optimize(size)]
 pub fn tier_at(x: i32, y: i32, z: i32) -> u16 {
     let mut best = 0;
     unsafe {
@@ -195,6 +197,7 @@ pub fn tier_at(x: i32, y: i32, z: i32) -> u16 {
 
 /// A cell changed from `old` to `new`. Entries within reach whose light that changes are marked
 /// to be worked out again; the entry of a torch that is gone is dropped.
+#[optimize(size)]
 pub fn block_changed(x: i32, y: i32, z: i32, old: u8, new: u8) {
     let torch_gone = crate::kind_of(old) == TORCH && crate::kind_of(new) != TORCH;
     let passes = |b: u8| unsafe { BCLASS[b as usize] } & CLS_LIGHT != 0;
@@ -226,6 +229,7 @@ pub fn block_changed(x: i32, y: i32, z: i32, old: u8, new: u8) {
 
 /// Cells of the column (`x`, `z`) from `y0` to `y1` were cleared (a blast): the entries within
 /// reach of any of them are marked.
+#[optimize(size)]
 pub fn column_changed(x: i32, z: i32, y0: i32, y1: i32) {
     unsafe {
         let dim = DIM;
@@ -248,6 +252,7 @@ pub fn column_changed(x: i32, z: i32, y0: i32, y1: i32) {
 
 /// The chunk (`cx`, `cz`) has joined the loaded ring: entries within reach of it are marked, for
 /// the cells they took for stone and are now blocks.
+#[optimize(size)]
 pub fn chunk_loaded(cx: i32, cz: i32) {
     unsafe {
         let dim = DIM;
@@ -308,6 +313,7 @@ pub fn reflow(i: usize, except: (i32, i32)) -> bool {
     done
 }
 
+#[optimize(size)]
 fn reflow_inner(i: usize, except: (i32, i32)) -> bool {
     unsafe {
         let (x, y, z) = (ENTRIES[i].x, ENTRIES[i].y as i32, ENTRIES[i].z);
@@ -406,6 +412,7 @@ fn mark(cx: i32, cz: i32) {
 }
 
 /// Work one marked entry out, the nearest the player. Returns whether it did.
+#[optimize(size)]
 pub fn tick() -> bool {
     unsafe {
         // A mesh in flight has faces in MESH_FACES: the flood waits for it to commit.

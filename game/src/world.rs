@@ -20,7 +20,7 @@ use crate::{
 };
 use crate::{
     is_lava, is_small_block, is_water, lava_level, lava_of_level, water_level, water_of_level,
-    COBBLE, LAVA_MAX_RUN, WATER_MAX_RUN,
+    COBBLE, GLASS, LAVA_MAX_RUN, WATER_MAX_RUN,
 };
 use psx_gte::math::Vec3I16;
 use psx_gte::scene;
@@ -3784,7 +3784,7 @@ const CLS_SEE: u8 = 2;
 /// Light source, cross plant or small block: the decode records these per
 /// cell, so the compare chains only run on blocks that carry this bit.
 const CLS_SPECIAL: u8 = 4;
-/// Lets light through: what can be seen through, and leaves.
+/// Lets light through: what can be seen through, leaves and glass.
 const CLS_LIGHT: u8 = 8;
 
 fn init_block_class() {
@@ -3802,7 +3802,7 @@ fn init_block_class() {
             // still draws.
             let see = air || is_water(b) || is_cross_plant(b) || is_small_block(b);
             let special = is_light_source(b) || is_cross_plant(b) || is_small_block(b);
-            let light_passes = see || crate::kind_of(b) == LEAVES;
+            let light_passes = see || crate::kind_of(b) == LEAVES || b == GLASS;
             BCLASS[i] = (meshable as u8)
                 | ((see as u8) << 1)
                 | ((special as u8) << 2)
