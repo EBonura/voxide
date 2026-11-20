@@ -264,28 +264,29 @@ pub fn reflow(open: &OpenMap, work: &mut Work, out: &mut FloodBits) {
     work[open_index(0, 0)] = 1 << FLOOD_R;
     let mut step = 1;
     while step <= FLOOD_R {
-        // The slabs are done in order of `dx` and the lit cells only grow, so a slab reads the
-        // old cells of the one before it (kept in `prev`), its own old cells (`cur`) and the
-        // untouched next slab.
+        // The slabs are done in order of `dx` and the lit cells only grow, so a slab reads the old
+        // cells of the one before it (`prev`, left behind as it was done), its own old cells (the
+        // three it has in hand) and the untouched next slab. Outside the diamond of the step
+        // nothing is lit yet, so the slab before the first and the cells beyond a slab's ends
+        // are 0.
         let mut prev = [0u32; GRID];
-        let first = open_index(-step - 1, -FLOOD_R - 1);
-        prev.copy_from_slice(&work[first..first + GRID]);
         let mut dx = -step;
         while dx <= step {
-            let base = open_index(dx, -FLOOD_R - 1);
-            let mut cur = [0u32; GRID];
-            cur.copy_from_slice(&work[base..base + GRID]);
             let m = step - dx.abs();
+            let mut left = 0u32;
+            let mut mid = work[open_index(dx, -m)];
             let mut dz = -m;
             while dz <= m {
                 let c = open_index(dx, dz);
                 let i = (dz + FLOOD_R + 1) as usize;
-                let v = cur[i];
-                let n = v | v << 1 | v >> 1 | prev[i] | work[c + GRID] | cur[i - 1] | cur[i + 1];
+                let right = work[c + 1];
+                let n = mid | mid << 1 | mid >> 1 | left | right | prev[i] | work[c + GRID];
+                prev[i] = mid;
                 work[c] = n & open[c] & COLUMN_BITS;
+                left = mid;
+                mid = right;
                 dz += 1;
             }
-            prev = cur;
             dx += 1;
         }
         let mut k = 0;
@@ -340,20 +341,25 @@ pub fn apply(cols: &mut Cols, bits: &FloodBits, sx: i32, sy: i32, sz: i32) -> bo
                 dx += 1;
                 continue;
             }
-            let mut dz = -m;
-            while dz <= m {
-                let half = m - dz.abs();
-                let w = (2 * half + 1) as u32;
-                let z = sz + dz;
-                if (-1..=16).contains(&z) {
+            // The columns of the slice inside the chunk and its ring: `dz` from `lo` to `hi`. The
+            // columns before `lo` are skipped by their length, not one by one.
+            let (lo, hi) = ((-m).max(-1 - sz), m.min(16 - sz));
+            if lo <= hi {
+                at += column_start(m, lo) as usize;
+                let mut dz = lo;
+                while dz <= hi {
+                    let w = (2 * (m - dz.abs()) + 1) as u32;
                     let v = get_bits(bits, at, w);
                     if v != 0 {
-                        or_heights(&mut cols[target][col_index(x, z)], v, sy - half);
+                        or_heights(&mut cols[target][col_index(x, sz + dz)], v, sy - (m - dz.abs()));
                         any = true;
                     }
+                    at += w as usize;
+                    dz += 1;
                 }
-                at += w as usize;
-                dz += 1;
+                at += slice_len(m) - column_start(m, hi + 1);
+            } else {
+                at += slice_len(m);
             }
             dx += 1;
         }

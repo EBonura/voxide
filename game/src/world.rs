@@ -3619,6 +3619,12 @@ pub fn grow_tree(wx: i32, wy: i32, wz: i32) {
 
 /// Has the world caught up with what changed: every chunk in range meshed, no edit mesh in flight
 /// and no torch light waiting to be worked out. For the headless labs, which wait on it.
+/// Torch light entries in use, worked out, waiting (the torch lab shows them).
+#[cfg(feature = "torch-lab")]
+pub fn torch_census() -> (u32, u32, u32) {
+    torchlight::census()
+}
+
 pub fn idle() -> bool {
     let (near, far) = stream_backlog();
     near == 0 && far == 0 && !torchlight::pending()

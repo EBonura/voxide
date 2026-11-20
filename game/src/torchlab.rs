@@ -30,7 +30,7 @@ pub static mut QUIET: bool = false;
 /// [count, longest], and the most the torch lights or-ed in during one lighting setup [longest].
 /// Shown in VOXIDE_GATE_STATE words 5, 6, 8, 15 and 18. The longest, not the sum: the world goes
 /// on remeshing (water running, a tree growing) while a stage is measured.
-pub static mut PROBE: [u32; 5] = [0; 5];
+pub static mut PROBE: [u32; 7] = [0; 7];
 /// The or-ing in of torch lights since the lighting setup in flight began.
 pub static mut APPLY_ACC: u32 = 0;
 
@@ -64,6 +64,14 @@ pub fn publish(words: &mut [u32; 22]) {
         words[8] = PROBE[2];
         words[15] = PROBE[3];
         words[18] = PROBE[4];
+        words[9] = PROBE[5];
+        words[10] = PROBE[6];
+        let (used, ready, dirty) = world::torch_census();
+        words[11] = used;
+        words[12] = ready;
+        words[13] = dirty;
+        let (mx, my, mz) = MID;
+        words[14] = world::get(mx, my + 1, mz) as u32;
     }
 }
 
@@ -113,13 +121,15 @@ fn fill(x0: i32, y0: i32, z0: i32, x1: i32, y1: i32, z1: i32, b: u8) {
 }
 
 /// The empty arena: a stone floor four cells deep, air above. The torches of the last scene are
-/// taken out first, as a player would.
+/// taken out of the world and of the edit store first (with raw sets: the scene is rebuilt and the
+/// world remeshed at once, and an edit's own remesh would be underfoot).
 fn arena() {
     unsafe {
         while NPLACED > 0 {
             NPLACED -= 1;
             let (x, y, z) = PLACED[NPLACED];
-            edit(x, y, z, AIR);
+            put(x, y, z, AIR);
+            record_edit(x, y, z, AIR);
         }
     }
     fill(-HALF, -4, -HALF, HALF, 0, HALF, COBBLE);
@@ -258,15 +268,15 @@ pub fn select(p: &mut Player, day: &mut u32) {
                 stand(p, 0, 12, 0, 1, 0);
             }
             11 => {
-                PROBE = [0; 5];
+                PROBE = [0; 7];
                 torch_at(0, 1, 0);
             }
             12 => {
-                PROBE = [0; 5];
+                PROBE = [0; 7];
                 edit_at(1, 0, 1, AIR);
             }
             13 => {
-                PROBE = [0; 5];
+                PROBE = [0; 7];
                 let mut k = 1;
                 while k < 32 {
                     torch_at(-7 + (k % 8) * 2, 1, -3 + (k / 8) * 2);
@@ -274,7 +284,7 @@ pub fn select(p: &mut Player, day: &mut u32) {
                 }
             }
             14 => {
-                PROBE = [0; 5];
+                PROBE = [0; 7];
                 world::remesh_loaded();
             }
             _ => {}

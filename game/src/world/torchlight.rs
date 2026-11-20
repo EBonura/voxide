@@ -63,6 +63,7 @@ static mut ENTRIES: [Entry; MAX_FLOODS] = [NO_ENTRY; MAX_FLOODS];
 /// `tick` leaves alone while a mesh is in flight.
 const SCRATCH_WORDS: usize = 2 * 21 * 21;
 const _: () = assert!(MAX_FACES >= SCRATCH_WORDS);
+const _: () = assert!(CW == 16);
 /// Entries in use, so a world without a torch pays one compare for any block change.
 static mut USED: usize = 0;
 /// Some entry is DIRTY.
@@ -268,19 +269,31 @@ fn reaches_box(x: i32, z: i32, x0: i32, z0: i32) -> bool {
     light::reaches_chunk(x - x0, z - z0, &light::TORCH_REACH)
 }
 
+/// The chunk the last column read was in: a flood reads columns of at most four chunks, so the
+/// slot and the residency test are worked out once for a run of them and not for each.
+struct Resident {
+    cx: i32,
+    cz: i32,
+    slot: usize,
+    loaded: bool,
+}
+
 /// The cells of the column at the world position (`wx`, `wz`) from `y0`, 19 of them, that let
 /// light pass, bit `y - y0`. A column that is not loaded is stone.
-fn column_open(wx: i32, wz: i32, y0: i32) -> u32 {
-    let (cx, cz) = (floor_div(wx, CW), floor_div(wz, CW));
-    let s = slot(cx, cz);
-    unsafe {
-        if CHUNKS[s].loaded && CHUNKS[s].cx == cx && CHUNKS[s].cz == cz {
-            let col = ((wz - cz * CW) * CW + (wx - cx * CW)) as usize;
-            rle::col_open(s, col, y0, y0 + 2 * light::FLOOD_R + 1)
-        } else {
-            0
-        }
+fn column_open(wx: i32, wz: i32, y0: i32, last: &mut Resident) -> u32 {
+    let (cx, cz) = (wx >> 4, wz >> 4);
+    if cx != last.cx || cz != last.cz {
+        let s = slot(cx, cz);
+        last.cx = cx;
+        last.cz = cz;
+        last.slot = s;
+        last.loaded = unsafe { CHUNKS[s].loaded && CHUNKS[s].cx == cx && CHUNKS[s].cz == cz };
     }
+    if !last.loaded {
+        return 0;
+    }
+    let col = (((wz & 15) << 4) | (wx & 15)) as usize;
+    rle::col_open(last.slot, col, y0, y0 + 2 * light::FLOOD_R + 1)
 }
 
 /// Work entry `i` out from the blocks, and mark the chunks it reaches into for a remesh when the
@@ -310,13 +323,21 @@ fn reflow_inner(i: usize, except: (i32, i32)) -> bool {
         let open = &mut *(base as *mut light::OpenMap);
         let work = &mut *(base.add(21 * 21) as *mut light::Work);
         *open = [0; 21 * 21];
+        let mut last = Resident {
+            cx: i32::MIN,
+            cz: i32::MIN,
+            slot: 0,
+            loaded: false,
+        };
+        #[cfg(feature = "torch-lab")]
+        let t0 = crate::torchlab::clock();
         let r = light::FLOOD_R;
         let mut dx = -r;
         while dx <= r {
             let m = r - dx.abs();
             let mut dz = -m;
             while dz <= m {
-                open[light::open_index(dx, dz)] = column_open(x + dx, z + dz, y - r);
+                open[light::open_index(dx, dz)] = column_open(x + dx, z + dz, y - r, &mut last);
                 dz += 1;
             }
             dx += 1;
@@ -324,7 +345,15 @@ fn reflow_inner(i: usize, except: (i32, i32)) -> bool {
         // The torch's own cell lets its light out whatever it holds.
         open[light::open_index(0, 0)] |= 1 << r;
         let mut bits: light::FloodBits = [0; light::FLOOD_WORDS];
+        #[cfg(feature = "torch-lab")]
+        let t1 = crate::torchlab::clock();
         light::reflow(open, work, &mut bits);
+        #[cfg(feature = "torch-lab")]
+        {
+            let t2 = crate::torchlab::clock();
+            crate::torchlab::PROBE[5] = crate::torchlab::PROBE[5].max(t1.wrapping_sub(t0) as u32);
+            crate::torchlab::PROBE[6] = crate::torchlab::PROBE[6].max(t2.wrapping_sub(t1) as u32);
+        }
         let e = &mut ENTRIES[i];
         let changed = e.bits != bits;
         e.bits = bits;
@@ -400,5 +429,20 @@ pub fn tick() -> bool {
         }
         reflow(best.1, (i32::MIN, i32::MIN));
         true
+    }
+}
+
+/// Entries in use, entries worked out, and whether any is waiting, for the torch lab.
+#[cfg(feature = "torch-lab")]
+pub fn census() -> (u32, u32, u32) {
+    unsafe {
+        let (mut ready, mut dirty) = (0, 0);
+        let mut i = 0;
+        while i < MAX_FLOODS {
+            ready += (ENTRIES[i].state == READY) as u32;
+            dirty += (ENTRIES[i].state == DIRTY) as u32;
+            i += 1;
+        }
+        (USED as u32, ready, dirty)
     }
 }

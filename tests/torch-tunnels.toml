@@ -135,7 +135,7 @@ kind = "frame_diff"
 from = "tunnel-b-before"
 region = { x = 60, y = 60, w = 200, h = 120 }
 color_tol = 12
-max_changed = 0.01
+max_changed = 0.005
 note = "the second tunnel stays as dark as it was: the rock between is not lit through"
 
 [[step]]
