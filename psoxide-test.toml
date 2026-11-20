@@ -53,29 +53,41 @@ collect = { "voxide.exe" = "game/target/mipsel-sony-psx/release/voxide.exe", "li
 disc = "voxide.cue"
 map = "link.map"
 
-# What block light costs, measured 2026-11-20 on the SDK fce1f6855bc1 pin against the b394b08
+# What block light cost, measured 2026-11-20 on the SDK fce1f6855bc1 pin against the b394b08
 # baseline (text 677,372 B, free RAM 102,732 B), after the shrink (four shade rows in the colour
 # table instead of six, table build and torch collection out of line, the mask build reading the
 # tier flag once a plane, profile re-collected): text +10,364 B, free RAM -18,528 B (what text,
-# data and bss take is what is left of the 2 MB, so the free figure is the sum). The bytes buy
-# (game/src/light.rs):
+# data and bss take is what is left of the 2 MB, so the free figure is the sum). Before the shrink
+# it was text +14,388 B and free -28,128 B. The bytes bought (game/src/light.rs):
 #   bss  colour table 16 light levels x 2 materials x 4 shades x 16 bands x 4 B = 8,192 B (was 3,072:
 #        a face shows the brighter of its sky bucket and its torch tier), tier maps of the chunk
 #        being meshed 6,144 B (were 2,048), the torch list of 32 = 384 B
 #   text the flood and the tier lookup, the torch list with the nearest-to-the-player cap and the
 #        neighbouring chunks' torches, the colour-table build for the extra levels, the neighbour
 #        remesh when a torch comes or goes
-# Before the shrink it was text +14,388 B and free -28,128 B. The bars below are what the fix costs
-# against the b394b08 baseline; the baseline is re-blessed on this code in the commit after, so
-# from then on a change is judged against block light's own size and these bars are back to 0.
+# The size stage passed against that baseline with bars of 11,000 B of text and 19,500 B of free RAM;
+# the baseline is blessed on this code (the commit that carries this comment), so a change is judged
+# against block light's own size from here on and the bars are 0 again.
 [[size]]
 build = "ship"
-text_max_growth = 11000
-free_min_drop = 19500
-reason = "block light (game/src/light.rs): measured text +10,364 B and free RAM -18,528 B against the b394b08 baseline, 2026-11-20; the colour table's 16 light levels (8 KB), the tier maps (6 KB, were 2 KB), the torch list (384 B) and the flood, torch collection and table build code; see the comment above"
 
 # The two tapes of the sample profile: train (the profile's own route) and unseen (the holdout, a
 # different walk on the sticks). Polls 252..1200 are gameplay on both.
+#
+# Blessed 2026-11-20 on the block-light code. The speed of the code is judged in lockstep (one
+# simulation step per pad poll, so both builds are in the same game state at every poll, the sample
+# profile's `lockstep` build); frame work per frame, main against block light, each with its own
+# sample profile:
+#   train   854,827 against 856,197 (+1,370, +0.16%)     unseen   681,086 against 679,855 (-1,231, -0.18%)
+# The two tapes add up equal. The train difference is mostly instruction-cache refill stalls (60.75
+# million against 60.67 million cycles of them, from where the profile put the code) and +0.14% of
+# instructions. Without torches the added code costs a flag read a plane in the mask build and a
+# compare in the close-range shell. The normal-pacing figures of this baseline move with the tape's trajectory
+# (the poll-bound tape plays the same pad presses against a game that is a few cycles slower or
+# faster, and its frames cross a vblank at other polls) and with which profile layout was collected:
+# train 887,283 against 887,119 at offset 0 for the repin baseline, unseen 694,693 against 727,463,
+# with the code no slower in lockstep. A speed gate on lockstep builds would judge the code and not
+# the trajectory (proposed to the harness owners in the lane notes).
 [[speed]]
 name = "train"
 build = "ship"
