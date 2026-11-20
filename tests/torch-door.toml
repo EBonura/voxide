@@ -1,0 +1,189 @@
+# A torch in a room with one doorway lights the ground in front of the door and not the ground
+# beside the walls. Built with
+#
+#   make gate-disc FEATURES=torch-lab PGO_VARIANT=off GATE_DIR=$PWD/build/gate-torches GATE_SYMBOLS=$PWD/build/gate-torches/gate-symbols.txt
+#   psoxide-gate run tests/torch-door.toml --disc build/gate-torches/voxide.cue --no-hw
+#
+# The first seven SELECTs of the torch lab (src/torchlab.rs) are the pit and the tunnels, which this
+# journey does not look at. The eighth builds the room at midnight and stands the player outside it,
+# the ninth puts a torch inside, the tenth stands in front of the door. VOXIDE_GATE_STATE word 4
+# (offset 16) is the stage done times two, plus one when the meshes and the torch light have caught
+# up, so every wait is on the game's own state.
+name = "voxide-torch-door"
+title = "VoXide: a torch in a room lights the ground through the doorway only"
+disc = ["build/gate-torches/voxide.cue"]
+symbols = ["build/gate-torches/gate-symbols.txt"]
+pad = "dualshock"
+max_ticks = 14000
+
+[card_fixture]
+path = "tests/cards/legacy-controls-seen.mcd"
+sha256 = "a0bc97a529dc33cdda8c438ec8e06a5ebc19e119fad846128d8827131c4a2f08"
+
+[[step]]
+label = "the title appears over the generated world"
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 3000
+
+[[step]]
+label = "PLAY GAME goes directly to the world"
+press = ["cross"]
+hold_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 0 }
+timeout = 1500
+
+[[step]]
+label = "the world clock runs"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 12, op = "ge", value = 120 }
+timeout = 1500
+
+[[step]]
+label = "SELECT 1 of the torch lab (a scene this journey does not look at)"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 3 }
+timeout = 3000
+
+[[step]]
+label = "SELECT 2 of the torch lab (a scene this journey does not look at)"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 5 }
+timeout = 3000
+
+[[step]]
+label = "SELECT 3 of the torch lab (a scene this journey does not look at)"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 7 }
+timeout = 3000
+
+[[step]]
+label = "SELECT 4 of the torch lab (a scene this journey does not look at)"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 9 }
+timeout = 3000
+
+[[step]]
+label = "SELECT 5 of the torch lab (a scene this journey does not look at)"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 11 }
+timeout = 3000
+
+[[step]]
+label = "SELECT 6 of the torch lab (a scene this journey does not look at)"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 13 }
+timeout = 3000
+
+[[step]]
+label = "SELECT 7 of the torch lab (a scene this journey does not look at)"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 15 }
+timeout = 3000
+
+[[step]]
+label = "SELECT builds the room and stands outside it"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 17 }
+timeout = 3000
+
+[[step]]
+sync = "poll"
+wait = 20
+
+[[step]]
+checkpoint = "room-before"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "SELECT puts a torch in the room"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 19 }
+timeout = 3000
+
+[[step]]
+sync = "poll"
+wait = 20
+
+[[step]]
+checkpoint = "room-lit"
+golden = false
+[[step.assert]]
+kind = "frame_diff"
+from = "room-before"
+region = { x = 215, y = 50, w = 70, h = 70 }
+color_tol = 12
+max_changed = 0.03
+note = "beside the walls the ground and the stone stay dark"
+[[step.assert]]
+kind = "frame_diff"
+from = "room-before"
+region = { x = 20, y = 110, w = 100, h = 45 }
+color_tol = 12
+min_changed = 0.15
+note = "in front of the door the ground is lit"
+
+[[step]]
+label = "SELECT stands in front of the door"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 21 }
+timeout = 3000
+
+[[step]]
+sync = "poll"
+wait = 20
+
+[[step]]
+checkpoint = "room-door"
+golden = false
+[[step.assert]]
+kind = "not_flat"

@@ -25,6 +25,9 @@ ui-fixture = []
 # builds a proving ground of doors, beds, torches, levers, ladders and dust, and
 # each later one moves the camera to the next view. Never ship.
 block-lab = []
+# Headless torch-light scenes only (src/torchlab.rs): a pit, two tunnels and a room with a doorway,
+# built by SELECT, each with a torch that walls must stop. Never ship.
+torch-lab = []
 # Headless edit-persistence check only (src/edit_lab.rs): 1,500 edits, a walk
 # 150 blocks away and back, and a count of what survived. Never ship.
 edit-lab = []

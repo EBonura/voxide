@@ -4,14 +4,14 @@
 #[path = "../../../game/src/light.rs"]
 mod light;
 
-use light::{BRIGHT_REACH, ROWS, TIERS, TORCH_REACH};
+use light::{BRIGHT_REACH, COLS, TIERS, TORCH_REACH};
 
-fn empty() -> light::Rows {
-    [[0; ROWS]; TIERS]
+fn empty() -> light::Cols {
+    [[[0; 2]; COLS]; TIERS]
 }
 
-fn tier(rows: &light::Rows, x: i32, y: i32, z: i32) -> u16 {
-    light::tier(rows, x as usize, y as usize, z as usize)
+fn tier(rows: &light::Cols, x: i32, y: i32, z: i32) -> u16 {
+    light::tier(rows, x, y, z)
 }
 
 /// What the tier should be from the distance alone.
@@ -65,9 +65,11 @@ fn the_tiers_are_nested_so_the_count_is_the_level() {
     let mut rows = empty();
     light::flood(&mut rows, 3, 20, 12, &TORCH_REACH);
     light::flood(&mut rows, 13, 25, 2, &BRIGHT_REACH);
-    for row in 0..ROWS {
-        assert_eq!(rows[2][row] & !rows[1][row], 0, "tier 3 inside tier 2, row {row}");
-        assert_eq!(rows[1][row] & !rows[0][row], 0, "tier 2 inside tier 1, row {row}");
+    for col in 0..COLS {
+        for w in 0..2 {
+            assert_eq!(rows[2][col][w] & !rows[1][col][w], 0, "tier 3 inside tier 2, column {col}");
+            assert_eq!(rows[1][col][w] & !rows[0][col][w], 0, "tier 2 inside tier 1, column {col}");
+        }
     }
 }
 
@@ -124,13 +126,14 @@ fn a_torch_in_the_next_chunk_lights_this_chunks_edge() {
 #[test]
 fn a_source_too_far_away_sets_nothing() {
     let mut rows = empty();
-    assert!(!light::flood(&mut rows, -10, 30, 8, &TORCH_REACH));
-    assert!(!light::flood(&mut rows, 8, 30, 26, &TORCH_REACH));
-    assert!(rows.iter().all(|t| t.iter().all(|&r| r == 0)));
-    assert!(!light::reaches_chunk(-10, 8, &TORCH_REACH));
-    assert!(light::reaches_chunk(-9, 8, &TORCH_REACH));
-    assert!(light::reaches_chunk(-5, -4, &TORCH_REACH), "a corner: five and four is nine");
-    assert!(!light::reaches_chunk(-5, -5, &TORCH_REACH));
+    assert!(!light::flood(&mut rows, -11, 30, 8, &TORCH_REACH));
+    assert!(!light::flood(&mut rows, 8, 30, 27, &TORCH_REACH));
+    assert!(rows.iter().all(|t| t.iter().all(|c| c[0] == 0 && c[1] == 0)));
+    // The ring of columns one outside the chunk counts: nine from -1 is -10.
+    assert!(!light::reaches_chunk(-11, 8, &TORCH_REACH));
+    assert!(light::reaches_chunk(-10, 8, &TORCH_REACH));
+    assert!(light::reaches_chunk(-6, -5, &TORCH_REACH), "a corner: five and four past the ring");
+    assert!(!light::reaches_chunk(-6, -6, &TORCH_REACH));
     assert!(light::reaches_chunk(0, 15, &TORCH_REACH));
 }
 
@@ -173,4 +176,244 @@ fn ramping_into_the_fog_keeps_the_order_of_two_colours() {
             }
         }
     }
+}
+
+// ---- A torch stopped by walls ---------------------------------------------------------------
+
+use light::{FloodBits, OpenMap, FLOOD_R, FLOOD_WORDS};
+
+/// The reference: a plain breadth-first search over cells, for the path distance of each cell.
+fn bfs<F: Fn(i32, i32, i32) -> bool>(solid: &F) -> std::collections::HashMap<(i32, i32, i32), i32> {
+    let mut dist = std::collections::HashMap::new();
+    let mut queue = std::collections::VecDeque::new();
+    dist.insert((0, 0, 0), 0);
+    queue.push_back((0, 0, 0));
+    while let Some((x, y, z)) = queue.pop_front() {
+        let d = dist[&(x, y, z)];
+        if d == FLOOD_R {
+            continue;
+        }
+        for (ax, ay, az) in [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)] {
+            let n = (x + ax, y + ay, z + az);
+            if !dist.contains_key(&n) && !solid(n.0, n.1, n.2) {
+                dist.insert(n, d + 1);
+                queue.push_back(n);
+            }
+        }
+    }
+    dist
+}
+
+/// The open map of a world for a torch at its origin.
+fn open_map<F: Fn(i32, i32, i32) -> bool>(solid: &F) -> OpenMap {
+    let mut open: OpenMap = [0; 21 * 21];
+    for dx in -FLOOD_R..=FLOOD_R {
+        for dz in -FLOOD_R..=FLOOD_R {
+            if dx.abs() + dz.abs() > FLOOD_R {
+                continue;
+            }
+            let mut word = 0u32;
+            for dy in -FLOOD_R..=FLOOD_R {
+                if !solid(dx, dy, dz) {
+                    word |= 1 << (dy + FLOOD_R);
+                }
+            }
+            open[light::open_index(dx, dz)] = word;
+        }
+    }
+    // The torch's own cell lets light out whatever it is.
+    open[light::open_index(0, 0)] |= 1 << FLOOD_R;
+    open
+}
+
+/// What the tier of a cell should be from its path distance.
+fn tier_of_path(d: i32) -> u16 {
+    if d <= 3 {
+        3
+    } else if d <= 6 {
+        2
+    } else if d <= 9 {
+        1
+    } else {
+        0
+    }
+}
+
+fn check_against_bfs<F: Fn(i32, i32, i32) -> bool>(solid: F, what: &str) -> FloodBits {
+    let dist = bfs(&solid);
+    let mut bits: FloodBits = [0; FLOOD_WORDS];
+    light::reflow(&open_map(&solid), &mut [0; 21 * 21], &mut bits);
+    for dx in -11i32..=11 {
+        for dy in -11i32..=11 {
+            for dz in -11i32..=11 {
+                let want = dist.get(&(dx, dy, dz)).map_or(0, |&d| tier_of_path(d));
+                assert_eq!(
+                    light::flood_tier(&bits, dx, dy, dz),
+                    want,
+                    "{what}: offset ({dx}, {dy}, {dz})"
+                );
+            }
+        }
+    }
+    bits
+}
+
+#[test]
+fn a_torch_in_the_open_floods_to_the_taxicab_ball() {
+    let bits = check_against_bfs(|_, _, _| false, "open");
+    // A flood of open air is the same as the blind flood.
+    let mut walled = empty();
+    let mut blind = empty();
+    light::apply(&mut walled, &bits, 8, 30, 8);
+    light::flood(&mut blind, 8, 30, 8, &TORCH_REACH);
+    assert_eq!(walled, blind);
+}
+
+#[test]
+fn a_sealed_pit_keeps_its_light() {
+    // A box of air round the torch, three blocks a side, in stone: nothing outside is lit.
+    let solid = |x: i32, y: i32, z: i32| x.abs() > 1 || y.abs() > 1 || z.abs() > 1;
+    let bits = check_against_bfs(solid, "sealed");
+    assert_eq!(light::flood_tier(&bits, 1, 0, 0), 3);
+    assert_eq!(light::flood_tier(&bits, 2, 0, 0), 0, "the wall itself is not lit");
+    let mut cols = empty();
+    light::apply(&mut cols, &bits, 8, 30, 8);
+    assert_eq!(tier(&cols, 8, 30, 8), 3);
+    assert_eq!(tier(&cols, 8, 36, 8), 0, "the ground above the cover is dark");
+}
+
+#[test]
+fn light_goes_through_an_opening_only() {
+    // A wall at x = 2 with a doorway at y = 0..=1, z = 0: the room behind it is lit through the
+    // door and nowhere else.
+    let solid = |x: i32, y: i32, z: i32| x == 2 && !(z == 0 && (0..=1).contains(&y));
+    let bits = check_against_bfs(solid, "doorway");
+    assert_eq!(light::flood_tier(&bits, 3, 0, 0), 3, "straight through the door");
+    assert_eq!(light::flood_tier(&bits, 3, 0, 5), 1, "round the corner: path 3 + 5 = 8 steps");
+    assert_eq!(light::flood_tier(&bits, 3, 5, 0), 1, "up behind the door: 3 + 5 steps");
+    assert_eq!(light::flood_tier(&bits, 3, 7, 0), 0, "path longer than 9");
+    // The cell right behind the wall to the side is reached by the long way round, not through it.
+    assert_eq!(light::flood_tier(&bits, 3, 0, 3), 2);
+}
+
+#[test]
+fn a_parallel_tunnel_two_blocks_behind_stone_stays_dark() {
+    // A tunnel along x (y 0..=1, z 0) and another at z = 3, the stone between them two blocks
+    // thick (z = 1 and 2), the two joined only far away at x = 30.
+    let solid = |x: i32, y: i32, z: i32| {
+        let in_a = (0..=1).contains(&y) && z == 0;
+        let in_b = (0..=1).contains(&y) && z == 3;
+        let join = (0..=1).contains(&y) && (0..=3).contains(&z) && x >= 30;
+        !(in_a || in_b || join)
+    };
+    let bits = check_against_bfs(solid, "tunnels");
+    assert_eq!(light::flood_tier(&bits, 2, 0, 0), 3, "down the tunnel");
+    assert_eq!(light::flood_tier(&bits, 8, 0, 0), 1);
+    for x in -9..=9 {
+        assert_eq!(light::flood_tier(&bits, x, 0, 3), 0, "the other tunnel at x {x}");
+    }
+}
+
+#[test]
+fn the_flood_matches_a_search_in_noise() {
+    // A few hundred worlds of scattered stone at varying density.
+    let mut seed = 0x1234_5678u32;
+    let mut next = move || {
+        seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        seed >> 8
+    };
+    for density in [8u32, 24, 40, 56] {
+        for n in 0..6 {
+            let mut cells = std::collections::HashSet::new();
+            for _ in 0..6_000 {
+                let r = next();
+                let x = (r % 23) as i32 - 11;
+                let y = ((r / 23) % 23) as i32 - 11;
+                let z = ((r / 529) % 23) as i32 - 11;
+                if next() % 100 < density {
+                    cells.insert((x, y, z));
+                }
+            }
+            check_against_bfs(|x, y, z| cells.contains(&(x, y, z)), &format!("noise {density}/{n}"));
+        }
+    }
+}
+
+#[test]
+fn applying_a_flood_clips_like_a_walled_search_in_the_chunk() {
+    // The same torch at chunk edges and corners, outside it and at the ceiling, against the
+    // search: every lit cell of the chunk is the torch's, and nothing else.
+    let solid = |x: i32, y: i32, z: i32| (x + 2 * y + 3 * z).rem_euclid(7) == 0 && (x, y, z) != (0, 0, 0);
+    let dist = bfs(&solid);
+    let mut bits: FloodBits = [0; FLOOD_WORDS];
+    light::reflow(&open_map(&solid), &mut [0; 21 * 21], &mut bits);
+    for &(sx, sy, sz) in &[
+        (8, 30, 8),
+        (0, 30, 0),
+        (15, 30, 15),
+        (-3, 30, 8),
+        (18, 30, -4),
+        (8, 0, 8),
+        (8, 63, 8),
+        (8, 59, 8),
+        (-9, 63, 24),
+    ] {
+        let mut cols = empty();
+        light::apply(&mut cols, &bits, sx, sy, sz);
+        for z in -1..=16i32 {
+            for x in -1..=16i32 {
+                for y in 0..64i32 {
+                    let want = dist.get(&(x - sx, y - sy, z - sz)).map_or(0, |&d| tier_of_path(d));
+                    assert_eq!(
+                        tier(&cols, x, y, z),
+                        want,
+                        "torch ({sx}, {sy}, {sz}), cell ({x}, {y}, {z})"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn two_torches_take_the_brighter_tier_and_the_runs_are_nested() {
+    let solid = |x: i32, y: i32, _: i32| x == 3 && y != 0;
+    let mut bits: FloodBits = [0; FLOOD_WORDS];
+    light::reflow(&open_map(&solid), &mut [0; 21 * 21], &mut bits);
+    let mut cols = empty();
+    light::apply(&mut cols, &bits, 4, 30, 8);
+    light::apply(&mut cols, &bits, 12, 30, 8);
+    for col in 0..COLS {
+        for w in 0..2 {
+            assert_eq!(cols[2][col][w] & !cols[1][col][w], 0);
+            assert_eq!(cols[1][col][w] & !cols[0][col][w], 0);
+        }
+    }
+}
+
+#[test]
+fn a_flood_fits_its_words() {
+    assert_eq!(FLOOD_WORDS, 50);
+    // The torch buried in stone lights only its own cell.
+    let solid = |x: i32, y: i32, z: i32| (x, y, z) != (0, 0, 0);
+    let bits = check_against_bfs(solid, "buried");
+    assert_eq!(light::flood_tier(&bits, 0, 0, 0), 3);
+    assert_eq!(light::flood_tier(&bits, 1, 0, 0), 0);
+}
+
+#[test]
+fn the_ring_of_columns_round_the_chunk_holds_the_light_its_faces_take() {
+    let mut rows = empty();
+    light::flood(&mut rows, 0, 30, 0, &TORCH_REACH);
+    assert_eq!(tier(&rows, -1, 30, 0), 3, "one block out of the chunk, beside the torch");
+    assert_eq!(tier(&rows, 0, 30, -1), 3);
+    assert_eq!(tier(&rows, -1, 30, -1), 3, "diagonally: two steps");
+    assert_eq!(tier(&rows, 16, 30, 0), 0, "the far ring is out of reach");
+    // Heights off the world have no light and are not read.
+    assert_eq!(tier(&rows, 0, -1, 0), 0);
+    assert_eq!(tier(&rows, 0, 64, 0), 0);
+    let mut rows = empty();
+    light::flood(&mut rows, 15, 63, 15, &TORCH_REACH);
+    assert_eq!(tier(&rows, 16, 63, 16), 3);
+    assert_eq!(tier(&rows, 16, 64, 16), 0);
 }

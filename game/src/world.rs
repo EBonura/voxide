@@ -28,6 +28,7 @@ use psx_math::int32::isqrt_i32;
 use psx_math::Mask64;
 
 mod rle;
+mod torchlight;
 use rle::{rget, rset};
 
 /// A cross-sprite plant (wheat/sapling/flower/tall grass): rendered as an
@@ -529,8 +530,8 @@ const LIGHT_DEPTH: i32 = 2;
 /// without the 200KB per-block light array a real propagation needs: the sources are found in
 /// one pass (the same pass that builds SKY_TOP), each floods three bitmaps a row at a time, and
 /// the mask build pays three bit reads per face cell, or none while no source reached the chunk.
-static mut LIGHT_ROWS: light::Rows = [[0; light::ROWS]; light::TIERS];
-/// Something in LIGHT_ROWS is set (so a chunk without light costs no clear and no read).
+static mut LIGHT_MAPS: light::Cols = [[[0; 2]; light::COLS]; light::TIERS];
+/// Something in LIGHT_MAPS is set (so a chunk without light costs no clear and no read).
 static mut LIGHT_ANY: bool = false;
 /// Emitters other than torches (lava, fire, lumistone) considered per chunk. A lava lake is
 /// hundreds of cells and its glow looks the same from six of them.
@@ -552,19 +553,25 @@ fn is_light_source(b: u8) -> bool {
 
 /// Block-light tier (0..=3) of a chunk-local cell, in the two bits above the sky bucket.
 #[inline]
-fn light_tier(lx: usize, ly: usize, lz: usize) -> u16 {
-    unsafe { light::tier(&*core::ptr::addr_of!(LIGHT_ROWS), lx, ly, lz) }
+fn light_tier(lx: i32, ly: i32, lz: i32) -> u16 {
+    unsafe { light::tier(&*core::ptr::addr_of!(LIGHT_MAPS), lx, ly, lz) }
 }
 
-/// Light value for a chunk-local cell: the sky bucket (bits 0..=1) and the block-light tier
-/// (bits 2..=3). The renderer lights the face by the brighter of the two. `lit` is whether any
-/// tier is set (LIGHT_ANY): the mask build reads it once for a plane and not once for each cell
-/// it asks about, where it costs a load from main RAM on every face of every mesh.
+/// Light value for the face of the chunk-local cell (`lx`, `ly`, `lz`) looking along `d`: the sky
+/// bucket of the cell (bits 0..=1) and the block-light tier of the cell in front of the face
+/// (bits 2..=3), where the light is: a block is solid and holds none. The renderer lights the face
+/// by the brighter of the two. `lit` is whether any tier is set (LIGHT_ANY): the mask build reads
+/// it once for a plane and not once for each cell it asks about, where it costs a load from main
+/// RAM on every face of every mesh.
 #[inline]
-fn sky_bucket(lit: bool, lx: usize, ly: usize, lz: usize) -> u16 {
+fn sky_bucket(lit: bool, lx: usize, ly: usize, lz: usize, d: (i32, i32, i32)) -> u16 {
     let top = unsafe { SKY_TOP[lz * CWU + lx] } as i32;
     let depth = top - ly as i32;
-    let tier = if lit { light_tier(lx, ly, lz) << 2 } else { 0 };
+    let tier = if lit {
+        light_tier(lx as i32 + d.0, ly as i32 + d.1, lz as i32 + d.2) << 2
+    } else {
+        0
+    };
     if depth < LIGHT_DEPTH {
         return (LIGHT_BUCKETS - 1) | tier;
     }
@@ -582,7 +589,7 @@ fn sky_bucket(lit: bool, lx: usize, ly: usize, lz: usize) -> u16 {
 fn clear_light() {
     unsafe {
         if LIGHT_ANY {
-            LIGHT_ROWS = [[0; light::ROWS]; light::TIERS];
+            LIGHT_MAPS = [[[0; 2]; light::COLS]; light::TIERS];
             LIGHT_ANY = false;
         }
         MESH_NTORCH = 0;
@@ -645,6 +652,11 @@ fn collect_neighbour_torches(cx: i32, cz: i32) {
 /// light reaches into it. One copy of the walk over the edit store, not eight.
 #[inline(never)]
 fn collect_torches_of(cx: i32, cz: i32, dx: i32, dz: i32) {
+    // A chunk that is not loaded has no blocks for its torches' light to go through: it does not
+    // light this one until it is (torchlight::chunk_loaded).
+    if !column_loaded(cx * CW, cz * CW) {
+        return;
+    }
     unsafe {
         crate::EDITS.for_chunk(DIM, cx, cz, |lx, ly, lz, b| {
             if crate::kind_of(b) == TORCH {
@@ -658,21 +670,58 @@ fn collect_torches_of(cx: i32, cz: i32, dx: i32, dz: i32) {
     }
 }
 
-/// Flood the light of the torch at index `k` of MESH_TORCH_SRC, or of the emitter `k - MESH_NTORCH`
-/// of MESH_LIGHT_SOURCES.
-fn flood_source(k: usize) {
+/// Whether `light_step` may work a torch's light out when it has not been.
+#[derive(Copy, Clone, PartialEq)]
+enum Reflow {
+    /// Work it out now (a mesh that reads the light the moment it is done).
+    Now,
+    /// Leave it: the entry is marked, and the frame's tick works it out and remeshes.
+    Later,
+}
+
+/// One step of the light work of source `k` of the mesh in flight: the torch at index `k` of
+/// MESH_TORCH_SRC (its remembered light is or-ed in; with `Reflow::Now` an entry that is not
+/// worked out yet takes this step to be) or the emitter `k - MESH_NTORCH` of MESH_LIGHT_SOURCES.
+/// Returns true when the source is done.
+fn light_step(k: usize, reflow: Reflow) -> bool {
     unsafe {
-        let (x, y, z, reach) = if k < MESH_NTORCH {
-            let t = MESH_TORCH_SRC[k];
-            (t.0, t.1, t.2, &light::TORCH_REACH)
-        } else {
+        let maps = &mut *core::ptr::addr_of_mut!(LIGHT_MAPS);
+        if k >= MESH_NTORCH {
             let e = MESH_LIGHT_SOURCES[k - MESH_NTORCH];
-            (e.0 as i32, e.1 as i32, e.2 as i32, &light::BRIGHT_REACH)
+            if light::flood(maps, e.0 as i32, e.1 as i32, e.2 as i32, &light::BRIGHT_REACH) {
+                LIGHT_ANY = true;
+            }
+            return true;
+        }
+        let t = MESH_TORCH_SRC[k];
+        let (cx, cz) = LIGHT_ORIGIN;
+        let Some(i) = torchlight::ensure(cx * CW + t.0, t.1, cz * CW + t.2) else {
+            return true;
         };
-        if light::flood(&mut *core::ptr::addr_of_mut!(LIGHT_ROWS), x, y, z, reach) {
+        if !torchlight::ready(i) {
+            if reflow == Reflow::Now {
+                // False when the torch is not there (the entry is dropped): nothing to light.
+                return !torchlight::reflow(i, LIGHT_ORIGIN);
+            }
+            return true;
+        }
+        #[cfg(feature = "torch-lab")]
+        let probe = crate::torchlab::clock();
+        if torchlight::apply(maps, i, cx, cz) {
             LIGHT_ANY = true;
         }
+        #[cfg(feature = "torch-lab")]
+        {
+            crate::torchlab::APPLY_ACC += crate::torchlab::clock().wrapping_sub(probe) as u32;
+        }
+        true
     }
+}
+
+/// The tier (0 to 3) the placed torches' light gives a world cell, walls stopping it, for the
+/// faces the greedy mesh does not carry.
+pub fn torch_tier_at(x: i32, y: i32, z: i32) -> u16 {
+    torchlight::tier_at(x, y, z)
 }
 
 /// Rebuild SKY_TOP and the light tiers from MESH_SCRATCH. The highest sky-blocking
@@ -680,7 +729,22 @@ fn flood_source(k: usize) {
 /// floor layer, never counts), and only the columns LIGHT_COLS flags can hold a
 /// light source, so the 16,000-cell scan the old version made per mesh is a
 /// few hundred word reads plus a walk down the rare lit columns.
-fn build_sky_top(s: usize) {
+fn build_sky_top(s: usize, reflow: Reflow) {
+    #[cfg(feature = "torch-lab")]
+    let probe = {
+        // SAFETY: one thread.
+        unsafe { crate::torchlab::APPLY_ACC = 0 };
+        crate::torchlab::clock()
+    };
+    build_sky_top_inner(s, reflow);
+    #[cfg(feature = "torch-lab")]
+    {
+        crate::torchlab::note(0, probe);
+        crate::torchlab::end_setup();
+    }
+}
+
+fn build_sky_top_inner(s: usize, reflow: Reflow) {
     clear_light();
     unsafe { LIGHT_ORIGIN = (CHUNKS[s].cx, CHUNKS[s].cz) };
     unsafe { MESH_NLIGHT = 0 };
@@ -713,12 +777,21 @@ fn build_sky_top(s: usize) {
         }
         col += 1;
     }
+    // Far-LOD faces are all skylit: no torch light to work out for them.
+    if FAR_LOD && unsafe { CHUNKS[s].face_lod } == 1 {
+        unsafe {
+            MESH_NTORCH = 0;
+            MESH_NLIGHT = 0;
+        }
+        return;
+    }
     let (cx, cz) = unsafe { (CHUNKS[s].cx, CHUNKS[s].cz) };
     collect_neighbour_torches(cx, cz);
     let mut k = 0;
     while k < unsafe { MESH_NTORCH + MESH_NLIGHT } {
-        flood_source(k);
-        k += 1;
+        if light_step(k, reflow) {
+            k += 1;
+        }
     }
 }
 
@@ -1870,6 +1943,7 @@ fn publish_chunk(s: usize, cx: i32, cz: i32) {
         CHUNKS[s].loaded = true;
         CHUNKS[s].dirty = true;
     }
+    torchlight::chunk_loaded(cx, cz);
 }
 
 /// Stamp the player's block edits back onto a chunk that has just been
@@ -2036,6 +2110,9 @@ pub fn set(wx: i32, wy: i32, wz: i32, b: u8) {
             if b != AIR {
                 MESH_YHI = MESH_YHI.max(wy as usize);
             }
+        }
+        if torchlight::active() {
+            torchlight::block_changed(wx, wy, wz, old, b);
         }
         (old, sky_changed)
     };
@@ -2592,6 +2669,10 @@ fn blast_column(job: &BlastJob, x: i32, z: i32, mask: u32) {
         }
         BJ_LO = (BJ_LO.0.min(x), BJ_LO.1.min(z));
         BJ_HI = (BJ_HI.0.max(x), BJ_HI.1.max(z));
+        if torchlight::active() {
+            let (lo, hi) = (clear.trailing_zeros() as i32, 31 - clear.leading_zeros() as i32);
+            torchlight::column_changed(x, z, y0 + lo, y0 + hi);
+        }
     }
 }
 
@@ -3443,6 +3524,7 @@ pub fn fluid_reset() {
         FIRE_N = 0;
     }
     blast_reset();
+    torchlight::reset();
     // The redstone net is rebuilt from the replayed edits.
     crate::redstone::reset();
 }
@@ -3535,6 +3617,13 @@ pub fn grow_tree(wx: i32, wy: i32, wz: i32) {
     }
 }
 
+/// Has the world caught up with what changed: every chunk in range meshed, no edit mesh in flight
+/// and no torch light waiting to be worked out. For the headless labs, which wait on it.
+pub fn idle() -> bool {
+    let (near, far) = stream_backlog();
+    near == 0 && far == 0 && !torchlight::pending()
+}
+
 /// Re-mesh loaded chunks after a bulk edit (e.g. loading a save). In-range chunks
 /// mesh now; the rest are flagged dirty so they mesh when the player nears them.
 #[inline(never)]
@@ -3603,6 +3692,9 @@ fn raw_set(wx: i32, wy: i32, wz: i32, b: u8) {
             let lx = (wx - cx * CW) as usize;
             let lz = (wz - cz * CW) as usize;
             let i = lidx(lx, wy as usize, lz);
+            if torchlight::active() {
+                torchlight::block_changed(wx, wy, wz, rget(s, i), b);
+            }
             rset(s, i, b);
             if MESH_SCRATCH_OWNER == s {
                 MESH_SCRATCH[i] = b;
@@ -3686,6 +3778,8 @@ const CLS_SEE: u8 = 2;
 /// Light source, cross plant or small block: the decode records these per
 /// cell, so the compare chains only run on blocks that carry this bit.
 const CLS_SPECIAL: u8 = 4;
+/// Lets light through: what can be seen through, and leaves.
+const CLS_LIGHT: u8 = 8;
 
 fn init_block_class() {
     unsafe {
@@ -3702,7 +3796,11 @@ fn init_block_class() {
             // still draws.
             let see = air || is_water(b) || is_cross_plant(b) || is_small_block(b);
             let special = is_light_source(b) || is_cross_plant(b) || is_small_block(b);
-            BCLASS[i] = (meshable as u8) | ((see as u8) << 1) | ((special as u8) << 2);
+            let light_passes = see || crate::kind_of(b) == LEAVES;
+            BCLASS[i] = (meshable as u8)
+                | ((see as u8) << 1)
+                | ((special as u8) << 2)
+                | ((light_passes as u8) << 3);
             i += 1;
         }
     }
@@ -3761,6 +3859,7 @@ fn build_y_cols(dir: usize) {
 fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) -> bool {
     // Fixed while a plane is masked: the tier maps are built before any plane is.
     let lit = unsafe { LIGHT_ANY };
+    let d = DIRS[dir];
     let (base, sa, sb) = match dir {
         0 | 1 => (plane, CWU * CWU, CWU),
         2 | 3 => (plane * CWU * CWU, 1, CWU),
@@ -3820,7 +3919,7 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                     0
                 } else {
                     bits.set(a);
-                    f as u16 | (sky_bucket(lit, lx, ly, lz) << 7)
+                    f as u16 | (sky_bucket(lit, lx, ly, lz, d) << 7)
                 };
                 unsafe { FMASK[b * a_dim + a] = cell };
                 a += 1;
@@ -3873,7 +3972,7 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                     let nb = unsafe { MESH_SCRATCH[col + nplane * CWU * CWU] };
                     if blk != nb {
                         unsafe {
-                            FMASK[col] = blk as u16 | (sky_bucket(lit, lx, plane, lz) << 7);
+                            FMASK[col] = blk as u16 | (sky_bucket(lit, lx, plane, lz, d) << 7);
                             FMASK_BITS[lz].set(lx);
                         }
                         rows.set(lz);
@@ -3899,7 +3998,7 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                     let nb = unsafe { MESH_SCRATCH[lidx(nlx, ly, lz)] };
                     if blk != nb {
                         unsafe {
-                            FMASK[lz * a_dim + ly] = blk as u16 | (sky_bucket(lit, plane, ly, lz) << 7);
+                            FMASK[lz * a_dim + ly] = blk as u16 | (sky_bucket(lit, plane, ly, lz, d) << 7);
                             FMASK_BITS[lz].set(ly);
                         }
                         rows.set(lz);
@@ -3925,7 +4024,7 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                     let nb = unsafe { MESH_SCRATCH[lidx(lx, ly, nlz)] };
                     if blk != nb {
                         unsafe {
-                            FMASK[ly * a_dim + lx] = blk as u16 | (sky_bucket(lit, lx, ly, plane) << 7);
+                            FMASK[ly * a_dim + lx] = blk as u16 | (sky_bucket(lit, lx, ly, plane, d) << 7);
                             FMASK_BITS[ly].set(lx);
                         }
                         rows.set(ly);
@@ -4882,7 +4981,7 @@ fn mesh_chunk(s: usize) {
     }
     set_mesh_lod(s);
     decode_to_mesh_scratch(s);
-    build_sky_top(s); // skylight depends on the whole column, so it precedes meshing
+    build_sky_top(s, Reflow::Now); // skylight depends on the whole column, so it precedes meshing
     if FAR_LOD && unsafe { CHUNKS[s].face_lod } == 1 {
         let n = mesh_lod_tops();
         commit_mesh(s, n);
@@ -5018,7 +5117,7 @@ fn mesh_edit_tick() {
             // for this chunk. Only when the scratch was already ours (and no
             // light source moved) is the single-column refresh enough.
             if EDIT_MESH_DECODE != 0 || EDIT_LIGHT_CHANGED {
-                build_sky_top(s);
+                build_sky_top(s, Reflow::Later);
             } else {
                 build_sky_column(EDIT_MESH_LX, EDIT_MESH_LZ);
             }
@@ -5500,6 +5599,11 @@ static mut ALLOW_CLAIM: bool = true;
 #[inline(never)]
 pub fn stream_tick() {
     unsafe {
+        // A torch's light that a block change has made stale is worked out first, one a frame: the
+        // picture is wrong for as short a time as the frame allows.
+        if ALLOW_CLAIM && torchlight::pending() && torchlight::tick() {
+            return;
+        }
         if EDIT_MESH_S != usize::MAX {
             // Main can call stream_tick once per simulation catch-up tick.
             // Advance player-visible edit work only on the first call so a slow
@@ -5590,8 +5694,9 @@ pub fn stream_tick() {
                     return;
                 }
                 if MESH_LIGHT_I < MESH_NTORCH + MESH_NLIGHT {
-                    flood_source(MESH_LIGHT_I);
-                    MESH_LIGHT_I += 1;
+                    if light_step(MESH_LIGHT_I, Reflow::Now) {
+                        MESH_LIGHT_I += 1;
+                    }
                     return;
                 }
             }

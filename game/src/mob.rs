@@ -958,6 +958,10 @@ fn lab_hold() {
 /// `sky` is the internal sky light mobs spawn by (thunder already folded
 /// in); `burn` is whether it is day enough for the undead to burn.
 pub fn update(px: i32, py: i32, pz: i32, sky: i32, burn: bool) {
+    #[cfg(feature = "torch-lab")]
+    if unsafe { crate::torchlab::QUIET } {
+        return;
+    }
     #[cfg(feature = "pick-lab")]
     lab_hold();
     #[cfg(feature = "mob-lab")]

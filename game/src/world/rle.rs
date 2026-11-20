@@ -411,6 +411,28 @@ pub(super) fn col_span(s: usize, col: usize, y0: i32, out: &mut [u8]) {
     }
 }
 
+/// The cells `y0..y1` (at most 32 of them) of column `col` of resident slot `s` that let light
+/// pass, bit `y - y0`; cells outside 0..64 do not. One run walk, a run at a time.
+pub(super) fn col_open(s: usize, col: usize, y0: i32, y1: i32) -> u32 {
+    unsafe {
+        let mut mask = 0u32;
+        let mut o = RBASE[s] as usize + COL_OFF[s][col] as usize;
+        let mut top = CHU as i32;
+        while top > y0 && top > 0 {
+            let lo = top - BLK[o + 1] as i32;
+            if BCLASS[BLK[o] as usize] & super::CLS_LIGHT != 0 {
+                let (from, to) = (lo.max(y0).max(0), top.min(y1));
+                if from < to {
+                    mask |= (u32::MAX >> (32 - (to - from))) << (from - y0);
+                }
+            }
+            top = lo;
+            o += 2;
+        }
+        mask
+    }
+}
+
 /// Decode columns `c0..c1` of slot `s` into MESH_SCRATCH and the column
 /// masks, a run at a time. `top` tracks the highest non-air index. With FULL
 /// the stream mesher's extras are recorded as well: per-column sky top, and,

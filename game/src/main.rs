@@ -16,6 +16,8 @@ extern crate psx_rt;
 mod blast;
 #[cfg(feature = "block-lab")]
 mod blocklab;
+#[cfg(feature = "torch-lab")]
+mod torchlab;
 mod blocks;
 mod bow;
 mod bstate;
@@ -3643,6 +3645,10 @@ fn main() {
                 if pad.pressed_since(previous, button::SELECT) {
                     blocklab::select(&mut player);
                 }
+                #[cfg(feature = "torch-lab")]
+                if pad.pressed_since(previous, button::SELECT) {
+                    torchlab::select(&mut player, &mut day);
+                }
                 let use_pressed = pad.pressed_since(previous, button::L2);
                 // Held L2 repeats a block placement every USE_REPEAT sim ticks.
                 let use_repeat = unsafe {
@@ -5743,6 +5749,7 @@ fn gate_snapshot(player: &Player) {
     unsafe {
         VOXIDE_GATE_STATE[3] = SIM_TICK;
         VOXIDE_GATE_STATE[4] = tnt::live_count();
+
         VOXIDE_GATE_STATE[5] = edit_count() as u32;
         VOXIDE_GATE_STATE[6] = world::blasts_pending() as u32;
         VOXIDE_GATE_STATE[7] = player.health as u32;
@@ -5759,6 +5766,13 @@ fn gate_snapshot(player: &Player) {
         VOXIDE_GATE_STATE[18] = redstone::worked();
         VOXIDE_GATE_STATE[20] = player.yaw as u32;
         VOXIDE_GATE_STATE[21] = player.pitch as i32 as u32;
+        // The torch lab has no TNT, no arrows and no redstone: these words say its stage, whether
+        // the world has settled, and the cycle probes.
+        #[cfg(feature = "torch-lab")]
+        {
+            torchlab::publish(&mut *core::ptr::addr_of_mut!(VOXIDE_GATE_STATE));
+            VOXIDE_GATE_STATE[4] = torchlab::gate_word();
+        }
     }
 }
 }
@@ -9607,7 +9621,11 @@ fn render_near_block_shell(cam: &Camera) {
                             let win = unsafe { MAT_WIN[0][tile] };
                             let cl_hi = unsafe { MAT_CLUT_HI[0][tile] };
                             let tp_hi = unsafe { MAT_TPAGE_HI[0][tile] };
-                            let row = unsafe { &MAT_CCMD[1 | torch_tier_at(bx, by, bz) << 2][0][shade_of(dir)] };
+                            // The light of a face is the light of the cell in front of it.
+                            let (fx, fy, fz) = (bx + DIRS[dir].0, by + DIRS[dir].1, bz + DIRS[dir].2);
+                            let row = unsafe {
+                                &MAT_CCMD[1 | torch_tier_at(fx, fy, fz) << 2][0][shade_of(dir)]
+                            };
                             let make = |index: usize, u: i32, v: i32| -> ClipVert {
                                 let (x, y, z) = camera[index];
                                 let rgb = row[fog_band(z)] & 0x00FF_FFFF;
@@ -13340,47 +13358,16 @@ pub(crate) fn block_light(x: i32, y: i32, z: i32) -> i32 {
     best.max(0)
 }
 
-/// Block-light tier (0..=3, light.rs) of a cell from the torches the player placed, read from the
-/// registry `block_light` uses. For the faces the greedy mesh does not carry (the close-range
-/// shell); the mesh itself gets its tiers from the edit store. Free while no torch is placed.
+/// Block-light tier (0..=3, light.rs) of a cell from the torches the player placed, stopped by
+/// solid blocks (world::torch_tier_at). For the faces the greedy mesh does not carry (the
+/// close-range shell); the mesh itself gets its tiers from the same remembered light. Free while
+/// no torch is placed: the near shell asks for every face it draws.
 #[inline(always)]
 fn torch_tier_at(x: i32, y: i32, z: i32) -> usize {
     if unsafe { TORCH_N } == 0 {
         return 0;
     }
-    torch_tier_near(x, y, z)
-}
-
-/// The walk over the registry for `torch_tier_at`, out of line: a world with no torch placed is
-/// nearly every world, and asks it for every face the near shell draws.
-#[inline(never)]
-fn torch_tier_near(x: i32, y: i32, z: i32) -> usize {
-    let d = world::dimension();
-    let reach = light::TORCH_REACH;
-    let mut best = 0;
-    unsafe {
-        let mut i = 0;
-        while i < TORCH_N.min(TORCHES) {
-            let (tx, ty, tz, td) = TORCH_POS[i];
-            if td == d {
-                let t = (tx as i32 - x).abs() + (ty as i32 - y).abs() + (tz as i32 - z).abs();
-                let tier = if t <= reach[0] {
-                    3
-                } else if t <= reach[1] {
-                    2
-                } else if t <= reach[2] {
-                    1
-                } else {
-                    0
-                };
-                if tier > best && kind_of(get_block_i32(tx as i32, ty as i32, tz as i32)) == TORCH {
-                    best = tier;
-                }
-            }
-            i += 1;
-        }
-    }
-    best
+    world::torch_tier_at(x, y, z) as usize
 }
 
 /// A point in the day on Java's 24,000-tick clock: 0 sunrise, 6,000 noon,

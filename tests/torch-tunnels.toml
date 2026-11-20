@@ -1,0 +1,165 @@
+# Two tunnels side by side with two blocks of rock between them: a torch in one does not light the other.
+# Built with
+#
+#   make gate-disc FEATURES=torch-lab PGO_VARIANT=off GATE_DIR=$PWD/build/gate-torches GATE_SYMBOLS=$PWD/build/gate-torches/gate-symbols.txt
+#   psoxide-gate run tests/torch-tunnels.toml --disc build/gate-torches/voxide.cue --no-hw
+#
+# The first three SELECTs of the torch lab (src/torchlab.rs) are the pit scene, which this journey
+# does not look at. The fourth builds the tunnels in a block of stone at midnight and stands the
+# player at the mouth of the first, the fifth at the mouth of the second, the sixth puts a torch in
+# the first (the view stays on the second, which must stay as it was) and the seventh stands at the
+# mouth of the first again. VOXIDE_GATE_STATE word 4 (offset 16) is the stage done times two, plus one
+# when the meshes and the torch light have caught up, so every wait is on the game's own state.
+name = "voxide-torch-tunnels"
+title = "VoXide: a torch in one tunnel leaves the tunnel behind two blocks of rock dark"
+disc = ["build/gate-torches/voxide.cue"]
+symbols = ["build/gate-torches/gate-symbols.txt"]
+pad = "dualshock"
+max_ticks = 9000
+
+[card_fixture]
+path = "tests/cards/legacy-controls-seen.mcd"
+sha256 = "a0bc97a529dc33cdda8c438ec8e06a5ebc19e119fad846128d8827131c4a2f08"
+
+[[step]]
+label = "the title appears over the generated world"
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 3000
+
+[[step]]
+label = "PLAY GAME goes directly to the world"
+press = ["cross"]
+hold_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 0 }
+timeout = 1500
+
+[[step]]
+label = "the world clock runs"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 12, op = "ge", value = 120 }
+timeout = 1500
+
+[[step]]
+label = "SELECT 1 of the torch lab (a scene this journey does not look at)"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 3 }
+timeout = 3000
+
+[[step]]
+label = "SELECT 2 of the torch lab (a scene this journey does not look at)"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 5 }
+timeout = 3000
+
+[[step]]
+label = "SELECT 3 of the torch lab (a scene this journey does not look at)"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 7 }
+timeout = 3000
+
+[[step]]
+label = "SELECT builds the tunnels and stands at the mouth of the first"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 9 }
+timeout = 3000
+
+[[step]]
+sync = "poll"
+wait = 20
+
+[[step]]
+checkpoint = "tunnel-a-before"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "SELECT stands at the mouth of the second"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 11 }
+timeout = 3000
+
+[[step]]
+sync = "poll"
+wait = 20
+
+[[step]]
+checkpoint = "tunnel-b-before"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "SELECT puts a torch in the first tunnel"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 13 }
+timeout = 3000
+
+[[step]]
+sync = "poll"
+wait = 20
+
+[[step]]
+checkpoint = "tunnel-b-after"
+golden = false
+[[step.assert]]
+kind = "frame_diff"
+from = "tunnel-b-before"
+region = { x = 60, y = 60, w = 200, h = 120 }
+color_tol = 12
+max_changed = 0.01
+note = "the second tunnel stays as dark as it was: the rock between is not lit through"
+
+[[step]]
+label = "SELECT stands at the mouth of the first again"
+press = ["select"]
+sync = "poll"
+hold = 3
+wait = 2
+
+[[step]]
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 16, op = "eq", value = 15 }
+timeout = 3000
+
+[[step]]
+sync = "poll"
+wait = 20
+
+[[step]]
+checkpoint = "tunnel-a-lit"
+golden = false
+[[step.assert]]
+kind = "frame_diff"
+from = "tunnel-a-before"
+region = { x = 60, y = 60, w = 200, h = 120 }
+color_tol = 12
+min_changed = 0.03
+note = "the torch lights the tunnel it stands in"
