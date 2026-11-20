@@ -39,13 +39,26 @@ the oldest).
 
 ## Block light
 
-Torches, lava, fire and lumistone light the ground in three tiers (Java levels 11, 8 and 5 and up: a torch
-reaches 3, 6 and 9 blocks, the others one block further), clipped to the chunk being meshed, through walls.
-A face carries its tier beside its sky bucket and the renderer shows the brighter, so a torch lights a cave
-or a night field and does nothing against a bright noon. Per chunk: 32 torches (those in it and those of
-the eight around it whose light reaches in, read from the edit store) and, apart from them, 6 other
-emitters; more are not lit. The tier maps are 6 KB of scratch (one chunk at a time); the colour table is
-16 light levels (12 KB). Far-LOD chunks are skylit only.
+Torches, lava, fire and lumistone light the ground in three tiers, not Java's fifteen levels: a torch
+(Java level 14) lights to 3, 6 and 9 blocks (Java levels 11, 8 and 5 and up, so 116, 88 and 56 of 128
+of full brightness) where Java fades one level a block out to 13; lava, fire and lumistone (level 15)
+reach 4, 7 and 10. A face carries its tier beside its sky bucket (four bits: sky bucket in 8..=9, tier in
+10..=11 of its side word) and is shown at the brighter of the two, a channel at a time (never the sum),
+in the neutral shade of the texture. This is a deliberate difference from the original: per-block
+falloff would need 14 block levels against 4 sky buckets = 56 light levels, a colour table of
+56 x 768 B = 43 KB (this one is 12 KB) and 6 face bits, and a table build several times dearer.
+
+The reach is clipped to the chunk being meshed and goes through walls (Java's does not): a torch under a
+one-block cover still lights the ground around it. Blocking by solid blocks would need a flood through
+air cells per torch (up to 1,160 cells each, a queue and a per-cell neighbour read from uncached RAM,
+roughly 70,000 cycles a torch against 5,000 now), run for every torch of a chunk on every remesh, and
+the torches of the neighbouring chunks would need those chunks' blocks.
+
+Per chunk: 32 torches (those in it, then those of the eight around it whose light reaches in, read from
+the edit store) and, apart from them, 6 other emitters (lava, fire, lumistone). When more torches than
+that reach a chunk, the ones farthest from the player (taxicab, at the time of the mesh) are left unlit.
+Fixed cost, not growing with torches: the tier maps are 6 KB of scratch (one chunk at a time), the colour
+table 16 light levels (12 KB, was 3 KB), the torch list 384 B. Far-LOD chunks are skylit only.
 
 ## Block states
 

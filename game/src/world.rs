@@ -593,13 +593,33 @@ fn clear_light() {
     }
 }
 
-/// Add a torch at chunk-local (x, y, z) to the list for the mesh in flight.
+/// The chunk whose torches are being listed (set where the list is cleared).
+static mut LIGHT_ORIGIN: (i32, i32) = (0, 0);
+
+/// Add a torch at chunk-local (x, y, z) to the list for the mesh in flight. When the list is
+/// full the torch farthest from the player (by horizontal taxicab distance) is the one left out,
+/// so the torches beside the player are always lit.
 #[inline]
 fn add_torch(x: i32, y: i32, z: i32) {
     unsafe {
         if MESH_NTORCH < MAX_TORCHES {
             MESH_TORCH_SRC[MESH_NTORCH] = (x, y, z);
             MESH_NTORCH += 1;
+            return;
+        }
+        let px = PLAYER_BX - LIGHT_ORIGIN.0 * CW;
+        let pz = PLAYER_BZ - LIGHT_ORIGIN.1 * CW;
+        let far = |t: (i32, i32, i32)| (t.0 - px).abs() + (t.2 - pz).abs();
+        let mut worst = 0;
+        let mut i = 1;
+        while i < MAX_TORCHES {
+            if far(MESH_TORCH_SRC[i]) > far(MESH_TORCH_SRC[worst]) {
+                worst = i;
+            }
+            i += 1;
+        }
+        if far((x, y, z)) < far(MESH_TORCH_SRC[worst]) {
+            MESH_TORCH_SRC[worst] = (x, y, z);
         }
     }
 }
@@ -660,6 +680,7 @@ fn flood_source(k: usize) {
 /// few hundred word reads plus a walk down the rare lit columns.
 fn build_sky_top(s: usize) {
     clear_light();
+    unsafe { LIGHT_ORIGIN = (CHUNKS[s].cx, CHUNKS[s].cz) };
     unsafe { MESH_NLIGHT = 0 };
     let mut col = 0usize;
     while col < CWU * CWU {
@@ -5520,6 +5541,7 @@ pub fn stream_tick() {
             MESH_LIGHT_I = 0;
             SKY_TOP = [0; CWU * CWU];
             clear_light();
+            LIGHT_ORIGIN = (CHUNKS[best].cx, CHUNKS[best].cz);
             MESH_NB_DONE = false;
             MESH_DIR_START[0] = 0;
             CHUNKS[best].dirty = false;
