@@ -1675,20 +1675,21 @@ fn refresh_mat_ccmd() {
     let op_a = TextureMaterial::blended(0, 0, (0, 0, 0), BlendMode::Average)
         .flat_textured_polygon_header(true);
     // The far bands are the fog for every row.
+    let table = core::ptr::addr_of_mut!(MAT_CCMD) as *mut u32;
     let mut b = FAR_FROM;
     while b < FOG_BANDS {
         let (fo, fa) = (op_o | far[b], op_a | far[b]);
-        let mut level = 0;
-        while level < LIGHT_LEVELS {
+        // Rows are 16 words apart, six directions to a material, two materials to a level.
+        let mut group = 0;
+        while group < LIGHT_LEVELS * 2 {
+            let w = if group & 1 == 0 { fo } else { fa };
+            let row = unsafe { table.add(group * 6 * FOG_BANDS + b) };
             let mut dir = 0;
             while dir < 6 {
-                unsafe {
-                    MAT_CCMD[level][0][dir][b] = fo;
-                    MAT_CCMD[level][1][dir][b] = fa;
-                }
+                unsafe { *row.add(dir * FOG_BANDS) = w };
                 dir += 1;
             }
-            level += 1;
+            group += 1;
         }
         b += 1;
     }
@@ -1755,10 +1756,10 @@ fn refresh_mat_ccmd() {
             let mut b = 0;
             while b < NEAR {
                 unsafe {
-                    MAT_CCMD[level][0][dir][b] = no;
-                    MAT_CCMD[level][1][dir][b] = na;
-                    MAT_CCMD[level][0][twin][b] = no;
-                    MAT_CCMD[level][1][twin][b] = na;
+                    *table.add(((level * 2 + 0) * 6 + dir) * FOG_BANDS + b) = no;
+                    *table.add(((level * 2 + 1) * 6 + dir) * FOG_BANDS + b) = na;
+                    *table.add(((level * 2 + 0) * 6 + twin) * FOG_BANDS + b) = no;
+                    *table.add(((level * 2 + 1) * 6 + twin) * FOG_BANDS + b) = na;
                 }
                 b += 1;
             }
@@ -1771,10 +1772,10 @@ fn refresh_mat_ccmd() {
                 };
                 let (ro, ra) = (op_o | c, op_a | c);
                 unsafe {
-                    MAT_CCMD[level][0][dir][NEAR + i] = ro;
-                    MAT_CCMD[level][1][dir][NEAR + i] = ra;
-                    MAT_CCMD[level][0][twin][NEAR + i] = ro;
-                    MAT_CCMD[level][1][twin][NEAR + i] = ra;
+                    *table.add(((level * 2 + 0) * 6 + dir) * FOG_BANDS + NEAR + i) = ro;
+                    *table.add(((level * 2 + 1) * 6 + dir) * FOG_BANDS + NEAR + i) = ra;
+                    *table.add(((level * 2 + 0) * 6 + twin) * FOG_BANDS + NEAR + i) = ro;
+                    *table.add(((level * 2 + 1) * 6 + twin) * FOG_BANDS + NEAR + i) = ra;
                 }
                 i += 1;
             }

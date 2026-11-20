@@ -80,7 +80,11 @@ pub fn flood(rows: &mut Rows, sx: i32, sy: i32, sz: i32, reach: &[i32; TIERS]) -
 #[inline(always)]
 pub fn tier(rows: &Rows, lx: usize, ly: usize, lz: usize) -> u16 {
     let row = ly * 16 + lz;
-    ((rows[0][row] >> lx) & 1) + ((rows[1][row] >> lx) & 1) + ((rows[2][row] >> lx) & 1)
+    // Tier 1 holds every lit cell: most cells are not, and cost one read.
+    if (rows[0][row] >> lx) & 1 == 0 {
+        return 0;
+    }
+    1 + ((rows[1][row] >> lx) & 1) + ((rows[2][row] >> lx) & 1)
 }
 
 /// Does a source at this chunk-local position reach any cell of the chunk? `x` and `z` may be
