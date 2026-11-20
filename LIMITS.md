@@ -48,18 +48,35 @@ in the neutral shade of the texture. This is a deliberate difference from the or
 falloff would need 14 block levels against 4 sky buckets = 56 light levels, a colour table of
 56 x 512 B = 28 KB (this one is 16 x 512 B = 8 KB: a face shade has four rows, not six) and 6 face bits, and a table build several times dearer.
 
-KNOWN DEFECT, not a limit (being fixed next): torch light goes through solid blocks (Java's is stopped by
-them): a torch in a pit under a one-block cover still lights the ground around it. The reach is also
-clipped to the chunk being meshed. Blocking by solid blocks would need a flood through
-air cells per torch (up to 1,160 cells each, a queue and a per-cell neighbour read from uncached RAM,
-roughly 70,000 cycles a torch against 5,000 now), run for every torch of a chunk on every remesh, and
-the torches of the neighbouring chunks would need those chunks' blocks.
+Torch light is stopped by solid blocks, as Java's is, and goes round corners: it is a flood through
+the cells that let light pass (air, water, plants, shaped blocks such as doors and slabs, leaves),
+counted in steps, so the tiers are 3, 6 and 9 steps from the torch and a thin wall does not shorten
+the way. A torch in a pit under a cover leaves the ground round it dark, a torch in a tunnel does
+not light the tunnel behind two blocks of rock, a torch in a doorway lights what is in front of the
+opening. The flood is worked out once for each torch and kept (212 B: the three tiers as columns of
+bits). It is worked out again when the torch is placed, when a block within 9 of it changes between
+letting light through and not (placing or breaking stone, a door is not either), and when a chunk
+next to it comes into the loaded ring. Cells of a chunk that is not loaded count as stone: at the
+edge of the ring the light stops at the border, and goes on when the neighbour streams in. One flood
+a frame, about 100,000 cycles each (a block break beside a torch shows the old light for the edit's
+remesh and one more frame, then the chunks the light reaches are remeshed). A chunk's mesh reads the
+kept light of the torches near it for about 19,000 cycles a torch: a chunk with 32 torches in reach
+sets its lighting up in about 620,000 cycles, spread over the streaming steps (one torch a step).
+A face takes the light of the cell in front of it, so the tier maps carry a ring of columns round the
+chunk.
 
 Per chunk: 32 torches (those in it, then those of the eight around it whose light reaches in, read from
 the edit store) and, apart from them, 6 other emitters (lava, fire, lumistone). When more torches than
 that reach a chunk, the ones farthest from the player (taxicab, at the time of the mesh) are left unlit.
-Fixed cost, not growing with torches: the tier maps are 6 KB of scratch (one chunk at a time), the colour
-table 16 light levels (8 KB, was 3 KB), the torch list 384 B. Far-LOD chunks are skylit only.
+The kept lights are 32 in all (the 32 nearest the player when more are placed: a torch without a place
+does not light until one frees). Fixed cost, not growing with torches: the tier maps are 7.8 KB of
+scratch (one chunk at a time, ring included), the colour table 16 light levels (8 KB, was 3 KB), the
+torch list 384 B, the kept lights 6.8 KB (32 x 212 B); the flood works in the first 3.5 KB of the mesh
+face scratch, which is empty while a mesh sets its lighting up. Far-LOD chunks are skylit only.
+
+Not stopped by walls: lava, fire and lumistone (their light still goes through blocks, within their
+own chunk), and the light the mob-spawn rule sees (main.rs `block_light`, taxicab). Leaves and water
+let light through without dimming it (Java dims it one and two levels more).
 
 ## Block states
 

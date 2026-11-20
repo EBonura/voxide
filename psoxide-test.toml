@@ -53,6 +53,15 @@ collect = { "voxide.exe" = "game/target/mipsel-sony-psx/release/voxide.exe", "li
 disc = "voxide.cue"
 map = "link.map"
 
+# The torch lab (src/torchlab.rs): the three scenes of torch light stopped by walls. Never shipped.
+[[build]]
+name = "gate-torches"
+out = "build/gate-torches"
+commands = [["make", "gate-disc", "FEATURES=torch-lab", "PGO_VARIANT=off", "GATE_DIR={out}", "GATE_SYMBOLS={out}/gate-symbols.txt"]]
+collect = { "voxide.exe" = "game/target/mipsel-sony-psx/release/voxide.exe", "link.map" = "game/target/mipsel-sony-psx/psoxide-pgo-maps/*" }
+disc = "voxide.cue"
+map = "link.map"
+
 # What block light cost, measured 2026-11-20 on the SDK fce1f6855bc1 pin against the b394b08
 # baseline (text 677,372 B, free RAM 102,732 B), after the shrink (four shade rows in the colour
 # table instead of six, table build and torch collection out of line, the mask build reading the
