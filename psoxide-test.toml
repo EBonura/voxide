@@ -77,8 +77,26 @@ map = "link.map"
 # The size stage passed against that baseline with bars of 11,000 B of text and 19,500 B of free RAM;
 # the baseline is blessed on this code (the commit that carries this comment), so a change is judged
 # against block light's own size from here on and the bars are 0 again.
+# What torch light stopped by walls (game/src/light.rs, game/src/world/torchlight.rs) costs, measured
+# 2026-11-20 against the baseline blessed on block light as it was (text 687,736 B, data 95,032 B,
+# bss 1,131,604 B, free RAM 84,204 B), sample profile re-collected on the final code: text +3,044 B,
+# data +1,792 B, bss +8,416 B, free RAM -13,248 B (text, data and bss are what is left of the 2 MB, so
+# the free figure is their sum). The bytes buy:
+#   bss  the kept lights of 32 torches, 32 x 212 B = 6,784 B (the three tiers as columns of bits, about
+#        200 B, and the torch's place), the tier maps 7,776 B (were 6,144: a ring of columns round the
+#        chunk, because a face takes the light of the cell in front of it)
+#   text the flood (a step is a few operations a column of heights, three, six and nine steps kept), the
+#        read-back into a chunk's tier maps, the table of lights and the marks a block change leaves on
+#        it, the lab-free hooks in `set`, `raw_set`, the blast and the chunk load
+#   data constants of the flood
+# The flood works in the first 3.5 KB of MESH_FACES (empty while a mesh sets its lighting up), which
+# keeps another 3.5 KB of bss out of this figure. The bars below are Part 2's allowance over that
+# baseline.
 [[size]]
 build = "ship"
+text_max_growth = 3500
+free_min_drop = 14000
+reason = "torch light stopped by walls: measured text +3,044 B, data +1,792 B, bss +8,416 B and free RAM -13,248 B against the baseline blessed on block light as it stood, 2026-11-20; the kept lights of 32 torches (6.8 KB), the tier maps' ring of columns (+1.6 KB) and the flood and read-back code; see the comment above"
 
 # The two tapes of the sample profile: train (the profile's own route) and unseen (the holdout, a
 # different walk on the sticks). Polls 252..1200 are gameplay on both.
