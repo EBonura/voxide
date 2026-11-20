@@ -13343,7 +13343,18 @@ pub(crate) fn block_light(x: i32, y: i32, z: i32) -> i32 {
 /// Block-light tier (0..=3, light.rs) of a cell from the torches the player placed, read from the
 /// registry `block_light` uses. For the faces the greedy mesh does not carry (the close-range
 /// shell); the mesh itself gets its tiers from the edit store. Free while no torch is placed.
+#[inline(always)]
 fn torch_tier_at(x: i32, y: i32, z: i32) -> usize {
+    if unsafe { TORCH_N } == 0 {
+        return 0;
+    }
+    torch_tier_near(x, y, z)
+}
+
+/// The walk over the registry for `torch_tier_at`, out of line: a world with no torch placed is
+/// nearly every world, and asks it for every face the near shell draws.
+#[inline(never)]
+fn torch_tier_near(x: i32, y: i32, z: i32) -> usize {
     let d = world::dimension();
     let reach = light::TORCH_REACH;
     let mut best = 0;
