@@ -495,9 +495,15 @@ pub(super) fn decode_cols<const FULL: bool>(s: usize, c0: usize, c1: usize, top:
                             let b = MESH_SCRATCH[ly * CWU * CWU + col];
                             let lx = col & (CWU - 1);
                             let lz = col >> 4;
-                            if pass == 0 && MESH_NLIGHT < MAX_SOURCES && is_light_source(b) {
-                                MESH_LIGHT_SOURCES[MESH_NLIGHT] = (lx, ly, lz);
-                                MESH_NLIGHT += 1;
+                            if pass == 0 && is_light_source(b) {
+                                // Torches have a list of their own: lava found first (it is
+                                // deeper) must not use up their places.
+                                if crate::kind_of(b) == crate::TORCH {
+                                    add_torch(lx as i32, ly as i32, lz as i32);
+                                } else if MESH_NLIGHT < MAX_SOURCES {
+                                    MESH_LIGHT_SOURCES[MESH_NLIGHT] = (lx, ly, lz);
+                                    MESH_NLIGHT += 1;
+                                }
                             }
                             if MESH_NPLANT < MAX_PLANTS
                                 && if pass == 0 {

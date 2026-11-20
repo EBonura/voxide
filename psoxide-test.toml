@@ -96,7 +96,7 @@ command = ["cargo", "run", "-q", "--release", "--locked", "--manifest-path", ".p
 # psx_math): left out by name until the owner fixes it, not skipped silently.
 [[host]]
 name = "host-tests"
-command = ["cargo", "test", "-q", "--no-fail-fast", "--manifest-path", "tools/host-tests/Cargo.toml", "--test", "adpcm_error", "--test", "blast_capacity", "--test", "blocks", "--test", "fluid_ignite", "--test", "full_card", "--test", "hand", "--test", "mask_equiv", "--test", "menu_tree", "--test", "music_plan", "--test", "near_grid", "--test", "sapper_capacity", "--test", "seal", "--test", "settings_card", "--test", "settings_profile", "--test", "shared_clip", "--test", "tnt_capacity", "--test", "tnt_pending", "--test", "units"]
+command = ["cargo", "test", "-q", "--no-fail-fast", "--manifest-path", "tools/host-tests/Cargo.toml", "--test", "adpcm_error", "--test", "blast_capacity", "--test", "blocks", "--test", "fluid_ignite", "--test", "full_card", "--test", "hand", "--test", "light", "--test", "mask_equiv", "--test", "menu_tree", "--test", "music_plan", "--test", "near_grid", "--test", "sapper_capacity", "--test", "seal", "--test", "settings_card", "--test", "settings_profile", "--test", "shared_clip", "--test", "tnt_capacity", "--test", "tnt_pending", "--test", "units"]
 
 [[host]]
 name = "voxide-tools"

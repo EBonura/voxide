@@ -33,8 +33,19 @@ craters only if all of them fit, so a crater never comes back half filled. The o
 ## Shapes in view
 
 Per frame 192 quads across plants, shaped blocks and dust, 64 of them reserved for shapes. Per chunk
-128 plant and shape entries, shapes counted first, so a meadow cannot starve a door. 64 torches are
-registered for block light (a ring: the 65th replaces the oldest).
+128 plant and shape entries, shapes counted first, so a meadow cannot starve a door. 64 player-placed
+torches are registered for the mob-spawn light rule and the close-range shell (a ring: the 65th replaces
+the oldest).
+
+## Block light
+
+Torches, lava, fire and lumistone light the ground in three tiers (Java levels 11, 8 and 5 and up: a torch
+reaches 3, 6 and 9 blocks, the others one block further), clipped to the chunk being meshed, through walls.
+A face carries its tier beside its sky bucket and the renderer shows the brighter, so a torch lights a cave
+or a night field and does nothing against a bright noon. Per chunk: 16 torches (those in it and those of
+the eight around it whose light reaches in, read from the edit store) and, apart from them, 6 other
+emitters; more are not lit. The tier maps are 6 KB of scratch (one chunk at a time); the colour table is
+16 light levels (12 KB). Far-LOD chunks are skylit only.
 
 ## Block states
 

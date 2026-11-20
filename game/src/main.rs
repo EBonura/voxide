@@ -34,6 +34,7 @@ mod flame;
 mod grid;
 mod hand;
 mod inv;
+mod light;
 mod loading;
 mod menu_tree;
 mod menus;
@@ -1454,9 +1455,16 @@ const STREAM_CRATER_SLICES: usize = 3;
 /// blend mode, face direction and fog band. Four buckets multiplies the table
 /// by four (768 words, 3KB) and keeps the per-face cost at one array read --
 /// which is the only reason block light is affordable here at all.
-static mut MAT_CCMD: [[[[u32; FOG_BANDS]; 6]; 2]; SKY_LEVELS] =
-    [[[[0; FOG_BANDS]; 6]; 2]; SKY_LEVELS];
+static mut MAT_CCMD: [[[[u32; FOG_BANDS]; 6]; 2]; LIGHT_LEVELS] =
+    [[[[0; FOG_BANDS]; 6]; 2]; LIGHT_LEVELS];
 const SKY_LEVELS: usize = 4;
+/// A face's light is its sky bucket (the low two bits) and its block-light tier (the next two,
+/// light.rs): the row is `sky | tier << 2`, and the renderer shows the brighter of the two.
+const LIGHT_LEVELS: usize = SKY_LEVELS * 4;
+/// Fraction of full brightness (out of 128) at each block-light tier, none first. Java levels
+/// 11, 8 and 5 and up, so the nearest block of a torch is as bright as day and the last tier is
+/// as dim as the darkest sky bucket at noon.
+const TORCH_SCALE: [u32; 4] = [0, 56, 88, 116];
 /// Fraction of full brightness at each bucket: fully shadowed cells keep a
 /// floor, because pitch black on a PS1 palette just reads as a hole.
 /// Skylight multiplier per bucket. Four steps now rather than two: the old pair
@@ -1594,16 +1602,26 @@ fn refresh_mat_ccmd() {
         lerp_u8(h.1 as i32, CAVE_FOG.1 as i32, cave, 255),
         lerp_u8(h.2 as i32, CAVE_FOG.2 as i32, cave, 255),
     );
-    let mut sky = 0usize;
-    while sky < SKY_LEVELS {
+    let mut level = 0usize;
+    while level < LIGHT_LEVELS {
+        let (sky, tier) = (level & 3, level >> 2);
         let mut dir = 0;
         while dir < 6 {
             let lit = face_tint(dir);
             let sc = SKY_SCALE[sky];
-            let tint = (
+            let sky_tint = (
                 (lit.0 as u32 * sc / 128) as u8,
                 (lit.1 as u32 * sc / 128) as u8,
                 (lit.2 as u32 * sc / 128) as u8,
+            );
+            // Block light does not follow the sun: a torch is as bright at midnight as at
+            // noon. The face shows whichever is brighter, a channel at a time.
+            let glow = torch_tint(dir);
+            let tc = TORCH_SCALE[tier];
+            let tint = (
+                sky_tint.0.max((glow.0 as u32 * tc / 128) as u8),
+                sky_tint.1.max((glow.1 as u32 * tc / 128) as u8),
+                sky_tint.2.max((glow.2 as u32 * tc / 128) as u8),
             );
             // The ramp is laid out against the far plane: `full` is the band
             // FAR_Z lands in (8 at 16 blocks) and `clear` a quarter of that.
@@ -1660,14 +1678,14 @@ fn refresh_mat_ccmd() {
                 let a = TextureMaterial::blended(0, 0, ft, BlendMode::Average)
                     .flat_textured_polygon_header(true);
                 unsafe {
-                    MAT_CCMD[sky][0][dir][b] = o;
-                    MAT_CCMD[sky][1][dir][b] = a;
+                    MAT_CCMD[level][0][dir][b] = o;
+                    MAT_CCMD[level][1][dir][b] = a;
                 }
                 b += 1;
             }
             dir += 1;
         }
-        sky += 1;
+        level += 1;
     }
 }
 
@@ -9475,7 +9493,7 @@ fn render_near_block_shell(cam: &Camera) {
                             let win = unsafe { MAT_WIN[0][tile] };
                             let cl_hi = unsafe { MAT_CLUT_HI[0][tile] };
                             let tp_hi = unsafe { MAT_TPAGE_HI[0][tile] };
-                            let row = unsafe { &MAT_CCMD[1][0][dir] };
+                            let row = unsafe { &MAT_CCMD[1 | torch_tier_at(bx, by, bz) << 2][0][dir] };
                             let make = |index: usize, u: i32, v: i32| -> ClipVert {
                                 let (x, y, z) = camera[index];
                                 let rgb = row[fog_band(z)] & 0x00FF_FFFF;
@@ -9531,7 +9549,7 @@ fn render_near_block_shell(cam: &Camera) {
 fn emit_near_face(f: u32, side: u16, dir: usize) {
     let (lx, by, lz, w, h, block) = face_fields(f);
     let ao = (side & 0xFF) as u8;
-    let light = ((side >> 8) & 3) as usize;
+    let light = ((side >> 8) & 15) as usize;
     let verts = face_verts(lx, by, lz, dir, w, h);
     let (bl, mi) = face_mat(block, dir);
     let ccmd_row: &'static [u32; FOG_BANDS] = unsafe { &MAT_CCMD[light][bl][dir] };
@@ -9872,7 +9890,7 @@ fn emit_face(
     }
     let (lx, by, lz, w, h, block) = face_fields(f);
     let ao = (side & 0xFF) as u8;
-    let light = ((side >> 8) & 3) as usize; // 0..LIGHT_BUCKETS-1 (= SKY_LEVELS)
+    let light = ((side >> 8) & 15) as usize; // sky bucket | block-light tier << 2
     let verts = face_verts(lx, by, lz, dir, w, h);
 
     // Kick RTPT for corners 0..2, then do the material lookups WHILE the GTE
@@ -9897,7 +9915,7 @@ fn emit_face(
     let (bl, mi) = face_mat(block, dir);
     // Row now, band later: the depth is not known until the corners project,
     // and this lookup is deliberately here to overlap the GTE's flight time.
-    // SAFETY: light < SKY_LEVELS (2 bits), bl < 2, dir < 6 (a face dir).
+    // SAFETY: light < LIGHT_LEVELS (4 bits), bl < 2, dir < 6 (a face dir).
     let ccmd_row = unsafe {
         MAT_CCMD
             .get_unchecked(light)
@@ -13058,6 +13076,18 @@ fn face_tint(dir: usize) -> (u8, u8, u8) {
     (bias(br), bias(bg), bias(bb))
 }
 
+/// The face colour block light gives at full strength: the same Java face shading as the sky
+/// (top, sides, bottom), in the warm yellow of a flame. Independent of the time of day.
+fn torch_tint(dir: usize) -> (u8, u8, u8) {
+    let s = match dir {
+        2 => 128u32,
+        4 | 5 => 102,
+        0 | 1 => 77,
+        _ => 64,
+    };
+    (s as u8, (s * 112 / 128) as u8, (s * 84 / 128) as u8)
+}
+
 /// Queue the GPU's ordered-dither draw mode at the head of the sky list.
 ///
 /// This was previously attempted with `TextureMaterial::with_dither(true)` on
@@ -13194,6 +13224,38 @@ pub(crate) fn block_light(x: i32, y: i32, z: i32) -> i32 {
         dy += 1;
     }
     best.max(0)
+}
+
+/// Block-light tier (0..=3, light.rs) of a cell from the torches the player placed, read from the
+/// registry `block_light` uses. For the faces the greedy mesh does not carry (the close-range
+/// shell); the mesh itself gets its tiers from the edit store. Free while no torch is placed.
+fn torch_tier_at(x: i32, y: i32, z: i32) -> usize {
+    let d = world::dimension();
+    let reach = light::TORCH_REACH;
+    let mut best = 0;
+    unsafe {
+        let mut i = 0;
+        while i < TORCH_N.min(TORCHES) {
+            let (tx, ty, tz, td) = TORCH_POS[i];
+            if td == d {
+                let t = (tx as i32 - x).abs() + (ty as i32 - y).abs() + (tz as i32 - z).abs();
+                let tier = if t <= reach[0] {
+                    3
+                } else if t <= reach[1] {
+                    2
+                } else if t <= reach[2] {
+                    1
+                } else {
+                    0
+                };
+                if tier > best && kind_of(get_block_i32(tx as i32, ty as i32, tz as i32)) == TORCH {
+                    best = tier;
+                }
+            }
+            i += 1;
+        }
+    }
+    best
 }
 
 /// A point in the day on Java's 24,000-tick clock: 0 sunrise, 6,000 noon,
