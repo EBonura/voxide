@@ -115,7 +115,11 @@ unsafe fn stream_bank() -> bool {
         // 16-byte-block aligned so the pad never reaches a played sample.
         let n = (left.min(SECTOR_BYTES) + 15) & !15;
         let bytes = core::slice::from_raw_parts(scratch.as_ptr() as *const u8, n);
-        psx_spu::upload_adpcm(SpuAddr::new(addr), bytes);
+        // A sample whose upload failed is never played: the load reports failure.
+        if psx_spu::upload_adpcm(SpuAddr::new(addr), bytes).is_err() {
+            rd.stop();
+            return false;
+        }
         addr += n as u32;
         left = left.saturating_sub(SECTOR_BYTES);
     }
@@ -471,7 +475,11 @@ fn thunder_step() {
         fill += 1;
         g.b += 1;
     }
-    psx_spu::upload_adpcm(SpuAddr::new(g.at), &bytes[..fill * 16]);
+    if psx_spu::upload_adpcm(SpuAddr::new(g.at), &bytes[..fill * 16]).is_err() {
+        // A failed upload leaves no thunder (and no rain behind it): never played.
+        unsafe { GEN = None };
+        return;
+    }
     g.at += fill as u32 * 16;
     if g.b > THUNDER_BLOCKS {
         unsafe {
@@ -628,7 +636,9 @@ fn rain_build(addr: u32) {
         };
         b += 1;
     }
-    psx_spu::upload_adpcm(SpuAddr::new(addr), bytes);
+    if psx_spu::upload_adpcm(SpuAddr::new(addr), bytes).is_err() {
+        return; // never played
+    }
     unsafe {
         RAIN = Some(SfxSample::resident(
             SpuAddr::new(addr),
