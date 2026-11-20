@@ -46,7 +46,7 @@ reach 4, 7 and 10. A face carries its tier beside its sky bucket (four bits: sky
 10..=11 of its side word) and is shown at the brighter of the two, a channel at a time (never the sum),
 in the neutral shade of the texture. This is a deliberate difference from the original: per-block
 falloff would need 14 block levels against 4 sky buckets = 56 light levels, a colour table of
-56 x 768 B = 43 KB (this one is 12 KB) and 6 face bits, and a table build several times dearer.
+56 x 512 B = 28 KB (this one is 16 x 512 B = 8 KB: a face shade has four rows, not six) and 6 face bits, and a table build several times dearer.
 
 KNOWN DEFECT, not a limit (being fixed next): torch light goes through solid blocks (Java's is stopped by
 them): a torch in a pit under a one-block cover still lights the ground around it. The reach is also
@@ -59,7 +59,7 @@ Per chunk: 32 torches (those in it, then those of the eight around it whose ligh
 the edit store) and, apart from them, 6 other emitters (lava, fire, lumistone). When more torches than
 that reach a chunk, the ones farthest from the player (taxicab, at the time of the mesh) are left unlit.
 Fixed cost, not growing with torches: the tier maps are 6 KB of scratch (one chunk at a time), the colour
-table 16 light levels (12 KB, was 3 KB), the torch list 384 B. Far-LOD chunks are skylit only.
+table 16 light levels (8 KB, was 3 KB), the torch list 384 B. Far-LOD chunks are skylit only.
 
 ## Block states
 

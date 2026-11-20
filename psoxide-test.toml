@@ -53,11 +53,25 @@ collect = { "voxide.exe" = "game/target/mipsel-sony-psx/release/voxide.exe", "li
 disc = "voxide.cue"
 map = "link.map"
 
+# What block light costs, measured 2026-11-20 on the SDK fce1f6855bc1 pin against the b394b08
+# baseline (text 677,372 B, free RAM 102,732 B), after the shrink (four shade rows in the colour
+# table instead of six, table build and torch collection out of line, profile re-collected):
+# text +11,740 B, data -1,264 B, bss +9,632 B, free RAM -20,112 B (what text, data and bss take is
+# what is left of the 2 MB, so the free figure is the sum). The bytes buy (game/src/light.rs):
+#   bss  colour table 16 light levels x 2 materials x 4 shades x 16 bands x 4 B = 8,192 B (was 3,072:
+#        a face shows the brighter of its sky bucket and its torch tier), tier maps of the chunk
+#        being meshed 6,144 B (were 2,048), the torch list of 32 = 384 B
+#   text the flood and the tier lookup, the torch list with the nearest-to-the-player cap and the
+#        neighbouring chunks' torches, the colour-table build for the extra levels (refresh_mat_ccmd
+#        4.9 KB against 2.6 KB), the neighbour remesh when a torch comes or goes
+# Before the shrink it was text +14,388 B and free -28,128 B. The bars below are what the fix costs
+# against the b394b08 baseline; the baseline is re-blessed on this code in the commit after, so
+# from then on a change is judged against block light's own size and these bars are back to 0.
 [[size]]
 build = "ship"
-text_max_growth = 12000
-free_min_drop = 26000
-reason = "block light (game/src/light.rs): torches, lava, fire and lumistone light in three tiers, which doubles the colour table's light levels (16 x 768 B, +9 KB), keeps the tier maps of the chunk being meshed (6 KB, was 2 KB) and adds the flood, the sources list and the table build (+10.7 KB of text); measured text +10,724 B and free RAM -24,240 B"
+text_max_growth = 12500
+free_min_drop = 21000
+reason = "block light (game/src/light.rs): measured text +11,740 B and free RAM -20,112 B against the b394b08 baseline, 2026-11-20; the colour table's 16 light levels (8 KB), the tier maps (6 KB, were 2 KB), the torch list (384 B) and the flood, torch collection and table build code; see the comment above"
 
 # The two tapes of the sample profile: train (the profile's own route) and unseen (the holdout, a
 # different walk on the sticks). Polls 252..1200 are gameplay on both.
