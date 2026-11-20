@@ -146,3 +146,31 @@ fn a_flood_never_reads_or_writes_outside_the_rows() {
         }
     }
 }
+
+#[test]
+fn the_fog_mix_is_the_division_it_replaces() {
+    for a in 0..=255i32 {
+        for b in 0..=255i32 {
+            for t in 0..=255i32 {
+                let want = (a + (b - a) * t / 255).clamp(0, 255) as u32;
+                assert_eq!(light::mix_fog(a as u8, b, t), want, "a {a} b {b} t {t}");
+            }
+        }
+    }
+}
+
+#[test]
+fn ramping_into_the_fog_keeps_the_order_of_two_colours() {
+    // renderer: the rows with block light are the brighter of the sky row and the torch row,
+    // each ramped on its own, instead of the ramp of the brighter tint.
+    for f in [0i32, 1, 37, 128, 200, 254, 255] {
+        for t in 0..=255i32 {
+            let mix: Vec<u32> = (0..=255u32).map(|c| light::mix_fog(c as u8, f, t)).collect();
+            for a in 0..=255usize {
+                for b in a..=255usize {
+                    assert!(mix[a] <= mix[b], "f {f} t {t}: {a} -> {}, {b} -> {}", mix[a], mix[b]);
+                }
+            }
+        }
+    }
+}

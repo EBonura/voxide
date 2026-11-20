@@ -102,3 +102,14 @@ pub fn reaches_chunk(x: i32, z: i32, reach: &[i32; TIERS]) -> bool {
     };
     ex + ez <= reach[TIERS - 1]
 }
+
+/// `a + (b - a) * t / 255` for `a` and `b` in 0..=255 and `t` in 0..=255, the way the renderer
+/// ramps a face's colour into the fog: the same value as the division, quotient rounded toward
+/// zero, with the division by 255 done as shifts.
+#[inline(always)]
+pub fn mix_fog(a: u8, b: i32, t: i32) -> u32 {
+    let d = b - a as i32;
+    let p = (d.abs() * t) as u32;
+    let q = ((p + 1 + (p >> 8)) >> 8) as i32;
+    (a as i32 + if d < 0 { -q } else { q }) as u32
+}
