@@ -1455,8 +1455,20 @@ const STREAM_CRATER_SLICES: usize = 3;
 /// blend mode, face direction and fog band. Four buckets multiplies the table
 /// by four (768 words, 3KB) and keeps the per-face cost at one array read --
 /// which is the only reason block light is affordable here at all.
-static mut MAT_CCMD: [[[[u32; FOG_BANDS]; 6]; 2]; LIGHT_LEVELS] =
-    [[[[0; FOG_BANDS]; 6]; 2]; LIGHT_LEVELS];
+static mut MAT_CCMD: [[[[u32; FOG_BANDS]; SHADES]; 2]; LIGHT_LEVELS] =
+    [[[[0; FOG_BANDS]; SHADES]; 2]; LIGHT_LEVELS];
+/// Face shades: Java shades a block's top, bottom, the two faces of one horizontal axis and the
+/// two of the other, so six face directions take four rows of the table. `shade_of` maps one to
+/// the other.
+const SHADES: usize = 4;
+/// The row of face direction `dir`: 0 and 1 share row 0, 2 (top) is row 1, 3 (bottom) row 2, 4 and
+/// 5 row 3. Two bits a direction in a constant, so no table is read.
+#[inline(always)]
+const fn shade_of(dir: usize) -> usize {
+    ((0xF90u32 >> (dir * 2)) & 3) as usize
+}
+/// A face direction of each row, for building it.
+const SHADE_DIR: [usize; SHADES] = [0, 2, 3, 4];
 const SKY_LEVELS: usize = 4;
 /// A face's light is its sky bucket (the low two bits) and its block-light tier (the next two,
 /// light.rs): the row is `sky | tier << 2`, and the renderer shows the brighter of the two.
@@ -1585,6 +1597,41 @@ fn ground_haze(light: u8) -> (u8, u8, u8) {
 /// few times a minute; rebuild only when one of them has.
 static mut MAT_CCMD_KEY: (u8, (u8, u8, u8), u8, i32) = (0xFF, (0, 0, 0), 0xFF, -1);
 
+/// The fog bands of the tint table: `FULL` is the band FAR_Z lands in, `CLEAR` a quarter of it.
+/// Bands up to `CLEAR` show the tint as it is, the last bands the fog colour, and `RAMP` bands
+/// between them mix the two.
+const FULL: usize = (FAR_Z >> FOG_SHIFT) as usize;
+const CLEAR: usize = FULL / 4;
+const NEAR: usize = CLEAR + 1;
+const FAR_FROM: usize = FULL - 1;
+const RAMP: usize = FAR_FROM - NEAR;
+
+/// The tint of a face lit by `scale` out of 128 of `src`, as the GPU's modulation word.
+#[inline(never)]
+fn tint_of(src: (u8, u8, u8), scale: u32) -> (u8, u8, u8) {
+    (
+        (src.0 as u32 * scale / 128) as u8,
+        (src.1 as u32 * scale / 128) as u8,
+        (src.2 as u32 * scale / 128) as u8,
+    )
+}
+
+/// A tint ramped into the fog over the ramp bands. Out of line: the table build calls it for
+/// every sky level and every block-light tier of every shade.
+#[inline(never)]
+fn ramp_row(tint: (u8, u8, u8), ramp_t: &[i32; RAMP], ramp_f: &[(i32, i32, i32); RAMP]) -> [u32; RAMP] {
+    let mut out = [0u32; RAMP];
+    let mut i = 0;
+    while i < RAMP {
+        let (t, f) = (ramp_t[i], ramp_f[i]);
+        out[i] = light::mix_fog(tint.0, f.0, t)
+            | light::mix_fog(tint.1, f.1, t) << 8
+            | light::mix_fog(tint.2, f.2, t) << 16;
+        i += 1;
+    }
+    out
+}
+
 fn refresh_mat_ccmd() {
     let fog = unsafe { FOG_RGB }; // already faded toward CAVE_FOG by the caller
                                   // The weather too: it tints the ground haze the far bands meet.
@@ -1602,7 +1649,7 @@ fn refresh_mat_ccmd() {
         lerp_u8(h.1 as i32, CAVE_FOG.1 as i32, cave, 255),
         lerp_u8(h.2 as i32, CAVE_FOG.2 as i32, cave, 255),
     );
-    // The table is 16 light levels x 2 materials x 6 faces x FOG_BANDS words, rebuilt whenever the
+    // The table is 16 light levels x 2 materials x 4 shades x FOG_BANDS words, rebuilt whenever the
     // sky or the fog moves, and every load from main RAM costs several cycles (there is no data
     // cache), so the work is laid out to do few: what is the same for many rows is worked out once
     // and stored to all of them.
@@ -1610,11 +1657,6 @@ fn refresh_mat_ccmd() {
     // The ramp is laid out against the far plane: `full` is the band FAR_Z lands in (8 at 16
     // blocks) and `clear` a quarter of that. Bands up to `clear` show the tint as it is, the last
     // bands the fog colour whatever the tint is, and `RAMP` bands between them mix the two.
-    const FULL: usize = (FAR_Z >> FOG_SHIFT) as usize;
-    const CLEAR: usize = FULL / 4;
-    const NEAR: usize = CLEAR + 1;
-    const FAR_FROM: usize = FULL - 1;
-    const RAMP: usize = FAR_FROM - NEAR;
     let mut ramp_t = [0i32; RAMP];
     let mut ramp_f = [(0i32, 0i32, 0i32); RAMP];
     let mut far = [0u32; FOG_BANDS];
@@ -1674,57 +1716,16 @@ fn refresh_mat_ccmd() {
     let op_o = TextureMaterial::opaque(0, 0, (0, 0, 0)).flat_textured_polygon_header(true);
     let op_a = TextureMaterial::blended(0, 0, (0, 0, 0), BlendMode::Average)
         .flat_textured_polygon_header(true);
-    // The far bands are the fog for every row.
-    let table = core::ptr::addr_of_mut!(MAT_CCMD) as *mut u32;
-    let mut b = FAR_FROM;
-    while b < FOG_BANDS {
-        let (fo, fa) = (op_o | far[b], op_a | far[b]);
-        // Rows are 16 words apart, six directions to a material, two materials to a level.
-        let mut group = 0;
-        while group < LIGHT_LEVELS * 2 {
-            let w = if group & 1 == 0 { fo } else { fa };
-            let row = unsafe { table.add(group * 6 * FOG_BANDS + b) };
-            let mut dir = 0;
-            while dir < 6 {
-                unsafe { *row.add(dir * FOG_BANDS) = w };
-                dir += 1;
-            }
-            group += 1;
-        }
-        b += 1;
-    }
-    // The near and ramp bands, a face direction at a time. The faces of dirs 0 and 1, and of 4
-    // and 5, are shaded alike (face_tint, torch_tint), so they share their rows.
-    let mut dir = 0;
-    while dir < 6 {
-        if dir == 1 || dir == 5 {
-            dir += 1;
-            continue;
-        }
-        let twin = if dir == 0 || dir == 4 { dir + 1 } else { dir };
+    // SAFETY: the table is only touched from the one thread of the game.
+    let table = unsafe { &mut *core::ptr::addr_of_mut!(MAT_CCMD) };
+    // A row is the near bands, the ramp and the far bands, which are the fog for every row, a shade
+    // at a time (the faces of dirs 0 and 1, and of 4 and 5, are
+    // shaded alike by face_tint and torch_tint, so a shade is one row).
+    let mut shade = 0;
+    while shade < SHADES {
+        let dir = SHADE_DIR[shade];
         let lit = face_tint(dir);
         let glow = torch_tint(dir);
-        // The tint of a face lit by `light` out of `full`, as the GPU's modulation word.
-        let tint_of = |src: (u8, u8, u8), scale: u32| {
-            (
-                (src.0 as u32 * scale / 128) as u8,
-                (src.1 as u32 * scale / 128) as u8,
-                (src.2 as u32 * scale / 128) as u8,
-            )
-        };
-        // Ramp a tint into the fog over the ramp bands.
-        let ramp = |tint: (u8, u8, u8)| -> [u32; RAMP] {
-            let mut out = [0u32; RAMP];
-            let mut i = 0;
-            while i < RAMP {
-                let (t, f) = (ramp_t[i], ramp_f[i]);
-                out[i] = light::mix_fog(tint.0, f.0, t)
-                    | light::mix_fog(tint.1, f.1, t) << 8
-                    | light::mix_fog(tint.2, f.2, t) << 16;
-                i += 1;
-            }
-            out
-        };
         // Block light does not follow the sun: a torch is as bright at midnight as at noon. A face
         // shows whichever of the sky and the torch is brighter, a channel at a time. Ramping into
         // the fog keeps the order of two colours, so the ramp of the brighter is the brighter of
@@ -1737,13 +1738,13 @@ fn refresh_mat_ccmd() {
         let mut i = 0;
         while i < SKY_LEVELS {
             sky_tint[i] = tint_of(lit, SKY_SCALE[i]);
-            sky_ramp[i] = ramp(sky_tint[i]);
+            sky_ramp[i] = ramp_row(sky_tint[i], &ramp_t, &ramp_f);
             i += 1;
         }
         let mut i = 1;
         while i < 4 {
             torch_tint[i] = tint_of(glow, TORCH_SCALE[i]);
-            torch_ramp[i] = ramp(torch_tint[i]);
+            torch_ramp[i] = ramp_row(torch_tint[i], &ramp_t, &ramp_f);
             i += 1;
         }
         let mut level = 0;
@@ -1752,36 +1753,43 @@ fn refresh_mat_ccmd() {
             let (st, tt) = (sky_tint[sky], torch_tint[tier]);
             let tint = (st.0.max(tt.0), st.1.max(tt.1), st.2.max(tt.2));
             let near = tint.0 as u32 | (tint.1 as u32) << 8 | (tint.2 as u32) << 16;
-            let (no, na) = (op_o | near, op_a | near);
-            let mut b = 0;
-            while b < NEAR {
-                unsafe {
-                    *table.add(((level * 2 + 0) * 6 + dir) * FOG_BANDS + b) = no;
-                    *table.add(((level * 2 + 1) * 6 + dir) * FOG_BANDS + b) = na;
-                    *table.add(((level * 2 + 0) * 6 + twin) * FOG_BANDS + b) = no;
-                    *table.add(((level * 2 + 1) * 6 + twin) * FOG_BANDS + b) = na;
+            let mut ramp = sky_ramp[sky];
+            if tier != 0 {
+                let mut i = 0;
+                while i < RAMP {
+                    ramp[i] = max_colour(ramp[i], torch_ramp[tier][i]);
+                    i += 1;
                 }
-                b += 1;
             }
-            let mut i = 0;
-            while i < RAMP {
-                let c = if tier == 0 {
-                    sky_ramp[sky][i]
-                } else {
-                    max_colour(sky_ramp[sky][i], torch_ramp[tier][i])
-                };
-                let (ro, ra) = (op_o | c, op_a | c);
-                unsafe {
-                    *table.add(((level * 2 + 0) * 6 + dir) * FOG_BANDS + NEAR + i) = ro;
-                    *table.add(((level * 2 + 1) * 6 + dir) * FOG_BANDS + NEAR + i) = ra;
-                    *table.add(((level * 2 + 0) * 6 + twin) * FOG_BANDS + NEAR + i) = ro;
-                    *table.add(((level * 2 + 1) * 6 + twin) * FOG_BANDS + NEAR + i) = ra;
-                }
-                i += 1;
-            }
+            fill_row(&mut table[level][0][shade], op_o, near, &ramp, &far);
+            fill_row(&mut table[level][1][shade], op_a, near, &ramp, &far);
             level += 1;
         }
-        dir += 1;
+        shade += 1;
+    }
+}
+
+/// One row of the table, the opcode with the colour of each band or-ed in: `near` for the clear
+/// bands, `ramp` for the bands that mix into the fog, `far` (the fog, per band) for the rest.
+#[inline(never)]
+fn fill_row(
+    row: &mut [u32; FOG_BANDS],
+    op: u32,
+    near: u32,
+    ramp: &[u32; RAMP],
+    far: &[u32; FOG_BANDS],
+) {
+    let mut b = 0;
+    while b < FOG_BANDS {
+        row[b] = op
+            | if b < NEAR {
+                near
+            } else if b < FAR_FROM {
+                ramp[b - NEAR]
+            } else {
+                far[b]
+            };
+        b += 1;
     }
 }
 
@@ -7411,7 +7419,7 @@ fn emit_body_box(
                     q.tex_window = MAT_WIN[0][hide];
                     // Mobs take the full-sky row: they light by day/night, not
                     // by the block they happen to stand on.
-                    q.color_cmd = MAT_CCMD[SKY_LEVELS - 1][0][dir][fog_band(depth)];
+                    q.color_cmd = MAT_CCMD[SKY_LEVELS - 1][0][shade_of(dir)][fog_band(depth)];
                     q.v0 = (p[0].x as u16 as u32) | ((p[0].y as u16 as u32) << 16);
                     q.uv0_clut = MAT_CLUT_HI[0][ft]; // the mob's face palette
                     q.v1 = (p[1].x as u16 as u32) | ((p[1].y as u16 as u32) << 16);
@@ -9599,7 +9607,7 @@ fn render_near_block_shell(cam: &Camera) {
                             let win = unsafe { MAT_WIN[0][tile] };
                             let cl_hi = unsafe { MAT_CLUT_HI[0][tile] };
                             let tp_hi = unsafe { MAT_TPAGE_HI[0][tile] };
-                            let row = unsafe { &MAT_CCMD[1 | torch_tier_at(bx, by, bz) << 2][0][dir] };
+                            let row = unsafe { &MAT_CCMD[1 | torch_tier_at(bx, by, bz) << 2][0][shade_of(dir)] };
                             let make = |index: usize, u: i32, v: i32| -> ClipVert {
                                 let (x, y, z) = camera[index];
                                 let rgb = row[fog_band(z)] & 0x00FF_FFFF;
@@ -9658,7 +9666,7 @@ fn emit_near_face(f: u32, side: u16, dir: usize) {
     let light = ((side >> 8) & 15) as usize;
     let verts = face_verts(lx, by, lz, dir, w, h);
     let (bl, mi) = face_mat(block, dir);
-    let ccmd_row: &'static [u32; FOG_BANDS] = unsafe { &MAT_CCMD[light][bl][dir] };
+    let ccmd_row: &'static [u32; FOG_BANDS] = unsafe { &MAT_CCMD[light][bl][shade_of(dir)] };
     let (win, cl_hi, tp_hi) = mat_words(mi);
     let blended = bl != 0;
     let (uc, vc) = if dir < 2 { (h, w) } else { (w, h) };
@@ -10026,7 +10034,7 @@ fn emit_face(
         MAT_CCMD
             .get_unchecked(light)
             .get_unchecked(bl)
-            .get_unchecked(dir)
+            .get_unchecked(shade_of(dir))
     };
     let (win, cl_hi, tp_hi) = mat_words(mi);
     let t = inflight.read();

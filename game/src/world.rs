@@ -632,27 +632,33 @@ fn collect_neighbour_torches(cx: i32, cz: i32) {
     if unsafe { crate::TORCH_N } == 0 {
         return;
     }
-    let dim = unsafe { DIM };
     let mut dz = -1;
     while dz <= 1 {
         let mut dx = -1;
         while dx <= 1 {
             if dx != 0 || dz != 0 {
-                unsafe {
-                    crate::EDITS.for_chunk(dim, cx + dx, cz + dz, |lx, ly, lz, b| {
-                        if crate::kind_of(b) == TORCH {
-                            let x = lx as i32 + dx * CW;
-                            let z = lz as i32 + dz * CW;
-                            if light::reaches_chunk(x, z, &light::TORCH_REACH) {
-                                add_torch(x, ly as i32, z);
-                            }
-                        }
-                    });
-                }
+                collect_torches_of(cx + dx, cz + dz, dx, dz);
             }
             dx += 1;
         }
         dz += 1;
+    }
+}
+
+/// The torches of the chunk (`cx`, `cz`), `dx` and `dz` chunks from the one being meshed, whose
+/// light reaches into it. One copy of the walk over the edit store, not eight.
+#[inline(never)]
+fn collect_torches_of(cx: i32, cz: i32, dx: i32, dz: i32) {
+    unsafe {
+        crate::EDITS.for_chunk(DIM, cx, cz, |lx, ly, lz, b| {
+            if crate::kind_of(b) == TORCH {
+                let x = lx as i32 + dx * CW;
+                let z = lz as i32 + dz * CW;
+                if light::reaches_chunk(x, z, &light::TORCH_REACH) {
+                    add_torch(x, ly as i32, z);
+                }
+            }
+        });
     }
 }
 
@@ -1932,6 +1938,7 @@ fn gen_chunk(s: usize, cx: i32, cz: i32) {
     finish_chunk(s, cx, cz);
 }
 
+#[inline(never)]
 fn set_dirty(cx: i32, cz: i32) {
     let s = slot(cx, cz);
     unsafe {
@@ -2073,11 +2080,16 @@ pub fn set(wx: i32, wy: i32, wz: i32, b: u8) {
 
 /// A torch came or went at chunk-local (lx, lz): remesh each neighbouring chunk its light reaches
 /// into (the edited chunk itself is remeshed by the edit).
+#[inline(never)]
 fn light_dirty_neighbours(cx: i32, cz: i32, lx: i32, lz: i32) {
-    let mut dz = -1;
-    while dz <= 1 {
-        let mut dx = -1;
-        while dx <= 1 {
+    let reach = light::TORCH_REACH[light::TIERS - 1];
+    // The chunks on each axis the reach crosses into: below 0, none, above 15.
+    let (x0, x1) = (-((lx < reach) as i32), (lx > CW - 1 - reach) as i32);
+    let (z0, z1) = (-((lz < reach) as i32), (lz > CW - 1 - reach) as i32);
+    let mut dz = z0;
+    while dz <= z1 {
+        let mut dx = x0;
+        while dx <= x1 {
             if (dx != 0 || dz != 0)
                 && light::reaches_chunk(lx - dx * CW, lz - dz * CW, &light::TORCH_REACH)
             {
