@@ -34,6 +34,7 @@ mod flame;
 mod grid;
 mod hand;
 mod inv;
+mod light;
 mod loading;
 mod menu_tree;
 mod menus;
@@ -1454,9 +1455,16 @@ const STREAM_CRATER_SLICES: usize = 3;
 /// blend mode, face direction and fog band. Four buckets multiplies the table
 /// by four (768 words, 3KB) and keeps the per-face cost at one array read --
 /// which is the only reason block light is affordable here at all.
-static mut MAT_CCMD: [[[[u32; FOG_BANDS]; 6]; 2]; SKY_LEVELS] =
-    [[[[0; FOG_BANDS]; 6]; 2]; SKY_LEVELS];
+static mut MAT_CCMD: [[[[u32; FOG_BANDS]; 6]; 2]; LIGHT_LEVELS] =
+    [[[[0; FOG_BANDS]; 6]; 2]; LIGHT_LEVELS];
 const SKY_LEVELS: usize = 4;
+/// A face's light is its sky bucket (the low two bits) and its block-light tier (the next two,
+/// light.rs): the row is `sky | tier << 2`, and the renderer shows the brighter of the two.
+const LIGHT_LEVELS: usize = SKY_LEVELS * 4;
+/// Fraction of full brightness (out of 128) at each block-light tier, none first. Java levels
+/// 11, 8 and 5 and up, so the nearest block of a torch is as bright as day and the last tier is
+/// as dim as the darkest sky bucket at noon.
+const TORCH_SCALE: [u32; 4] = [0, 56, 88, 116];
 /// Fraction of full brightness at each bucket: fully shadowed cells keep a
 /// floor, because pitch black on a PS1 palette just reads as a hole.
 /// Skylight multiplier per bucket. Four steps now rather than two: the old pair
@@ -1594,81 +1602,196 @@ fn refresh_mat_ccmd() {
         lerp_u8(h.1 as i32, CAVE_FOG.1 as i32, cave, 255),
         lerp_u8(h.2 as i32, CAVE_FOG.2 as i32, cave, 255),
     );
-    let mut sky = 0usize;
-    while sky < SKY_LEVELS {
-        let mut dir = 0;
-        while dir < 6 {
-            let lit = face_tint(dir);
-            let sc = SKY_SCALE[sky];
-            let tint = (
-                (lit.0 as u32 * sc / 128) as u8,
-                (lit.1 as u32 * sc / 128) as u8,
-                (lit.2 as u32 * sc / 128) as u8,
-            );
-            // The ramp is laid out against the far plane: `full` is the band
-            // FAR_Z lands in (8 at 16 blocks) and `clear` a quarter of that.
-            const FULL: usize = (FAR_Z >> FOG_SHIFT) as usize;
-            const CLEAR: usize = FULL / 4;
-            let mut b = 0;
-            while b < FOG_BANDS {
-                // Clear near the eye, then ramp to the far plane, so close
-                // terrain keeps full contrast and only the band where the hard edge
-                // against the sky used to be gets blended.
-                let t = if b <= CLEAR {
-                    0
-                } else if b + 3 <= FULL {
-                    // At 16 blocks: clear to ~5 blocks, ramp through mid
-                    // distance, full ground-haze in the last band so the
-                    // horizon dissolves into the below-horizon sky fill.
-                    ((b - CLEAR) as i32) * 255 / ((FULL - CLEAR) as i32)
-                } else if b + 2 == FULL {
-                    200
-                } else {
-                    255
-                };
-                // ...and the far bands converge on GROUND HAZE rather than sky
-                // blue: those bands exist to give crest sightlines something to
-                // hit, and they only work if the ring's silhouettes are the same
-                // colour as the below-horizon sky behind them (ground_haze on
-                // both sides). Sky-blue full fog would repaint the old void
-                // sliver ON the terrain.
-                let target = if b <= FULL / 2 {
-                    fog
-                } else if b + 2 <= FULL {
-                    (
-                        ((fog.0 as u16 + haze.0 as u16) / 2) as u8,
-                        ((fog.1 as u16 + haze.1 as u16) / 2) as u8,
-                        ((fog.2 as u16 + haze.2 as u16) / 2) as u8,
-                    )
-                } else {
-                    haze
-                };
-                // The tint is a MODULATION word: the GPU computes texel * cmd / 128.
-                // Lerping it toward the raw fog colour therefore does not converge
-                // distant terrain ON the fog colour, it multiplies the fog by the
-                // texel -- so a bright sand texel (~230) against a fog tint of
-                // (82,130,190) landed near (147,234,255), lighter and cooler than
-                // both the near ground AND the sky. The first sky audit measured
-                // exactly that and called the far dunes "a wall of ice". Pre-divide
-                // by the mean terrain texel so the product lands on the fog colour.
-                const MEAN_TEXEL: u32 = 176;
-                let fm = |f: u8| ((f as u32 * 128 / MEAN_TEXEL).min(255)) as u8;
-                let (fr, fg, fb) = (fm(target.0), fm(target.1), fm(target.2));
-                let mix = |c: u8, f: u8| lerp_u8(c as i32, f as i32, t, 255);
-                let ft = (mix(tint.0, fr), mix(tint.1, fg), mix(tint.2, fb));
-                let o = TextureMaterial::opaque(0, 0, ft).flat_textured_polygon_header(true);
-                let a = TextureMaterial::blended(0, 0, ft, BlendMode::Average)
-                    .flat_textured_polygon_header(true);
+    // The table is 16 light levels x 2 materials x 6 faces x FOG_BANDS words, rebuilt whenever the
+    // sky or the fog moves, and every load from main RAM costs several cycles (there is no data
+    // cache), so the work is laid out to do few: what is the same for many rows is worked out once
+    // and stored to all of them.
+    //
+    // The ramp is laid out against the far plane: `full` is the band FAR_Z lands in (8 at 16
+    // blocks) and `clear` a quarter of that. Bands up to `clear` show the tint as it is, the last
+    // bands the fog colour whatever the tint is, and `RAMP` bands between them mix the two.
+    const FULL: usize = (FAR_Z >> FOG_SHIFT) as usize;
+    const CLEAR: usize = FULL / 4;
+    const NEAR: usize = CLEAR + 1;
+    const FAR_FROM: usize = FULL - 1;
+    const RAMP: usize = FAR_FROM - NEAR;
+    let mut ramp_t = [0i32; RAMP];
+    let mut ramp_f = [(0i32, 0i32, 0i32); RAMP];
+    let mut far = [0u32; FOG_BANDS];
+    let mut b = 0;
+    while b < FOG_BANDS {
+        // Clear near the eye, then ramp to the far plane, so close
+        // terrain keeps full contrast and only the band where the hard edge
+        // against the sky used to be gets blended.
+        let t = if b <= CLEAR {
+            0
+        } else if b + 3 <= FULL {
+            // At 16 blocks: clear to ~5 blocks, ramp through mid
+            // distance, full ground-haze in the last band so the
+            // horizon dissolves into the below-horizon sky fill.
+            ((b - CLEAR) as i32) * 255 / ((FULL - CLEAR) as i32)
+        } else if b + 2 == FULL {
+            200
+        } else {
+            255
+        };
+        // ...and the far bands converge on GROUND HAZE rather than sky
+        // blue: those bands exist to give crest sightlines something to
+        // hit, and they only work if the ring's silhouettes are the same
+        // colour as the below-horizon sky behind them (ground_haze on
+        // both sides). Sky-blue full fog would repaint the old void
+        // sliver ON the terrain.
+        let target = if b <= FULL / 2 {
+            fog
+        } else if b + 2 <= FULL {
+            (
+                ((fog.0 as u16 + haze.0 as u16) / 2) as u8,
+                ((fog.1 as u16 + haze.1 as u16) / 2) as u8,
+                ((fog.2 as u16 + haze.2 as u16) / 2) as u8,
+            )
+        } else {
+            haze
+        };
+        // The tint is a MODULATION word: the GPU computes texel * cmd / 128.
+        // Lerping it toward the raw fog colour therefore does not converge
+        // distant terrain ON the fog colour, it multiplies the fog by the
+        // texel -- so a bright sand texel (~230) against a fog tint of
+        // (82,130,190) landed near (147,234,255), lighter and cooler than
+        // both the near ground AND the sky. The first sky audit measured
+        // exactly that and called the far dunes "a wall of ice". Pre-divide
+        // by the mean terrain texel so the product lands on the fog colour.
+        const MEAN_TEXEL: u32 = 176;
+        let fm = |f: u8| ((f as u32 * 128 / MEAN_TEXEL).min(255)) as i32;
+        let f = (fm(target.0), fm(target.1), fm(target.2));
+        far[b] = f.0 as u32 | (f.1 as u32) << 8 | (f.2 as u32) << 16;
+        if (NEAR..FAR_FROM).contains(&b) {
+            ramp_t[b - NEAR] = t;
+            ramp_f[b - NEAR] = f;
+        }
+        b += 1;
+    }
+    // A header is the opcode with the colour or-ed in; only the opcode differs between the two.
+    let op_o = TextureMaterial::opaque(0, 0, (0, 0, 0)).flat_textured_polygon_header(true);
+    let op_a = TextureMaterial::blended(0, 0, (0, 0, 0), BlendMode::Average)
+        .flat_textured_polygon_header(true);
+    // The far bands are the fog for every row.
+    let mut b = FAR_FROM;
+    while b < FOG_BANDS {
+        let (fo, fa) = (op_o | far[b], op_a | far[b]);
+        let mut level = 0;
+        while level < LIGHT_LEVELS {
+            let mut dir = 0;
+            while dir < 6 {
                 unsafe {
-                    MAT_CCMD[sky][0][dir][b] = o;
-                    MAT_CCMD[sky][1][dir][b] = a;
+                    MAT_CCMD[level][0][dir][b] = fo;
+                    MAT_CCMD[level][1][dir][b] = fa;
+                }
+                dir += 1;
+            }
+            level += 1;
+        }
+        b += 1;
+    }
+    // The near and ramp bands, a face direction at a time. The faces of dirs 0 and 1, and of 4
+    // and 5, are shaded alike (face_tint, torch_tint), so they share their rows.
+    let mut dir = 0;
+    while dir < 6 {
+        if dir == 1 || dir == 5 {
+            dir += 1;
+            continue;
+        }
+        let twin = if dir == 0 || dir == 4 { dir + 1 } else { dir };
+        let lit = face_tint(dir);
+        let glow = torch_tint(dir);
+        // The tint of a face lit by `light` out of `full`, as the GPU's modulation word.
+        let tint_of = |src: (u8, u8, u8), scale: u32| {
+            (
+                (src.0 as u32 * scale / 128) as u8,
+                (src.1 as u32 * scale / 128) as u8,
+                (src.2 as u32 * scale / 128) as u8,
+            )
+        };
+        // Ramp a tint into the fog over the ramp bands.
+        let ramp = |tint: (u8, u8, u8)| -> [u32; RAMP] {
+            let mut out = [0u32; RAMP];
+            let mut i = 0;
+            while i < RAMP {
+                let (t, f) = (ramp_t[i], ramp_f[i]);
+                out[i] = light::mix_fog(tint.0, f.0, t)
+                    | light::mix_fog(tint.1, f.1, t) << 8
+                    | light::mix_fog(tint.2, f.2, t) << 16;
+                i += 1;
+            }
+            out
+        };
+        // Block light does not follow the sun: a torch is as bright at midnight as at noon. A face
+        // shows whichever of the sky and the torch is brighter, a channel at a time. Ramping into
+        // the fog keeps the order of two colours, so the ramp of the brighter is the brighter of
+        // the two ramps: the rows with block light are made of the sky's ramp and the torch's,
+        // and only those are ramped.
+        let mut sky_tint = [(0u8, 0u8, 0u8); SKY_LEVELS];
+        let mut sky_ramp = [[0u32; RAMP]; SKY_LEVELS];
+        let mut torch_tint = [(0u8, 0u8, 0u8); 4];
+        let mut torch_ramp = [[0u32; RAMP]; 4];
+        let mut i = 0;
+        while i < SKY_LEVELS {
+            sky_tint[i] = tint_of(lit, SKY_SCALE[i]);
+            sky_ramp[i] = ramp(sky_tint[i]);
+            i += 1;
+        }
+        let mut i = 1;
+        while i < 4 {
+            torch_tint[i] = tint_of(glow, TORCH_SCALE[i]);
+            torch_ramp[i] = ramp(torch_tint[i]);
+            i += 1;
+        }
+        let mut level = 0;
+        while level < LIGHT_LEVELS {
+            let (sky, tier) = (level & 3, level >> 2);
+            let (st, tt) = (sky_tint[sky], torch_tint[tier]);
+            let tint = (st.0.max(tt.0), st.1.max(tt.1), st.2.max(tt.2));
+            let near = tint.0 as u32 | (tint.1 as u32) << 8 | (tint.2 as u32) << 16;
+            let (no, na) = (op_o | near, op_a | near);
+            let mut b = 0;
+            while b < NEAR {
+                unsafe {
+                    MAT_CCMD[level][0][dir][b] = no;
+                    MAT_CCMD[level][1][dir][b] = na;
+                    MAT_CCMD[level][0][twin][b] = no;
+                    MAT_CCMD[level][1][twin][b] = na;
                 }
                 b += 1;
             }
-            dir += 1;
+            let mut i = 0;
+            while i < RAMP {
+                let c = if tier == 0 {
+                    sky_ramp[sky][i]
+                } else {
+                    max_colour(sky_ramp[sky][i], torch_ramp[tier][i])
+                };
+                let (ro, ra) = (op_o | c, op_a | c);
+                unsafe {
+                    MAT_CCMD[level][0][dir][NEAR + i] = ro;
+                    MAT_CCMD[level][1][dir][NEAR + i] = ra;
+                    MAT_CCMD[level][0][twin][NEAR + i] = ro;
+                    MAT_CCMD[level][1][twin][NEAR + i] = ra;
+                }
+                i += 1;
+            }
+            level += 1;
         }
-        sky += 1;
+        dir += 1;
     }
+}
+
+/// The brighter of two packed colours (red in bits 0..8, green 8..16, blue 16..24), a channel at
+/// a time. Bits 24.. of either are ignored.
+#[inline(always)]
+fn max_colour(a: u32, b: u32) -> u32 {
+    let r = (a & 0xFF).max(b & 0xFF);
+    let g = ((a >> 8) & 0xFF).max((b >> 8) & 0xFF);
+    let bl = ((a >> 16) & 0xFF).max((b >> 16) & 0xFF);
+    r | g << 8 | bl << 16
 }
 
 /// Depth -> fog band, by shift (see FOG_SHIFT).
@@ -9475,7 +9598,7 @@ fn render_near_block_shell(cam: &Camera) {
                             let win = unsafe { MAT_WIN[0][tile] };
                             let cl_hi = unsafe { MAT_CLUT_HI[0][tile] };
                             let tp_hi = unsafe { MAT_TPAGE_HI[0][tile] };
-                            let row = unsafe { &MAT_CCMD[1][0][dir] };
+                            let row = unsafe { &MAT_CCMD[1 | torch_tier_at(bx, by, bz) << 2][0][dir] };
                             let make = |index: usize, u: i32, v: i32| -> ClipVert {
                                 let (x, y, z) = camera[index];
                                 let rgb = row[fog_band(z)] & 0x00FF_FFFF;
@@ -9531,7 +9654,7 @@ fn render_near_block_shell(cam: &Camera) {
 fn emit_near_face(f: u32, side: u16, dir: usize) {
     let (lx, by, lz, w, h, block) = face_fields(f);
     let ao = (side & 0xFF) as u8;
-    let light = ((side >> 8) & 3) as usize;
+    let light = ((side >> 8) & 15) as usize;
     let verts = face_verts(lx, by, lz, dir, w, h);
     let (bl, mi) = face_mat(block, dir);
     let ccmd_row: &'static [u32; FOG_BANDS] = unsafe { &MAT_CCMD[light][bl][dir] };
@@ -9872,7 +9995,7 @@ fn emit_face(
     }
     let (lx, by, lz, w, h, block) = face_fields(f);
     let ao = (side & 0xFF) as u8;
-    let light = ((side >> 8) & 3) as usize; // 0..LIGHT_BUCKETS-1 (= SKY_LEVELS)
+    let light = ((side >> 8) & 15) as usize; // sky bucket | block-light tier << 2
     let verts = face_verts(lx, by, lz, dir, w, h);
 
     // Kick RTPT for corners 0..2, then do the material lookups WHILE the GTE
@@ -9897,7 +10020,7 @@ fn emit_face(
     let (bl, mi) = face_mat(block, dir);
     // Row now, band later: the depth is not known until the corners project,
     // and this lookup is deliberately here to overlap the GTE's flight time.
-    // SAFETY: light < SKY_LEVELS (2 bits), bl < 2, dir < 6 (a face dir).
+    // SAFETY: light < LIGHT_LEVELS (4 bits), bl < 2, dir < 6 (a face dir).
     let ccmd_row = unsafe {
         MAT_CCMD
             .get_unchecked(light)
@@ -13058,6 +13181,18 @@ fn face_tint(dir: usize) -> (u8, u8, u8) {
     (bias(br), bias(bg), bias(bb))
 }
 
+/// The face colour block light gives at full strength: the same Java face shading as the sky
+/// (top, sides, bottom), in the warm yellow of a flame. Independent of the time of day.
+fn torch_tint(dir: usize) -> (u8, u8, u8) {
+    let s = match dir {
+        2 => 128u32,
+        4 | 5 => 102,
+        0 | 1 => 77,
+        _ => 64,
+    };
+    (s as u8, (s * 112 / 128) as u8, (s * 84 / 128) as u8)
+}
+
 /// Queue the GPU's ordered-dither draw mode at the head of the sky list.
 ///
 /// This was previously attempted with `TextureMaterial::with_dither(true)` on
@@ -13194,6 +13329,38 @@ pub(crate) fn block_light(x: i32, y: i32, z: i32) -> i32 {
         dy += 1;
     }
     best.max(0)
+}
+
+/// Block-light tier (0..=3, light.rs) of a cell from the torches the player placed, read from the
+/// registry `block_light` uses. For the faces the greedy mesh does not carry (the close-range
+/// shell); the mesh itself gets its tiers from the edit store. Free while no torch is placed.
+fn torch_tier_at(x: i32, y: i32, z: i32) -> usize {
+    let d = world::dimension();
+    let reach = light::TORCH_REACH;
+    let mut best = 0;
+    unsafe {
+        let mut i = 0;
+        while i < TORCH_N.min(TORCHES) {
+            let (tx, ty, tz, td) = TORCH_POS[i];
+            if td == d {
+                let t = (tx as i32 - x).abs() + (ty as i32 - y).abs() + (tz as i32 - z).abs();
+                let tier = if t <= reach[0] {
+                    3
+                } else if t <= reach[1] {
+                    2
+                } else if t <= reach[2] {
+                    1
+                } else {
+                    0
+                };
+                if tier > best && kind_of(get_block_i32(tx as i32, ty as i32, tz as i32)) == TORCH {
+                    best = tier;
+                }
+            }
+            i += 1;
+        }
+    }
+    best
 }
 
 /// A point in the day on Java's 24,000-tick clock: 0 sunrise, 6,000 noon,

@@ -8,6 +8,7 @@
 //! only chunks that pass a cheap distance + horizontal-frustum cull.
 
 use crate::flame;
+use crate::light;
 use crate::{
     floor_div, Camera, AIR, BLOCK, CACTUS, CLAY, COAL_ORE, DIAMOND_ORE, DIRS, DIRT, FAR_SIDE_Z,
     FAR_TREE_SIDE_Z, FAR_Z, FLOWER_R, FLOWER_Y, GOLD_ORE, GRASS, IRON_ORE, LAVA, LEAVES, PROJ_H,
@@ -523,43 +524,53 @@ const LIGHT_BUCKETS: u16 = 4;
 /// the cutoff has to sit where cover starts rather than where it gets deep.
 const LIGHT_DEPTH: i32 = 2;
 
-/// One bit per cell of the chunk being meshed: lit by a TORCH, lava, lumistone
-/// or fire. Rebuilt per mesh alongside SKY_TOP.
-///
-/// This is what makes point lights affordable without the 200KB per-block light
-/// array a real propagation needs. Sources are found in one pass (the same pass
-/// that builds SKY_TOP), then each floods a bounded sphere -- a few thousand bit
-/// writes per mesh -- and the mask build pays ONE bitmap lookup per cell instead
-/// of a distance loop over sources.
-static mut TORCH_LIT: [u32; CHUNK_VOL / 32] = [0; CHUNK_VOL / 32];
-/// How far a light source reaches. Java's torch is 14; at two buckets this only
-/// has to decide lit-or-not, and 6 keeps the flood cheap.
-const TORCH_R: i32 = 6;
-/// Sources considered per chunk. A room lit by twenty torches looks the same as
-/// one lit by six, and the flood is the cost.
+/// The block-light tiers of the chunk being meshed (light.rs): lit by a torch, lava, fire or
+/// lumistone. Rebuilt per mesh alongside SKY_TOP. This is what makes point lights affordable
+/// without the 200KB per-block light array a real propagation needs: the sources are found in
+/// one pass (the same pass that builds SKY_TOP), each floods three bitmaps a row at a time, and
+/// the mask build pays three bit reads per face cell, or none while no source reached the chunk.
+static mut LIGHT_ROWS: light::Rows = [[0; light::ROWS]; light::TIERS];
+/// Something in LIGHT_ROWS is set (so a chunk without light costs no clear and no read).
+static mut LIGHT_ANY: bool = false;
+/// Emitters other than torches (lava, fire, lumistone) considered per chunk. A lava lake is
+/// hundreds of cells and its glow looks the same from six of them.
 const MAX_SOURCES: usize = 6;
-
-#[inline]
-fn torch_lit(lx: usize, ly: usize, lz: usize) -> bool {
-    let i = lidx(lx, ly, lz);
-    unsafe { TORCH_LIT[i >> 5] & (1 << (i & 31)) != 0 }
-}
+/// Torches considered per chunk, those standing in it and those in the eight around it whose
+/// light reaches in. A room of twenty torches is lit by sixteen. Torches are kept apart from the
+/// other emitters so a lava pocket in the same chunk cannot use up their places, which it used to
+/// (the cap was six cells of any kind, and lava is found first).
+const MAX_TORCHES: usize = 16;
+/// Torches found for the chunk being meshed, chunk-local; x and z reach outside 0..=15 for a
+/// torch in a neighbouring chunk.
+static mut MESH_TORCH_SRC: [(i32, i32, i32); MAX_TORCHES] = [(0, 0, 0); MAX_TORCHES];
+static mut MESH_NTORCH: usize = 0;
 
 #[inline]
 fn is_light_source(b: u8) -> bool {
     crate::kind_of(b) == TORCH || b == LUMISTONE || b == FIRE || is_lava(b)
 }
 
-/// Light bucket for a chunk-local cell: lit by sky OR by a nearby source.
+/// Block-light tier (0..=3) of a chunk-local cell, in the two bits above the sky bucket.
+#[inline]
+fn light_tier(lx: usize, ly: usize, lz: usize) -> u16 {
+    unsafe {
+        if LIGHT_ANY {
+            light::tier(&*core::ptr::addr_of!(LIGHT_ROWS), lx, ly, lz)
+        } else {
+            0
+        }
+    }
+}
+
+/// Light value for a chunk-local cell: the sky bucket (bits 0..=1) and the block-light tier
+/// (bits 2..=3). The renderer lights the face by the brighter of the two.
 #[inline]
 fn sky_bucket(lx: usize, ly: usize, lz: usize) -> u16 {
     let top = unsafe { SKY_TOP[lz * CWU + lx] } as i32;
     let depth = top - ly as i32;
+    let tier = light_tier(lx, ly, lz) << 2;
     if depth < LIGHT_DEPTH {
-        return LIGHT_BUCKETS - 1;
-    }
-    if torch_lit(lx, ly, lz) {
-        return LIGHT_BUCKETS - 1;
+        return (LIGHT_BUCKETS - 1) | tier;
     }
     // GRADED falloff under cover, one step per two blocks of depth, instead of a
     // cliff straight to black. This is what actually produces intermediate
@@ -567,20 +578,89 @@ fn sky_bucket(lx: usize, ly: usize, lz: usize) -> u16 {
     // this function only ever answered 0 or max.
     let steps = (LIGHT_BUCKETS - 1) as i32;
     let d = (depth - LIGHT_DEPTH) / 2;
-    (steps - d.min(steps)).max(0) as u16
+    (steps - d.min(steps)).max(0) as u16 | tier
 }
 
-/// Rebuild SKY_TOP and TORCH_LIT from MESH_SCRATCH. The highest sky-blocking
+/// Forget the light of the last chunk meshed.
+#[inline]
+fn clear_light() {
+    unsafe {
+        if LIGHT_ANY {
+            LIGHT_ROWS = [[0; light::ROWS]; light::TIERS];
+            LIGHT_ANY = false;
+        }
+        MESH_NTORCH = 0;
+    }
+}
+
+/// Add a torch at chunk-local (x, y, z) to the list for the mesh in flight.
+#[inline]
+fn add_torch(x: i32, y: i32, z: i32) {
+    unsafe {
+        if MESH_NTORCH < MAX_TORCHES {
+            MESH_TORCH_SRC[MESH_NTORCH] = (x, y, z);
+            MESH_NTORCH += 1;
+        }
+    }
+}
+
+/// Add the torches the player placed in the eight chunks around (cx, cz) whose light reaches
+/// into it. They are read from the edit store, which holds every placed torch (a chunk that is
+/// not loaded, or not meshed yet, has no scratch to look in). Costs nothing while the world has
+/// no torch.
+fn collect_neighbour_torches(cx: i32, cz: i32) {
+    if unsafe { crate::TORCH_N } == 0 {
+        return;
+    }
+    let dim = unsafe { DIM };
+    let mut dz = -1;
+    while dz <= 1 {
+        let mut dx = -1;
+        while dx <= 1 {
+            if dx != 0 || dz != 0 {
+                unsafe {
+                    crate::EDITS.for_chunk(dim, cx + dx, cz + dz, |lx, ly, lz, b| {
+                        if crate::kind_of(b) == TORCH {
+                            let x = lx as i32 + dx * CW;
+                            let z = lz as i32 + dz * CW;
+                            if light::reaches_chunk(x, z, &light::TORCH_REACH) {
+                                add_torch(x, ly as i32, z);
+                            }
+                        }
+                    });
+                }
+            }
+            dx += 1;
+        }
+        dz += 1;
+    }
+}
+
+/// Flood the light of the torch at index `k` of MESH_TORCH_SRC, or of the emitter `k - MESH_NTORCH`
+/// of MESH_LIGHT_SOURCES.
+fn flood_source(k: usize) {
+    unsafe {
+        let (x, y, z, reach) = if k < MESH_NTORCH {
+            let t = MESH_TORCH_SRC[k];
+            (t.0, t.1, t.2, &light::TORCH_REACH)
+        } else {
+            let e = MESH_LIGHT_SOURCES[k - MESH_NTORCH];
+            (e.0 as i32, e.1 as i32, e.2 as i32, &light::BRIGHT_REACH)
+        };
+        if light::flood(&mut *core::ptr::addr_of_mut!(LIGHT_ROWS), x, y, z, reach) {
+            LIGHT_ANY = true;
+        }
+    }
+}
+
+/// Rebuild SKY_TOP and the light tiers from MESH_SCRATCH. The highest sky-blocking
 /// block of a column is the highest set bit of its COL_MESH word (bit 0, the
 /// floor layer, never counts), and only the columns LIGHT_COLS flags can hold a
 /// light source, so the 16,000-cell scan the old version made per mesh is a
-/// few hundred word reads plus a walk down the rare lit columns. The sources
-/// are collected in the old order (columns in index order, each from the top
-/// down), so which of a crowded chunk's lights flood is unchanged.
-fn build_sky_top() {
-    unsafe { TORCH_LIT = [0; CHUNK_VOL / 32] };
-    let mut src: [(usize, usize, usize); MAX_SOURCES] = [(0, 0, 0); MAX_SOURCES];
-    let mut nsrc = 0usize;
+/// few hundred word reads plus a walk down the rare lit columns.
+fn build_sky_top(s: usize) {
+    clear_light();
+    unsafe { MESH_NLIGHT = 0 };
     let mut col = 0usize;
     while col < CWU * CWU {
         let m = unsafe { COL_MESH[col] }.and_not(Mask64::bit(0));
@@ -590,23 +670,31 @@ fn build_sky_top() {
             63 - m.leading_zeros()
         };
         unsafe { SKY_TOP[col] = top as u8 };
-        if nsrc < MAX_SOURCES && unsafe { LIGHT_COLS[col >> 5] } & (1 << (col & 31)) != 0 {
+        if unsafe { LIGHT_COLS[col >> 5] } & (1 << (col & 31)) != 0 {
             let (lx, lz) = (col & (CWU - 1), col >> 4);
             let mut ly = CHU - 1;
             while ly > 0 {
-                if nsrc < MAX_SOURCES && is_light_source(unsafe { MESH_SCRATCH[lidx(lx, ly, lz)] })
-                {
-                    src[nsrc] = (lx, ly, lz);
-                    nsrc += 1;
+                let b = unsafe { MESH_SCRATCH[lidx(lx, ly, lz)] };
+                if is_light_source(b) {
+                    if crate::kind_of(b) == TORCH {
+                        add_torch(lx as i32, ly as i32, lz as i32);
+                    } else if unsafe { MESH_NLIGHT } < MAX_SOURCES {
+                        unsafe {
+                            MESH_LIGHT_SOURCES[MESH_NLIGHT] = (lx, ly, lz);
+                            MESH_NLIGHT += 1;
+                        }
+                    }
                 }
                 ly -= 1;
             }
         }
         col += 1;
     }
+    let (cx, cz) = unsafe { (CHUNKS[s].cx, CHUNKS[s].cz) };
+    collect_neighbour_torches(cx, cz);
     let mut k = 0;
-    while k < nsrc {
-        flood_light(src[k]);
+    while k < unsafe { MESH_NTORCH + MESH_NLIGHT } {
+        flood_source(k);
         k += 1;
     }
 }
@@ -626,32 +714,6 @@ fn build_sky_column(lx: usize, lz: usize) {
         ly -= 1;
     }
     unsafe { SKY_TOP[lz * CWU + lx] = top };
-}
-
-/// Mark every cell within TORCH_R of a source as lit. A cube test, not a sphere:
-/// the corners are wrong by a block and nobody can tell at two brightness levels.
-fn flood_light(p: (usize, usize, usize)) {
-    let (sx, sy, sz) = (p.0 as i32, p.1 as i32, p.2 as i32);
-    let y0 = (sy - TORCH_R).max(0);
-    let y1 = (sy + TORCH_R).min(CHU as i32 - 1);
-    let z0 = (sz - TORCH_R).max(0);
-    let z1 = (sz + TORCH_R).min(CWU as i32 - 1);
-    let x0 = (sx - TORCH_R).max(0);
-    let x1 = (sx + TORCH_R).min(CWU as i32 - 1);
-    let mut y = y0;
-    while y <= y1 {
-        let mut z = z0;
-        while z <= z1 {
-            let mut x = x0;
-            while x <= x1 {
-                let i = lidx(x as usize, y as usize, z as usize);
-                unsafe { TORCH_LIT[i >> 5] |= 1 << (i & 31) };
-                x += 1;
-            }
-            z += 1;
-        }
-        y += 1;
-    }
 }
 
 // Meshing scratch: a chunk is meshed into MESH_FACES/MESH_DIR_START, then copied
@@ -676,6 +738,8 @@ static mut MESH_COMMIT_I: usize = 0;
 static mut MESH_LIGHT_SOURCES: [(usize, usize, usize); MAX_SOURCES] = [(0, 0, 0); MAX_SOURCES];
 static mut MESH_NLIGHT: usize = 0;
 static mut MESH_LIGHT_I: usize = 0;
+/// The neighbouring chunks' torches are in MESH_TORCH_SRC (stream path).
+static mut MESH_NB_DONE: bool = false;
 const STREAM_DECODE_BATCH: usize = 2048;
 const STREAM_COMMIT_BATCH: usize = 512;
 
@@ -1979,6 +2043,28 @@ pub fn set(wx: i32, wy: i32, wz: i32, b: u8) {
     }
     if lz == CW - 1 {
         set_dirty(cx, cz + 1);
+    }
+    // Only a torch's light crosses a chunk border (lava, fire and lumistone light their own chunk).
+    if crate::kind_of(old) == TORCH || crate::kind_of(b) == TORCH {
+        light_dirty_neighbours(cx, cz, lx, lz);
+    }
+}
+
+/// A torch came or went at chunk-local (lx, lz): remesh each neighbouring chunk its light reaches
+/// into (the edited chunk itself is remeshed by the edit).
+fn light_dirty_neighbours(cx: i32, cz: i32, lx: i32, lz: i32) {
+    let mut dz = -1;
+    while dz <= 1 {
+        let mut dx = -1;
+        while dx <= 1 {
+            if (dx != 0 || dz != 0)
+                && light::reaches_chunk(lx - dx * CW, lz - dz * CW, &light::TORCH_REACH)
+            {
+                set_dirty(cx + dx, cz + dz);
+            }
+            dx += 1;
+        }
+        dz += 1;
     }
 }
 
@@ -3839,7 +3925,7 @@ fn push_face(
     if n < MAX_FACES {
         unsafe {
             MESH_FACES[n] = pack(lx, ly, lz, dir, blk, w, h, 0);
-            MESH_AO[n] = (ao as u16) | ((light & 7) << 8);
+            MESH_AO[n] = (ao as u16) | ((light & 15) << 8);
         }
         n + 1
     } else {
@@ -4765,7 +4851,7 @@ fn mesh_chunk(s: usize) {
     }
     set_mesh_lod(s);
     decode_to_mesh_scratch(s);
-    build_sky_top(); // skylight depends on the whole column, so it precedes meshing
+    build_sky_top(s); // skylight depends on the whole column, so it precedes meshing
     if FAR_LOD && unsafe { CHUNKS[s].face_lod } == 1 {
         let n = mesh_lod_tops();
         commit_mesh(s, n);
@@ -4895,13 +4981,13 @@ fn mesh_edit_tick() {
         if EDIT_MESH_PHASE == 1 {
             set_mesh_lod(s);
             // If phase 0 re-decoded the scratch (another chunk owned it),
-            // SKY_TOP and TORCH_LIT still describe THAT chunk -- shading the
+            // SKY_TOP and LIGHT_ROWS still describe THAT chunk -- shading the
             // rebuilt planes from a stranger's skylight heights is what made
             // whole sections go dark on an ordinary block edit. Rebuild them
             // for this chunk. Only when the scratch was already ours (and no
             // light source moved) is the single-column refresh enough.
             if EDIT_MESH_DECODE != 0 || EDIT_LIGHT_CHANGED {
-                build_sky_top();
+                build_sky_top(s);
             } else {
                 build_sky_column(EDIT_MESH_LX, EDIT_MESH_LZ);
             }
@@ -5433,7 +5519,8 @@ pub fn stream_tick() {
             MESH_NLIGHT = 0;
             MESH_LIGHT_I = 0;
             SKY_TOP = [0; CWU * CWU];
-            TORCH_LIT = [0; CHUNK_VOL / 32];
+            clear_light();
+            MESH_NB_DONE = false;
             MESH_DIR_START[0] = 0;
             CHUNKS[best].dirty = false;
             set_mesh_lod(best);
@@ -5464,10 +5551,17 @@ pub fn stream_tick() {
                 return;
             }
             // Far-LOD faces are all skylit: no torch light to flood.
-            if MESH_LIGHT_I < MESH_NLIGHT && !(FAR_LOD && CHUNKS[s].face_lod == 1) {
-                flood_light(MESH_LIGHT_SOURCES[MESH_LIGHT_I]);
-                MESH_LIGHT_I += 1;
-                return;
+            if !(FAR_LOD && CHUNKS[s].face_lod == 1) {
+                if !MESH_NB_DONE {
+                    MESH_NB_DONE = true;
+                    collect_neighbour_torches(CHUNKS[s].cx, CHUNKS[s].cz);
+                    return;
+                }
+                if MESH_LIGHT_I < MESH_NTORCH + MESH_NLIGHT {
+                    flood_source(MESH_LIGHT_I);
+                    MESH_LIGHT_I += 1;
+                    return;
+                }
             }
             MESH_PREP = 2;
             return;
@@ -5670,9 +5764,10 @@ fn plane_in_frustum(
 /// 1.7 survivors on a recorded walk, and the cull loop (with plane_in_frustum)
 /// and the packet builder together are bigger than the instruction cache, so
 /// every call refilled both. Each entry's side word carries the face's
-/// direction in bits SURV_DIR_SHIFT.. (the AO and light bits are below it).
+/// direction in bits SURV_DIR_SHIFT.. (the AO and light bits are below it: AO in
+/// bits 0..=7, sky bucket and block-light tier in bits 8..=11).
 const SURV_CAP: usize = MAX_FACES;
-pub const SURV_DIR_SHIFT: u32 = 11;
+pub const SURV_DIR_SHIFT: u32 = 12;
 static mut SURV_F: [u32; SURV_CAP] = [0; SURV_CAP];
 static mut SURV_S: [u16; SURV_CAP] = [0; SURV_CAP];
 

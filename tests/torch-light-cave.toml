@@ -1,0 +1,410 @@
+# A torch lights a cave. At midnight the player digs nine blocks down and two cells along, backs
+# off to a fixed spot, places a torch on the end wall and backs off to the same spot again: the
+# tunnel was black and now is lit around the torch. Every wait is the game's own state (an edit
+# count, the placed cell) or its pad polls; the walking ends against the tunnel's end wall.
+#
+#   psoxide-gate run tests/torch-light-cave.toml --disc build/gate/voxide.cue --no-hw
+name = "voxide-torch-light-cave"
+title = "VoXide: a torch placed in a dug tunnel at midnight lights it"
+disc = ["build/gate/voxide.cue"]
+symbols = ["build/gate/gate-symbols.txt"]
+pad = "dualshock"
+max_ticks = 8000
+
+[card_fixture]
+path = "tests/cards/legacy-controls-seen.mcd"
+sha256 = "a0bc97a529dc33cdda8c438ec8e06a5ebc19e119fad846128d8827131c4a2f08"
+
+[[step]]
+label = "the title appears over the generated world"
+wait_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 1 }
+timeout = 3000
+
+[[step]]
+label = "PLAY GAME goes directly to the world"
+press = ["cross"]
+hold_until = { kind = "ram", sym = "VOXIDE_SETTINGS_STATE", offset = 12, op = "eq", value = 0 }
+timeout = 1500
+
+[[step]]
+label = "the world clock runs"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 12, op = "ge", value = 120 }
+timeout = 1500
+
+[[step]]
+label = "Start opens the game menu: OPTIONS, GAMEPLAY, CHEATS"
+press = ["start"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+press = ["down"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+press = ["cross"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+press = ["down"]
+sync = "poll"
+hold = 3
+wait = 10
+repeat = 3
+
+[[step]]
+press = ["cross"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+press = ["down"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+press = ["cross"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "GIVE EVERYTHING is the fourth row of CHEATS"
+press = ["down"]
+sync = "poll"
+hold = 3
+wait = 10
+repeat = 3
+
+[[step]]
+press = ["cross"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "TIME is the next row; MIDNIGHT is two choices right of NOON"
+press = ["down"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+press = ["right"]
+sync = "poll"
+hold = 3
+wait = 10
+repeat = 2
+
+[[step]]
+press = ["cross"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "back out of CHEATS, GAMEPLAY, OPTIONS and the game menu"
+press = ["circle"]
+sync = "poll"
+hold = 3
+wait = 10
+repeat = 4
+
+[[step]]
+label = "the inventory"
+press = ["triangle"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "the BLOCKS tab"
+press = ["r1"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "the torch is the fourth row, third column"
+press = ["down"]
+sync = "poll"
+hold = 3
+wait = 10
+repeat = 3
+
+[[step]]
+press = ["right"]
+sync = "poll"
+hold = 3
+wait = 10
+repeat = 2
+
+[[step]]
+label = "take the stack"
+press = ["cross"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "onto the hotbar, third slot"
+press = ["down"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "swap it into the hotbar"
+press = ["cross"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "put the hand back and close the inventory"
+press = ["circle"]
+sync = "poll"
+hold = 3
+wait = 10
+repeat = 2
+
+[[step]]
+label = "the torch is in hand"
+press = ["r1"]
+sync = "poll"
+hold = 3
+wait = 10
+repeat = 2
+
+[[step]]
+label = "look straight down"
+sync = "poll"
+rstick = [128, 255]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 84) <= -1000" }
+timeout = 600
+wait = 10
+
+[[step]]
+label = "mine the block underfoot, hole 1 (each break is an edit)"
+press = ["r2"]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 20) >= 1" }
+timeout = 900
+wait = 30
+sync = "poll"
+
+[[step]]
+label = "mine the block underfoot, hole 2 (each break is an edit)"
+press = ["r2"]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 20) >= 2" }
+timeout = 900
+wait = 30
+sync = "poll"
+
+[[step]]
+label = "mine the block underfoot, hole 3 (each break is an edit)"
+press = ["r2"]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 20) >= 3" }
+timeout = 900
+wait = 30
+sync = "poll"
+
+[[step]]
+label = "mine the block underfoot, hole 4 (each break is an edit)"
+press = ["r2"]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 20) >= 4" }
+timeout = 900
+wait = 30
+sync = "poll"
+
+[[step]]
+label = "mine the block underfoot, hole 5 (each break is an edit)"
+press = ["r2"]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 20) >= 5" }
+timeout = 900
+wait = 30
+sync = "poll"
+
+[[step]]
+label = "mine the block underfoot, hole 6 (each break is an edit)"
+press = ["r2"]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 20) >= 6" }
+timeout = 900
+wait = 30
+sync = "poll"
+
+[[step]]
+label = "mine the block underfoot, hole 7 (each break is an edit)"
+press = ["r2"]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 20) >= 7" }
+timeout = 900
+wait = 30
+sync = "poll"
+
+[[step]]
+label = "mine the block underfoot, hole 8 (each break is an edit)"
+press = ["r2"]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 20) >= 8" }
+timeout = 900
+wait = 30
+sync = "poll"
+
+[[step]]
+label = "mine the block underfoot, hole 9 (each break is an edit)"
+press = ["r2"]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 20) >= 9" }
+timeout = 900
+wait = 30
+sync = "poll"
+
+[[step]]
+label = "level the view"
+sync = "poll"
+rstick = [128, 0]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 84) >= -40" }
+timeout = 600
+wait = 10
+
+[[step]]
+label = "mine the block ahead at eye level"
+press = ["r2"]
+sync = "poll"
+hold = 60
+wait = 10
+
+[[step]]
+label = "tilt down"
+sync = "poll"
+rstick = [128, 255]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 84) <= -300" }
+timeout = 600
+wait = 10
+
+[[step]]
+label = "mine the block ahead at the feet"
+press = ["r2"]
+sync = "poll"
+hold = 60
+wait = 10
+
+[[step]]
+label = "walk into the gap"
+lstick = [128, 0]
+sync = "poll"
+hold = 45
+wait = 20
+
+[[step]]
+label = "level the view"
+sync = "poll"
+rstick = [128, 0]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 84) >= -40" }
+timeout = 600
+wait = 10
+
+[[step]]
+label = "mine the block ahead at eye level"
+press = ["r2"]
+sync = "poll"
+hold = 60
+wait = 10
+
+[[step]]
+label = "tilt down"
+sync = "poll"
+rstick = [128, 255]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 84) <= -300" }
+timeout = 600
+wait = 10
+
+[[step]]
+label = "mine the block ahead at the feet"
+press = ["r2"]
+sync = "poll"
+hold = 60
+wait = 10
+
+[[step]]
+label = "walk into the gap"
+lstick = [128, 0]
+sync = "poll"
+hold = 45
+wait = 20
+
+[[step]]
+label = "level the view"
+sync = "poll"
+rstick = [128, 0]
+hold_until = { kind = "expr", expr = "i32(VOXIDE_GATE_STATE + 84) >= -40" }
+timeout = 600
+wait = 10
+
+[[step]]
+label = "back off a little"
+lstick = [128, 255]
+sync = "poll"
+hold = 30
+wait = 20
+
+[[step]]
+sync = "poll"
+wait = 30
+
+[[step]]
+checkpoint = "cave-before"
+golden = false
+[[step.assert]]
+kind = "not_flat"
+
+[[step]]
+label = "forward to the end wall"
+lstick = [128, 0]
+sync = "poll"
+hold = 60
+wait = 20
+
+[[step]]
+label = "L2 places the torch on the end wall"
+press = ["l2"]
+sync = "poll"
+hold = 3
+wait = 10
+
+[[step]]
+label = "the torch is placed"
+wait_until = { kind = "ram", sym = "VOXIDE_GATE_STATE", offset = 36, op = "ne", value = 0 }
+timeout = 300
+
+[[step]]
+label = "let the chunk remesh"
+sync = "poll"
+wait = 300
+
+[[step]]
+label = "back off to the same spot"
+lstick = [128, 255]
+sync = "poll"
+hold = 30
+wait = 20
+
+[[step]]
+sync = "poll"
+wait = 30
+
+[[step]]
+checkpoint = "cave-lit"
+golden = false
+[[step.assert]]
+kind = "frame_diff"
+from = "cave-before"
+region = { x = 40, y = 40, w = 240, h = 150 }
+color_tol = 24
+min_changed = 0.3
+note = "the tunnel walls around the torch are lit"
+
