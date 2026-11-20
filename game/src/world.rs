@@ -553,22 +553,18 @@ fn is_light_source(b: u8) -> bool {
 /// Block-light tier (0..=3) of a chunk-local cell, in the two bits above the sky bucket.
 #[inline]
 fn light_tier(lx: usize, ly: usize, lz: usize) -> u16 {
-    unsafe {
-        if LIGHT_ANY {
-            light::tier(&*core::ptr::addr_of!(LIGHT_ROWS), lx, ly, lz)
-        } else {
-            0
-        }
-    }
+    unsafe { light::tier(&*core::ptr::addr_of!(LIGHT_ROWS), lx, ly, lz) }
 }
 
 /// Light value for a chunk-local cell: the sky bucket (bits 0..=1) and the block-light tier
-/// (bits 2..=3). The renderer lights the face by the brighter of the two.
+/// (bits 2..=3). The renderer lights the face by the brighter of the two. `lit` is whether any
+/// tier is set (LIGHT_ANY): the mask build reads it once for a plane and not once for each cell
+/// it asks about, where it costs a load from main RAM on every face of every mesh.
 #[inline]
-fn sky_bucket(lx: usize, ly: usize, lz: usize) -> u16 {
+fn sky_bucket(lit: bool, lx: usize, ly: usize, lz: usize) -> u16 {
     let top = unsafe { SKY_TOP[lz * CWU + lx] } as i32;
     let depth = top - ly as i32;
-    let tier = light_tier(lx, ly, lz) << 2;
+    let tier = if lit { light_tier(lx, ly, lz) << 2 } else { 0 };
     if depth < LIGHT_DEPTH {
         return (LIGHT_BUCKETS - 1) | tier;
     }
@@ -3763,6 +3759,8 @@ fn build_y_cols(dir: usize) {
 /// so `CHUNKS[s].cx` was a multiply by a big constant on every cell) and no
 /// cross-chunk `get()` (which costs a rem_euclid division).
 fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) -> bool {
+    // Fixed while a plane is masked: the tier maps are built before any plane is.
+    let lit = unsafe { LIGHT_ANY };
     let (base, sa, sb) = match dir {
         0 | 1 => (plane, CWU * CWU, CWU),
         2 | 3 => (plane * CWU * CWU, 1, CWU),
@@ -3822,7 +3820,7 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                     0
                 } else {
                     bits.set(a);
-                    f as u16 | (sky_bucket(lx, ly, lz) << 7)
+                    f as u16 | (sky_bucket(lit, lx, ly, lz) << 7)
                 };
                 unsafe { FMASK[b * a_dim + a] = cell };
                 a += 1;
@@ -3875,7 +3873,7 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                     let nb = unsafe { MESH_SCRATCH[col + nplane * CWU * CWU] };
                     if blk != nb {
                         unsafe {
-                            FMASK[col] = blk as u16 | (sky_bucket(lx, plane, lz) << 7);
+                            FMASK[col] = blk as u16 | (sky_bucket(lit, lx, plane, lz) << 7);
                             FMASK_BITS[lz].set(lx);
                         }
                         rows.set(lz);
@@ -3901,7 +3899,7 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                     let nb = unsafe { MESH_SCRATCH[lidx(nlx, ly, lz)] };
                     if blk != nb {
                         unsafe {
-                            FMASK[lz * a_dim + ly] = blk as u16 | (sky_bucket(plane, ly, lz) << 7);
+                            FMASK[lz * a_dim + ly] = blk as u16 | (sky_bucket(lit, plane, ly, lz) << 7);
                             FMASK_BITS[lz].set(ly);
                         }
                         rows.set(lz);
@@ -3927,7 +3925,7 @@ fn build_mask(s: usize, dir: usize, plane: usize, a_dim: usize, b_dim: usize) ->
                     let nb = unsafe { MESH_SCRATCH[lidx(lx, ly, nlz)] };
                     if blk != nb {
                         unsafe {
-                            FMASK[ly * a_dim + lx] = blk as u16 | (sky_bucket(lx, ly, plane) << 7);
+                            FMASK[ly * a_dim + lx] = blk as u16 | (sky_bucket(lit, lx, ly, plane) << 7);
                             FMASK_BITS[ly].set(lx);
                         }
                         rows.set(ly);
