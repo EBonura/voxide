@@ -13182,7 +13182,7 @@ fn face_tint(dir: usize) -> (u8, u8, u8) {
 }
 
 /// The face colour block light gives at full strength: the same Java face shading as the sky
-/// (top, sides, bottom), in the warm yellow of a flame. Independent of the time of day.
+/// (top, sides, bottom), neutral, as Java's block light is (it only raises the brightness of the texture's own colours). Independent of the time of day.
 fn torch_tint(dir: usize) -> (u8, u8, u8) {
     let s = match dir {
         2 => 128u32,
@@ -13190,7 +13190,7 @@ fn torch_tint(dir: usize) -> (u8, u8, u8) {
         0 | 1 => 77,
         _ => 64,
     };
-    (s as u8, (s * 112 / 128) as u8, (s * 84 / 128) as u8)
+    (s as u8, s as u8, s as u8)
 }
 
 /// Queue the GPU's ordered-dither draw mode at the head of the sky list.

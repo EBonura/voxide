@@ -536,10 +536,10 @@ static mut LIGHT_ANY: bool = false;
 /// hundreds of cells and its glow looks the same from six of them.
 const MAX_SOURCES: usize = 6;
 /// Torches considered per chunk, those standing in it and those in the eight around it whose
-/// light reaches in. A room of twenty torches is lit by sixteen. Torches are kept apart from the
+/// light reaches in. A room of forty torches is lit by thirty-two (those found first, those in the chunk before those of its neighbours). Torches are kept apart from the
 /// other emitters so a lava pocket in the same chunk cannot use up their places, which it used to
 /// (the cap was six cells of any kind, and lava is found first).
-const MAX_TORCHES: usize = 16;
+const MAX_TORCHES: usize = 32;
 /// Torches found for the chunk being meshed, chunk-local; x and z reach outside 0..=15 for a
 /// torch in a neighbouring chunk.
 static mut MESH_TORCH_SRC: [(i32, i32, i32); MAX_TORCHES] = [(0, 0, 0); MAX_TORCHES];

@@ -42,7 +42,7 @@ the oldest).
 Torches, lava, fire and lumistone light the ground in three tiers (Java levels 11, 8 and 5 and up: a torch
 reaches 3, 6 and 9 blocks, the others one block further), clipped to the chunk being meshed, through walls.
 A face carries its tier beside its sky bucket and the renderer shows the brighter, so a torch lights a cave
-or a night field and does nothing against a bright noon. Per chunk: 16 torches (those in it and those of
+or a night field and does nothing against a bright noon. Per chunk: 32 torches (those in it and those of
 the eight around it whose light reaches in, read from the edit store) and, apart from them, 6 other
 emitters; more are not lit. The tier maps are 6 KB of scratch (one chunk at a time); the colour table is
 16 light levels (12 KB). Far-LOD chunks are skylit only.
