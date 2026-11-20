@@ -48,8 +48,9 @@ in the neutral shade of the texture. This is a deliberate difference from the or
 falloff would need 14 block levels against 4 sky buckets = 56 light levels, a colour table of
 56 x 768 B = 43 KB (this one is 12 KB) and 6 face bits, and a table build several times dearer.
 
-The reach is clipped to the chunk being meshed and goes through walls (Java's does not): a torch under a
-one-block cover still lights the ground around it. Blocking by solid blocks would need a flood through
+KNOWN DEFECT, not a limit (being fixed next): torch light goes through solid blocks (Java's is stopped by
+them): a torch in a pit under a one-block cover still lights the ground around it. The reach is also
+clipped to the chunk being meshed. Blocking by solid blocks would need a flood through
 air cells per torch (up to 1,160 cells each, a queue and a per-cell neighbour read from uncached RAM,
 roughly 70,000 cycles a torch against 5,000 now), run for every torch of a chunk on every remesh, and
 the torches of the neighbouring chunks would need those chunks' blocks.
