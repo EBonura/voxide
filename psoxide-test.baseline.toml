@@ -1,36 +1,36 @@
 # Written by `psoxide-test bless`; edit only by blessing again (decision 4: a bar changes by editing
 # psoxide-test.toml with a reason, never by hand-editing these numbers).
 schema = 1
-blessed_commit = "d02ec6dd41ed47183a9d555010ec6df80b6d30c0"
+blessed_commit = "e33e12e4c39987c3a4cf658ad99b20ba4dc1ec56"
 sdk_pin = "fce1f6855bc1c3e8336cc68be98a3df06ef9a967"
 
 [size.ship]
-text = 687736
-data = 95032
-bss = 1131604
-free = 84204
+text = 690780
+data = 96824
+bss = 1140020
+free = 70956
 
 [speed.train]
 offsets = [-48, -36, -24, -12, 0, 12, 24, 36]
-flips = [948, 948, 948, 948, 947, 948, 948, 948]
-work_per_frame = [886346, 887550, 888046, 887552, 887283, 886244, 886221, 885040]
-frame_work_p99 = [1121382, 1121382, 1121382, 1121382, 1121382, 1121382, 1121382, 1121382]
-vblanks = ["1:368,2:578,3:1", "1:366,2:580,3:1", "1:365,2:581,3:1", "1:365,2:581,3:1", "1:366,2:579,3:1", "1:368,2:578,3:1", "1:368,2:578,3:1", "1:369,2:577,3:1"]
+flips = [948, 948, 948, 948, 948, 948, 948, 948]
+work_per_frame = [888318, 889523, 890105, 889995, 888815, 888814, 888115, 887513]
+frame_work_p99 = [1121319, 1121319, 1121319, 1121319, 1121317, 1121317, 1121317, 1121317]
+vblanks = ["1:364,2:583", "1:362,2:585", "1:361,2:586", "1:361,2:586", "1:362,2:585", "1:363,2:584", "1:364,2:583", "1:364,2:583"]
 
 [speed.unseen]
 offsets = [-48, -36, -24, -12, 0, 12, 24, 36]
-flips = [948, 948, 948, 948, 948, 947, 947, 947]
-work_per_frame = [695187, 696993, 697594, 697100, 694693, 692910, 691705, 689897]
-frame_work_p99 = [1121078, 1121099, 1121099, 1121254, 1121254, 1121254, 1121254, 1121254]
-vblanks = ["1:678,2:269", "1:675,2:272", "1:674,2:273", "1:674,2:273", "1:678,2:269", "1:681,2:265", "1:683,2:263", "1:686,2:260"]
+flips = [948, 948, 948, 948, 948, 948, 947, 948]
+work_per_frame = [740961, 742165, 741563, 740961, 739757, 740359, 739934, 740335]
+frame_work_p99 = [1121128, 1121128, 1121128, 1121128, 1121007, 1121128, 1121128, 1121190]
+vblanks = ["1:629,2:318", "1:626,2:321", "1:627,2:320", "1:629,2:318", "1:630,2:317", "1:630,2:317", "1:630,2:316", "1:630,2:317"]
 
 [journeys.blocklab]
-ticks = 2953
+ticks = 2957
 open_loop = 35
 clock_waits = 0
 
 [journeys.blocklab-save]
-ticks = 4011
+ticks = 4017
 open_loop = 16
 clock_waits = 0
 
@@ -40,141 +40,156 @@ open_loop = 29
 clock_waits = 0
 
 [journeys.distant-mining]
-ticks = 687
+ticks = 685
 open_loop = 27
 clock_waits = 0
 
 [journeys.journey]
-ticks = 2862
+ticks = 2861
 open_loop = 44
 clock_waits = 0
 
 [journeys.loading-screen]
-ticks = 473
+ticks = 472
 open_loop = 2
 clock_waits = 0
 
 [journeys.music]
-ticks = 6079
+ticks = 5695
 open_loop = 19
 clock_waits = 0
 
 [journeys.music-lab]
-ticks = 3437
+ticks = 3389
 open_loop = 3
 clock_waits = 0
 
 [journeys.save-repin]
-ticks = 4983
+ticks = 4984
 open_loop = 49
 clock_waits = 0
 
 [journeys.settings-flagged-seen]
-ticks = 442
+ticks = 441
 open_loop = 1
 clock_waits = 0
 
 [journeys.settings-legacy-seen]
-ticks = 626
+ticks = 624
 open_loop = 7
 clock_waits = 0
 
 [journeys.settings-load]
-ticks = 611
+ticks = 609
 open_loop = 2
 clock_waits = 0
 
 [journeys.settings-manual]
-ticks = 2399
+ticks = 2394
 open_loop = 50
 clock_waits = 0
 
 [journeys.settings-menu-quit]
-ticks = 1998
+ticks = 1996
 open_loop = 21
 clock_waits = 0
 
 [journeys.settings-menu-quit-blank]
-ticks = 1794
+ticks = 1779
 open_loop = 12
 clock_waits = 0
 
 [journeys.settings-menu-quit-full]
-ticks = 1800
+ticks = 1799
 open_loop = 13
 clock_waits = 0
 
 [journeys.settings-menu-quit-inferno]
-ticks = 2370
+ticks = 2363
 open_loop = 30
 clock_waits = 0
 
 [journeys.settings-menu-quit-nocard]
-ticks = 1922
+ticks = 1921
 open_loop = 16
 clock_waits = 0
 
 [journeys.settings-menu-quit-removed]
-ticks = 1837
+ticks = 1840
 open_loop = 13
 clock_waits = 0
 
 [journeys.settings-menu-quit-state]
-ticks = 2333
+ticks = 1995
 open_loop = 40
 clock_waits = 0
 
 [journeys.settings-menu-tree]
-ticks = 2644
+ticks = 2641
 open_loop = 91
 clock_waits = 0
 
 [journeys.settings-options-ui]
-ticks = 1113
+ticks = 1112
 open_loop = 32
 clock_waits = 0
 
 [journeys.settings-title-load]
-ticks = 1596
+ticks = 1594
 open_loop = 16
 clock_waits = 0
 
 [journeys.settings-title-load-nocard]
-ticks = 698
+ticks = 697
 open_loop = 7
 clock_waits = 0
 
 [journeys.settings-title-load-nosave]
-ticks = 757
+ticks = 755
 open_loop = 6
 clock_waits = 0
 
 [journeys.settings-title-ui]
-ticks = 759
+ticks = 758
 open_loop = 14
 clock_waits = 0
 
 [journeys.settings-unformatted]
-ticks = 1723
+ticks = 1720
 open_loop = 18
 clock_waits = 0
 
 [journeys.smoke-boot-play]
-ticks = 470
+ticks = 469
+open_loop = 0
+clock_waits = 0
+
+[journeys.torch-door]
+ticks = 1965
 open_loop = 0
 clock_waits = 0
 
 [journeys.torch-light-cave]
-ticks = 3327
+ticks = 3328
 open_loop = 0
 clock_waits = 0
 
 [journeys.torch-light-night]
-ticks = 2072
+ticks = 2098
+open_loop = 0
+clock_waits = 0
+
+[journeys.torch-pit]
+ticks = 1106
+open_loop = 0
+clock_waits = 0
+
+[journeys.torch-tunnels]
+ticks = 1507
 open_loop = 0
 clock_waits = 0
 
 [host]
 
 [maps]
-ship = "a8de6ce6db2c18f13ae34b3b40ecc1a2572c442087f138fe7c47cd3c668b99ab"
+ship = "b81ab022004f77ce86facd1287519cb4222ad990bf195a85932aeb19fd03e24f"

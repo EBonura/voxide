@@ -90,13 +90,11 @@ map = "link.map"
 #        it, the lab-free hooks in `set`, `raw_set`, the blast and the chunk load
 #   data constants of the flood
 # The flood works in the first 3.5 KB of MESH_FACES (empty while a mesh sets its lighting up), which
-# keeps another 3.5 KB of bss out of this figure. The bars below are Part 2's allowance over that
-# baseline.
+# keeps another 3.5 KB of bss out of this figure. The size stage passed with bars of 3,500 B of text
+# and 14,000 B of free RAM; the baseline is blessed on this code (the commit that carries this
+# comment), so the bars are 0 again.
 [[size]]
 build = "ship"
-text_max_growth = 3500
-free_min_drop = 14000
-reason = "torch light stopped by walls: measured text +3,044 B, data +1,792 B, bss +8,416 B and free RAM -13,248 B against the baseline blessed on block light as it stood, 2026-11-20; the kept lights of 32 torches (6.8 KB), the tier maps' ring of columns (+1.6 KB) and the flood and read-back code; see the comment above"
 
 # The two tapes of the sample profile: train (the profile's own route) and unseen (the holdout, a
 # different walk on the sticks). Polls 252..1200 are gameplay on both.
@@ -115,6 +113,17 @@ reason = "torch light stopped by walls: measured text +3,044 B, data +1,792 B, b
 # train 887,283 against 887,119 at offset 0 for the repin baseline, unseen 694,693 against 727,463,
 # with the code no slower in lockstep. A speed gate on lockstep builds would judge the code and not
 # the trajectory (proposed to the harness owners in the lane notes).
+#
+# Re-blessed 2026-11-20 on torch light stopped by walls. Lockstep, no torch in the world (frame work
+# per frame, each build with its own sample profile): block light before it 856,197 (train) and
+# 679,855 (unseen), after it 858,042 and 683,897 (+0.22%, +0.59%); main for reference 854,827 and
+# 681,086. The code that runs without a torch is a flag read in the stream tick and in the block
+# edit hooks; the instruction count differs by +0.7%, which the sample profile's own collection
+# (2,007,589 samples against 2,010,472) does not show, so the lockstep difference is not isolated
+# to a function. In normal pacing the unseen tape read 740,754 against 694,510 before the bless
+# (the tape's trajectory, as for the block-light bless), train 888,900 against 886,785. Torches
+# themselves cost: a flood about 100,000 cycles, one a frame, and about 19,000 cycles a torch each
+# time a chunk with it in reach is meshed (LIMITS.md).
 [[speed]]
 name = "train"
 build = "ship"
