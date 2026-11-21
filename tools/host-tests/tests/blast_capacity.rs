@@ -72,6 +72,10 @@ mod tnt {
         }
     }
 }
+mod torchlight {
+    pub fn active() -> bool { false }
+    pub fn column_changed(_: i32, _: i32, _: i32, _: i32) {}
+}
 mod rle {
     pub fn rset_mask(_: usize, _: usize, _: u64, _: u8) -> bool {
         unsafe { super::CELL = super::AIR; }
