@@ -1,14 +1,14 @@
 # Written by `psoxide-test bless`; edit only by blessing again (decision 4: a bar changes by editing
 # psoxide-test.toml with a reason, never by hand-editing these numbers).
 schema = 1
-blessed_commit = "e33e12e4c39987c3a4cf658ad99b20ba4dc1ec56"
-sdk_pin = "fce1f6855bc1c3e8336cc68be98a3df06ef9a967"
+blessed_commit = "d3f19925a41194a9a4db0f7ef3518e5affc3c05b"
+sdk_pin = "6bfe478ff0e0c6e226cdf67b164df311c1658fec"
 
 [size.ship]
-text = 690780
-data = 96824
-bss = 1140020
-free = 70956
+text = 692708
+data = 96872
+bss = 1140036
+free = 68956
 
 [speed.train]
 offsets = [-48, -36, -24, -12, 0, 12, 24, 36]
@@ -16,6 +16,15 @@ flips = [948, 948, 948, 948, 948, 948, 948, 948]
 work_per_frame = [888318, 889523, 890105, 889995, 888815, 888814, 888115, 887513]
 frame_work_p99 = [1121319, 1121319, 1121319, 1121319, 1121317, 1121317, 1121317, 1121317]
 vblanks = ["1:364,2:583", "1:362,2:585", "1:361,2:586", "1:361,2:586", "1:362,2:585", "1:363,2:584", "1:364,2:583", "1:364,2:583"]
+legacy_trusted = "e33e12e4c39987c3a4cf658ad99b20ba4dc1ec56"
+
+[speed.train.identity]
+tape = "pgo/train.pxtape"
+tape_sha256 = "9106aa8003bebab7768accbb3a8c88c3c39d627d6c23f3864ba83dab019fcc35"
+window = "polls 252..1200"
+offsets = [-48, -36, -24, -12, 0, 12, 24, 36]
+launch_args = ["--embedded-playtest"]
+gate_revision = "97cd078f9d2a33eb6aff274541bccc118f5b12e8"
 
 [speed.unseen]
 offsets = [-48, -36, -24, -12, 0, 12, 24, 36]
@@ -23,9 +32,18 @@ flips = [948, 948, 948, 948, 948, 948, 947, 948]
 work_per_frame = [740961, 742165, 741563, 740961, 739757, 740359, 739934, 740335]
 frame_work_p99 = [1121128, 1121128, 1121128, 1121128, 1121007, 1121128, 1121128, 1121190]
 vblanks = ["1:629,2:318", "1:626,2:321", "1:627,2:320", "1:629,2:318", "1:630,2:317", "1:630,2:317", "1:630,2:316", "1:630,2:317"]
+legacy_trusted = "e33e12e4c39987c3a4cf658ad99b20ba4dc1ec56"
+
+[speed.unseen.identity]
+tape = "pgo/unseen.pxtape"
+tape_sha256 = "4417f58d1805f09a157ec44d16726597b178da8e4ef7ac0a023e02d1ee1d7a88"
+window = "polls 252..1200"
+offsets = [-48, -36, -24, -12, 0, 12, 24, 36]
+launch_args = ["--embedded-playtest"]
+gate_revision = "97cd078f9d2a33eb6aff274541bccc118f5b12e8"
 
 [journeys.blocklab]
-ticks = 2957
+ticks = 2956
 open_loop = 35
 clock_waits = 0
 
@@ -35,7 +53,7 @@ open_loop = 16
 clock_waits = 0
 
 [journeys.blocks]
-ticks = 2140
+ticks = 2142
 open_loop = 29
 clock_waits = 0
 
@@ -55,12 +73,12 @@ open_loop = 2
 clock_waits = 0
 
 [journeys.music]
-ticks = 5695
+ticks = 5693
 open_loop = 19
 clock_waits = 0
 
 [journeys.music-lab]
-ticks = 3389
+ticks = 3384
 open_loop = 3
 clock_waits = 0
 
@@ -85,17 +103,17 @@ open_loop = 2
 clock_waits = 0
 
 [journeys.settings-manual]
-ticks = 2394
+ticks = 2393
 open_loop = 50
 clock_waits = 0
 
 [journeys.settings-menu-quit]
-ticks = 1996
+ticks = 1999
 open_loop = 21
 clock_waits = 0
 
 [journeys.settings-menu-quit-blank]
-ticks = 1779
+ticks = 1803
 open_loop = 12
 clock_waits = 0
 
@@ -105,7 +123,7 @@ open_loop = 13
 clock_waits = 0
 
 [journeys.settings-menu-quit-inferno]
-ticks = 2363
+ticks = 2364
 open_loop = 30
 clock_waits = 0
 
@@ -115,17 +133,17 @@ open_loop = 16
 clock_waits = 0
 
 [journeys.settings-menu-quit-removed]
-ticks = 1840
+ticks = 1839
 open_loop = 13
 clock_waits = 0
 
 [journeys.settings-menu-quit-state]
-ticks = 1995
+ticks = 2334
 open_loop = 40
 clock_waits = 0
 
 [journeys.settings-menu-tree]
-ticks = 2641
+ticks = 2640
 open_loop = 91
 clock_waits = 0
 
@@ -135,7 +153,7 @@ open_loop = 32
 clock_waits = 0
 
 [journeys.settings-title-load]
-ticks = 1594
+ticks = 1597
 open_loop = 16
 clock_waits = 0
 
@@ -145,7 +163,7 @@ open_loop = 7
 clock_waits = 0
 
 [journeys.settings-title-load-nosave]
-ticks = 755
+ticks = 754
 open_loop = 6
 clock_waits = 0
 
@@ -155,7 +173,7 @@ open_loop = 14
 clock_waits = 0
 
 [journeys.settings-unformatted]
-ticks = 1720
+ticks = 1719
 open_loop = 18
 clock_waits = 0
 
@@ -165,7 +183,7 @@ open_loop = 0
 clock_waits = 0
 
 [journeys.torch-door]
-ticks = 1965
+ticks = 1958
 open_loop = 0
 clock_waits = 0
 
@@ -175,21 +193,21 @@ open_loop = 0
 clock_waits = 0
 
 [journeys.torch-light-night]
-ticks = 2098
+ticks = 2097
 open_loop = 0
 clock_waits = 0
 
 [journeys.torch-pit]
-ticks = 1106
+ticks = 1102
 open_loop = 0
 clock_waits = 0
 
 [journeys.torch-tunnels]
-ticks = 1507
+ticks = 1505
 open_loop = 0
 clock_waits = 0
 
 [host]
 
 [maps]
-ship = "b81ab022004f77ce86facd1287519cb4222ad990bf195a85932aeb19fd03e24f"
+ship = "97fd0c8bf359477dcb38bc34d1ee5bfb04a07f834d58812cd8d81b3ee564d2bc"
