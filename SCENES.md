@@ -43,6 +43,22 @@ live generated world with the gameplay renderer and PLAY GAME enters that same r
 Row 2 is optional; without it the root lookup stays. On the demo disc VoXide would be one Program row in
 the host's table with its own `lba_offset`; it already chain-loads there through `disc_base` today.
 
+## Scene table v2 (v2, row layout pending)
+
+The table moves to version 2 with two row kinds: IMAGE rows are load units (LBA and flags, sectors, load address, size, FNV, residency class BOOT_RESIDENT, RESIDENT_SET n or SWAP) and SCENE rows are entry points (scene id, image index, entry, name). Several scenes can share an image, several images can be in RAM at once, and switching to a scene whose image is loaded reads nothing. The byte layout is not fixed yet; the v1 rows above stay as the record of what was measured.
+
+In v2 terms the program is one base image, `PSX.EXE` (image 0, BOOT_RESIDENT) and one scene, 0 `VOXIDE`. Everything reachable in play (title, world generation, play, inventory and crafting, pause and options, save) is in image 0; the SFX bank is data loaded once at boot. No screen needs a scene switch. `WORLD.PAK` and `MUSIC1.XA` stay data the program reads itself (v1 rows 1 and 2).
+
+## Boot splash: via .boot, one per disc (pending the SDK change)
+
+Decision (scene-system plan, "Splash: one mechanism, no extra load"): the splash is not dropped and is not a separate scene. psx-splash links into the boot-only `.boot` section of the boot image (sdk/psoxide-boot.ld): stored after `.data`, run from the start of the heap, moved there by `__boot_entry` before `_start`, played once. Only a disc's first program plays it.
+
+VoXide plays the splash today and keeps it (`show_intro`). psx_splash's 3,804 B of text and 2,778 B of data (b7b7bd8 map; `show_intro` and its closure, 144 B, stay resident as the caller) move into the boot image's `.boot` section. They are in the exe today, so the load does not grow by the splash; `__boot_entry` adds about 100 B. VoXide links no heap allocator (no `psx_rt::heap::ALLOCATOR` in the map), so nothing reclaims the memory: it sits unused above `__bss_end` after boot, which is fine, and the resident image is smaller by the splash.
+
+The existing `scene-core` feature (commits c884719, 0641e4e) compiles the splash out and is superseded: under the SDK change it keeps the call and links `.boot` instead.
+
+Why this is not built here yet: ld.lld's `--oformat=binary` places sections by run address and ignores `AT()`, so a psoxide-boot.ld link through the flat output these builds use writes `.boot` past `.bss` instead of after `.data` (checked on a small link at the 6bfe scripts: the ELF has the right load address, the flat file does not). It waits for the one SDK-side change (lane/disc-scenes-1123): `.boot` with its run address in the reclaimed region and its load address after `.data`, the exe writer and overlay-compose working from the ELF program headers. Opting in then takes: a repin to that SDK, the `scene-core` feature linking `-T psoxide-boot.ld` ahead of psoxide.ld with `__boot_entry` kept, and the splash call at boot.
+
 ## Shared code versus per scene
 
 One row, so everything is shared: one static image, no heap, every table a static (`LIMITS.md:3`).
