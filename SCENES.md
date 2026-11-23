@@ -49,15 +49,31 @@ The table moves to version 2 with two row kinds: IMAGE rows are load units (LBA 
 
 In v2 terms the program is one base image, `PSX.EXE` (image 0, BOOT_RESIDENT) and one scene, 0 `VOXIDE`. Everything reachable in play (title, world generation, play, inventory and crafting, pause and options, save) is in image 0; the SFX bank is data loaded once at boot. No screen needs a scene switch. `WORLD.PAK` and `MUSIC1.XA` stay data the program reads itself (v1 rows 1 and 2).
 
-## Boot splash: via .boot, one per disc (pending the SDK change)
+## Boot splash: via .boot, one per disc (built)
 
-Decision (scene-system plan, "Splash: one mechanism, no extra load"): the splash is not dropped and is not a separate scene. psx-splash links into the boot-only `.boot` section of the boot image (sdk/psoxide-boot.ld): stored after `.data`, run from the start of the heap, moved there by `__boot_entry` before `_start`, played once. Only a disc's first program plays it.
+Decision (scene-system plan, "Splash: one mechanism, no extra load"): the splash is not dropped and is not a separate scene. psx-splash links into the boot-only `.boot` section of the boot image (sdk/psoxide-boot.ld): stored after `.data`, run from the start of the heap, moved there by psx-rt's `__boot_entry` before `_start`, played once. Only a disc's first program plays it.
 
-VoXide plays the splash today and keeps it (`show_intro`). psx_splash's 3,804 B of text and 2,778 B of data (b7b7bd8 map; `show_intro` and its closure, 144 B, stay resident as the caller) move into the boot image's `.boot` section. They are in the exe today, so the load does not grow by the splash; `__boot_entry` adds about 100 B. VoXide links no heap allocator (no `psx_rt::heap::ALLOCATOR` in the map), so nothing reclaims the memory: it sits unused above `__bss_end` after boot, which is fine, and the resident image is smaller by the splash.
+Built on SDK lane/disc-scenes-1123 610b97fb661c (pin commit b11e22a), behind the off-by-default `scene-core` feature (commit bb13a7e): `show_intro` stays (`main.rs:3089`, `5179`, no line moved) and `game/build.rs` links `-T psoxide-boot.ld` ahead of psoxide.ld as an ELF; psoxide-pgo writes the EXE by load address. `make compile FEATURES=scene-core` builds it.
 
-The existing `scene-core` feature (commits c884719, 0641e4e) compiles the splash out and is superseded: under the SDK change it keeps the call and links `.boot` instead.
+Measured (maps in the campaign's `itch-1123/core-window-keep/voxide-610b/`: `off.map` is the default build after the feature commit, `scene-core.map`):
 
-Why this is not built here yet: ld.lld's `--oformat=binary` places sections by run address and ignores `AT()`, so a psoxide-boot.ld link through the flat output these builds use writes `.boot` past `.bss` instead of after `.data` (checked on a small link at the 6bfe scripts: the ELF has the right load address, the flat file does not). It waits for the one SDK-side change (lane/disc-scenes-1123): `.boot` with its run address in the reclaimed region and its load address after `.data`, the exe writer and overlay-compose working from the ELF program headers. Opting in then takes: a repin to that SDK, the `scene-core` feature linking `-T psoxide-boot.ld` ahead of psoxide.ld with `__boot_entry` kept, and the splash call at boot.
+| | default | scene-core |
+|---|---|---|
+| exe header PC | `_start` | `__boot_entry` 0x800806E4 |
+| .text / .data / .bss | 695,696 / 97,144 / 1,140,032 | 690,792 / 94,360 / 1,140,032 |
+| `.boot` | none | 8,220 B, runs at 0x801E6050..0x801E806C (`ALIGN(__bss_end, 16)`), stored at 0x800CFB08 (`__data_end`); `.boot_bss` empty |
+| in `.boot` | | `psx_splash::play` 2,656, `draw_line` 1,564, `logo::expand` 664, `draw_line` closure 260, `enter` 132, `show::<show_intro::{closure}>` 32, `Gpu::draw::<BrightnessOverlay>` 132 (text); `logo::CODED` 2,746, `logo::PALETTE` 32 (rodata) |
+| `__heap_start` (= `__bss_end`) | 0x801E7E48 | 0x801E6048 |
+| resident free RAM (to `__heap_end` 0x801F5F00) | 57,528 | **65,208 (+7,680)** |
+| exe file | 796,672 B (389 sectors) | 796,672 B (389 sectors): no growth |
+
+VoXide links no heap allocator, so nothing reuses the `.boot` range after boot; it stays as it was loaded. `psoxide-size ram` (tools-hc-894d16439831) reports 56,980 for the scene-core map because it reads `__heap_start` from the map row's address column, which after the INSERTed `.boot_bss` is the location counter (0x801E806C), not the symbol (0x801E6048, `llvm-nm`).
+
+**Finding for the SDK (not fixed here):** `Gpu::draw::<BrightnessOverlay>` is the generic instance psx_splash instantiated; its symbol carries `psx_splash`, so psoxide-boot.ld's `*(.text.*psx_splash*)` puts it in `.boot`, and VoXide's own resident `draw_brightness_now` and `menus::input` call that shared instance (two `jal`s into the `.boot` range from outside it, besides `show_intro`'s call to the splash). Harmless in VoXide, which never writes over the range, but it breaks the rule that nothing calls into `.boot` after boot; a program with a heap would crash in the brightness overlay.
+
+Default build: the exe built after the feature commit is byte-identical to the exe of the repin commit b11e22a (sha256 a13a3945...).
+
+Run (frontend 31982f1e5c8d, headless, no input, 1.5 G instructions, 4,299 route ticks, 1,813 pad polls): the splash plays (tick 100), the world generates and the main menu is up at tick 4,280. Frames kept as `core-window-keep/voxide-boot-splash.png` and `voxide-boot-first-screen.png`.
 
 ## Shared code versus per scene
 
