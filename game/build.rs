@@ -25,6 +25,17 @@ fn main() {
     std::fs::write(&ram_size, format!("RAM_SIZE_OVERRIDE = {RAM_SIZE_OVERRIDE:#X};\n"))
         .expect("write ram-size.ld");
     println!("cargo:rustc-link-arg=-T{}", ram_size.display());
+    // `scene-core`: the boot splash runs from the SDK's boot-only memory (sdk/psoxide-boot.ld,
+    // ahead of psoxide.ld): psx_splash's text and rodata are stored after .data and run above
+    // .bss. Its sections run apart from where they are stored, so the link is an ELF and the
+    // driver (psoxide-pgo) writes the EXE by load address.
+    let boot = std::env::var_os("CARGO_FEATURE_SCENE_CORE").is_some();
+    if boot {
+        let boot_ld = psoxide.join("sdk/psoxide-boot.ld");
+        let boot_ld = boot_ld.canonicalize().unwrap_or(boot_ld);
+        println!("cargo:rustc-link-arg=-T{}", boot_ld.display());
+        println!("cargo:rerun-if-changed={}", boot_ld.display());
+    }
     println!("cargo:rustc-link-arg=-T{}", ld.display());
     // `PSOXIDE_LINK_ELF=1` (set by the SDK's psoxide-pgo driver) keeps the ELF
     // instead of the flat PSX-EXE, so the driver can read its DWARF. Same code
@@ -32,7 +43,7 @@ fn main() {
     // arguments after rustflags, so the driver's own --oformat=elf cannot
     // override this one.
     println!("cargo:rerun-if-env-changed=PSOXIDE_LINK_ELF");
-    if std::env::var_os("PSOXIDE_LINK_ELF").is_none() {
+    if std::env::var_os("PSOXIDE_LINK_ELF").is_none() && !boot {
         println!("cargo:rustc-link-arg=--oformat=binary");
     }
     // Optional linker map (RAM headroom, PC attribution). Link-only: the
