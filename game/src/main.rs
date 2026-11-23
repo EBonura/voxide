@@ -3086,6 +3086,8 @@ fn main() {
     load_shared_settings();
     sfx::init();
     let mut fb = screen::Screen::new();
+    // On the scene core the core's boot scene shows the splash (SCENES.md).
+    #[cfg(not(feature = "scene-core"))]
     show_intro(&mut fb);
     // After the intro, not before: it reads the disc twice, which would shift
     // the splash's timing, and the splash is checked at a fixed tick.
@@ -5176,6 +5178,7 @@ fn wait_vblank() {
 }
 
 /// Boot intro: the SDK's splash. Any face button skips it.
+#[cfg(not(feature = "scene-core"))]
 fn show_intro(fb: &mut screen::Screen) {
     // SAFETY: the one GPU owner, as in `apply_screen_offset`.
     let mut dma = unsafe { GpuDma::steal() };

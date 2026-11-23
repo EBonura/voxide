@@ -9,6 +9,10 @@ path = "src/main.rs"
 
 [features]
 default = []
+# Scene core (campaign scene-system-1123, SCENES.md): the core's boot scene shows the
+# "Built with PSoXide" splash, so the game's own copy is compiled out. Off by default and
+# not yet usable on a disc: no core exists to show the splash instead.
+scene-core = []
 # Result receipts for the headless journeys (VOXIDE_GATE_STATE and the others): the gate disc has them,
 # a shipping build links none.
 receipts = ["psx-telemetry/receipts"]
