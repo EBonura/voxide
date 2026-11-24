@@ -5177,6 +5177,7 @@ fn wait_vblank() {
 }
 
 /// Boot intro: the SDK's splash. Any face button skips it. It runs from `.boot` (build.rs).
+#[inline(never)]
 fn show_intro(fb: &mut screen::Screen) -> FontAtlas {
     // SAFETY: the one GPU owner, as in `apply_screen_offset`.
     let mut dma = unsafe { GpuDma::steal() };
