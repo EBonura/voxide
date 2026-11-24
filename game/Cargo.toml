@@ -9,10 +9,6 @@ path = "src/main.rs"
 
 [features]
 default = []
-# Scene core (campaign scene-system-1123, SCENES.md): the boot splash links into the SDK's
-# boot-only memory (sdk/psoxide-boot.ld, build.rs): stored after .data, run above .bss once
-# at boot, never resident. Off by default.
-scene-core = []
 # Result receipts for the headless journeys (VOXIDE_GATE_STATE and the others): the gate disc has them,
 # a shipping build links none.
 receipts = ["psx-telemetry/receipts"]
@@ -107,6 +103,8 @@ psx-pad  = { path = "../.psoxide/sdk/crates/psx-pad" }
 psx-tick = { path = "../.psoxide/sdk/crates/psx-tick" }
 psx-font = { path = "../.psoxide/sdk/crates/psx-font" }
 psx-splash = { path = "../.psoxide/sdk/crates/psx-splash" }
+# The scene core (SCENES.md): `__core_boot` places the shared core in its window at boot.
+psx-core = { path = "../.psoxide/sdk/crates/psx-core", features = ["link"] }
 psx-vram = { path = "../.psoxide/sdk/crates/psx-vram" }
 psx-math = { path = "../.psoxide/sdk/crates/psx-math" }
 psx-gte  = { path = "../.psoxide/sdk/crates/psx-gte" }

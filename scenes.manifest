@@ -1,0 +1,5 @@
+# VoXide's scene disc (mkisopsx --scenes, SCENES.md): one Program on the scene core, every screen
+# resident in it; WORLD.PAK (the SFX bank) and the MUSIC XA files are read by the program itself. Image 0
+# is the boot exe (`-`: the --exe).
+program PSX.EXE   -
+scene   VOXIDE    PSX.EXE    start

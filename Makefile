@@ -110,6 +110,8 @@ pack:
 		--exe "$(PACK_EXE)" \
 		--out "$(PACK_OUT)" \
 		--volume VOXIDE \
+		--scenes "$(ROOT)/scenes.manifest" \
+		--core-image "$(PSOXIDE)/sdk/crates/psx-core/prebuilt/psx-core.bin" \
 		$(PACK_FLAGS) \
 		--world-pack-extra-dir "$(ROOT)/assets/sfx/pak" \
 		$(foreach xa,$(sort $(wildcard $(ROOT)/assets/music/MUSIC*.XA)),--xa-file "$(xa)")
