@@ -5181,8 +5181,7 @@ fn wait_vblank() {
     feature = "block-lab",
     feature = "music-lab",
     feature = "save-lab",
-    feature = "torch-lab",
-    feature = "receipts"
+    feature = "torch-lab"
 )))]
 #[inline(never)]
 fn show_intro(fb: &mut screen::Screen) -> FontAtlas {
@@ -5202,14 +5201,13 @@ fn show_intro(fb: &mut screen::Screen) -> FontAtlas {
     font
 }
 
-/// The lab and gate discs (never shipped; the ship disc's cross smoke plays the splash) play no splash: they upload the font themselves and leave no
+/// The lab discs (never shipped) play no splash: they upload the font themselves and leave no
 /// boot-only code to store, which their unprofiled, feature-laden image has no room for.
 #[cfg(any(
     feature = "block-lab",
     feature = "music-lab",
     feature = "save-lab",
-    feature = "torch-lab",
-    feature = "receipts"
+    feature = "torch-lab"
 ))]
 #[inline(never)]
 fn show_intro(_fb: &mut screen::Screen) -> FontAtlas {

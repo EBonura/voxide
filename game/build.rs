@@ -36,9 +36,9 @@ fn main() {
     // profiled gate image keeps the shipping layout.
     let featured = std::env::vars().any(|(name, _)| name.starts_with("CARGO_FEATURE_"));
     if std::env::var_os("PSOXIDE_LINK_ELF").is_some() && featured {
-        // The lab and gate discs play no splash (no boot-only code, so no splash stack floor): their twin
+        // The lab discs play no splash (no boot-only code, so no splash stack floor): their twin
         // can give up nearly the whole reserve.
-        let lab = ["BLOCK_LAB", "MUSIC_LAB", "SAVE_LAB", "TORCH_LAB", "RECEIPTS"]
+        let lab = ["BLOCK_LAB", "MUSIC_LAB", "SAVE_LAB", "TORCH_LAB"]
             .iter()
             .any(|name| std::env::var_os(format!("CARGO_FEATURE_{name}")).is_some());
         let (boot, reserve) = if lab { (0x1000, 0x1000) } else { (0x5000, 0x4000) };
