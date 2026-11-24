@@ -36,8 +36,14 @@ fn main() {
     // profiled gate image keeps the shipping layout.
     let featured = std::env::vars().any(|(name, _)| name.starts_with("CARGO_FEATURE_"));
     if std::env::var_os("PSOXIDE_LINK_ELF").is_some() && featured {
+        // The lab discs play no splash (no boot-only code, so no splash stack floor): their twin
+        // can give up nearly the whole reserve.
+        let lab = ["BLOCK_LAB", "MUSIC_LAB", "SAVE_LAB", "TORCH_LAB"]
+            .iter()
+            .any(|name| std::env::var_os(format!("CARGO_FEATURE_{name}")).is_some());
+        let (boot, reserve) = if lab { (0x1000, 0x1000) } else { (0x5000, 0x4000) };
         overrides = format!(
-            "RAM_SIZE_OVERRIDE = {RAM_SIZE_OVERRIDE:#X};\nBOOT_STACK_OVERRIDE = 0x5000;\nSTACK_RESERVE_OVERRIDE = 0x4000;\n"
+            "RAM_SIZE_OVERRIDE = {RAM_SIZE_OVERRIDE:#X};\nBOOT_STACK_OVERRIDE = {boot:#X};\nSTACK_RESERVE_OVERRIDE = {reserve:#X};\n"
         );
     }
     std::fs::write(&ram_size, overrides).expect("write ram-size.ld");
