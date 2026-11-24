@@ -99,6 +99,21 @@ compile: psoxide no64
 		--variant "$(PGO_VARIANT)" $(if $(findstring +order,$(PGO_VARIANT)),--layout "$(PGO_LAYOUT)") -- $(GAME_CARGO)
 	@echo "EXE -> $(EXE)"
 
+# The ordering file the shipping link follows: the searched layout (pgo/voxide.layout) placed on the
+# unordered profiled link (hot=500), which is what the layout was searched on. The harness checks
+# the ship map against it (psoxide-test.toml `order`).
+ORDER_OUT ?= $(ROOT)/build/order
+PGO_MAPS  := $(GAME)/target/$(TARGET)/psoxide-pgo-maps
+.PHONY: ship-order
+ship-order: psoxide
+	@mkdir -p "$(ORDER_OUT)"
+	touch "$(GAME)/src/main.rs"
+	$(MAKE) --no-print-directory compile PGO_VARIANT=hot=500
+	cp "$(EXE)" "$(ORDER_OUT)/first.exe"
+	cp "$$(/bin/ls -t "$(PGO_MAPS)"/*.map | head -1)" "$(ORDER_OUT)/first.map"
+	PSOXIDE="$(PSOXIDE)" $(PGO) place "$(PGO_LAYOUT)" "$(ORDER_OUT)/first.map" "$(ORDER_OUT)/first.exe" \
+		"$(PSOXIDE)/sdk/psoxide.ld" "$(ORDER_OUT)/voxide.order"
+
 # `make pack PACK_EXE=x PACK_OUT=y.bin` wraps any exe in the game's disc image.
 PACK_EXE ?= $(EXE)
 PACK_OUT ?= $(DIST)/voxide.bin

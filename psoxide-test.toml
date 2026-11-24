@@ -10,19 +10,23 @@ repository = "EBonura/voxide"
 name = "ship"
 out = "build/ship"
 commands = [
+  ["make", "ship-order", "ORDER_OUT={out}"],
   ["make", "compile"],
   ["make", "pack", "PACK_OUT={out}/voxide.bin"],
 ]
 collect = { "voxide.exe" = "game/target/mipsel-sony-psx/release/voxide.exe", "link.map" = "game/target/mipsel-sony-psx/psoxide-pgo-maps/*" }
 disc = "voxide.cue"
 map = "link.map"
+# The ordering file the ship link followed (`make ship-order`), with its .placed sidecar beside it.
+order = "voxide.order"
+layout_files = ["pgo/voxide.layout"]
 
 # The journeys' disc: the shipping code plus the result receipts, packed with --diag; the state blocks
 # are located in its exe (gate-symbols.txt).
 [[build]]
 name = "gate"
 out = "build/gate"
-commands = [["make", "gate-disc", "GATE_DIR={out}", "GATE_SYMBOLS={out}/gate-symbols.txt"]]
+commands = [["make", "gate-disc", "PGO_VARIANT=hot=500", "GATE_DIR={out}", "GATE_SYMBOLS={out}/gate-symbols.txt"]]
 collect = { "voxide.exe" = "game/target/mipsel-sony-psx/release/voxide.exe", "link.map" = "game/target/mipsel-sony-psx/psoxide-pgo-maps/*" }
 disc = "voxide.cue"
 map = "link.map"
