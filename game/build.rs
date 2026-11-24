@@ -29,11 +29,19 @@ fn main() {
     // __bss_end, far below the splash's stack: the map's __boot_end against the stack's deepest
     // point (STACK_INIT less about 39 KB, main's frame plus the splash's 0x5000) is the proof, and
     // `make compile`'s link map is where to read it.
-    std::fs::write(
-        &ram_size,
-        format!("RAM_SIZE_OVERRIDE = {RAM_SIZE_OVERRIDE:#X};\nBOOT_STACK_OVERRIDE = 0x7000;\n"),
-    )
-    .expect("write ram-size.ld");
+    let mut overrides = format!("RAM_SIZE_OVERRIDE = {RAM_SIZE_OVERRIDE:#X};\nBOOT_STACK_OVERRIDE = 0x7000;\n");
+    // The gate disc (feature `receipts`) adds the result receipts to .bss, and its unprofiled twin
+    // (the driver sets PSOXIDE_LINK_ELF for it) no longer fits the image: that twin is only read to
+    // bind the profile and is never run, so it gets a smaller stack reserve and boot stack. The
+    // profiled gate image keeps the shipping layout.
+    if std::env::var_os("PSOXIDE_LINK_ELF").is_some()
+        && std::env::var_os("CARGO_FEATURE_RECEIPTS").is_some()
+    {
+        overrides = format!(
+            "RAM_SIZE_OVERRIDE = {RAM_SIZE_OVERRIDE:#X};\nBOOT_STACK_OVERRIDE = 0x5000;\nSTACK_RESERVE_OVERRIDE = 0x4000;\n"
+        );
+    }
+    std::fs::write(&ram_size, overrides).expect("write ram-size.ld");
     println!("cargo:rustc-link-arg=-T{}", ram_size.display());
     for name in ["sdk/psoxide-core.ld", "sdk/psoxide-boot.ld"] {
         let script = psoxide.join(name);
@@ -45,6 +53,7 @@ fn main() {
     // Always an ELF (see above): `PSOXIDE_LINK_ELF`, which the driver sets, changes nothing here.
     // Optional linker map (RAM headroom, PC attribution). Link-only: the
     // emitted bytes do not change.
+    println!("cargo:rerun-if-env-changed=PSOXIDE_LINK_ELF");
     println!("cargo:rerun-if-env-changed=VOXIDE_LINK_MAP");
     if let Some(map) = std::env::var_os("VOXIDE_LINK_MAP").filter(|m| !m.is_empty()) {
         println!("cargo:rustc-link-arg=-Map={}", map.to_string_lossy());
