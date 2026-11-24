@@ -19,6 +19,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "psx-core"
+version = "0.1.0"
+dependencies = [
+ "psx-hw",
+ "psx-scene-abi",
+]
+
+[[package]]
 name = "psx-display"
 version = "0.1.0"
 dependencies = [
@@ -126,6 +134,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "psx-scene-abi"
+version = "0.1.0"
+
+[[package]]
 name = "psx-settings"
 version = "0.1.0"
 dependencies = [
@@ -153,6 +165,7 @@ dependencies = [
  "psx-gpu",
  "psx-pad",
  "psx-rt",
+ "psx-scene-abi",
  "psx-vram",
 ]
 
@@ -193,6 +206,7 @@ version = "0.1.0"
 name = "voxide"
 version = "0.4.1"
 dependencies = [
+ "psx-core",
  "psx-font",
  "psx-fx",
  "psx-gpu",

@@ -12,6 +12,8 @@
 #![feature(optimize_attribute)] // menu code is built for size (inv.rs) // psx_gte::mtc2!/mfc2! expand to MIPS asm
 
 extern crate psx_rt;
+// The scene core's program side (`__core_boot`, the header's entry): linked though no code names it.
+extern crate psx_core;
 
 mod blast;
 #[cfg(feature = "block-lab")]
@@ -84,7 +86,7 @@ const ST_OTCLEAR: u16 = 46; // TEMP: OT.clear span
 
 use core::cmp::{max, min};
 
-use psx_font::{fonts::BASIC, FontAtlas};
+use psx_font::FontAtlas;
 use psx_gpu::{
     self as gpu,
     display::{DisplayConfig, DoubleBuffer, Resolution, VideoMode},
@@ -1137,8 +1139,6 @@ const SWIM_SINK: i32 = units::cbps_q8(281);
 const LOOK_YAW_Q8: i32 = units::dps_q8(117);
 const LOOK_PITCH_Q8: i32 = units::dps_q8(98);
 
-const FONT_TPAGE: TexturePage = TexturePage::new(320, 0, TextureDepth::Bit4);
-const FONT_CLUT: Clut = Clut::new(320, 256);
 
 // Day/night: a full cycle is DAY_LEN sim ticks, Java's 20 minutes (24,000
 // game ticks, minecraft.wiki/w/Daylight cycle). LIGHT (0..128) scales the
@@ -3067,7 +3067,6 @@ fn main() {
     gpu::set_draw_area(0, 0, SCREEN_W - 1, SCREEN_H - 1);
     gpu::set_draw_offset(0, 0);
 
-    let font = FontAtlas::upload(&BASIC, FONT_TPAGE, FONT_CLUT);
     unsafe {
         BLOCK_TEX = tex::upload();
     }
@@ -3086,7 +3085,9 @@ fn main() {
     load_shared_settings();
     sfx::init();
     let mut fb = screen::Screen::new();
-    show_intro(&mut fb); // the splash runs from boot-only memory (.boot, build.rs)
+    // The splash runs from boot-only memory (.boot, build.rs) and hands back its font, which stays in
+    // VRAM at FONT_TPAGE / FONT_CLUT (what every later draw uses).
+    let font = show_intro(&mut fb);
     // After the intro, not before: it reads the disc twice, which would shift
     // the splash's timing, and the splash is checked at a fixed tick.
     music::init();
@@ -5176,12 +5177,12 @@ fn wait_vblank() {
 }
 
 /// Boot intro: the SDK's splash. Any face button skips it. It runs from `.boot` (build.rs).
-fn show_intro(fb: &mut screen::Screen) {
+fn show_intro(fb: &mut screen::Screen) -> FontAtlas {
     // SAFETY: the one GPU owner, as in `apply_screen_offset`.
     let mut dma = unsafe { GpuDma::steal() };
     let gpu = Gpu::from_dma_mut(&mut dma);
     let mut buffers = DoubleBuffer::new(Resolution::R320X240);
-    psx_splash::show(
+    let font = psx_splash::show_keeping_font(
         gpu,
         &mut buffers,
         "Built with PSoXide",
@@ -5190,6 +5191,7 @@ fn show_intro(fb: &mut screen::Screen) {
     );
     // The game's own buffer tracking follows the splash's last swap.
     fb.follow(buffers);
+    font
 }
 
 /// Boot/regen loading screen: dark backdrop, logo, and a progress bar. Drawn
