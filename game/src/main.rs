@@ -1027,6 +1027,8 @@ fn msg_code(m: &str) -> u32 {
 
 psx_telemetry::receipts! {
 /// `world` is the player and the world clock when a world is up and paused.
+#[optimize(size)]
+#[inline(never)]
 fn publish_settings(context: u32, selected: usize, page: u32, world: Option<(&Player, u32)>) {
     unsafe {
         let mut state = core::ptr::read_volatile(core::ptr::addr_of!(VOXIDE_SETTINGS_STATE));
@@ -5761,6 +5763,8 @@ pub static mut VOXIDE_GATE_STATE: [u32; 22] = [
 ];
 
 /// What is under the crosshair, for the gate (once a frame).
+#[optimize(size)]
+#[inline(never)]
 fn gate_probe(pick: &Pick) {
     unsafe {
         VOXIDE_GATE_STATE[17] = if pick.hit {
@@ -5771,6 +5775,8 @@ fn gate_probe(pick: &Pick) {
     }
 }
 
+#[optimize(size)]
+#[inline(never)]
 fn gate_snapshot(player: &Player) {
     unsafe {
         VOXIDE_GATE_STATE[3] = SIM_TICK;

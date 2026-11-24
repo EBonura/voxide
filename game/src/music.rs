@@ -341,6 +341,8 @@ pub fn tick() {
 
 /// Write the receipt again when it is `RECEIPT_VBLANKS` old (a build with the receipts only).
 #[inline(always)]
+#[optimize(size)]
+#[inline(never)]
 fn publish_due(x: &mut Music, now: u32) {
     psx_telemetry::receipts! {
         if now.wrapping_sub(x.published) >= RECEIPT_VBLANKS {
@@ -370,6 +372,8 @@ fn poll(now: u32) {
 }
 
 #[inline(always)]
+#[optimize(size)]
+#[inline(never)]
 fn publish() {
     psx_telemetry::receipts! {
     let x = m();
