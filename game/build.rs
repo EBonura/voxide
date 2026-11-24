@@ -30,13 +30,12 @@ fn main() {
     // point (STACK_INIT less about 39 KB, main's frame plus the splash's 0x5000) is the proof, and
     // `make compile`'s link map is where to read it.
     let mut overrides = format!("RAM_SIZE_OVERRIDE = {RAM_SIZE_OVERRIDE:#X};\nBOOT_STACK_OVERRIDE = 0x7000;\n");
-    // The gate disc (feature `receipts`) adds the result receipts to .bss, and its unprofiled twin
+    // A feature build (the gate disc's `receipts`, the labs) adds to .bss, and its unprofiled twin
     // (the driver sets PSOXIDE_LINK_ELF for it) no longer fits the image: that twin is only read to
     // bind the profile and is never run, so it gets a smaller stack reserve and boot stack. The
     // profiled gate image keeps the shipping layout.
-    if std::env::var_os("PSOXIDE_LINK_ELF").is_some()
-        && std::env::var_os("CARGO_FEATURE_RECEIPTS").is_some()
-    {
+    let featured = std::env::vars().any(|(name, _)| name.starts_with("CARGO_FEATURE_"));
+    if std::env::var_os("PSOXIDE_LINK_ELF").is_some() && featured {
         overrides = format!(
             "RAM_SIZE_OVERRIDE = {RAM_SIZE_OVERRIDE:#X};\nBOOT_STACK_OVERRIDE = 0x5000;\nSTACK_RESERVE_OVERRIDE = 0x4000;\n"
         );
