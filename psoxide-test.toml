@@ -31,12 +31,12 @@ collect = { "voxide.exe" = "game/target/mipsel-sony-psx/release/voxide.exe", "li
 disc = "voxide.cue"
 map = "link.map"
 
-# The three lab discs (make gate-labs), built without the profile: the lab code overflows .bss with the
-# profile-ordered layout. Never shipped.
+# The lab discs (make gate-labs), built with the sample profile and no placement layout, and with no
+# splash (game/src/main.rs show_intro): an unprofiled lab image does not fit the 2 MB with the core.
 [[build]]
 name = "gate-blocks"
 out = "build/gate-blocks"
-commands = [["make", "gate-disc", "FEATURES=block-lab", "PGO_VARIANT=off", "GATE_DIR={out}", "GATE_SYMBOLS={out}/gate-symbols.txt"]]
+commands = [["make", "gate-disc", "FEATURES=block-lab", "PGO_VARIANT=hot=500", "GATE_DIR={out}", "GATE_SYMBOLS={out}/gate-symbols.txt"]]
 collect = { "voxide.exe" = "game/target/mipsel-sony-psx/release/voxide.exe", "link.map" = "game/target/mipsel-sony-psx/psoxide-pgo-maps/*" }
 disc = "voxide.cue"
 map = "link.map"
@@ -44,7 +44,7 @@ map = "link.map"
 [[build]]
 name = "gate-lab"
 out = "build/gate-lab"
-commands = [["make", "gate-disc", "FEATURES=music-lab", "PGO_VARIANT=off", "GATE_DIR={out}", "GATE_SYMBOLS={out}/gate-symbols.txt"]]
+commands = [["make", "gate-disc", "FEATURES=music-lab", "PGO_VARIANT=hot=500", "GATE_DIR={out}", "GATE_SYMBOLS={out}/gate-symbols.txt"]]
 collect = { "voxide.exe" = "game/target/mipsel-sony-psx/release/voxide.exe", "link.map" = "game/target/mipsel-sony-psx/psoxide-pgo-maps/*" }
 disc = "voxide.cue"
 map = "link.map"
@@ -52,7 +52,7 @@ map = "link.map"
 [[build]]
 name = "gate-pull"
 out = "build/gate-pull"
-commands = [["make", "gate-disc", "FEATURES=save-pull", "PGO_VARIANT=off", "GATE_DIR={out}", "GATE_SYMBOLS={out}/gate-symbols.txt"]]
+commands = [["make", "gate-disc", "FEATURES=save-pull", "PGO_VARIANT=hot=500", "GATE_DIR={out}", "GATE_SYMBOLS={out}/gate-symbols.txt"]]
 collect = { "voxide.exe" = "game/target/mipsel-sony-psx/release/voxide.exe", "link.map" = "game/target/mipsel-sony-psx/psoxide-pgo-maps/*" }
 disc = "voxide.cue"
 map = "link.map"
@@ -61,7 +61,7 @@ map = "link.map"
 [[build]]
 name = "gate-torches"
 out = "build/gate-torches"
-commands = [["make", "gate-disc", "FEATURES=torch-lab", "PGO_VARIANT=off", "GATE_DIR={out}", "GATE_SYMBOLS={out}/gate-symbols.txt"]]
+commands = [["make", "gate-disc", "FEATURES=torch-lab", "PGO_VARIANT=hot=500", "GATE_DIR={out}", "GATE_SYMBOLS={out}/gate-symbols.txt"]]
 collect = { "voxide.exe" = "game/target/mipsel-sony-psx/release/voxide.exe", "link.map" = "game/target/mipsel-sony-psx/psoxide-pgo-maps/*" }
 disc = "voxide.cue"
 map = "link.map"
