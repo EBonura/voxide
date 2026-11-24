@@ -84,7 +84,7 @@ PGO          = cargo run -q --release --locked --manifest-path "$(PSOXIDE)/tools
 PSOXIDE_SIZE = cargo run -q --release --locked --manifest-path "$(PSOXIDE)/tools/psoxide-size/Cargo.toml" --
 PSOXIDE_DEV  = cargo run -q --release --locked --manifest-path "$(PSOXIDE)/tools/psoxide-dev/Cargo.toml" --
 PGO_PROFILE  = $(ROOT)/pgo/voxide.prof
-PGO_VARIANT ?= hot=500
+PGO_VARIANT ?= hot=500+order
 # Layout profile for `+order` variants (make pgo-order); only they read it.
 PGO_LAYOUT   = $(ROOT)/pgo/voxide.layout
 
