@@ -22,8 +22,18 @@ fn main() {
     // stored, so the link is an ELF and the driver (psoxide-pgo) writes the EXE by load address.
     const RAM_SIZE_OVERRIDE: u32 = 0x1F_E000;
     let ram_size = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("ram-size.ld");
-    std::fs::write(&ram_size, format!("RAM_SIZE_OVERRIDE = {RAM_SIZE_OVERRIDE:#X};\n"))
-        .expect("write ram-size.ld");
+    // BOOT_STACK_OVERRIDE only lets the driver's plain link (psoxide-pgo apply and collect link the
+    // unprofiled build first, to bind the profile) pass the .boot fit check: unprofiled, the image
+    // leaves under 10 KB between .bss and the stack reserve and .boot (10.5 KB) does not fit there.
+    // That plain image is never run for the splash. The shipping (profiled) image puts .boot at
+    // __bss_end, far below the splash's stack: the map's __boot_end against the stack's deepest
+    // point (STACK_INIT less about 39 KB, main's frame plus the splash's 0x5000) is the proof, and
+    // `make compile`'s link map is where to read it.
+    std::fs::write(
+        &ram_size,
+        format!("RAM_SIZE_OVERRIDE = {RAM_SIZE_OVERRIDE:#X};\nBOOT_STACK_OVERRIDE = 0x7000;\n"),
+    )
+    .expect("write ram-size.ld");
     println!("cargo:rustc-link-arg=-T{}", ram_size.display());
     for name in ["sdk/psoxide-core.ld", "sdk/psoxide-boot.ld"] {
         let script = psoxide.join(name);
