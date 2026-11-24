@@ -5177,6 +5177,12 @@ fn wait_vblank() {
 }
 
 /// Boot intro: the SDK's splash. Any face button skips it. It runs from `.boot` (build.rs).
+#[cfg(not(any(
+    feature = "block-lab",
+    feature = "music-lab",
+    feature = "save-lab",
+    feature = "torch-lab"
+)))]
 #[inline(never)]
 fn show_intro(fb: &mut screen::Screen) -> FontAtlas {
     // SAFETY: the one GPU owner, as in `apply_screen_offset`.
@@ -5193,6 +5199,23 @@ fn show_intro(fb: &mut screen::Screen) -> FontAtlas {
     // The game's own buffer tracking follows the splash's last swap.
     fb.follow(buffers);
     font
+}
+
+/// The lab discs (never shipped) play no splash: they upload the font themselves and leave no
+/// boot-only code to store, which their unprofiled, feature-laden image has no room for.
+#[cfg(any(
+    feature = "block-lab",
+    feature = "music-lab",
+    feature = "save-lab",
+    feature = "torch-lab"
+))]
+#[inline(never)]
+fn show_intro(_fb: &mut screen::Screen) -> FontAtlas {
+    FontAtlas::upload(
+        &psx_font::fonts::BASIC,
+        TexturePage::new(320, 0, TextureDepth::Bit4),
+        Clut::new(320, 256),
+    )
 }
 
 /// Boot/regen loading screen: dark backdrop, logo, and a progress bar. Drawn
