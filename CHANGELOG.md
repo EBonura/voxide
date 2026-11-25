@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.4.2 | 2026-11-25
 
-Blocks that carry state and have shapes: real doors, beds, levers, redstone
+VoXide now runs on the PSoXide scene core (one resident core, the same as every game on the demo disc; the
+boot splash plays from boot-only memory). Blocks that carry state and have shapes: real doors, beds, levers, redstone
 dust and torches, pistons and ladders, a bow that is drawn and let go, and an
 edit store that no longer forgets a build.
 
