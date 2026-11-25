@@ -1,25 +1,25 @@
 # Written by `psoxide-test bless`; edit only by blessing again (decision 4: a bar changes by editing
 # psoxide-test.toml with a reason, never by hand-editing these numbers).
 schema = 1
-blessed_commit = "a1a5284d8eb82a891a674bd309eafaa5c5b4d607"
+blessed_commit = "6a8ed7a372dbf31e2b0e894ddc3d01117a08c436"
 sdk_pin = "80d432926e69dc0bc6ac328c3c9b143a8d875754"
 
 [size.ship]
 text = 694704
-data = 94504
+data = 94488
 bss = 1140032
-free = 61160
+free = 61176
 
 [speed.train]
 offsets = [-48, -36, -24, -12, 0, 12, 24, 36]
-flips = [948, 948, 948, 948, 948, 947, 948, 948]
-work_per_frame = [876658, 877862, 878355, 877753, 877151, 876871, 875924, 875345]
-frame_work_p99 = [1121372, 1121372, 1121372, 1121373, 1121374, 1121373, 1121373, 1121372]
-vblanks = ["1:380,2:567", "1:379,2:568", "1:378,2:569", "1:378,2:569", "1:380,2:567", "1:380,2:566", "1:382,2:565", "1:383,2:564"]
+flips = [947, 948, 947, 948, 948, 948, 948, 948]
+work_per_frame = [876039, 876320, 877245, 876900, 875719, 875014, 874412, 873909]
+frame_work_p99 = [1121260, 1121260, 1121260, 1121260, 1121260, 1121260, 1121260, 1121260]
+vblanks = ["1:381,2:565", "1:380,2:567", "1:379,2:567", "1:380,2:567", "1:382,2:565", "1:382,2:565", "1:384,2:563", "1:384,2:563"]
 
 [[speed.train.layouts]]
 path = "pgo/voxide.layout"
-sha256 = "813971d670ba8a27cf3aefc78828c95de3881d2c52c639ebbd9e15cdf5fc3c54"
+sha256 = "f1aa840c160cf1fbeaf015315e34def31d869b1fd37d3adf38f2dc264fe0f5bd"
 
 [speed.train.layouts.searched]
 rounds = 600
@@ -35,14 +35,14 @@ gate_revision = "97cd078f9d2a33eb6aff274541bccc118f5b12e8"
 
 [speed.unseen]
 offsets = [-48, -36, -24, -12, 0, 12, 24, 36]
-flips = [948, 948, 947, 948, 948, 948, 948, 948]
-work_per_frame = [737778, 738982, 738557, 737177, 735974, 736553, 735371, 735949]
-frame_work_p99 = [1121259, 1121259, 1121259, 1121259, 1121259, 1121208, 1121208, 1121205]
-vblanks = ["1:634,2:313", "1:632,2:315", "1:632,2:314", "1:634,2:313", "1:636,2:311", "1:636,2:311", "1:637,2:310", "1:637,2:310"]
+flips = [948, 948, 948, 948, 948, 948, 948, 948]
+work_per_frame = [738578, 740361, 739760, 738579, 737375, 737352, 736750, 736850]
+frame_work_p99 = [1121194, 1121198, 1121198, 1121198, 1121198, 1121194, 1121189, 1121189]
+vblanks = ["1:632,2:315", "1:630,2:317", "1:631,2:316", "1:633,2:314", "1:635,2:312", "1:635,2:312", "1:636,2:311", "1:636,2:311"]
 
 [[speed.unseen.layouts]]
 path = "pgo/voxide.layout"
-sha256 = "813971d670ba8a27cf3aefc78828c95de3881d2c52c639ebbd9e15cdf5fc3c54"
+sha256 = "f1aa840c160cf1fbeaf015315e34def31d869b1fd37d3adf38f2dc264fe0f5bd"
 
 [speed.unseen.layouts.searched]
 rounds = 600
@@ -224,4 +224,4 @@ clock_waits = 0
 [host]
 
 [maps]
-ship = "c16cde8c65129f0c9b65e4af45449ff5b1e4d39a5b1a1754938344106de5721e"
+ship = "c47684ccfba88c080f30874b8ef1568e4414d01d705608dcba91c39f9e9f3a37"
